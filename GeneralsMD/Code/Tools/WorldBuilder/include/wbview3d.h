@@ -124,6 +124,7 @@ protected:
 	afx_msg void OnUpdateViewShowExtraBlends(CCmdUI* pCmdUI);
 	afx_msg void OnEditShadows();
 	afx_msg void OnEditMapSettings();
+	afx_msg void OnClearAllExtraBoundaries();
 	afx_msg void OnViewShowimpassableareas();
 	afx_msg void OnUpdateViewShowimpassableareas(CCmdUI* pCmdUI);
 	afx_msg void OnImpassableAreaOptions();

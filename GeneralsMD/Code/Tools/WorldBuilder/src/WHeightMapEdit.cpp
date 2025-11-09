@@ -3693,6 +3693,19 @@ void WorldHeightMapEdit::removeLastBoundary(void)
 	m_boundaries.pop_back();
 }
 
+void WorldHeightMapEdit::removeAllExtraBoundaries()
+{
+	if (m_boundaries.size() <= 1) {
+		// Nothing to remove or only one boundary exists
+		return;
+	}
+
+	// Keep only the first boundary
+	ICoord2D firstBoundary = m_boundaries[0];
+	m_boundaries.clear();
+	m_boundaries.push_back(firstBoundary);
+}
+
 void WorldHeightMapEdit::findBoundaryNear(Coord3D *pt, float okDistance, Int *outNdx, Int *outHandle)
 {
 	if (!outNdx) {

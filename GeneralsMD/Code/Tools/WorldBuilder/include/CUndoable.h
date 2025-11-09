@@ -292,6 +292,23 @@ public:
 		virtual void Undo(void);
 };
 
+/*************************************************************************
+**                   RemoveAllExtraBoundariesUndoable
+***************************************************************************/
+// class RemoveAllExtraBoundariesUndoable : public Undoable
+// {
+// protected:
+//     CWorldBuilderDoc *m_pDoc;          ///< Not ref counted.
+//     std::vector<ICoord2D> m_oldBoundaries;
+
+// public:
+//     RemoveAllExtraBoundariesUndoable(CWorldBuilderDoc *pDoc);
+//     virtual ~RemoveAllExtraBoundariesUndoable(void);
+
+//     virtual void Do(void);
+//     virtual void Undo(void);
+// };
+
 ///                            AddPolygonUndoable
 /** An undoable that actually undoes something.  Adds a polygon. */
 class AddPolygonUndoable : public Undoable

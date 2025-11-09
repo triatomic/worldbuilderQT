@@ -160,6 +160,7 @@ public: // Editing methods.
 	void addBoundary(ICoord2D* boundaryToAdd);
 	void changeBoundary(Int ndx, ICoord2D *border);
 	void removeLastBoundary(void);
+	void removeAllExtraBoundaries();
 
 	// outNdx must not be NULL, but outHandle can be.
 	// outHandle: 0 means BL, 1 means TL, 2 means TR, 3 means BR

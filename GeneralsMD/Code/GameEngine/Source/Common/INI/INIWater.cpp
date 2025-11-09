@@ -137,7 +137,9 @@ void INI::parseWaterTransparencyDefinition( INI *ini )
 		oldTextures[4]=&wtOriginal->m_skyboxTextureT;
 		newTextures[4]=&wtOverride->m_skyboxTextureT;
 
-		TheTerrainVisual->replaceSkyboxTextures(oldTextures, newTextures);
+		// Adriane [Deathscythe] -- Worldbuilder dont have this shit
+		if(TheTerrainVisual)
+			TheTerrainVisual->replaceSkyboxTextures(oldTextures, newTextures);
 	}
 }
 

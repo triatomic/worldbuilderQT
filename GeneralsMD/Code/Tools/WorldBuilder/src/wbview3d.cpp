@@ -96,6 +96,7 @@
 #include "LayersList.h"
 #include "ImpassableOptions.h"
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
+// #include "CUndoable.h"
 
 
 #include <d3dx8.h>
@@ -129,6 +130,7 @@ static W3DDynamicLight * theDynamicLight = NULL;
 static Real theLightXOffset = 0.1f;
 static Real theLightYOffset = 0.07f;
 static Int theFlashCount = 0;
+static Bool g_alreadyHintedTraceOverlay = false;
 #endif
 
 // ----------------------------------------------------------------------------
@@ -419,8 +421,8 @@ void WbView3d::setObjTracking(MapObject *pMapObj,  Coord3D pos, Real angle, Bool
 	AsciiString modelName = getModelNameAndScale(pMapObj, &scale, BODY_PRISTINE);
 
 	// Adriane [Deathscythe] The worldbuilder's scale change is very off for infantry -- adjust properly
-	if (scale > 1.0 && pMapObj->getThingTemplate()->isKindOf(KINDOF_INFANTRY)) {
-		scale *= 3.5f;  // scale up to 350% 
+	if (scale > 2.0 && pMapObj->getThingTemplate()->isKindOf(KINDOF_INFANTRY)) {
+		scale *= 4.0f;  // scale up to 350% 
 	}
 
 	if (modelName != m_objectToolTrackingModelName) {
@@ -1828,9 +1830,10 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 			// 	DEBUG_LOG(("starting boxes: %d, cash value: %d\n", startingBoxes, cashValue));
 			// }
 
+				scale = tTemplate->getAssetScale();
 				// Adriane [Deathscythe] The worldbuilder's scale change is very off for infantry -- adjust properly
-				if (scale > 1.0 && pMapObj->getThingTemplate()->isKindOf(KINDOF_INFANTRY)) {
-					scale *= 3.5f;  // scale up to 350% 
+				if (scale > 2.0 && pMapObj->getThingTemplate()->isKindOf(KINDOF_INFANTRY)) {
+					scale *= 4.0f;  // scale up to 350% 
 				}
 		
 				// Setup model condition flags from the current damage state
@@ -2874,6 +2877,7 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_SHOWSHADOWS, OnUpdateViewShowshadows)
 	ON_COMMAND(ID_EDIT_SHADOWS, OnEditShadows)
 	ON_COMMAND(ID_EDIT_MAPSETTINGS, OnEditMapSettings)
+	ON_COMMAND(ID_REMOVEBOUNDARIES, OnClearAllExtraBoundaries)
 	ON_COMMAND(ID_VIEW_SHOWIMPASSABLEAREAS, OnViewShowimpassableareas)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_SHOWIMPASSABLEAREAS, OnUpdateViewShowimpassableareas)
 	ON_COMMAND(ID_VIEW_IMPASSABLEAREAOPTIONS, OnImpassableAreaOptions)
@@ -3065,6 +3069,26 @@ int WbView3d::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	m_showSoundCircles = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowSoundCircles", 0);
 	m_showRulerGrid = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowRulerGrid", 1);
 	m_showTracingOverlay = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowTracingOverlay", 0);
+
+
+	CFileFind finder;
+	BOOL fileExists = finder.FindFile("data\\editor\\trace_overlay.dds");
+	if (!fileExists)
+	{
+		if(m_showTracingOverlay){
+			::MessageBeep(MB_ICONERROR);
+			AfxMessageBox(
+				"Missing texture:\n"
+				"data\\editor\\trace_overlay.dds\n\n"
+				"The tracing overlay will not be displayed until this texture is restored.\n\n"
+				"You little shit, did you not install the worldbuilder properly? the texture file was supposed to be on the zip file - did you delete it?.",
+				MB_ICONERROR | MB_OK
+			);
+		}
+		m_showTracingOverlay = 0;
+		::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "ShowTracingOverlay", m_showTracingOverlay ? 1 : 0);
+	}
+
 
 	DrawObject::setDoBoundaryFeedback(m_showMapBoundaries);
 	DrawObject::setDoGridFeedback(m_showRulerGrid);
@@ -4086,6 +4110,25 @@ void WbView3d::OnEditMapSettings()
 	}
 }
 
+void WbView3d::OnClearAllExtraBoundaries()
+{
+	::MessageBeep(MB_ICONINFORMATION);
+	int response = ::AfxMessageBox(
+		"You are about to clear all extra boundaries. Are you sure you want to continue? This action cannot be undone.",
+		MB_YESNO | MB_ICONQUESTION
+	);
+
+	if (response == IDNO){
+		return;
+	}
+
+	CWorldBuilderDoc *pDoc = CWorldBuilderDoc::GetActiveDoc();
+	pDoc->removeAllExtraBoundaries();
+    // RemoveAllExtraBoundariesUndoable *pUndo = new RemoveAllExtraBoundariesUndoable(pDoc);
+    // pDoc->AddAndDoUndoable(pUndo);
+    // REF_PTR_RELEASE(pUndo);
+}
+
 void WbView3d::OnEditShadows() 
 {
 	if (!m_showShadows) {
@@ -4337,6 +4380,34 @@ void WbView3d::OnUpdateViewShowRulerGrid(CCmdUI* pCmdUI)
 void WbView3d::OnViewShowTracingOverlay()
 {
 	m_showTracingOverlay = !m_showTracingOverlay;
+
+	if (m_showTracingOverlay)
+	{
+		if(!g_alreadyHintedTraceOverlay){
+			AfxMessageBox(
+				"This feature is used to overlay a texture on the map -- it needs to be a dds file under your game directory\\data\\editor\\trace_overlay.dds",
+				MB_ICONINFORMATION | MB_OK
+			);
+			g_alreadyHintedTraceOverlay = true;
+		}
+		
+		CFileFind finder;
+		BOOL fileExists = finder.FindFile("data\\editor\\trace_overlay.dds");
+		if (!fileExists)
+		{
+			AfxMessageBox(
+				"Missing texture:\n\n"
+				"data\\editor\\trace_overlay.dds\n\n"
+				"The tracing overlay will not be displayed until this texture is restored.\n\n"
+				"You little shit, did you not install the worldbuilder properly? the texture file was supposed to be on the zip file - did you delete it?.",
+				MB_ICONERROR | MB_OK
+			);
+
+			m_showTracingOverlay = 0;
+
+		}
+	}
+
 	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "ShowTracingOverlay", m_showTracingOverlay ? 1 : 0);
 	DrawObject::setDoTracingOverlayFeedback(m_showTracingOverlay);
 }

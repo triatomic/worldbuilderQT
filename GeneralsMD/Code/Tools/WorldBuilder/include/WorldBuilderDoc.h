@@ -94,6 +94,10 @@ public:
 	void addBoundary(ICoord2D* boundaryToAdd);
 	void changeBoundary(Int ndx, ICoord2D *border);
 	void removeLastBoundary(void);
+	void removeAllExtraBoundaries();
+
+	// const std::vector<ICoord2D>& getBoundaries() const { return m_boundaries; }
+	// void clearBoundaries() { m_boundaries.clear(); }
 
 	// outNdx must not be NULL, but outHandle can be.
 	// outHandle: 0 means BL, 1 means TL, 2 means TR, 3 means BR
@@ -195,6 +199,10 @@ protected:
 	afx_msg void OnJumpToMapFolder();
 	afx_msg void OnJumpToAutoSaveFolder();
 	afx_msg void OnOpenWorldbuilderSettings();
+
+	void OpenGameFolder(Bool data);
+	afx_msg void OnOpenGameFolder();
+	afx_msg void OnOpenDataFolder();
 
 	void OnJumpToGame(Bool withDebug, Bool waveEdit);
 	afx_msg void OnJumpToGameWithoutDebug();

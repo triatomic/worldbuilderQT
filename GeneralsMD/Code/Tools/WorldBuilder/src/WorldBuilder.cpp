@@ -862,7 +862,7 @@ void CAboutDlg::OnCenterOnSelectedButtonWP()
 BOOL CAboutDlg::OnInitDialog()
 {
 	CDialog::OnInitDialog();
-	// DoShrink();
+	DoShrink();
 	g_aboutPageOn = true;
 
 	m_bLaunchOnStartUpAbout=::AfxGetApp()->GetProfileInt(ABOUT_SECTION, "LaunchOnStartUp", 1);

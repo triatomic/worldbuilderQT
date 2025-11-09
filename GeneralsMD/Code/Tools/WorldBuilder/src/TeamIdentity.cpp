@@ -404,7 +404,7 @@ void TeamIdentity::loadUnitsInfo(int idcMinUnit, NameKeyType keyMinUnit,
 			}
 		}
 		Int ndx = pCombo->AddString(NONE_STRING);
-		if (!found && exists && !type.isEmpty()) {
+		if (!found && exists && !type.isEmpty() && type != NONE_STRING) {
 			// Insert placeholder showing what was expected but missing
 			CString badName;
 			badName.Format("[???] %s", type.str());

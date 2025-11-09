@@ -249,6 +249,55 @@ void AddBoundaryUndoable::Undo(void)
 	m_addedToList = false;
 }
 
+
+// /*************************************************************************
+// **                             RemoveAllExtraBoundariesUndoable
+// ***************************************************************************/
+// //
+// // Constructor — snapshot current boundaries
+// //
+// RemoveAllExtraBoundariesUndoable::RemoveAllExtraBoundariesUndoable(CWorldBuilderDoc *pDoc)
+//     : m_pDoc(pDoc)
+// {
+//     if (m_pDoc) {
+//         // Save all existing boundaries for undo
+//         m_oldBoundaries = m_pDoc->getBoundaries();
+//     }
+// }
+
+// //
+// // Destructor
+// //
+// RemoveAllExtraBoundariesUndoable::~RemoveAllExtraBoundariesUndoable(void)
+// {
+//     m_pDoc = NULL;
+// }
+
+// //
+// // Do — clear all extra boundaries (keep only first)
+// //
+// void RemoveAllExtraBoundariesUndoable::Do(void)
+// {
+//     if (m_pDoc) {
+//         m_pDoc->removeAllExtraBoundaries();
+//     }
+// }
+
+// //
+// // Undo — restore previous boundaries
+// //
+// void RemoveAllExtraBoundariesUndoable::Undo(void)
+// {
+//     if (!m_pDoc)
+//         return;
+
+//     m_pDoc->clearBoundaries(); // make sure we have a function to clear all boundaries fully
+//     for (size_t i = 0; i < m_oldBoundaries.size(); ++i) {
+//         ICoord2D b = m_oldBoundaries[i];
+//         m_pDoc->addBoundary(&b);
+//     }
+// }
+
 /*************************************************************************
 **                             AddObjectUndoable
 ***************************************************************************/

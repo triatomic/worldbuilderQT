@@ -413,6 +413,7 @@
 #define IDC_CLEANSCRIPTNAME             1171
 #define IDC_WARNINGS_CAPTION            1172
 #define IDC_CHECK6                      1172
+#define IDC_REFRENCEMODE1               1172
 #define IDC_WARNINGS                    1173
 #define IDC_EDIT_X                      1174
 #define IDC_EDIT_Y                      1175
@@ -645,6 +646,8 @@
 #define ID_FILE_JUMPTOGAME_WM           1391
 #define ID_DISABLEMAPPREVGENERATE       1392
 #define ID_FILE_AUTOSAVEFOLDER          1393
+#define ID_FILE_GAMEFOLDER              1394
+#define ID_FILE_GAMEFOLDERDATA          1395
 #define ID_BRUSH_TOOL                   32771
 #define IDM_ShowGrid                    32772
 #define ID_FEATHERTOOL                  32791
@@ -804,6 +807,7 @@
 #define ID_LOD_MODE_2                   33353
 #define ID_LOD_MODE_3                   33354
 #define ID_VIEW_LABELS_EXTRA            33355
+#define ID_REMOVEBOUNDARIES             33356
 #define IDS_NEW                         61446
 #define IDS_RESIZE                      61447
 #define IDS_REMOVING_INUSE_TEAM         61448

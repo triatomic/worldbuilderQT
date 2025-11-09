@@ -86,6 +86,7 @@ enum DIRECTION
 	PREFER_BOTTOM,
 };
 
+static Bool g_mapiniloaded = false;
 static bool secondGreaterThan(const std::pair<AsciiString, Int>& __t1, const std::pair<AsciiString, Int>& __t2)
 {
 	return __t1.second > __t2.second;
@@ -114,6 +115,8 @@ BEGIN_MESSAGE_MAP(CWorldBuilderDoc, CDocument)
 	ON_COMMAND(ID_FILE_WBSETTINGS, OnOpenWorldbuilderSettings)
 	ON_COMMAND(ID_FILE_AUTOSAVEFOLDER, OnJumpToAutoSaveFolder)
 	ON_COMMAND(ID_FILE_JUMPTOFOLDER, OnJumpToMapFolder)
+	ON_COMMAND(ID_FILE_GAMEFOLDERDATA, OnOpenDataFolder)
+	ON_COMMAND(ID_FILE_GAMEFOLDER, OnOpenGameFolder)
 	
 	ON_COMMAND(ID_DISABLEMAPPREVGENERATE, OnViewDisableMapPrevGen)
 	// ON_UPDATE_COMMAND_UI(ID_DISABLEMAPPREVGENERATE, OnUpdateDisableMapPrevGen)
@@ -315,6 +318,31 @@ public:
 		destBuffer = NULL;
 	}
 };
+
+// Static helper to get the validated game directory path
+static CString GetGameDirectory()
+{
+	CString gameDir = AfxGetApp()->GetProfileString("WorldbuilderApp", "GameDirectory", "");
+
+	if (gameDir.IsEmpty()) {
+		// Try fallback
+		gameDir = AfxGetApp()->GetProfileString("WorldbuilderApp", "OpenDirectory", "");
+	}
+
+	if (gameDir.IsEmpty()) {
+		AfxMessageBox(
+			"Unable to locate the game directory because it has not been set in your World Builder settings."
+			" To fix this, open your WorldBuilder settings file and add:\n\n"
+			"[WorldbuilderApp]\nGameDirectory=YourGameFolderPath\n\n"
+			"Example:\nGameDirectory=C:\\Program Files (x86)\\Command and Conquer Generals Zero Hour",
+			MB_ICONEXCLAMATION | MB_OK
+		);
+		return "";
+	}
+
+	return gameDir;
+}
+
 
 void CWorldBuilderDoc::OnViewDisableMapPrevGen() 
 {
@@ -950,6 +978,45 @@ void CWorldBuilderDoc::OnOpenWorldbuilderSettings()
 	}
 }
 
+void CWorldBuilderDoc::OpenGameFolder(Bool data /*= false*/)
+{
+	try {
+		CString gameDir = GetGameDirectory();
+
+		if (gameDir.IsEmpty()) {
+			OnOpenWorldbuilderSettings();
+			return;
+		}
+
+		CString targetPath = gameDir;
+		if (data) {
+			targetPath += "\\Data";
+		}
+
+		if (!PathFileExists(targetPath)) {
+			CString msg;
+			msg.Format("The folder was not found:\n%s\n\nPlease make sure it exists in your game directory.", targetPath);
+			AfxMessageBox(msg, MB_ICONEXCLAMATION | MB_OK);
+			return;
+		}
+
+		ShellExecute(NULL, "open", targetPath, NULL, NULL, SW_SHOWNORMAL);
+
+	} catch (...) {
+		AfxMessageBox("An unexpected error occurred while trying to open the game folder.", MB_ICONERROR | MB_OK);
+	}
+}
+
+void CWorldBuilderDoc::OnOpenGameFolder()
+{
+	OpenGameFolder(false); // opens main game directory
+}
+
+void CWorldBuilderDoc::OnOpenDataFolder()
+{
+	OpenGameFolder(true); // opens Data subfolder
+}
+
 void CWorldBuilderDoc::OnJumpToGameWithDebug(){
 	OnJumpToGame(true, false);
 }
@@ -965,21 +1032,9 @@ void CWorldBuilderDoc::OnJumpToGameWithWaveEdit(){
 void CWorldBuilderDoc::OnJumpToGame(Bool withDebug, Bool waveEdit)
 {
 	try {
-		CString gameDir = AfxGetApp()->GetProfileString("WorldbuilderApp", "GameDirectory", "");
+		CString gameDir = GetGameDirectory();
 
 		if (gameDir.IsEmpty()) {
-			// Try fallback
-			gameDir = AfxGetApp()->GetProfileString("WorldbuilderApp", "OpenDirectory", "");
-		}
-
-		if (gameDir.IsEmpty()) {
-			AfxMessageBox(
-				"Unable to launch the game because the game directory has not been set in your worldbuilder settings."
-				" To fix this, find the [WorldbuilderApp] section in your worldbuilder settings file and under it add the following entry:\n\n"
-				"GameDirectory=YourGameFolderPath\n"
-				"Example:\nGameDirectory=C:\\Program Files (x86)\\Command and Conquer Generals Zero Hour",
-				MB_ICONEXCLAMATION | MB_OK
-			);
 			OnOpenWorldbuilderSettings();
 			return;
 		}
@@ -1099,6 +1154,27 @@ BOOL CWorldBuilderDoc::DoSave(LPCTSTR lpszPathName, BOOL bReplace)
 	// if 'bReplace' is TRUE will change file name if successful (SaveAs)
 	// if 'bReplace' is FALSE will not change path name (SaveCopyAs)
 {
+	// Check current map for duplicates before opening another one
+    WorldHeightMapEdit *pMap = GetHeightMap();
+    if (pMap != NULL)
+    {
+        Bool check = pMap->selectDuplicates();
+        if (check)
+        {
+            MessageBeep(MB_ICONWARNING);
+			int res = MessageBox(
+				AfxGetMainWnd()->GetSafeHwnd(),
+				"Duplicate / Overlapping objects were detected in the current map.\n\n"
+				"Are you sure you want to continue saving or fix this damn issue?",
+				"Duplicate / Overlapping Objects Detected",
+				MB_OKCANCEL | MB_ICONERROR | MB_TOPMOST
+			);
+
+            if (res == IDCANCEL)
+                return FALSE; // user canceled open
+        }
+    }
+
 	CString newName = lpszPathName;
 	if (newName.IsEmpty())
 	{
@@ -1817,6 +1893,59 @@ void CWorldBuilderDoc::updateHeightMap(WorldHeightMap *htMap, Bool partial, cons
 
 BOOL CWorldBuilderDoc::OnOpenDocument(LPCTSTR lpszPathName) 
 {
+
+	if (g_mapiniloaded)
+	{
+		MessageBeep(MB_ICONSTOP);
+		int res = MessageBox(
+			NULL,
+			"A Map.ini override was previously loaded.\n\n"
+			"We still have not find a way to clear those stuff on memory - so i am gonna force you to restart.\n"
+			"Press OK to restart now or Cancel to continue editing the same map.\n\n"
+			"This is retarded i know but i do not want to crash your worldbuilder accidentally - Adriane.\n",
+			"Map.ini Cleanup Required",
+			MB_OKCANCEL | MB_ICONERROR
+		);
+
+		if (res == IDOK)
+		{
+			try {
+				CString exePath;
+				GetModuleFileName(NULL, exePath.GetBuffer(_MAX_PATH), _MAX_PATH);
+				exePath.ReleaseBuffer();
+
+				// optional: autosave or clean up before restart
+				if (AfxGetApp()->GetMainWnd())
+					AfxGetApp()->GetMainWnd()->SendMessage(WM_CLOSE);
+
+				// restart the same executable
+				STARTUPINFO si = { sizeof(si) };
+				PROCESS_INFORMATION pi;
+				ZeroMemory(&pi, sizeof(pi));
+				CreateProcess(
+					exePath,             // application path
+					NULL,                // command line
+					NULL, NULL, FALSE,
+					0,                   // no special flags
+					NULL, NULL,          // environment and directory
+					&si, &pi
+				);
+
+				// ensure current process dies
+				::ExitProcess(0);
+			}
+			catch (...) {
+				::ExitProcess(0);
+			}
+
+			return FALSE;
+		}
+		else
+		{
+			// user canceled opening new map
+			return FALSE;
+		}
+	}
 #ifdef ONLY_ONE_AT_A_TIME
 	if (gAlreadyOpen) {
 		::AfxMessageBox(IDS_ONLY_ONE_FILE);
@@ -1872,6 +2001,8 @@ BOOL CWorldBuilderDoc::OnOpenDocument(LPCTSTR lpszPathName)
 			ini.loadWB(iniPath, INI_LOAD_CREATE_OVERRIDES, NULL);
 
 			ObjectOptions::reprocessObjectList();
+
+			g_mapiniloaded = true;
 		}
 		else {
 			DEBUG_LOG(("User chose not to load map.ini\n"));
@@ -3155,6 +3286,12 @@ void CWorldBuilderDoc::removeLastBoundary(void)
 {
 	m_heightMap->removeLastBoundary();
 }
+
+void CWorldBuilderDoc::removeAllExtraBoundaries(void)
+{
+	m_heightMap->removeAllExtraBoundaries();
+}
+
 
 void CWorldBuilderDoc::findBoundaryNear(Coord3D *pt, float okDistance, Int *outNdx, Int *outHandle)
 {

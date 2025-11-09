@@ -192,6 +192,8 @@ BEGIN
         MENUITEM SEPARATOR
         MENUITEM "Open Map folder",             ID_FILE_JUMPTOFOLDER
         MENUITEM "Open Worldbuilder Settings",  ID_FILE_WBSETTINGS
+        MENUITEM "Open Game Folder",            ID_FILE_GAMEFOLDER
+        MENUITEM "Open Game Folder / Data",     ID_FILE_GAMEFOLDERDATA
         MENUITEM "Open AutoSave Folder",        ID_FILE_AUTOSAVEFOLDER
         MENUITEM SEPARATOR
         MENUITEM "Dump Map To File",            ID_FILE_DUMPTOFILE
@@ -246,6 +248,8 @@ BEGIN
         MENUITEM "Impassable Area Options...",  ID_VIEW_IMPASSABLEAREAOPTIONS
 
         MENUITEM SEPARATOR
+        MENUITEM "Remove all extra borders",    ID_REMOVEBOUNDARIES
+        MENUITEM SEPARATOR
         MENUITEM "Edit Teams...",               ID_EDIT_TEAMLIST
         MENUITEM "Edit Player List...",         ID_EDIT_PLAYERLIST
         MENUITEM SEPARATOR
@@ -265,6 +269,7 @@ BEGIN
         END
         MENUITEM "Show Waypoints",              ID_VIEW_SHOWWAYPOINTS
         MENUITEM "Use Fixed Colored Waypoints", ID_VIEW_FIXEDCOLOREDWAYPOINTS
+
         MENUITEM "Show Trigger Areas",          ID_VIEW_SHOWPOLYGONTRIGGERS
         MENUITEM "Show Shadows",                ID_VIEW_SHOWSHADOWS
         MENUITEM "Show Labels",                 ID_VIEW_LABELS
@@ -355,7 +360,7 @@ BEGIN
     END
     POPUP "Help / Entity finder"
     BEGIN
-        MENUITEM "Entity finder...",            ID_APP_ABOUT
+        MENUITEM "Entity finder / Hotkey List", ID_APP_ABOUT
     END
     POPUP "Tools"
     BEGIN
@@ -1137,10 +1142,10 @@ BEGIN
                     TVS_HASLINES | TVS_LINESATROOT | TVS_SHOWSELALWAYS | 
                     WS_TABSTOP,7,25,259,297,WS_EX_CLIENTEDGE
     PUSHBUTTON      "New &Folder...",IDC_NEW_FOLDER,598,87,50,14
-    EDITTEXT        IDC_SCRIPT_DESCRIPTION,272,25,317,200,ES_MULTILINE | 
+    EDITTEXT        IDC_SCRIPT_DESCRIPTION,272,25,317,191,ES_MULTILINE | 
                     ES_READONLY | WS_VSCROLL | WS_HSCROLL
     PUSHBUTTON      "Cancel",IDCANCEL,598,308,50,14
-    EDITTEXT        IDC_SCRIPT_COMMENT,272,228,317,95,ES_MULTILINE | 
+    EDITTEXT        IDC_SCRIPT_COMMENT,272,233,317,90,ES_MULTILINE | 
                     ES_READONLY | WS_VSCROLL
     CONTROL         "Auto Verify",IDC_AUTO_VERIFY,"Button",BS_AUTOCHECKBOX | 
                     WS_TABSTOP,597,7,51,14
@@ -1150,17 +1155,20 @@ BEGIN
     PUSHBUTTON      "Find Next",IDC_FIND_NEXT,165,7,41,14
     LTEXT           "Search:",IDC_STATIC,7,7,26,13,SS_CENTERIMAGE
     CONTROL         "Compress Script",IDC_COMPRESS,"Button",BS_AUTOCHECKBOX | 
-                    WS_TABSTOP,212,7,68,14
+                    WS_TABSTOP,215,7,68,14
     CONTROL         "New Icons",IDC_NEWICONS,"Button",BS_AUTOCHECKBOX | 
-                    WS_TABSTOP,280,7,48,14
+                    WS_TABSTOP,287,7,48,14
     CONTROL         "Disable Script Deep Scan On Load  | Fast Load",
-                    IDC_DEEPSCAN,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,429,7,
+                    IDC_DEEPSCAN,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,424,7,
                     162,14
     PUSHBUTTON      "Re- Verify All",IDC_VERIFYALL,598,24,50,14
     CONTROL         "Smart Copy",IDC_SMART_COPY,"Button",BS_AUTOCHECKBOX | 
                     WS_TABSTOP,600,155,48,14
     CONTROL         "Clean Script Name",IDC_CLEANSCRIPTNAME,"Button",
-                    BS_AUTOCHECKBOX | WS_TABSTOP,333,7,75,14
+                    BS_AUTOCHECKBOX | WS_TABSTOP,339,7,75,14
+    CONTROL         "Detect References via picked Parameters",
+                    IDC_REFRENCEMODE1,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,
+                    271,217,150,14
 END
 
 IDD_ScriptTabWindow DIALOG DISCARDABLE  0, 0, 391, 255

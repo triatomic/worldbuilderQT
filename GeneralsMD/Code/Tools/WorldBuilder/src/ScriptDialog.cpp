@@ -233,6 +233,7 @@ BEGIN_MESSAGE_MAP(ScriptDialog, CDialog)
 	ON_BN_CLICKED(IDC_COMPRESS, OnCompress)
 	ON_BN_CLICKED(IDC_NEWICONS, OnNewIcons)
 	ON_BN_CLICKED(IDC_DEEPSCAN, OnDisableDeepScan)
+	ON_BN_CLICKED(IDC_REFRENCEMODE1, OnCheckByParameterForReference)
 	ON_BN_CLICKED(IDC_CLEANSCRIPTNAME, OnCleanScriptName)
 	ON_BN_CLICKED(IDC_FIND_NEXT, OnFindNext)
 	ON_BN_CLICKED(IDC_SMART_COPY, OnSmartCopy)
@@ -323,11 +324,11 @@ void ScriptDialog::OnSelchangedScriptTree(NMHDR* pNMHDR, LRESULT* pResult)
 	pWnd->EnableWindow(m_curSelection.m_objType != ListType::PLAYER_TYPE);
 
 	AsciiString scriptBurst;
-
 	AsciiString scriptComment;
 	AsciiString actionComment;
 	AsciiString conditionComment;
 	AsciiString scriptText;
+
 	if (pScript) {
 		actionComment = pScript->getActionComment();
 		conditionComment = pScript->getConditionComment();
@@ -341,39 +342,97 @@ void ScriptDialog::OnSelchangedScriptTree(NMHDR* pNMHDR, LRESULT* pResult)
 		AsciiString targetScriptName = pScript->getName();
 		Bool foundUse = false;
 
+		// 🔀 Toggle: choose between parameter-based or text-based reference detection
+		bool checkByParameter = m_bCheckByParameter; 
+
 		for (int i = 0; i < m_sides.getNumSides(); ++i) {
 			ScriptList* pSL = m_sides.getSideInfo(i)->getScriptList();
 			if (!pSL) continue;
 
-			// --- Check non-grouped scripts
-			for (Script* s = pSL->getScript(); s; s = s->getNext()) {
-				if (s == pScript) continue;
-
-				// Collect all readable text for this script
-				AsciiString allText;
-				allText.concat(s->getUiText());
-				allText.concat(s->getComment());
-				allText.concat(s->getActionComment());
-				allText.concat(s->getConditionComment());
-
-				CString content = allText.str();
-				CString search = targetScriptName.str();
-
-				if (content.Find(search) != -1 && !alreadyListed(usedByTag, s->getName())) {
-					if (foundUse) {
-						usedByTag.concat(", ");
-					} else {
-						foundUse = true;
-					}
-					usedByTag.concat(s->getName());
-				}
-			}
-
-			// --- Check grouped scripts
-			for (ScriptGroup* g = pSL->getScriptGroup(); g; g = g->getNext()) {
-				for (Script* s = g->getScript(); s; s = s->getNext()) {
+			if (checkByParameter) {
+				// --- Parameter-based search ---
+				// Non-grouped scripts
+				for (Script* s = pSL->getScript(); s; s = s->getNext()) {
 					if (s == pScript) continue;
+					bool referenced = false;
 
+					// Conditions
+					for (OrCondition* pOr = s->getOrCondition(); pOr && !referenced; pOr = pOr->getNextOrCondition()) {
+						for (Condition* c = pOr->getFirstAndCondition(); c && !referenced; c = c->getNext()) {
+							for (int p = 0; p < c->getNumParameters(); ++p) {
+								Parameter* param = c->getParameter(p);
+								if (param && (param->getParameterType() == Parameter::SCRIPT || param->getParameterType() == Parameter::SCRIPT_SUBROUTINE)  &&
+									param->getString() == targetScriptName) {
+									referenced = true;
+									break;
+								}
+							}
+						}
+					}
+
+					// Actions
+					for (ScriptAction* a = s->getAction(); a && !referenced; a = a->getNext()) {
+						for (int p = 0; p < a->getNumParameters(); ++p) {
+							Parameter* param = a->getParameter(p);
+							if (param && (param->getParameterType() == Parameter::SCRIPT || param->getParameterType() == Parameter::SCRIPT_SUBROUTINE)  &&
+								param->getString() == targetScriptName) {
+								referenced = true;
+								break;
+							}
+						}
+					}
+
+					if (referenced && !alreadyListed(usedByTag, s->getName())) {
+						if (foundUse) usedByTag.concat(", ");
+						else foundUse = true;
+						usedByTag.concat(s->getName());
+					}
+				}
+
+				// Grouped scripts
+				for (ScriptGroup* g = pSL->getScriptGroup(); g; g = g->getNext()) {
+					for (Script* s = g->getScript(); s; s = s->getNext()) {
+						if (s == pScript) continue;
+						bool referenced = false;
+
+						// Conditions
+						for (OrCondition* pOr = s->getOrCondition(); pOr && !referenced; pOr = pOr->getNextOrCondition()) {
+							for (Condition* c = pOr->getFirstAndCondition(); c && !referenced; c = c->getNext()) {
+								for (int p = 0; p < c->getNumParameters(); ++p) {
+									Parameter* param = c->getParameter(p);
+									if (param && (param->getParameterType() == Parameter::SCRIPT || param->getParameterType() == Parameter::SCRIPT_SUBROUTINE)  &&
+										param->getString() == targetScriptName) {
+										referenced = true;
+										break;
+									}
+								}
+							}
+						}
+
+						// Actions
+						for (ScriptAction* a = s->getAction(); a && !referenced; a = a->getNext()) {
+							for (int p = 0; p < a->getNumParameters(); ++p) {
+								Parameter* param = a->getParameter(p);
+								if (param && (param->getParameterType() == Parameter::SCRIPT || param->getParameterType() == Parameter::SCRIPT_SUBROUTINE) &&
+									param->getString() == targetScriptName) {
+									referenced = true;
+									break;
+								}
+							}
+						}
+
+						if (referenced && !alreadyListed(usedByTag, s->getName())) {
+							if (foundUse) usedByTag.concat(", ");
+							else foundUse = true;
+							usedByTag.concat(s->getName());
+						}
+					}
+				}
+			} 
+			else {
+				// --- Text-based search (existing behavior) ---
+				for (Script* s = pSL->getScript(); s; s = s->getNext()) {
+					if (s == pScript) continue;
 					AsciiString allText;
 					allText.concat(s->getUiText());
 					allText.concat(s->getComment());
@@ -384,12 +443,29 @@ void ScriptDialog::OnSelchangedScriptTree(NMHDR* pNMHDR, LRESULT* pResult)
 					CString search = targetScriptName.str();
 
 					if (content.Find(search) != -1 && !alreadyListed(usedByTag, s->getName())) {
-						if (foundUse) {
-							usedByTag.concat(", ");
-						} else {
-							foundUse = true;
-						}
+						if (foundUse) usedByTag.concat(", ");
+						else foundUse = true;
 						usedByTag.concat(s->getName());
+					}
+				}
+
+				for (ScriptGroup* g = pSL->getScriptGroup(); g; g = g->getNext()) {
+					for (Script* s = g->getScript(); s; s = s->getNext()) {
+						if (s == pScript) continue;
+						AsciiString allText;
+						allText.concat(s->getUiText());
+						allText.concat(s->getComment());
+						allText.concat(s->getActionComment());
+						allText.concat(s->getConditionComment());
+
+						CString content = allText.str();
+						CString search = targetScriptName.str();
+
+						if (content.Find(search) != -1 && !alreadyListed(usedByTag, s->getName())) {
+							if (foundUse) usedByTag.concat(", ");
+							else foundUse = true;
+							usedByTag.concat(s->getName());
+						}
 					}
 				}
 			}
@@ -430,6 +506,7 @@ void ScriptDialog::OnSelchangedScriptTree(NMHDR* pNMHDR, LRESULT* pResult)
 
 	*pResult = 0;
 }
+
 
 /* The purpose of these two functions is to allow
 the inner class CSDTreeCtrl the ability to check
@@ -776,6 +853,13 @@ void ScriptDialog::OnDisableDeepScan()
 	CButton *pButton = (CButton*)GetDlgItem(IDC_DEEPSCAN);
 	m_bDisableDeepScan = (pButton->GetCheck() == 1);
     ::AfxGetApp()->WriteProfileInt(SCRIPT_DIALOG_SECTION, "DisableDeepScan", m_bDisableDeepScan ? 1 : 0);
+}
+
+void ScriptDialog::OnCheckByParameterForReference()
+{
+	CButton *pButton = (CButton*)GetDlgItem(IDC_REFRENCEMODE1);
+	m_bCheckByParameter = (pButton->GetCheck() == 1);
+    ::AfxGetApp()->WriteProfileInt(SCRIPT_DIALOG_SECTION, "ReferenceCheckByParameter", m_bCheckByParameter ? 1 : 0);
 }
 
 void ScriptDialog::OnCompress()
@@ -1194,6 +1278,11 @@ BOOL ScriptDialog::OnInitDialog()
 	pWnd->EnableWindow(!m_autoUpdateWarnings);
 
 	m_staticThis = this;
+
+	m_bCheckByParameter=::AfxGetApp()->GetProfileInt(SCRIPT_DIALOG_SECTION, "ReferenceCheckByParameter", 1);
+	pButton = (CButton*)GetDlgItem(IDC_REFRENCEMODE1);
+	pButton->SetCheck(m_bCheckByParameter ? 1:0);
+	OnCheckByParameterForReference();
 
 	m_bDisableDeepScan=::AfxGetApp()->GetProfileInt(SCRIPT_DIALOG_SECTION, "DisableDeepScan", 1);
 	pButton = (CButton*)GetDlgItem(IDC_DEEPSCAN);

@@ -169,7 +169,7 @@ static const BlockParse theWbTypeTable[] =
 	{ "AudioEvent",					    INI::parseAudioEventDefinition },
 
 	// { "WaterSet",						INI::parseWaterSettingDefinition },
-	// // { "WaterTransparency",	            INI::parseWaterTransparencyDefinition},
+	{ "WaterTransparency",	            INI::parseWaterTransparencyDefinition},
 	{ NULL,									NULL },		// keep this last!
 };
 

@@ -265,3 +265,50 @@ XXX
 == Team Editor ==
 - Missing units now displays error 
 - Missing scripts now displays error
+
+
+10/01/2025
+======================================================
+== System ==
+- Total world cash calculator
+- Lowest LOD now disables submodels
+- Group Rotate tooltip added
+- Visibility toggle for bridges
+- New auto-save SFX
+- Toast dialog stacking support
+- Fullscreen bug fix
+- Visibility toggle for object properties
+- New "Jump to Auto-Save Folder" button 
+- Technical: Refresh logic for copied terrain
+- Fixed color mode for waypoints (color seed based on skirmish waypoint names)
+- Renamed menus
+- Moved menu items to proper locations
+- Fixed bridges and scorch marks being selectable under invalid pick constraints
+- 3 circles added to the grid overlay
+- Technical: Moved mesh feedback after border render since it caused glitches
+- Technical: Removed culling for waypoint lines for now (caused color seed glitches)
+- Fixed a crash when too many objects used the line renderer
+- Fixed an error in the expand logic of the Team Editor
+
+== Build List Tool ==
+- Export button now allows users to choose where to save the exported file
+
+== Auto Edge Tool ==
+- Horizontal and vertical gap correction
+- Diagonal gap correction
+- Re-blending option
+- Pointer tooltip support
+
+== Script Editor ==
+- Option to clear clutter in script names
+- New auto-verify SFX
+- Revamped comments
+
+== Tile Tool ==
+- Copy terrain support
+- Copy terrain (raise only) support
+- Copy terrain height support
+- Copy texture blend support
+- Copy terrain feedback added
+
+

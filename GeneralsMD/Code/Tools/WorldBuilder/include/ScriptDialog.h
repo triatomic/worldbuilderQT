@@ -131,6 +131,7 @@ protected:
 
 	BOOL m_bDisableDeepScan;
 	BOOL m_bCleanScriptName;
+	BOOL m_bCheckByParameter; //reference mode default
 
 protected:
 	HTREEITEM addPlayer(Int playerIndx);
@@ -179,6 +180,7 @@ protected:
 	afx_msg void OnSmartCopy();
 	afx_msg void OnCompress();
 	afx_msg void OnDisableDeepScan();
+	afx_msg void OnCheckByParameterForReference();
 	afx_msg void OnCleanScriptName();
 	afx_msg void OnNewIcons();
 	afx_msg void OnSave();
