@@ -2793,6 +2793,39 @@ if (_skip_drawobject_render) {
 				if (!m_drawWaypoints) {
 					continue;
 				}
+
+				Bool exists = false;
+				AsciiString wpName = pMapObj->getProperties()->getAsciiString(TheKey_waypointName, &exists);
+				if (exists && wpName.startsWith("Player_") && wpName.endsWith("_Start")) {
+					const char* fullName = wpName.str();
+					const char* numStart = fullName + 7; // skip "Player_"
+					const char* numEnd = strstr(numStart, "_Start");
+					int playerNum = 0;
+					if (numEnd && numEnd > numStart) {
+						char numBuf[8];
+						int len = numEnd - numStart;
+						if (len > 7) len = 7;
+						strncpy(numBuf, numStart, len);
+						numBuf[len] = '\0';
+						playerNum = atoi(numBuf);
+					}
+
+					if (playerNum >= 1 && playerNum <= 8) {
+						Coord3D center = *pMapObj->getLocation();
+						center.z = TheTerrainRenderObject->getHeightMapHeight(center.x, center.y, NULL);
+
+						const Real innerRadius = 550.0f;
+						const Real outerRadius = 700.0f;
+						const Real lineWidth = 2.0f;
+
+						// Use the same circle drawer you already have
+						addCircleToLineRenderer(center, innerRadius, lineWidth, 0xFFFF0000, &rinfo.Camera); // red
+						addCircleToLineRenderer(center, outerRadius, lineWidth, 0xFF00FF00, &rinfo.Camera); // green
+
+						linesToRender = true; // ensures line renderer will render later
+					}
+				}
+	
 			}	else {
 				// MLL C&C3
 				if (pMapObj->isSelected()) {

@@ -311,4 +311,18 @@ XXX
 - Copy texture blend support
 - Copy terrain feedback added
 
+10/09/2025
+======================================================
+== System ==
+- Water edits support for map ini loader
+- Undoable Clear extra borders
+- Removed dialog popup for autosave
+- Fixed none string bug on team identity tab
 
+== Script Editor ==
+- References under comments support precise and imprecise mode
+
+11/11/2025
+======================================================
+== System ==
+- Radius for the player x start waypoints
