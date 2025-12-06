@@ -326,3 +326,50 @@ XXX
 ======================================================
 == System ==
 - Radius for the player x start waypoints
+- Preview for grove tool
+- Tracing overlay alignment fix
+- Buildzone feedback set to on by default
+- Grove tool impassable checkbox now also handle inside object check
+- Show Object icons set to off by default 
+- Save audio cue and text added
+- One time warning for users who uses object icons
+- Alignment fix for default water
+
+
+12/06/2025
+======================================================
+== System ==
+- Road and Waypoint Angle Control Support
+- Option to disable base radius for Waypoints
+- Several list view is now compressed, allowing more items to be displayed simultaneously
+- Options to disable sub models added
+- Bug on old undo of road type replacer fixed
+- Ramp feedback moved after boundary code due to visual glitches
+- New generation of map preview added yet unused for now
+- Notification now have an audio cue
+
+== Terrain Material ==
+- Added Search option
+
+== Script Editor == 
+- Added a disabler for the reference due to performance issues
+- Added counter on the script for smart copy to work on
+- Added tooltip for the smart copy
+
+== Pointer tool ==
+- Fixed a bug where auto edge tool tooltip is missing when opening pointer tool
+- Fixed a bug where object properties tooltip not updating when selecting new object
+
+== Road Tool ==
+- Road Type Replacer
+- Road Group Selection
+- Added Tooltip for new group selection
+
+== Waypoint Tool == 
+- Added Tooltip for group selection
+
+== Water Tool ==
+- Added jump to game on the tool screen for easy access
+
+== Grove Tool ==
+- Selection now supports 3d preview
