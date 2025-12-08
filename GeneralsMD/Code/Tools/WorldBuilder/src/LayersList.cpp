@@ -40,6 +40,8 @@
 #include "Common/MapObject.h"
 #include "Common/WellKnownKeys.h"
 
+#include "wbview3d.h"
+
 #include "PointerTool.h"
 #include "WorldBuilderDoc.h"
 #include "GameLogic/PolygonTrigger.h"
@@ -958,6 +960,11 @@ void LayersList::OnHideShowLayer()
 	layerIt->show = !layerIt->show;
 	updateObjectRenderFlags(&layerIt);
 	updateTreeImages();
+
+	// Revalidate them models and them shadows
+	WbView3d *p3View = pDoc->GetActive3DView();
+	p3View->resetRenderObjects();
+	p3View->invalObjectInView(NULL);
 	//PointerTool::clearSelection();
 }
 
@@ -1193,6 +1200,17 @@ void LayersList::OnMergeViewSelection(UINT commandID)
 		changePolygonTriggerLayer(allSelectedTriggers.top(), layerIt->layerName);
 		allSelectedTriggers.pop();
 	}
+
+
+    // 🔹 Trigger re-render of shadows / objects in the view
+    CWorldBuilderDoc* pDoc = CWorldBuilderDoc::GetActiveDoc();
+    if (pDoc) {
+        WbView3d* p3View = pDoc->GetActive3DView();
+        if (p3View) {
+            p3View->resetRenderObjects();
+            p3View->invalObjectInView(NULL);
+        }
+    }
 }
 
 

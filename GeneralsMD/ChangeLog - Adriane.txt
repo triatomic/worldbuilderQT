@@ -390,3 +390,4 @@ XXX
 == Layers List ==
 - Screen position is now saved
 - Layers List is now accessible from the toolbar
+- Shadows and trees now properly disappear when hidden

@@ -1256,6 +1256,11 @@ void WbView3d::updateTrees(void)
 	MapObject *pMapObj;
 	for (pMapObj = MapObject::getFirstMapObject(); pMapObj; pMapObj = pMapObj->getNext())
 	{
+
+		// Skip objects that shouldn't render (hidden by layer or flag)
+		if (pMapObj->getFlags() & FLAG_DONT_RENDER)
+			continue;
+
 		const ThingTemplate *tTemplate;
 		
 		tTemplate = pMapObj->getThingTemplate();

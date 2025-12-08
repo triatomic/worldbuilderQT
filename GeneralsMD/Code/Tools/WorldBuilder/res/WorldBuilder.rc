@@ -1817,14 +1817,19 @@ BEGIN
                     WS_VSCROLL | WS_TABSTOP
 END
 
-IDD_LAYERSLIST DIALOG DISCARDABLE  0, 0, 221, 162
+IDD_LAYERSLIST DIALOG DISCARDABLE  0, 0, 221, 237
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION
 CAPTION "Layers List"
 FONT 8, "MS Sans Serif"
 BEGIN
     CONTROL         "Tree1",IDC_LL_TREE,"SysTreeView32",TVS_HASBUTTONS | 
                     TVS_LINESATROOT | TVS_EDITLABELS | TVS_DISABLEDRAGDROP | 
-                    WS_TABSTOP,7,7,207,148
+                    WS_TABSTOP,7,7,207,146
+    GROUPBOX        "Developer Note (How To Use):",IDC_STATIC,7,159,207,72
+    LTEXT           "1. Right Click on the List and hit Insert New Layer\n2. Select an object on the map\n3. Right Click to on the layer list again \n4. Select Merge Into View Selection Into\n5. Select Your  New Layer",
+                    IDC_STATIC,13,170,176,42
+    LTEXT           "Right Click on the on the items list to see more Options",
+                    IDC_STATIC,14,216,176,9
 END
 
 IDD_REPLACEUNIT DIALOG DISCARDABLE  0, 0, 242, 325
@@ -2639,7 +2644,7 @@ BEGIN
         LEFTMARGIN, 7
         RIGHTMARGIN, 214
         TOPMARGIN, 7
-        BOTTOMMARGIN, 155
+        BOTTOMMARGIN, 231
     END
 
     IDD_REPLACEUNIT, DIALOG
