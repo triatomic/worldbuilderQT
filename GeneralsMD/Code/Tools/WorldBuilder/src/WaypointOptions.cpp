@@ -114,6 +114,50 @@ void WaypointOptions::updateTheUI(void)
 	CComboBox *pCombo = (CComboBox*)GetDlgItem(IDC_WAYPOINTNAME_EDIT);
 	CComboBox *pListWayptNames = (CComboBox*)GetDlgItem(IDC_LIST_OF_WAYPOINT_NAMES);
 
+	// Adriane [Deathscythe] -- Ever since we have our own wy finder we dont need this
+	// plus it lags the tool everytime we activate it
+	pListWayptNames->ShowWindow(SW_HIDE);
+	pCaption5->ShowWindow(SW_HIDE);
+
+	CWnd *pAIWPLbl1 = GetDlgItem(IDC_AIWP_LBL1);
+	CWnd *pAIWPLbl2 = GetDlgItem(IDC_AIWP_LBL2);
+	CWnd *pAIWPLbl3 = GetDlgItem(IDC_AIWP_LBL3);
+
+	CWnd *pAIWPLblH0 = GetDlgItem(IDC_AIWP_LBLH0);
+
+	pAIWPLbl1->SetWindowText("Flank");
+	pAIWPLbl2->SetWindowText("Center");
+	pAIWPLbl3->SetWindowText("BackDoor");
+
+	CWnd *pTrainsWPLbl1 = GetDlgItem(IDC_TRAINSWP_LBL1);
+	CWnd *pTrainsWPLbl2 = GetDlgItem(IDC_TRAINSWP_LBL2);
+	CWnd *pTrainsWPLbl3 = GetDlgItem(IDC_TRAINSWP_LBL3);
+	CWnd *pTrainsWPLbl4 = GetDlgItem(IDC_TRAINSWP_LBL4);
+
+	CWnd *pTrainsWPLbH0 = GetDlgItem(IDC_TRAINSWP_LBLH0);
+	CWnd *pTrainsWPLbH1 = GetDlgItem(IDC_TRAINSWP_LBLH1);
+	CWnd *pTrainsWPLbH2 = GetDlgItem(IDC_TRAINSWP_LBLH2);
+
+	pTrainsWPLbl1->SetWindowText("_Station");
+	pTrainsWPLbl2->SetWindowText("_PingPong");
+	pTrainsWPLbl3->SetWindowText("_Tunnel");
+	pTrainsWPLbl4->SetWindowText("_Disembark");
+
+	int nShow = theTrigger ? SW_HIDE : SW_SHOW;
+
+	pAIWPLbl1->ShowWindow(nShow);
+	pAIWPLbl2->ShowWindow(nShow);
+	pAIWPLbl3->ShowWindow(nShow);
+	pAIWPLblH0->ShowWindow(nShow);
+
+	pTrainsWPLbl1->ShowWindow(nShow);
+	pTrainsWPLbl2->ShowWindow(nShow);
+	pTrainsWPLbl3->ShowWindow(nShow);
+	pTrainsWPLbl4->ShowWindow(nShow);
+	pTrainsWPLbH0->ShowWindow(nShow);
+	pTrainsWPLbH1->ShowWindow(nShow);
+	pTrainsWPLbH2->ShowWindow(nShow);
+
 	CWnd *pWaypointLabel1 = GetDlgItem(IDC_WAYPOINTLABEL1_EDIT);
 	CWnd *pWaypointLabel2 = GetDlgItem(IDC_WAYPOINTLABEL2_EDIT);
 	CWnd *pWaypointLabel3 = GetDlgItem(IDC_WAYPOINTLABEL3_EDIT);
@@ -124,10 +168,10 @@ void WaypointOptions::updateTheUI(void)
 	CButton *pBiDirCheck = (CButton *)GetDlgItem(IDC_WAYPOINT_BIDIRECTIONAL);
 
 	if (theTrigger) {
-		pCaption1->ShowWindow(SW_SHOW);
+		// pCaption1->ShowWindow(SW_SHOW);
 		pWnd->ShowWindow(SW_SHOW);	
 	} else {
-		pCaption1->ShowWindow(SW_HIDE);
+		// pCaption1->ShowWindow(SW_HIDE);
 		pCaption2->ShowWindow(SW_HIDE);
 		pWnd->ShowWindow(SW_HIDE);	
 	}
@@ -167,28 +211,28 @@ void WaypointOptions::updateTheUI(void)
 	}
 
 	// display the list of waypoint names drop down menu
-	if (pListWayptNames && !theTrigger) {
+	// if (pListWayptNames && !theTrigger) {
 
-		// reset everything and start fresh again
-		pListWayptNames->ResetContent();
+	// 	// reset everything and start fresh again
+	// 	pListWayptNames->ResetContent();
 
-		// get the first map object, and then cycle through the rest
-		MapObject *tempObj = MapObject::getFirstMapObject();
-		while (true) {
+	// 	// get the first map object, and then cycle through the rest
+	// 	MapObject *tempObj = MapObject::getFirstMapObject();
+	// 	while (true) {
 
-			if (!tempObj)
-				break;
+	// 		if (!tempObj)
+	// 			break;
 			
-			// if it is a waypoint, add its name to the combo box
-			if (tempObj->isWaypoint())
-				pListWayptNames->AddString(tempObj->getWaypointName().str());
+	// 		// if it is a waypoint, add its name to the combo box
+	// 		if (tempObj->isWaypoint())
+	// 			pListWayptNames->AddString(tempObj->getWaypointName().str());
 			
-			tempObj = tempObj->getNext();
-		}
+	// 		tempObj = tempObj->getNext();
+	// 	}
 
-		// make sure the window is displayed
-		pCombo->ShowWindow(SW_SHOW);
-	}
+	// 	// make sure the window is displayed
+	// 	pCombo->ShowWindow(SW_SHOW);
+	// }
 
 	if ((theMapObj || isWaypointTool) && pWnd ) {
 		if (theMapObj) {
@@ -204,8 +248,8 @@ void WaypointOptions::updateTheUI(void)
 			pWaypointLocation->ShowWindow(SW_SHOW);
 			pWaypointY->ShowWindow(SW_SHOW);
 			pWaypointX->ShowWindow(SW_SHOW);
-			pListWayptNames->ShowWindow(SW_SHOW);
-			pCaption5->ShowWindow(SW_SHOW);
+			// pListWayptNames->ShowWindow(SW_SHOW);
+			// pCaption5->ShowWindow(SW_SHOW);
 			const Coord3D *waypointLocation = getSingleSelectedWaypoint()->getLocation();
 			AsciiString locX, locY;
 

@@ -60,6 +60,9 @@ BEGIN_MESSAGE_MAP(OpenMap, CDialog)
 	ON_BN_CLICKED(IDC_SYSTEMMAPS, OnSystemMaps)
 	ON_BN_CLICKED(IDC_USERMAPS, OnUserMaps)
 	ON_LBN_DBLCLK(IDC_OPEN_LIST, OnDblclkOpenList)
+
+    ON_BN_CLICKED(IDC_MAP_FIND_BUTTON, OnSearchMap)
+    ON_BN_CLICKED(IDC_MAP_SEARCH_RESET_BTN, OnResetSearch)
 	//}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
@@ -84,6 +87,15 @@ void OpenMap::OnBrowse()
 
 void OpenMap::OnOK() 
 {
+
+    // If Enter is pressed inside the search box -> perform search instead of opening a map
+    if (GetFocus() == GetDlgItem(IDC_MAP_SEARCH_EDIT))
+    {
+        OnSearchMap();
+        return; // prevent dialog from closing
+    }
+
+    // === original behavior ===
 	CListBox *pList = (CListBox *)this->GetDlgItem(IDC_OPEN_LIST);
 	if (pList == NULL) {
 		OnCancel();
@@ -140,6 +152,7 @@ void OpenMap::populateMapListbox( Bool systemMaps )
 	strcpy(findBuf, dirBuf);
 	strcat(findBuf, "*.*");
 
+    m_fullMapList.RemoveAll(); // before filling list
 	Bool found = false;
 
 	hFindFile = FindFirstFile(findBuf, &findData); 
@@ -161,6 +174,7 @@ void OpenMap::populateMapListbox( Bool systemMaps )
 				if (CFile::GetStatus(fileBuf, status)) {
 					if (!(status.m_attribute & CFile::directory)) {
 						pList->AddString(findData.cFileName);
+						m_fullMapList.Add(findData.cFileName);
 						found = true;
 					};
 				}
@@ -207,3 +221,62 @@ void OpenMap::OnDblclkOpenList()
 {
 	OnOK();
 }
+
+void OpenMap::OnSearchMap()
+{
+    CString search;
+    GetDlgItemText(IDC_MAP_SEARCH_EDIT, search);
+    search.MakeLower();
+
+    CListBox* pList = (CListBox*)GetDlgItem(IDC_OPEN_LIST);
+    if (!pList) return;
+
+    pList->ResetContent();
+
+    if (search.IsEmpty()) {
+        for (int i=0;i<m_fullMapList.GetSize();i++)
+            pList->AddString(m_fullMapList[i]);
+        pList->SetCurSel(0);
+        return;
+    }
+
+    bool found = false;
+
+    for (int i=0;i<m_fullMapList.GetSize();i++)
+    {
+        CString name = m_fullMapList[i];
+        CString lower = name; lower.MakeLower();
+
+        if (lower.Find(search) != -1) {
+            pList->AddString(name);
+            found = true;
+        }
+    }
+
+    if (!found) {
+        ::MessageBeep(MB_ICONEXCLAMATION); // no matches
+    } else {
+        pList->SetCurSel(0);
+    }
+}
+
+void OpenMap::OnResetSearch()
+{
+    SetDlgItemText(IDC_MAP_SEARCH_EDIT, "");
+    CListBox* pList = (CListBox*)GetDlgItem(IDC_OPEN_LIST);
+    if (!pList) return;
+
+    pList->ResetContent();
+
+    for (int i=0;i<m_fullMapList.GetSize();i++)
+        pList->AddString(m_fullMapList[i]);
+
+    if (m_fullMapList.GetSize()>0)
+        pList->SetCurSel(0);
+}
+
+// optional: auto filter as user types
+// void OpenMap::OnSearchEditChange()
+// {
+//     OnSearchMap();
+// }

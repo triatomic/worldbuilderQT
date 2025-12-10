@@ -118,7 +118,7 @@ BOOL WaterOptions::OnInitDialog()
 	m_updating = true;
 
 	m_waterHeightPopup.SetupPopSliderButton(this, IDC_HEIGHT_POPUP, this);
-	m_waterPointSpacing = 2*MAP_XY_FACTOR;
+	m_waterPointSpacing = 10*MAP_XY_FACTOR;
 	m_staticThis = this;
 	m_updating = false;
 	setHeight(m_waterHeight);
@@ -193,73 +193,92 @@ void WaterOptions::OnWaterPolygon()
 
 void WaterOptions::OnMakeRiver() 
 {
-	CButton *pButton = (CButton*)GetDlgItem(IDC_MAKE_RIVER);
-	Bool river = (pButton->GetCheck()==1);
-	PolygonTrigger *theTrigger = WaypointOptions::getSingleSelectedPolygon();
-	if (theTrigger) {
-		theTrigger->setRiver(river);
-		if (river) {
-			Int curPoint = PolygonTool::getSelectedPointNdx();
-			if (curPoint >= 0) {
-				Real endLen=0;
-				Int newPoint = curPoint;
-				if (curPoint>0) curPoint--;
-				if (curPoint>0) curPoint--;
-				Int i;
-				for (i=curPoint; i<theTrigger->getNumPoints()-1 && i<curPoint+4; i++) {
-					ICoord3D innerPt = *theTrigger->getPoint(i);
-					ICoord3D outerPt = *theTrigger->getPoint(i+1);
-					Real dx = innerPt.x-outerPt.x;
-					Real dy = innerPt.y-outerPt.y;
-					Real curLen = sqrt(dx*dx+dy*dy);
-					if ( curLen>endLen) {
-						newPoint = i;
-						endLen = curLen;
-					}
-				}
-				theTrigger->setRiverStart(newPoint);
-
-				// Now find the other end.
-//				Real sourceWidth = endLen;
-
-				endLen=0;	
-				Int endPoint = 0;
-				for (i=0; i<theTrigger->getNumPoints()-1; i++) {
-					if (i>=newPoint-1 && i<=newPoint+1) continue;
-					ICoord3D innerPt = *theTrigger->getPoint(i);
-					ICoord3D outerPt = *theTrigger->getPoint(i+1);
-					Real dx = innerPt.x-outerPt.x;
-					Real dy = innerPt.y-outerPt.y;
-					Real curLen = sqrt(dx*dx+dy*dy);
-					if ( curLen>endLen) {
-						endPoint = i;
-						endLen = curLen;
-					}
-				}
-				Int pointsOut = endPoint - newPoint;
-				Int pointsIn = 	newPoint - endPoint;
-				if (pointsOut<0) pointsOut += theTrigger->getNumPoints();
-				if (pointsIn<0) pointsIn += theTrigger->getNumPoints();
-				Int delta = pointsIn-pointsOut;
-				if (delta<0) delta = -delta;
-				if (delta>1) {
-					PolygonTrigger *pNew;
-					if (pointsOut<pointsIn) {
-						pNew = adjustCount(theTrigger, newPoint+1, endPoint, pointsIn-1);
-						theTrigger->setRiverStart(pointsIn);
-					}	else {
-						pNew = adjustCount(theTrigger, endPoint+1, newPoint, pointsOut-1);
-						theTrigger->setRiverStart(0);
-					}
-					while(theTrigger->getNumPoints()) theTrigger->deletePoint(theTrigger->getNumPoints()-1);
-					for (i=0; i<pNew->getNumPoints(); i++) {
-						theTrigger->addPoint(*pNew->getPoint(i));
-					}
-					pNew->deleteInstance();
-				}
-			}
-		}
-	}
+    CButton *pButton = (CButton*)GetDlgItem(IDC_MAKE_RIVER);
+    Bool river = (pButton->GetCheck() == 1);
+    PolygonTrigger *theTrigger = WaypointOptions::getSingleSelectedPolygon();
+    
+    if (!theTrigger) return;
+    
+    theTrigger->setRiver(river);
+    
+    if (river) {
+        Int selectedPoint = PolygonTool::getSelectedPointNdx();
+        if (selectedPoint < 0) selectedPoint = 0; // Default to first point if none selected
+        
+        // Determine river flow direction by checking which orientation has wider segments
+        Int horizontalWideCount = 0;
+        Int verticalWideCount = 0;
+        Int i;
+        
+        for (i = 0; i < theTrigger->getNumPoints() - 1; i++) {
+            ICoord3D pt1 = *theTrigger->getPoint(i);
+            ICoord3D pt2 = *theTrigger->getPoint(i + 1);
+            
+            Real dx = abs(pt1.x - pt2.x);
+            Real dy = abs(pt1.y - pt2.y);
+            
+            if (dx > dy) {
+                horizontalWideCount++;
+            } else {
+                verticalWideCount++;
+            }
+        }
+        
+        // Flow is perpendicular to the wide segments
+        Bool flowIsHorizontal = (verticalWideCount > horizontalWideCount);
+        
+        // Find the opposite end based on flow direction
+        Int endPoint = 0;
+        Real maxDistance = 0;
+        
+        ICoord3D startPt = *theTrigger->getPoint(selectedPoint);
+        
+        for (i = 0; i < theTrigger->getNumPoints(); i++) {
+            if (i == selectedPoint) continue;
+            
+            ICoord3D pt = *theTrigger->getPoint(i);
+            Real distance;
+            
+            if (flowIsHorizontal) {
+                distance = abs(pt.x - startPt.x);
+            } else {
+                distance = abs(pt.y - startPt.y);
+            }
+            
+            if (distance > maxDistance) {
+                maxDistance = distance;
+                endPoint = i;
+            }
+        }
+        
+        // Reorder points if needed so start is at index 0
+        if (selectedPoint != 0) {
+            // Store all points temporarily
+            int numPoints = theTrigger->getNumPoints();
+            ICoord3D *tempPoints = new ICoord3D[numPoints];
+            
+            for (i = 0; i < numPoints; i++) {
+                tempPoints[i] = *theTrigger->getPoint(i);
+            }
+            
+            // Clear existing points
+            while (theTrigger->getNumPoints()) {
+                theTrigger->deletePoint(theTrigger->getNumPoints() - 1);
+            }
+            
+            // Add points in new order (from selected to end, then beginning to selected)
+            for (i = selectedPoint; i < numPoints; i++) {
+                theTrigger->addPoint(tempPoints[i]);
+            }
+            for (i = 0; i < selectedPoint; i++) {
+                theTrigger->addPoint(tempPoints[i]);
+            }
+            
+            delete[] tempPoints;
+        }
+        
+        theTrigger->setRiverStart(0);
+    }
 }
 
 /// Adjust the spacing.

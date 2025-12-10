@@ -79,6 +79,8 @@ BEGIN_MESSAGE_MAP(RoadOptions, COptionsPanel)
 	ON_BN_CLICKED(IDC_BROAD_CURVE, OnBroadCurve)
 	ON_BN_CLICKED(IDC_JOIN, OnJoin)
 	ON_BN_CLICKED(IDC_APPLY_ROAD, OnApplyRoad)
+	ON_BN_CLICKED(IDC_OBJECT_SEARCH_BUTTON, OnSearch)
+	ON_BN_CLICKED(IDC_OBJECT_SEARCH_RESET_BTN, OnReset)
 	ON_EN_CHANGE(IDC_ROAD_SNAP_POINT_EDIT, OnEditSnapPoint)
 	//}}AFX_MSG_MAP
 END_MESSAGE_MAP()
@@ -681,4 +683,123 @@ void RoadOptions::OnApplyRoad()
 	{
 		ChangeRoadType(m_currentRoadName);
 	}
+}
+
+
+void RoadOptions::OnOK()
+{
+    OnSearch(); 
+}
+void RoadOptions::OnSearch()
+{
+
+    CString searchText;
+    GetDlgItemText(IDC_OBJECT_SEARCH_EDIT, searchText);
+    searchText.MakeLower();
+
+	m_roadTreeView.SetRedraw(FALSE);   // stop redraw
+    m_roadTreeView.DeleteAllItems(); // clear tree
+
+    // If search box empty → restore full list
+    if (searchText.IsEmpty())
+    {
+        OnReset();
+        return;
+    }
+
+    Int index = 0;
+    int matchCount = 0;
+
+    // Search roads
+    for (TerrainRoadType* road = TheTerrainRoads->firstRoad(); 
+         road; road = TheTerrainRoads->nextRoad(road))
+    {
+        CString name = road->getName().str();
+        CString lower = name; lower.MakeLower();
+
+        if (lower.Find(searchText) != -1)
+        {
+            addRoad((char*)road->getName().str(), index, TVI_ROOT);
+            matchCount++;
+        }
+        index++;
+    }
+
+    // Search bridges
+    for (TerrainRoadType* bridge = TheTerrainRoads->firstBridge(); 
+         bridge; bridge = TheTerrainRoads->nextBridge(bridge))
+    {
+        CString name = bridge->getName().str();
+        CString lower = name; lower.MakeLower();
+
+        if (lower.Find(searchText) != -1)
+        {
+            addRoad((char*)bridge->getName().str(), index, TVI_ROOT);
+            matchCount++;
+        }
+        index++;
+    }
+
+    if (matchCount == 0)
+    {
+		::MessageBeep(MB_ICONEXCLAMATION); // no result
+
+		m_roadTreeView.DeleteAllItems(); // clear tree
+		m_roadTreeView.Invalidate();       // force repaint
+
+        return;
+    }
+
+    // Expand "Roads" and/or "Bridges" automatically if results found
+    HTREEITEM root = m_roadTreeView.GetRootItem();
+    ExpandAllItems(m_roadTreeView, root);
+
+    m_roadTreeView.SetRedraw(TRUE);    // resume redraw
+    m_roadTreeView.Invalidate();       // force repaint
+}
+
+// 🔄 Reset View – restore original full list
+void RoadOptions::OnReset()
+{
+    m_roadTreeView.SetRedraw(FALSE);   // stop redraw
+    m_roadTreeView.DeleteAllItems();
+
+    Int index = 0;
+
+    // restore roads
+    for (TerrainRoadType* road = TheTerrainRoads->firstRoad(); 
+         road; road = TheTerrainRoads->nextRoad(road))
+    {
+        addRoad((char*)road->getName().str(), index, TVI_ROOT);
+        index++;
+    }
+
+    // restore bridges
+    for (TerrainRoadType* bridge = TheTerrainRoads->firstBridge(); 
+         bridge; bridge = TheTerrainRoads->nextBridge(bridge))
+    {
+        addRoad((char*)bridge->getName().str(), index, TVI_ROOT);
+        index++;
+    }
+
+    // restore selection + label
+	int selectionindex = 0; // we set it to 0 since its default 
+    setRoadTreeViewSelection(TVI_ROOT, selectionindex);
+    updateLabel();
+
+    m_roadTreeView.SetRedraw(TRUE);    // resume redraw
+    m_roadTreeView.Invalidate();       // force repaint
+}
+
+void RoadOptions::ExpandAllItems(CTreeCtrl& treeCtrl, HTREEITEM hItem)
+{
+    while (hItem)
+    {
+        treeCtrl.Expand(hItem, TVE_EXPAND);
+        HTREEITEM hChild = treeCtrl.GetChildItem(hItem);
+        if (hChild)
+            ExpandAllItems(treeCtrl, hChild);
+
+        hItem = treeCtrl.GetNextSiblingItem(hItem);
+    }
 }

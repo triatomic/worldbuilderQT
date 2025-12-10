@@ -77,6 +77,7 @@ protected:
 	afx_msg void OnChangeZOffset();
 	afx_msg void OnChangeAngle();
 	afx_msg void OnExport();
+	afx_msg void OnImport();
 	afx_msg void OnForcedShowObjects();
 	//}}AFX_MSG
 	DECLARE_MESSAGE_MAP()

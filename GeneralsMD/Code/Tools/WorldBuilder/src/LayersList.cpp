@@ -1246,6 +1246,12 @@ Bool LayersList::findAndSelectMapObject(AsciiString selectedItemAsciiString)
 		if (mapObjectName.compareNoCase(selectedItemAsciiString) == 0) {
 			// Found it... select this object
 			mapObject->setSelected(true);
+
+			const Coord3D* objectPosition = mapObject->getLocation();
+			WbView3d* p3View = CWorldBuilderDoc::GetActive3DView();
+			if (p3View) {
+				p3View->setCenterInView(objectPosition->x / MAP_XY_FACTOR, objectPosition->y / MAP_XY_FACTOR);
+			}
 			return (true);
 		}
 		mapObject = mapObject->getNext();

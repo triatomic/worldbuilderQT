@@ -530,14 +530,14 @@ void PointerTool::mouseDown(TTrackingMode m, CPoint viewPt, WbView* pView, CWorl
 		if (m_curObject) {
 			// adjust the starting point so if we are snapping, the object snaps as well.
 			loc = *m_curObject->getLocation();
-			float angle = m_curObject->getAngle(); 
+			float angleDeg = m_curObject->getAngle() * (180.0f / 3.14159265f);
 			Coord3D snapLoc = loc;
 			pView->snapPoint(&snapLoc);
 			m_downPt3d.x += (loc.x-snapLoc.x);
 			m_downPt3d.y += (loc.y-snapLoc.y);
 
 			CString text;
-			text.Format(_T("X: %.2f\nY: %.2f\nAngle: %.2f"), loc.x, loc.y, angle);
+			text.Format(_T("X: %.2f\nY: %.2f\nAngle: %.2f"), loc.x, loc.y, angleDeg);
 			m_lastPointerInfo = text;
 
 		}
@@ -781,8 +781,8 @@ void PointerTool::mouseMoved(TTrackingMode m, CPoint viewPt, WbView* pView, CWor
         Real yOffset = (cpt.y - m_downPt3d.y);
         m_modifyUndoable->SetOffset(xOffset, yOffset);
         Coord3D center = *m_curObject->getLocation();
-		float angle = m_curObject->getAngle(); 
-        text.Format(_T("X: %.2f\nY: %.2f\nAngle: %.2f"), center.x, center.y, angle);
+		float angleDeg = m_curObject->getAngle() * (180.0f / 3.14159265f);
+        text.Format(_T("X: %.2f\nY: %.2f\nAngle: %.2f"), center.x, center.y, angleDeg);
         m_lastPointerInfo = text;
     }
 

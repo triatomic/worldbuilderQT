@@ -391,3 +391,32 @@ XXX
 - Screen position is now saved
 - Layers List is now accessible from the toolbar
 - Shadows and trees now properly disappear when hidden
+
+
+12/11/2025
+======================================================
+== System ==
+- Open map screen now supports search 
+- Added a one time introcution mechanic to the layer list tool 
+
+== Layers List ==
+- Object select now supports camera centering on to the object 
+
+== Road Tool == 
+- Support for Search Added 
+
+== Object Tool ==
+- Fixed the bug where snapping doesnt work here properly
+- Pointer tooltip support added
+
+==  BuildList Tool == 
+- Crash bug fix on delete
+- Enabled the Unused building properties 
+- Import support added  
+
+== Water Tool ==
+- Simplified the logic for river creation 
+- Set the default spacing to 100
+
+== Waypoint Tool ==
+- Added tooltips

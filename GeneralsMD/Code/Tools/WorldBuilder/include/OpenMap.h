@@ -59,7 +59,10 @@ public:
 protected:
 	TOpenMapInfo *m_pInfo;
 	void populateMapListbox( Bool systemMaps );
+	void OnSearchMap();
+	void OnResetSearch();
 	Bool m_usingSystemDir;
+    CStringArray m_fullMapList;   // original unfiltered list
 protected:
 
 	// Generated message map functions

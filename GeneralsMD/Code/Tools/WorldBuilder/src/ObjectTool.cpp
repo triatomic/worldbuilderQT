@@ -33,6 +33,10 @@
 #include "WorldBuilderView.h"
 #include "Common/ThingTemplate.h"
 #include "Common/WellKnownKeys.h"
+#include "PointerTool.h"
+
+
+Bool ObjectTool::m_objectToolActive = false;
 //
 // ObjectTool class.
 //
@@ -160,6 +164,8 @@ void ObjectTool::deactivate()
 	if (pDoc==NULL) return;
 	WbView3d *p3View = pDoc->GetActive3DView();
 	p3View->setObjTracking(NULL, m_downPt3d, 0, false);
+
+	m_objectToolActive = false;
 }
 /// Shows the object options panel
 void ObjectTool::activate() 
@@ -170,6 +176,8 @@ void ObjectTool::activate()
 	if (pDoc==NULL) return;
 	WbView3d *p3View = pDoc->GetActive3DView();
 	p3View->setObjTracking(NULL, m_downPt3d, 0, false);
+
+    m_objectToolActive = true;
 }
 
 /** Execute the tool on mouse down - Place an object. */
@@ -179,6 +187,9 @@ void ObjectTool::mouseDown(TTrackingMode m, CPoint viewPt, WbView* pView, CWorld
 
 	Coord3D cpt;
 	pView->viewToDocCoords(viewPt, &cpt);
+
+    pView->snapPoint(&cpt);
+	
 	m_downPt2d = viewPt;
 	m_downPt3d = cpt;
 }
@@ -197,9 +208,22 @@ void ObjectTool::mouseMoved(TTrackingMode m, CPoint viewPt, WbView* pView, CWorl
 		loc = m_downPt3d;
 	}
 	MapObject *pCur = ObjectOptions::getObjectNamed(AsciiString(ObjectOptions::getCurObjectName()));
-	Real angle = justAClick ? 0 : calcAngle(loc, cpt, pView);
-	if (justAClick && pCur && pCur->getThingTemplate()) {
-		angle = pCur->getThingTemplate()->getPlacementViewAngle();
+	Real angle;
+
+	if (justAClick) {
+		// Use default template placement angle if just previewing
+		if (pCur && pCur->getThingTemplate())
+			angle = pCur->getThingTemplate()->getPlacementViewAngle();
+		else
+			angle = 0;
+	} 
+	else {
+		// <- SUPPORT SNAP HERE
+		if (pView->isLockedAngle()) {
+			angle = ObjectTool::calcAngleSnapped(loc, cpt, pView);   // snapped rotation
+		} else {
+			angle = ObjectTool::calcAngle(loc, cpt, pView);          // free rotation
+		}
 	}
 	WbView3d *p3View = pDoc->GetActive3DView();
 	p3View->setObjTracking(NULL, m_downPt3d, 0, false);
@@ -207,6 +231,11 @@ void ObjectTool::mouseMoved(TTrackingMode m, CPoint viewPt, WbView* pView, CWorl
 	if (pCur) { 
 		// Display the transparent version of this object.
 		p3View->setObjTracking(pCur, loc, angle, true);
+
+		float angleDeg = angle * (180.0f / 3.14159265f);
+		CString text;
+		text.Format(_T("X: %.2f\nY: %.2f\nAngle: %.2f"), loc.x, loc.y, angleDeg);
+		PointerTool::setLastPointerInfoString(text);
 	} else {
 		// Don't display anything. 
 		p3View->setObjTracking(NULL, loc, angle, false);
@@ -242,11 +271,28 @@ void ObjectTool::mouseUp(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBu
 	WbView3d* p3View = pDoc->GetActive3DView();
 	if (p3View && p3View->getLastTrackingZIsFromHighElev()) {
 		loc.z = p3View->getLastTrackingZ();
-		DEBUG_LOG(("terrainz: %.2f\n", loc.z));
+		// DEBUG_LOG(("terrainz: %.2f\n", loc.z));
 	} else {
 		loc.z = ObjectOptions::getCurObjectHeight();  // fallback
 	}
-	Real angle = justAClick ? 0 : calcAngle(loc, cpt, pView);
+	MapObject *pCur = ObjectOptions::getObjectNamed(AsciiString(ObjectOptions::getCurObjectName()));
+	Real angle;
+
+	if (justAClick) {
+		// Use default template placement angle if just previewing
+		if (pCur && pCur->getThingTemplate())
+			angle = pCur->getThingTemplate()->getPlacementViewAngle();
+		else
+			angle = 0;
+	} else {
+		// <- SUPPORT SNAP HERE
+		if (pView->isLockedAngle()) {
+			angle = ObjectTool::calcAngleSnapped(loc, cpt, pView);   // snapped rotation
+		} else {
+			angle = ObjectTool::calcAngle(loc, cpt, pView);          // free rotation
+		}
+	}
+
 	MapObject *pNew = ObjectOptions::duplicateCurMapObjectForPlace(&loc, angle, true);
 	if (pNew) {
 		if (justAClick && pNew->getThingTemplate()) {

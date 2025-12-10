@@ -53,7 +53,7 @@ public:
 	//{{AFX_VIRTUAL(RoadOptions)
 	protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV support
-	virtual void OnOK(){return;};  ///< Modeless dialogs don't OK, so eat this for modeless.
+	virtual void OnOK();  ///< Modeless dialogs don't OK, so eat this for modeless.
 	virtual void OnCancel(){return;}; ///< Modeless dialogs don't close on ESC, so eat this for modeless.
 	virtual BOOL OnNotify(WPARAM wParam, LPARAM lParam, LRESULT* pResult);
 	//}}AFX_VIRTUAL
@@ -70,6 +70,9 @@ protected:
 	afx_msg void OnJoin();
 	afx_msg void OnApplyRoad();
 	afx_msg void OnEditSnapPoint();
+
+	afx_msg void OnSearch();
+	afx_msg void OnReset();
 	//}}AFX_MSG
 	DECLARE_MESSAGE_MAP()
 
@@ -89,6 +92,7 @@ protected:
 
 
 protected:
+	void ExpandAllItems(CTreeCtrl& treeCtrl, HTREEITEM hItem);
 	void addRoad(char *pPath, Int objectNdx, HTREEITEM parent);
 	HTREEITEM findOrAdd(HTREEITEM parent, const char *pLabel);
 	Bool findAndSelect(HTREEITEM parent, AsciiString label);

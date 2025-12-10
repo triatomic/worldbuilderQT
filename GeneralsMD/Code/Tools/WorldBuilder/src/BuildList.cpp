@@ -82,6 +82,7 @@ BEGIN_MESSAGE_MAP(BuildList, COptionsPanel)
 	ON_EN_CHANGE(IDC_MAPOBJECT_ZOffset, OnChangeZOffset)
 	ON_EN_CHANGE(IDC_MAPOBJECT_Angle, OnChangeAngle)
 	ON_BN_CLICKED(IDC_EXPORT, OnExport)
+	ON_BN_CLICKED(IDC_IMPORT, OnImport)
 	ON_BN_CLICKED(IDC_SHOW_OBJECTS, OnForcedShowObjects)
 	//}}AFX_MSG_MAP
 END_MESSAGE_MAP()
@@ -538,16 +539,23 @@ void BuildList::OnDeleteBuilding()
 		pBuildInfo = pBuildInfo->getNext();
 		if (pBuildInfo == NULL) return;
 	}
+
+	// Adriane [Deathscythe] -- Crash fix for delete -- this arrangement of code fixes it for some reason
+	CWorldBuilderDoc* pDoc = CWorldBuilderDoc::GetActiveDoc();
+	WbView3d *p3View = pDoc->GetActive3DView();
+	p3View->invalBuildListItemInView(pBuildInfo);
 	pSide->removeFromBuildList(pBuildInfo); 
 
-	CWorldBuilderDoc* pDoc = CWorldBuilderDoc::GetActiveDoc();
 	SidesListUndoable *pUndo = new SidesListUndoable(sides, pDoc);
 	pDoc->AddAndDoUndoable(pUndo);
 	REF_PTR_RELEASE(pUndo); // belongs to pDoc now.
 	updateCurSide();
-	WbView3d *p3View = pDoc->GetActive3DView();
-	p3View->invalBuildListItemInView(pBuildInfo);
-	pList->SetCurSel(-1);
+
+	int itemCount = pList->GetCount();
+	if (itemCount > 0)
+		pList->SetCurSel(itemCount - 1);
+	else
+		pList->SetCurSel(-1);
 }
 
 void BuildList::OnSelendokRebuilds() 
@@ -805,5 +813,149 @@ void BuildList::OnExport()
 		if (open) {
 			fclose(theLogFile);
 		}
+	}
+}
+
+void BuildList::OnImport() 
+{
+	CFileDialog dlg(TRUE, _T("ini"), _T("BuildList.ini"), OFN_HIDEREADONLY | OFN_FILEMUSTEXIST,
+		_T("INI Files (*.ini)|*.ini|All Files (*.*)|*.*||"));
+
+	if (dlg.DoModal() != IDOK)
+		return; // User cancelled
+
+	CString filePath = dlg.GetPathName();
+	FILE* file = fopen(filePath, "r");
+	if (file == NULL) {
+		AfxMessageBox(_T("Failed to open file for import."));
+		return;
+	}
+
+	try {
+		// Create a copy of the sides list for undo
+		SidesList sides;
+		sides = *TheSidesList;
+		SidesInfo *pSide = sides.getSideInfo(m_curSide);
+		
+		if (!pSide) {
+			fclose(file);
+			AfxMessageBox(_T("No valid side selected."));
+			return;
+		}
+
+		// Clear existing build list for this side
+		BuildListInfo *pBuild = pSide->getBuildList();
+		while (pBuild) {
+			BuildListInfo *pNext = pBuild->getNext();
+			pSide->removeFromBuildList(pBuild);
+			pBuild = pNext;
+		}
+
+		char line[512];
+		BuildListInfo *currentBuild = NULL;
+		bool inStructure = false;
+		int importedCount = 0;
+
+		while (fgets(line, sizeof(line), file)) {
+			// Trim whitespace
+			char *p = line;
+			while (*p && isspace(*p)) p++;
+			
+			// Skip comments and empty lines
+			if (*p == ';' || *p == '\0' || *p == '\n')
+				continue;
+
+			// Check for Structure start
+			if (strstr(p, "Structure ") == p) {
+				inStructure = true;
+				currentBuild = newInstance(BuildListInfo);
+				
+				// Extract template name
+				char *nameStart = p + 10; // strlen("Structure ")
+				char *nameEnd = strchr(nameStart, '\n');
+				if (nameEnd) *nameEnd = '\0';
+				
+				// Trim trailing whitespace
+				char *end = nameStart + strlen(nameStart) - 1;
+				while (end > nameStart && isspace(*end)) *end-- = '\0';
+				
+				currentBuild->setTemplateName(AsciiString(nameStart));
+				
+				// Set defaults
+				currentBuild->setAngle(0.0f);
+				Coord3D defaultLoc;
+				defaultLoc.set(0.0f, 0.0f, 0.0f);
+				currentBuild->setLocation(defaultLoc);
+				currentBuild->setNumRebuilds(0);
+				currentBuild->setInitiallyBuilt(false);
+				continue;
+			}
+
+			// Check for Structure end
+			if (strstr(p, "END") == p && inStructure) {
+				if (currentBuild) {
+					pSide->addToBuildList(currentBuild, 1000);
+					importedCount++;
+					currentBuild = NULL;
+				}
+				inStructure = false;
+				continue;
+			}
+
+			// Parse structure properties
+			if (inStructure && currentBuild) {
+				if (strstr(p, "Name =") || strstr(p, "Name=")) {
+					char *valueStart = strchr(p, '=') + 1;
+					while (*valueStart && isspace(*valueStart)) valueStart++;
+					char *valueEnd = strchr(valueStart, '\n');
+					if (valueEnd) *valueEnd = '\0';
+					currentBuild->setBuildingName(AsciiString(valueStart));
+				}
+				else if (strstr(p, "Location =") || strstr(p, "Location=")) {
+					float x = 0, y = 0;
+					if (sscanf(p, "%*[^X]X:%f Y:%f", &x, &y) == 2) {
+						Coord3D loc;
+						loc.set(x, y, 0.0f);
+						currentBuild->setLocation(loc);
+					}
+				}
+				else if (strstr(p, "Rebuilds =") || strstr(p, "Rebuilds=")) {
+					int rebuilds = 0;
+					if (sscanf(p, "%*[^=]=%d", &rebuilds) == 1) {
+						currentBuild->setNumRebuilds(rebuilds);
+					}
+				}
+				else if (strstr(p, "Angle =") || strstr(p, "Angle=")) {
+					float angleDeg = 0;
+					if (sscanf(p, "%*[^=]=%f", &angleDeg) == 1) {
+						currentBuild->setAngle(angleDeg * PI / 180);
+					}
+				}
+				else if (strstr(p, "InitiallyBuilt =") || strstr(p, "InitiallyBuilt=")) {
+					char *valueStart = strchr(p, '=') + 1;
+					while (*valueStart && isspace(*valueStart)) valueStart++;
+					bool isBuilt = (strstr(valueStart, "Yes") != NULL || strstr(valueStart, "yes") != NULL);
+					currentBuild->setInitiallyBuilt(isBuilt);
+				}
+			}
+		}
+
+		fclose(file);
+
+		// Add to undo stack and refresh UI
+		CWorldBuilderDoc* pDoc = CWorldBuilderDoc::GetActiveDoc();
+		SidesListUndoable *pUndo = new SidesListUndoable(sides, pDoc);
+		pDoc->AddAndDoUndoable(pUndo);
+		REF_PTR_RELEASE(pUndo);
+
+		updateCurSide();
+
+		CString msg;
+		msg.Format(_T("Successfully imported %d buildings."), importedCount);
+		AfxMessageBox(msg);
+
+	} catch (...) {
+		fclose(file);
+		AfxMessageBox(_T("Error occurred during import."));
 	}
 }

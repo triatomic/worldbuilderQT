@@ -312,6 +312,15 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	m_cameraOptions.Create(IDD_CAMERA_OPTIONS, this);
 	m_cameraOptions.SetWindowPos(NULL, frameRect.left, frameRect.top, 0, 0, SWP_NOZORDER|SWP_NOSIZE);
  	m_cameraOptions.GetWindowRect(&frameRect);
+
+	// We know people are retarded -- so we have to force them dickwads to use the layers list at least once
+	int introduced = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "LayerListIntroducedToShitHead", 0);
+
+	if (introduced != 1)
+	{
+		::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "ShowLayersList", 1);
+		::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "LayerListIntroducedToShitHead", 1);
+	}
 	
 	// now, setup the Layers Panel
 	m_layersList = new LayersList(LayersList::IDD, this);

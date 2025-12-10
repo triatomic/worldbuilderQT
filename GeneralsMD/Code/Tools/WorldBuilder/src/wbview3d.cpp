@@ -3564,7 +3564,7 @@ void WbView3d::drawLabels(HDC hdc)
 	// DEBUG_LOG(("AutoEdgeOutTool::isActive() = %d\n", AutoEdgeOutTool::isActive() ? 1 : 0));
 	// DEBUG_LOG(("PointerTool::isDragSelecting() = %d\n", PointerTool::isDragSelecting() ? 1 : 0));
 	//  BE WARNED -- DO NOT ENABLE THIS DUDE WHEN DRAGGING OR ELSE THE DRAG RECT WILL BE BROKEN UNDER POINTER TOOL
-	if ((PointerTool::isMouseDown() || AutoEdgeOutTool::isActive()) 
+	if ((PointerTool::isMouseDown() || AutoEdgeOutTool::isActive() || ObjectTool::isActive()) 
 			&& !PointerTool::isDragSelecting()
 		) {
 		const CString text = _T(PointerTool::getLastPointerInfoString());

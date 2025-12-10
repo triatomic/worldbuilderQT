@@ -632,6 +632,20 @@
 #define IDC_VOLUME_EDIT                 1352
 #define IDC_MAPOBJECT_XYPosition        1353
 #define IDC_DEV_NOTE                    1354
+#define IDC_MAP_SEARCH_EDIT             1355
+#define IDC_MAP_FIND_BUTTON             1356
+#define IDC_MAP_SEARCH_RESET_BTN        1357
+#define IDC_AIWP_LBL1                   1358
+#define IDC_AIWP_LBL2                   1359
+#define IDC_AIWP_LBL3                   1360
+#define IDC_TRAINSWP_LBL1               1361
+#define IDC_TRAINSWP_LBL2               1362
+#define IDC_TRAINSWP_LBL3               1363
+#define IDC_TRAINSWP_LBL4               1364
+#define IDC_TRAINSWP_LBLH2              1365
+#define IDC_TRAINSWP_LBLH1              1366
+#define IDC_TRAINSWP_LBLH0              1367
+#define IDC_AIWP_LBLH0                  1368
 #define IDC_STATIC_MAPOBJECT_GENERAL    1379
 #define IDC_STATIC_MAPOBJECT_LOGICAL    1380
 #define IDC_STATIC_MAPOBJECT_SOUND      1381
@@ -884,7 +898,7 @@
 #define _APS_3D_CONTROLS                     1
 #define _APS_NEXT_RESOURCE_VALUE        243
 #define _APS_NEXT_COMMAND_VALUE         33348
-#define _APS_NEXT_CONTROL_VALUE         1355
+#define _APS_NEXT_CONTROL_VALUE         1369
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif
