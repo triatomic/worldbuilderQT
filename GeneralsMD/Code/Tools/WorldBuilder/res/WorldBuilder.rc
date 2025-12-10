@@ -800,10 +800,10 @@ CAPTION "Road Options"
 FONT 8, "MS Sans Serif"
 BEGIN
     CONTROL         "",IDC_ROAD_TREEVIEW,"Static",SS_BLACKFRAME | SS_SUNKEN,
-                    5,5,190,204
+                    2,20,196,189
     LTEXT           "Two lane",IDC_ROAD_NAME,17,222,86,9
-    GROUPBOX        "Current road type:",IDC_STATIC,5,210,190,27
-    GROUPBOX        "Corner Type:",IDC_STATIC,5,238,190,45
+    GROUPBOX        "Current road type:",IDC_STATIC,2,210,196,27
+    GROUPBOX        "Corner Type:",IDC_STATIC,2,238,196,45
     CONTROL         199,IDC_STATIC,"Static",SS_BITMAP,19,250,11,30
     CONTROL         "Broad Curve",IDC_BROAD_CURVE,"Button",
                     BS_AUTORADIOBUTTON,33,250,82,8
@@ -816,11 +816,15 @@ BEGIN
     PUSHBUTTON      "Apply To Selection",IDC_APPLY_ROAD,116,328,72,14
     EDITTEXT        IDC_ROAD_SNAP_POINT_EDIT,84,360,31,12,ES_AUTOHSCROLL
     LTEXT           "Road Snap Distance:",IDC_STATIC,11,362,70,8
-    GROUPBOX        "Tool Option:",IDC_STATIC,5,350,190,27
+    GROUPBOX        "Tool Option:",IDC_STATIC,2,350,196,27
     LTEXT           "(Min: 0.0 - Max: 5.0)",IDC_STATIC,121,362,67,8
-    GROUPBOX        "Road Replacer",IDC_STATIC,5,297,190,48
+    GROUPBOX        "Road Replacer",IDC_STATIC,2,297,196,48
     LTEXT           "Updates only the selected road points (single or multiple), spreading to connected segments like a flood fill.",
                     IDC_STATIC,11,307,178,17
+    LTEXT           "Search:",IDC_STATIC,2,7,25,8
+    EDITTEXT        IDC_OBJECT_SEARCH_EDIT,33,5,106,12,ES_AUTOHSCROLL
+    PUSHBUTTON      "Find",IDC_OBJECT_SEARCH_BUTTON,143,5,26,12
+    PUSHBUTTON      "Reset",IDC_OBJECT_SEARCH_RESET_BTN,172,5,26,12
 END
 
 IDD_NO_OPTIONS DIALOG DISCARDABLE  0, 0, 169, 109
@@ -979,21 +983,25 @@ BEGIN
     EDITTEXT        IDC_RADIUS_EDIT,15,125,60,11,ES_AUTOHSCROLL
 END
 
-IDD_OPEN_MAP DIALOG DISCARDABLE  0, 0, 306, 234
+IDD_OPEN_MAP DIALOG DISCARDABLE  0, 0, 306, 288
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Open Map"
 FONT 8, "MS Sans Serif"
 BEGIN
-    DEFPUSHBUTTON   "OK",IDOK,246,212,50,16
-    PUSHBUTTON      "Cancel",IDCANCEL,192,212,50,16
-    LISTBOX         IDC_OPEN_LIST,7,25,289,184,LBS_SORT | 
+    DEFPUSHBUTTON   "OK",IDOK,246,266,50,16
+    PUSHBUTTON      "Cancel",IDCANCEL,192,266,50,16
+    LISTBOX         IDC_OPEN_LIST,7,42,289,218,LBS_SORT | 
                     LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
     LTEXT           "Open Map:",IDC_STATIC,7,6,67,17,SS_CENTERIMAGE
-    PUSHBUTTON      "Browse...",IDC_BROWSE,7,212,61,16
+    PUSHBUTTON      "Browse...",IDC_BROWSE,7,266,61,16
     CONTROL         "System Maps",IDC_SYSTEMMAPS,"Button",BS_AUTORADIOBUTTON | 
                     BS_PUSHLIKE,242,6,54,17
     CONTROL         "User Maps",IDC_USERMAPS,"Button",BS_AUTORADIOBUTTON | 
                     BS_PUSHLIKE,183,6,55,17
+    LTEXT           "Search:",IDC_STATIC,7,28,25,8
+    EDITTEXT        IDC_MAP_SEARCH_EDIT,35,26,180,12,ES_AUTOHSCROLL
+    PUSHBUTTON      "Find",IDC_MAP_FIND_BUTTON,221,26,41,12
+    PUSHBUTTON      "Reset",IDC_MAP_SEARCH_RESET_BTN,270,26,26,12
 END
 
 IDD_SAVE_MAP DIALOG DISCARDABLE  0, 0, 306, 234
@@ -1754,11 +1762,11 @@ BEGIN
     PUSHBUTTON      "Cancel",IDCANCEL,172,114,50,14
     LTEXT           "Name:",IDC_STATIC,7,13,22,8
     EDITTEXT        IDC_MAPOBJECT_Name,41,10,166,14,ES_AUTOHSCROLL
-    LTEXT           "Starting Health",IDC_STATIC,7,54,48,8,WS_DISABLED
+    LTEXT           "Starting Health",IDC_STATIC,7,54,48,8
     EDITTEXT        IDC_MAPOBJECT_StartingHealthEdit,61,52,24,14,
-                    ES_AUTOHSCROLL | WS_DISABLED
+                    ES_AUTOHSCROLL
     CONTROL         "Unsellable",IDC_MAPOBJECT_Unsellable,"Button",
-                    BS_AUTOCHECKBOX | WS_DISABLED | WS_TABSTOP,7,71,131,10
+                    BS_AUTOCHECKBOX | WS_TABSTOP,7,71,131,10
     COMBOBOX        IDC_MAPOBJECT_Script,41,31,166,67,CBS_DROPDOWNLIST | 
                     WS_VSCROLL | WS_TABSTOP
     LTEXT           "Script:",IDC_STATIC,7,34,21,8
@@ -1817,19 +1825,22 @@ BEGIN
                     WS_VSCROLL | WS_TABSTOP
 END
 
-IDD_LAYERSLIST DIALOG DISCARDABLE  0, 0, 221, 237
+IDD_LAYERSLIST DIALOG DISCARDABLE  0, 0, 221, 265
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION
 CAPTION "Layers List"
 FONT 8, "MS Sans Serif"
 BEGIN
     CONTROL         "Tree1",IDC_LL_TREE,"SysTreeView32",TVS_HASBUTTONS | 
                     TVS_LINESATROOT | TVS_EDITLABELS | TVS_DISABLEDRAGDROP | 
-                    WS_TABSTOP,7,7,207,146
-    GROUPBOX        "Developer Note (How To Use):",IDC_STATIC,7,159,207,72
+                    WS_TABSTOP,7,7,207,137
+    GROUPBOX        "Developer Note (How To Use):",IDC_STATIC,7,147,207,69
     LTEXT           "1. Right Click on the List and hit Insert New Layer\n2. Select an object on the map\n3. Right Click to on the layer list again \n4. Select Merge Into View Selection Into\n5. Select Your  New Layer",
-                    IDC_STATIC,13,170,176,42
+                    IDC_STATIC,13,158,176,42
     LTEXT           "Right Click on the on the items list to see more Options",
-                    IDC_STATIC,14,216,176,9
+                    IDC_STATIC,14,204,176,9
+    GROUPBOX        "Example Usage:",IDC_STATIC,7,219,207,40
+    LTEXT           "It's great when you have lots of objects/waypoints going to the same spot for a cinematic. You can hide most of them and work without the clutter",
+                    IDC_STATIC,15,230,191,23
 END
 
 IDD_REPLACEUNIT DIALOG DISCARDABLE  0, 0, 242, 325
@@ -1847,7 +1858,7 @@ BEGIN
                     SS_SUNKEN | NOT WS_VISIBLE,178,269,57,49
 END
 
-IDD_WATER_OPTIONS DIALOG DISCARDABLE  0, 0, 200, 279
+IDD_WATER_OPTIONS DIALOG DISCARDABLE  0, 0, 200, 314
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION
 CAPTION "Water Options"
 FONT 8, "MS Sans Serif"
@@ -1859,18 +1870,23 @@ BEGIN
     EDITTEXT        IDC_HEIGHT_EDIT,70,52,17,12,ES_AUTOHSCROLL
     RTEXT           "Water height (feet):",IDC_WATER_HEIGHT2,4,54,62,10
     PUSHBUTTON      "1",IDC_HEIGHT_POPUP,89,52,8,12,BS_BITMAP
-    CONTROL         "Create Water Polygon",IDC_WATER_POLYGON,"Button",
-                    BS_AUTOCHECKBOX | BS_PUSHLIKE | WS_TABSTOP,9,110,180,16
-    CONTROL         "River",IDC_MAKE_RIVER,"Button",BS_AUTOCHECKBOX | 
-                    BS_PUSHLIKE | WS_TABSTOP,10,75,180,16
+    CONTROL         "Fill Mode",IDC_WATER_POLYGON,"Button",BS_AUTOCHECKBOX | 
+                    BS_PUSHLIKE | WS_TABSTOP,9,89,180,16
+    CONTROL         "Activate",IDC_MAKE_RIVER,"Button",BS_AUTOCHECKBOX | 
+                    BS_PUSHLIKE | WS_TABSTOP,9,172,180,16
     GROUPBOX        "Point spacing for water polygons and rivers.",
-                    IDC_STATIC,1,96,195,66
-    EDITTEXT        IDC_SPACING,9,131,180,12,ES_AUTOHSCROLL
-    LTEXT           "Increase the value for less water nodes",IDC_STATIC,9,
-                    146,139,10
-    GROUPBOX        "Want to create waves?",IDC_STATIC,1,178,195,38
+                    IDC_STATIC,1,76,195,85
+    EDITTEXT        IDC_SPACING,9,109,180,12,ES_AUTOHSCROLL
+    LTEXT           "> Increase the value for less water points \n( Its not  recommended to put so many water points - due to performance reasons ) \n[ 100 - for river / less value for  default water]",
+                    IDC_STATIC,9,124,180,33
+    GROUPBOX        "Want to create waves?",IDC_STATIC,1,270,195,38
     PUSHBUTTON      "Jump to Game (with wave editor)",ID_FILE_JUMPTOGAME_WM,
-                    9,190,180,16
+                    8,281,180,16
+    GROUPBOX        "River",IDC_STATIC,1,162,195,91
+    LTEXT           "> To control the speed  of the river you need to space out the water points (in fill mode, or manually move them  in the map if its already placed)",
+                    IDC_STATIC,10,221,180,26
+    LTEXT           "> Select a water point, then click Activate* (the selected point determines the river flow direction) \n> Keep clicking Activate* to  preview other river direction",
+                    IDC_STATIC,9,192,180,25
 END
 
 IDD_CAMERA_OPTIONS DIALOG DISCARDABLE  0, 0, 144, 162
@@ -1901,26 +1917,41 @@ STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION
 CAPTION "Waypoint Options"
 FONT 8, "MS Sans Serif"
 BEGIN
-    GROUPBOX        "Waypoint Name:",IDC_WAYPOINT_CAPTION1,1,1,195,34
-    COMBOBOX        IDC_WAYPOINTNAME_EDIT,7,15,186,271,CBS_DROPDOWN | 
+    GROUPBOX        "Waypoint Name:",IDC_WAYPOINT_CAPTION1,1,1,195,134
+    COMBOBOX        IDC_WAYPOINTNAME_EDIT,7,14,186,271,CBS_DROPDOWN | 
                     CBS_SORT | WS_VSCROLL | WS_TABSTOP
-    EDITTEXT        IDC_WAYPOINTLABEL1_EDIT,7,119,182,12,ES_AUTOHSCROLL
-    EDITTEXT        IDC_WAYPOINTLABEL2_EDIT,8,134,182,12,ES_AUTOHSCROLL
-    EDITTEXT        IDC_WAYPOINTLABEL3_EDIT,7,150,182,12,ES_AUTOHSCROLL
-    GROUPBOX        "Waypoint Location",IDC_WAYPOINT_LOCATION,1,38,195,29
-    GROUPBOX        "Waypoint Path Labels:",IDC_WAYPOINT_PATHLABELS,1,107,
-                    195,61
-    EDITTEXT        IDC_WAYPOINT_LOCATIONX,22,50,66,12,ES_AUTOHSCROLL
-    RTEXT           "X:",-1,7,53,13,8
-    RTEXT           "Y:",65534,96,52,13,8
-    EDITTEXT        IDC_WAYPOINT_LOCATIONY,111,50,69,12,ES_AUTOHSCROLL
-    GROUPBOX        "List of Current Waypoints:",IDC_LIST_WAYPOINTS,1,74,195,
-                    28
-    COMBOBOX        IDC_LIST_OF_WAYPOINT_NAMES,7,85,183,88,CBS_DROPDOWN | 
+    EDITTEXT        IDC_WAYPOINTLABEL1_EDIT,7,226,182,12,ES_AUTOHSCROLL
+    EDITTEXT        IDC_WAYPOINTLABEL2_EDIT,8,241,182,12,ES_AUTOHSCROLL
+    EDITTEXT        IDC_WAYPOINTLABEL3_EDIT,7,257,182,12,ES_AUTOHSCROLL
+    GROUPBOX        "Waypoint Location",IDC_WAYPOINT_LOCATION,1,145,195,29
+    GROUPBOX        "Waypoint Path Labels:",IDC_WAYPOINT_PATHLABELS,1,182,
+                    195,93
+    EDITTEXT        IDC_WAYPOINT_LOCATIONX,22,157,66,12,ES_AUTOHSCROLL
+    RTEXT           "X:",-1,7,160,13,8
+    RTEXT           "Y:",65534,96,159,13,8
+    EDITTEXT        IDC_WAYPOINT_LOCATIONY,111,157,69,12,ES_AUTOHSCROLL
+    GROUPBOX        "List of Current Waypoints:",IDC_LIST_WAYPOINTS,1,300,
+                    195,28
+    COMBOBOX        IDC_LIST_OF_WAYPOINT_NAMES,7,311,183,88,CBS_DROPDOWN | 
                     CBS_SORT | WS_VSCROLL | WS_TABSTOP
     CONTROL         "Bi-Directional (Used for back-and-forth patrol routes)",
                     IDC_WAYPOINT_BIDIRECTIONAL,"Button",BS_AUTOCHECKBOX | 
-                    WS_TABSTOP,8,171,188,9
+                    WS_TABSTOP,8,282,188,9
+    LTEXT           "AI Used Waypoint Labels for skirmish maps:",
+                    IDC_AIWP_LBLH0,7,196,142,10,NOT WS_GROUP
+    EDITTEXT        IDC_AIWP_LBL1,7,207,38,13,ES_READONLY
+    EDITTEXT        IDC_AIWP_LBL2,49,207,38,13,ES_READONLY
+    EDITTEXT        IDC_AIWP_LBL3,92,207,38,13,ES_READONLY
+    LTEXT           "Train Related Waypoint Labels: (Copy Pasteable):",
+                    IDC_TRAINSWP_LBLH0,7,32,160,10,NOT WS_GROUP
+    EDITTEXT        IDC_TRAINSWP_LBL1,7,42,38,12,ES_READONLY
+    EDITTEXT        IDC_TRAINSWP_LBL2,51,42,43,12,ES_READONLY
+    LTEXT           "> Adding one of these labels on the name of your waypoints will affect train behaviours \n(Used like this: e.g. Waypoint12_Station)",
+                    IDC_TRAINSWP_LBLH1,8,55,178,25,NOT WS_GROUP
+    EDITTEXT        IDC_TRAINSWP_LBL3,97,42,33,12,ES_READONLY
+    LTEXT           "> _Station - Makes the waypoint a stopping point of the trains\n> _PingPong - The train will go back after hitting this waypoint\n>_Tunnel - Must be used for both tunnel exits \n> _Disembark - Trains will disembark units in this waypoint",
+                    IDC_TRAINSWP_LBLH2,8,81,182,53,NOT WS_GROUP
+    EDITTEXT        IDC_TRAINSWP_LBL4,134,42,43,12,ES_READONLY
 END
 
 IDD_CHANGE_TEAM_OWNER DIALOG DISCARDABLE  0, 0, 200, 131
@@ -2203,7 +2234,7 @@ STYLE DS_MODALFRAME | WS_POPUP
 FONT 8, "MS Sans Serif"
 BEGIN
     LTEXT           "Customizable hint text goes here...",IDC_HINT_TEXT,2,1,
-                    156,33
+                    192,33
     DEFPUSHBUTTON   "OK",IDOK,204,1,27,14
     PUSHBUTTON      "Cancel",IDCANCEL,204,20,27,14
 END
@@ -2335,8 +2366,8 @@ BEGIN
 
     IDD_ROAD_OPTIONS, DIALOG
     BEGIN
-        LEFTMARGIN, 5
-        RIGHTMARGIN, 195
+        LEFTMARGIN, 2
+        RIGHTMARGIN, 198
         TOPMARGIN, 5
         BOTTOMMARGIN, 377
     END
@@ -2394,7 +2425,7 @@ BEGIN
         LEFTMARGIN, 7
         RIGHTMARGIN, 296
         TOPMARGIN, 6
-        BOTTOMMARGIN, 228
+        BOTTOMMARGIN, 282
     END
 
     IDD_SAVE_MAP, DIALOG
@@ -2644,7 +2675,7 @@ BEGIN
         LEFTMARGIN, 7
         RIGHTMARGIN, 214
         TOPMARGIN, 7
-        BOTTOMMARGIN, 231
+        BOTTOMMARGIN, 259
     END
 
     IDD_REPLACEUNIT, DIALOG
@@ -2660,7 +2691,7 @@ BEGIN
         LEFTMARGIN, 1
         RIGHTMARGIN, 196
         TOPMARGIN, 1
-        BOTTOMMARGIN, 274
+        BOTTOMMARGIN, 309
     END
 
     IDD_CAMERA_OPTIONS, DIALOG
