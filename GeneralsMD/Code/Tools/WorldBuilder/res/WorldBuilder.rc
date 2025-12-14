@@ -138,6 +138,8 @@ BEGIN
     SEPARATOR
     BUTTON      ID_APP_ABOUT
     BUTTON      ID_VIEW_LAYERS_LIST
+    BUTTON      ID_EDIT_CAMERAOPTIONS
+    BUTTON      ID_EDIT_MAPSETTINGS
 END
 
 IDR_TOOLBAR1 TOOLBAR DISCARDABLE  20, 80
@@ -2251,7 +2253,7 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,8,0,0
+ FILEVERSION 1,0,0,0
  PRODUCTVERSION 0,8,0,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
@@ -2269,8 +2271,8 @@ BEGIN
         BEGIN
             VALUE "Comments", "Beta - not supported by Customer Support\0"
             VALUE "CompanyName", "Electronic Arts\0"
-            VALUE "FileDescription", "Command And Conquer Generals World Builder\0"
-            VALUE "FileVersion", "0, 8, 0, 0\0"
+            VALUE "FileDescription", "Command And Conquer Generals World Builder - Modified by Adriane\0"
+            VALUE "FileVersion", "1, 0, 0, 0\0"
             VALUE "InternalName", "WorldBuilder\0"
             VALUE "LegalCopyright", "Copyright (C) 2003\0"
             VALUE "LegalTrademarks", "\0"
