@@ -70,12 +70,19 @@ protected:
 	afx_msg void OnMoveUpTeam();
 	// afx_msg void OnSizing(UINT fwSide, LPRECT pRect);
 	afx_msg void OnExpandOrShrink();
+
+	static Bool ParseTeamsDataChunk(DataChunkInput &file, DataChunkInfo *info, void *userData);
+	
+	afx_msg void OnExportTeams();
+	afx_msg void OnImportTeams();
+
 	//}}AFX_MSG
 	DECLARE_MESSAGE_MAP()
 
 	Int								m_updating;
 	SidesList						m_sides;
 	Int								m_curTeam;
+	AsciiString                     m_importTargetPlayer;
 
 	enum
 	{

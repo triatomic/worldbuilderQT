@@ -35,9 +35,14 @@
 #include "CUndoable.h"
 #include "wbview3d.h"
 
+#include "Common/DataChunk.h"
+#include "Common/FileSystem.h"
+
 static Int thePrevCurTeam = 0;
 
 static const char* NEUTRAL_NAME_STR = "(neutral)";
+static const Int K_LOCAL_TEAMS_VERSION_1 = 1;
+
 
 /////////////////////////////////////////////////////////////////////////////
 // CTeamsDialog dialog
@@ -73,6 +78,10 @@ BEGIN_MESSAGE_MAP(CTeamsDialog, CDialog)
 	ON_BN_CLICKED(IDC_MOVEDOWNTEAM, OnMoveDownTeam)
 	ON_BN_CLICKED(IDC_MOVEUPTEAM, OnMoveUpTeam)
 	ON_BN_CLICKED(IDC_EXPAND_SHRINK_TEAM, OnExpandOrShrink)
+
+	ON_BN_CLICKED(IDC_EXPORT_TEAMS, OnExportTeams)
+	ON_BN_CLICKED(IDC_IMPORT_TEAMS, OnImportTeams)
+
 	ON_WM_SIZING()
 	//}}AFX_MSG_MAP
 END_MESSAGE_MAP()
@@ -780,3 +789,245 @@ void CTeamsDialog::doCorrectTeamOwnerDialog( TeamsInfo *ti )
 	}
 }
 
+
+class LocalMFCFileOutputStream : public OutputStream
+{
+protected:
+	CFile *m_file;
+public:
+	LocalMFCFileOutputStream(CFile *pFile):m_file(pFile) {};
+	virtual Int write(const void *pData, Int numBytes) {
+		Int numBytesWritten = 0;
+		try {
+			m_file->Write(pData, numBytes);
+			numBytesWritten = numBytes;
+		} catch(exception)  {
+			DEBUG_CRASH(("threw exception in LocalMFCFileOutputStream"));
+		}
+		return(numBytesWritten);
+	};
+};
+
+
+// Replace the existing OnExportTeams and OnImportTeams functions with these:
+void CTeamsDialog::OnExportTeams()
+{
+    // Get the selected player
+    CListBox *players = (CListBox*)GetDlgItem(IDC_PLAYER_LIST);
+    Int selectedPlayer = players->GetCurSel();
+    
+    if (selectedPlayer < 1) {
+        AfxMessageBox("Please select a valid player first!", MB_OK | MB_ICONWARNING);
+        return;
+    }
+
+    AsciiString selectedPlayerName = playerNameForUI(m_sides, selectedPlayer);
+    
+    CFileDialog dlg(FALSE, ".teams", "exportedteams.teams",
+        OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT,
+        "Team Export (*.teams)|*.teams||");
+
+    if (dlg.DoModal() == IDCANCEL)
+        return;
+
+    CString path = dlg.GetPathName();
+
+    try {
+        CFile f(path,
+            CFile::modeCreate | CFile::modeWrite |
+            CFile::shareDenyWrite | CFile::typeBinary);
+
+        LocalMFCFileOutputStream stream(&f);
+        DataChunkOutput out(&stream);
+
+		DEBUG_LOG(("ExportTeams: opening ScriptTeams chunk\n"));
+        // Open the main chunk
+        out.openDataChunk("ScriptTeams", K_LOCAL_TEAMS_VERSION_1);
+
+        // Count and export only teams belonging to selected player
+        int exportedCount = 0;
+
+        for (int i = 0; i < m_sides.getNumTeams(); i++)
+        {
+            TeamsInfo* ti = m_sides.getTeamInfo(i);
+            if (!ti) continue;
+
+			// Skip default teams
+			if (m_sides.isPlayerDefaultTeam(ti))
+				continue;
+
+            Dict* d = ti->getDict();
+            if (!d) continue;
+
+			DEBUG_LOG(("ExportTeams: writing team dict '%s'\n",
+				d->getAsciiString(TheKey_teamName).str()));
+            // Only export teams that belong to the selected player
+            AsciiString teamOwner = d->getAsciiString(TheKey_teamOwner);
+            if (teamOwner == selectedPlayerName.str()) {
+                out.writeDict(*d);
+                exportedCount++;
+            }
+        }
+
+        out.closeDataChunk();
+        // f.Close();
+
+        if (exportedCount == 0) {
+            AfxMessageBox("No teams found for the selected player!", MB_OK | MB_ICONWARNING);
+        } else {
+            CString msg;
+            msg.Format("Successfully exported %d team(s) from player '%s' to:\n%s", 
+                exportedCount, selectedPlayerName.str(), path);
+            AfxMessageBox(msg, MB_OK | MB_ICONINFORMATION);
+        }
+
+    } catch(...) {
+        AfxMessageBox("Error writing team export file!", MB_OK | MB_ICONERROR);
+        DEBUG_CRASH(("Exception in OnExportTeams"));
+    }
+}
+
+void CTeamsDialog::OnImportTeams()
+{
+
+	CListBox *players = (CListBox*)GetDlgItem(IDC_PLAYER_LIST);
+	Int selectedPlayer = players->GetCurSel();
+
+	if (selectedPlayer < 1) {
+		AfxMessageBox("Please select a valid player first!", MB_OK | MB_ICONWARNING);
+		return;
+	}
+
+	AsciiString selectedPlayerName = playerNameForUI(m_sides, selectedPlayer);
+
+	m_importTargetPlayer = selectedPlayerName;
+
+    CFileDialog dlg(TRUE, ".teams", NULL, 
+        OFN_FILEMUSTEXIST | OFN_HIDEREADONLY,
+        "Team Export (*.teams)|*.teams||");
+
+    if (dlg.DoModal() == IDCANCEL)
+        return;
+
+    CString path = dlg.GetPathName();
+
+    try {
+        CachedFileInputStream in;
+        if (!in.open(AsciiString(path))) {
+            AfxMessageBox("Could not open team file!", MB_OK | MB_ICONERROR);
+            return;
+        }
+
+        DataChunkInput reader(&in);
+
+        // Register the parser - note we pass 'this' as userData
+        reader.registerParser(
+            AsciiString("ScriptTeams"), 
+            AsciiString::TheEmptyString, 
+            ParseTeamsDataChunk
+        );
+
+        // Parse the file
+        if (!reader.parse(this)) {
+            AfxMessageBox("Error parsing team export file!\nFile may be corrupt or incompatible.", 
+                MB_OK | MB_ICONERROR);
+            return;
+        }
+
+        // Validate all team owners after import
+        validateTeamOwners();
+
+        // Update UI to show imported teams
+        updateUI(REBUILD_ALL);
+
+        AfxMessageBox("Teams imported successfully!", MB_OK | MB_ICONINFORMATION);
+
+    } catch(...) {
+        AfxMessageBox("Exception occurred while importing teams!", MB_OK | MB_ICONERROR);
+        DEBUG_CRASH(("Exception in OnImportTeams"));
+    }
+}
+
+AsciiString MakeUniqueTeamName(
+    SidesList &sidesList,
+    const AsciiString &baseName)
+{
+    // If unused, return as-is
+    if (!sidesList.findTeamInfo(baseName) &&
+        !sidesList.findSideInfo(baseName))
+    {
+        return baseName;
+    }
+
+    Int index = 1;
+    AsciiString candidate;
+
+    do {
+        char buf[256];
+        sprintf(buf, "%s_%d", baseName.str(), index);
+        candidate = AsciiString(buf);
+        index++;
+    }
+    while (
+        sidesList.findTeamInfo(candidate) ||
+        sidesList.findSideInfo(candidate)
+    );
+
+    return candidate;
+}
+
+Bool CTeamsDialog::ParseTeamsDataChunk(
+    DataChunkInput &file,
+    DataChunkInfo *info,
+    void *userData)
+{
+    CTeamsDialog *pThis = (CTeamsDialog *)userData;
+    if (!pThis) return false;
+
+    const AsciiString &targetPlayer = pThis->m_importTargetPlayer;
+
+    while (!file.atEndOfChunk()) {
+        Dict teamDict = file.readDict();
+
+        // Replace owner unconditionally
+        teamDict.setAsciiString(TheKey_teamOwner, targetPlayer);
+
+        AsciiString teamName = teamDict.getAsciiString(TheKey_teamName);
+
+        // Skip duplicates
+        // if (pThis->m_sides.findTeamInfo(teamName)) {
+        //     DEBUG_LOG(("Skipping duplicate team %s\n", teamName.str()));
+        //     continue;
+        // }
+
+
+		// Skip default teams
+		// TeamsInfo tempInfo(&teamDict);
+		// if (pThis->m_sides.isPlayerDefaultTeam(&tempInfo)) {
+		// 	DEBUG_LOG(("Skipping default team '%s' on import\n",
+		// 		teamDict.getAsciiString(TheKey_teamName).str()));
+		// 	continue;
+		// }
+
+		// Ensure unique name
+		AsciiString uniqueName = MakeUniqueTeamName(
+			pThis->m_sides,
+			teamName
+		);
+
+		if (uniqueName != teamName) {
+			DEBUG_LOG((
+				"Renaming imported team %s -> %s\n",
+				teamName.str(),
+				uniqueName.str()
+			));
+			teamDict.setAsciiString(TheKey_teamName, uniqueName);
+		}
+
+
+
+        pThis->m_sides.addTeam(&teamDict);
+    }
+
+    return true;
+}
