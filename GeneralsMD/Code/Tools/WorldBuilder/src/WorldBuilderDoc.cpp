@@ -1271,6 +1271,26 @@ BOOL CWorldBuilderDoc::DoSave(LPCTSTR lpszPathName, BOOL bReplace)
 		}
 	}
 
+	WbView3d * p3View = Get3DView();
+	if (p3View) {
+		DWORD editTimeSeconds = p3View->getEditTimeInSeconds();
+		
+		// Get the map folder path from newName (remove .map extension and get directory)
+		CString mapPath = newName;
+		int lastSlash = mapPath.ReverseFind('\\');
+		if (lastSlash != -1) {
+			mapPath = mapPath.Left(lastSlash); // Get folder path
+		}
+		
+		// Create AdrianeMapSettings.ini path
+		CString individualMapSettings = mapPath + "\\AdrianeMapSettings.ini";
+		
+		// Save edit time to the Data section
+		CString editTimeStr;
+		editTimeStr.Format("%u", editTimeSeconds);
+		WritePrivateProfileString("Data", "EditTimeSeconds", editTimeStr, individualMapSettings);
+	}
+
 	CWaitCursor wait;
 
 	if (!OnSaveDocument(newName))
@@ -1813,6 +1833,7 @@ BOOL CWorldBuilderDoc::OnNewDocument()
 	WbView3d * p3View = Get3DView();
 	if (p3View) {
 		p3View->resetRenderObjects();
+		p3View->resetEditTimer();
 	}
 	firstTime = false;
 	m_heightMap = NEW_REF(WorldHeightMapEdit,(hi.xExtent,hi.yExtent,hi.initialHeight, hi.borderWidth));
@@ -1927,6 +1948,32 @@ void CWorldBuilderDoc::updateHeightMap(WorldHeightMap *htMap, Bool partial, cons
 		ASSERT_VALID(pWView);
 		pWView->updateHeightMapInView(htMap, partial, partialRange);
 		pWView->Invalidate();
+	}
+}
+
+void CWorldBuilderDoc::LoadEditTime(const CString& mapPath)
+{
+	WbView3d * p3View = Get3DView();
+	if (!p3View) return;
+	
+	// Get the map folder path
+	CString folderPath = mapPath;
+	int lastSlash = folderPath.ReverseFind('\\');
+	if (lastSlash != -1) {
+		folderPath = folderPath.Left(lastSlash);
+	}
+	
+	CString individualMapSettings = folderPath + "\\AdrianeMapSettings.ini";
+	
+	if (PathFileExists(individualMapSettings)) {
+		// Read edit time from Data section
+		DWORD savedTime = GetPrivateProfileInt("Data", "EditTimeSeconds", 0, individualMapSettings);
+		
+		// Set the loaded time in the view
+		p3View->setEditTime(savedTime); // Subtract 3 seconds to account for load time
+	} else {
+		// No saved time, start from zero
+		p3View->resetEditTimer();
 	}
 }
 
@@ -2066,6 +2113,8 @@ BOOL CWorldBuilderDoc::OnOpenDocument(LPCTSTR lpszPathName)
 		return FALSE;
 	
 	Create3DView();
+
+	LoadEditTime(lpszPathName);
 
 	// WbApp()->OnRefreshAppAbout();
 	// DEBUG_LOG(("strTitle=%s strPathName=%s\n", lpszPathName, m_strPathName));

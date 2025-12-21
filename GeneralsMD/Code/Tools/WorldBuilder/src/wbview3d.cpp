@@ -628,7 +628,10 @@ WbView3d::WbView3d() :
 	m_showLetterbox(false),
 	m_validTerrain(true),
 	m_showBuildZoneFeedback(false),
-  m_showSoundCircles(false)
+	m_showSoundCircles(false),
+    m_editStartTime(0),
+    m_totalEditTime(0),
+    m_isTimerRunning(false)
 {
 	TheTacticalView = &bogusTacticalView;  
 	m_actualWinSize.x = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "Width", THREE_D_VIEW_WIDTH);
@@ -2855,6 +2858,8 @@ void WbView3d::render()
 // ----------------------------------------------------------------------------
 BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	//{{AFX_MSG_MAP(WbView3d)
+	ON_WM_SETFOCUS()
+	ON_WM_KILLFOCUS()
 	ON_WM_CREATE()
 	ON_WM_PAINT()
 	ON_WM_SIZE()
@@ -3121,6 +3126,9 @@ int WbView3d::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	DrawObject::setDoAmbientSoundFeedback(m_showAmbientSounds);
 	DrawObject::setDoTracingOverlayFeedback(m_showTracingOverlay);
 	DrawObject::setDoBaseRadiusFeedback(m_showBaseRadius);
+
+	startEditTimer();
+
 	return 0;
 }
 
@@ -3224,6 +3232,70 @@ void WbView3d::drawCircle(HDC hdc, const Coord3D& centerPoint, Real radius, COLO
     DeleteObject(pen);
 }
 
+
+
+void WbView3d::startEditTimer()
+{
+
+	CWorldBuilderDoc *pDoc = CWorldBuilderDoc::GetActiveDoc();
+	if (pDoc) {
+		DEBUG_LOG(("Map Name: %s\n", pDoc->getMapPath()));
+	}
+
+    if (!m_isTimerRunning) {
+        m_editStartTime = ::GetTickCount();
+        m_isTimerRunning = true;
+    }
+}
+
+void WbView3d::pauseEditTimer()
+{
+    if (m_isTimerRunning) {
+        DWORD currentTime = ::GetTickCount();
+        m_totalEditTime += (currentTime - m_editStartTime);
+        m_isTimerRunning = false;
+    }
+}
+
+void WbView3d::resetEditTimer()
+{
+    m_totalEditTime = 0;
+    m_editStartTime = ::GetTickCount();
+    m_isTimerRunning = true;
+}
+
+DWORD WbView3d::getEditTimeInSeconds()
+{
+    DWORD totalTime = m_totalEditTime;
+    
+    if (m_isTimerRunning) {
+        DWORD currentTime = ::GetTickCount();
+        totalTime += (currentTime - m_editStartTime);
+    }
+    
+    return totalTime / 1000; // Convert milliseconds to seconds
+}
+
+AsciiString WbView3d::formatEditTime()
+{
+    DWORD totalSeconds = getEditTimeInSeconds();
+    
+    DWORD hours = totalSeconds / 3600;
+    DWORD minutes = (totalSeconds % 3600) / 60;
+    DWORD seconds = totalSeconds % 60;
+    
+    char buffer[64];
+    sprintf(buffer, "Total Edit Time: %02d:%02d:%02d", hours, minutes, seconds);
+    
+    return AsciiString(buffer);
+}
+
+void WbView3d::setEditTime(DWORD seconds)
+{
+	resetEditTimer();
+	m_totalEditTime = seconds * 1000; // Convert seconds to milliseconds
+	startEditTimer();
+}
 
 void WbView3d::drawLabels(void)
 {
@@ -3645,6 +3717,31 @@ void WbView3d::drawLabels(HDC hdc)
 		::SetBkMode(hdc, TRANSPARENT);
 		::SetTextColor(hdc, RGB(255, 255, 255));
 		::TextOut(hdc, offsetX, offsetY, text, text.GetLength());
+	}
+
+    // === EDIT TIMER DISPLAY (Bottom Left) ===
+    AsciiString editTimeStr = formatEditTime();
+	if(editTimeStr.isEmpty() == false){
+		CRect rClient;
+		GetClientRect(&rClient);
+		
+		const int offsetX = 10;
+		const int offsetY = rClient.bottom + 70;
+		
+		if (m3DFont && !hdc) {
+			RECT rct = { offsetX, offsetY, offsetX + 400, offsetY + 30 };
+			m3DFont->DrawText(
+				editTimeStr.str(),
+				editTimeStr.getLength(),
+				&rct,
+				DT_LEFT | DT_TOP | DT_NOCLIP | DT_SINGLELINE,
+				0xFFFFFFFF // White color
+			);
+		} else if (hdc && !m3DFont) {
+			::SetBkMode(hdc, TRANSPARENT);
+			::SetTextColor(hdc, RGB(255, 255, 255));
+			::TextOut(hdc, offsetX, offsetY, editTimeStr.str(), editTimeStr.getLength());
+		}
 	}
 
 	if (CMainFrame::GetMainFrame()->showAutoSaveMessage()){
@@ -4628,4 +4725,16 @@ void WbView3d::OnWindowLODMode3()
 void WbView3d::OnUpdateOnWindowLODMode3(CCmdUI* pCmdUI) 
 {
     pCmdUI->SetCheck(m_lod == 3);
+}
+
+void WbView3d::OnKillFocus(CWnd* pNewWnd)
+{
+    pauseEditTimer();
+    WbView::OnKillFocus(pNewWnd);
+}
+
+void WbView3d::OnSetFocus(CWnd* pOldWnd)
+{
+    startEditTimer();
+    WbView::OnSetFocus(pOldWnd);
 }

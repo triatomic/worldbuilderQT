@@ -174,6 +174,9 @@ protected:
 	afx_msg void OnUpdateViewShowBaseRadius(CCmdUI* pCmdUI);
 	afx_msg void OnRefreshSceneObjects();
 
+	afx_msg void OnSetFocus(CWnd* pOldWnd);
+	afx_msg void OnKillFocus(CWnd* pNewWnd);
+
   //}}AFX_MSG
 	DECLARE_MESSAGE_MAP()
 
@@ -249,6 +252,10 @@ private:
 	Int											m_partialMapSize;
 	Real m_lastTrackingZ;     // stores last used ghost placement height
 	Bool m_lastTrackingZIsFromHighElev;
+
+    DWORD m_editStartTime;      // Timestamp when editing started
+    DWORD m_totalEditTime;      // Total accumulated edit time in milliseconds
+    Bool m_isTimerRunning;      // Whether the timer is currently running
 protected:
 
 	UINT getLastDrawTime();
@@ -273,6 +280,14 @@ protected:
 	
 
 public:
+
+	void startEditTimer();
+	void pauseEditTimer();
+	void resetEditTimer();
+	void setEditTime(DWORD second);
+	DWORD getEditTimeInSeconds();
+	AsciiString formatEditTime();
+
 	virtual Bool viewToDocCoords(CPoint curPt, Coord3D *newPt, Bool constrain=true);
 	virtual Bool docToViewCoords(Coord3D curPt, CPoint* newPt);
 

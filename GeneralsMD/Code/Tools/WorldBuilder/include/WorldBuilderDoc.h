@@ -129,6 +129,7 @@ public:
 	static WbView3d *GetActive3DView();
 
 	CString getMapPath() const { return m_strPathName; }
+	void LoadEditTime(const CString& mapPath);
 
 	void invalObject(MapObject *pMapObj);
 	void invalCell(int xIndex, int yIndex);

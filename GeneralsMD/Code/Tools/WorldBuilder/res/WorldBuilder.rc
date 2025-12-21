@@ -553,7 +553,7 @@ BEGIN
                     SS_CENTERIMAGE
     EDITTEXT        IDC_FIND_QUERY,312,3,110,14
     PUSHBUTTON      "Find",IDC_FIND_HKEY_BUTTON,428,3,24,14
-    LTEXT           "Kabuse [Hotkey layout] | Gramantio | Veloxious | Muska | Vite | Sgtmyers | WWB2 | BKR",
+    LTEXT           "Kabuse [Hotkey layout] | Gramantio | Veloxious | Muska | Vite | Sgtmyers | WWB2 | BKR | Emil",
                     IDC_STATIC,62,52,152,31
     CONTROL         "Launch this window on app startup",IDC_LAUNCH_ONSTARTUP,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,4,173,147,14

@@ -341,7 +341,16 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	} else {
 		DrawObject::disableFeedback();
 	}
-	
+		
+	// Eversince the shity auto save was revamped, we need to make sure people are aware of it
+	int autosaveintro = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "AutoSaveForcedReintroduction", 0);
+
+	if (autosaveintro != 1)
+	{
+		::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "AutoSave", 1);
+		::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "AutoSaveForcedReintroduction", 1);
+	}
+
 	Int autoSave = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "AutoSave", 1);
 	m_autoSave = autoSave != 0;
 	autoSave = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "AutoSaveIntervalSeconds", 120);

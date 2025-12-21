@@ -2417,6 +2417,8 @@ void WorldHeightMapEdit::removeFirstObject(void)
 //=============================================================================
 Bool WorldHeightMapEdit::selectDuplicates(void)
 {
+	const float Z_DELTA     = 0.05f;
+	const float ANGLE_DELTA = 0.01f; // radians (~0.57°)
 	const float DELTA =  0.05f;
 	MapObject *firstObj = MapObject::TheMapObjectListPtr;
 	MapObject *pObj;
@@ -2436,12 +2438,16 @@ Bool WorldHeightMapEdit::selectDuplicates(void)
 				continue;
 			}
 			Coord3D prevLoc = *prevObj->getLocation();
+			Real prevAngle = prevObj->getAngle();
 			if (abs(curLoc.x-prevLoc.x)>DELTA) {
 				continue; // locations don't match.
 			}
 			if (abs(curLoc.y-prevLoc.y)>DELTA) {
 				continue; // locations don't match.
 			}
+
+			if (fabs(curLoc.z - prevLoc.z) > Z_DELTA)   continue;
+			if (fabs(pObj->getAngle() - prevAngle) > ANGLE_DELTA) continue;
 
 			if (pObj->getFlag(FLAG_ROAD_FLAGS)) {
 				if (pObj->getNext() == NULL) continue;
@@ -2452,6 +2458,7 @@ Bool WorldHeightMapEdit::selectDuplicates(void)
 					continue;
 				}
 				Coord3D nextLoc = *pObj->getNext()->getLocation();
+				Real nextAngle = pObj->getAngle();
 				prevObj = prevObj->getNext();
 				if (!prevObj) continue;
 				if (!prevObj->getFlag(FLAG_ROAD_POINT2)) {
@@ -2464,6 +2471,10 @@ Bool WorldHeightMapEdit::selectDuplicates(void)
 				if (abs(nextLoc.y-prevLoc.y)>DELTA) {
 					continue; // locations don't match.
 				}
+
+				if (fabs(nextLoc.z - prevLoc.z) > Z_DELTA)   continue;
+				if (fabs(nextAngle - prevObj->getAngle()) > ANGLE_DELTA) continue;
+
 				pObj->setSelected(true);
 				pObj = pObj->getNext();
 				pObj->setSelected(true);
