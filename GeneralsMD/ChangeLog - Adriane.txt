@@ -431,3 +431,24 @@ XXX
 - Added a new jump button directly to the cnc data
 - Added Camera Options on the toolbar
 - Added Map Settings on the toolbar
+
+12/21/2025
+======================================================
+== System ==
+- Duplicate Detection Fixed
+- Total time edit added
+- Forced reintroduction to save mechanic Added
+
+12/22/2025
+======================================================
+== ScriptDialog ==
+- Added FLAG on the script for smart copy to work on
+- Added MergeOptions for script group
+
+
+12/24/2025
+======================================================
+== System ==
+- Allow total time to increment if script dialog is open
+- Seperate Smart Copy Support for sub menus in ScriptDialog
+    > Actions - TRUE, Actions - FALSE, Conditions

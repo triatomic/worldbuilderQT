@@ -64,6 +64,7 @@ protected:
 	OrCondition *m_orCondition; // Currently selected OR clause.
 	Condition		*m_condition;		// Currently selected condition.
 	Int					m_index; // Index of whatever is currently selected.
+	Bool m_bSmartCopyEnabled;
 
 protected:
 	void enableUI(void); 
@@ -71,6 +72,8 @@ protected:
 	Int doMoveUp( OrCondition **outWhichNow );
 	Int doMoveDown( OrCondition **outWhichNow );
 	void setSel(OrCondition *pOr, Condition *pCond);
+	AsciiString incrementStringNumber(const AsciiString &input);
+	void applySmartCopyToCondition(Condition* pCondition);
 
 protected:
 	// Generated message map functions
@@ -83,9 +86,11 @@ protected:
 	afx_msg void OnNew();
 	afx_msg void OnDelete();
 	afx_msg void OnCopy();
+	afx_msg void OnSmartCopy();
 	afx_msg void OnMoveDown();
 	afx_msg void OnMoveUp();
 	afx_msg void OnChangeEditComment();
+	virtual BOOL OnSetActive();
 	//}}AFX_MSG
 	DECLARE_MESSAGE_MAP()
 

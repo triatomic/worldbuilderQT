@@ -33,7 +33,8 @@ IMPLEMENT_DYNCREATE(ScriptActionsFalse, CPropertyPage)
 
 ScriptActionsFalse::ScriptActionsFalse() : CPropertyPage(ScriptActionsFalse::IDD),
 m_falseAction(NULL),
-m_index(0)
+m_index(0),
+m_bSmartCopyEnabled(false)
 {
 	//{{AFX_DATA_INIT(ScriptActionsFalse)
 		// NOTE: the ClassWizard will add member initialization here
@@ -61,6 +62,7 @@ BEGIN_MESSAGE_MAP(ScriptActionsFalse, CPropertyPage)
 	ON_BN_CLICKED(IDC_NEW, OnNew)
 	ON_BN_CLICKED(IDC_DELETE, OnDelete)
 	ON_BN_CLICKED(IDC_COPY, OnCopy)
+	ON_BN_CLICKED(IDC_SMART_COPY, OnSmartCopy)
 	ON_BN_CLICKED(IDC_MOVETOTRUE, OnMoveToTrue)
 	ON_BN_CLICKED(IDC_MOVE_DOWN, OnMoveDown)
 	ON_BN_CLICKED(IDC_MOVE_UP, OnMoveUp)
@@ -89,6 +91,12 @@ BOOL ScriptActionsFalse::OnSetActive()
     // if (pList) {
     //     pList->ResetContent();  // clear only when activating the tab
     // }
+
+	m_bSmartCopyEnabled=::AfxGetApp()->GetProfileInt(SCRIPT_DIALOG_SECTION, "SmartCopyDeep", 0);
+
+	CButton *pButton = (CButton*)GetDlgItem(IDC_SMART_COPY);
+	pButton->SetCheck(m_bSmartCopyEnabled ? 1:0);
+
     loadList();  // repopulate list
     return CPropertyPage::OnSetActive();
 }
@@ -244,10 +252,90 @@ void ScriptActionsFalse::OnDelete()
 	}
 }
 
+
+void ScriptActionsFalse::OnSmartCopy()
+{
+	CButton *pButton = (CButton*)GetDlgItem(IDC_SMART_COPY);
+	m_bSmartCopyEnabled = (pButton->GetCheck() == 1);
+	::AfxGetApp()->WriteProfileInt(SCRIPT_DIALOG_SECTION, "SmartCopyDeep", m_bSmartCopyEnabled ? 1 : 0);
+
+
+	if (m_bSmartCopyEnabled && !::AfxGetApp()->GetProfileInt("ToolTips", "SmartCopyInfoShown", 0))
+	{
+		AfxMessageBox(
+			"This feature will auto increment values on your copied script's parameters\n\n"
+			"Example:   Add  1  to counter 'Counter01' -> click copy ->   Add  1  to counter 'Counter02'\n\n"
+			"Note: This does not support all parameters. Contact Adriane if you want other parameters to be supported adios.",
+			MB_OK | MB_ICONINFORMATION
+		);
+		::AfxGetApp()->WriteProfileInt("ToolTips", "SmartCopyInfoShown", 1);
+	}
+}
+
+void ScriptActionsFalse::applySmartCopyToAction(ScriptAction* pAction)
+{
+    if (!pAction) return;
+
+    // Increment parameters inside the action
+    for (int i = 0; i < pAction->getNumParameters(); ++i) {
+        Parameter* param = pAction->getParameter(i);
+        if (!param) continue;
+        
+        // For now, always increment these parameter types (condition set to true)
+        if (true) {  // You can adjust this condition later for testing
+            if (
+                param->getParameterType() == Parameter::TEXT_STRING ||
+                param->getParameterType() == Parameter::TEAM ||
+                param->getParameterType() == Parameter::WAYPOINT ||
+                param->getParameterType() == Parameter::SCRIPT ||
+                param->getParameterType() == Parameter::SCRIPT_SUBROUTINE ||
+                param->getParameterType() == Parameter::UNIT ||
+                param->getParameterType() == Parameter::REVEALNAME ||
+                param->getParameterType() == Parameter::COUNTER ||
+                param->getParameterType() == Parameter::FLAG ||
+                param->getParameterType() == Parameter::SIDE
+            )
+            {
+                AsciiString newVal = incrementStringNumber(param->getString());
+                param->friend_setString(newVal);
+            }
+        }
+    }
+}
+
+AsciiString ScriptActionsFalse::incrementStringNumber(const AsciiString& input)
+{
+    const char* str = input.str();
+    int len = strlen(str);
+
+    // Find trailing number
+    int pos = len - 1;
+    while (pos >= 0 && isdigit(str[pos])) pos--;
+
+    if (pos == len - 1) {
+        // No number at end, return unchanged
+        return input;
+    }
+
+    CString prefix(str, pos + 1); // text before number
+    CString numberStr(str + pos + 1);
+    int number = atoi(numberStr);
+    number++;
+
+    CString result;
+    result.Format("%s%0*d", prefix, numberStr.GetLength(), number);
+    return AsciiString(result);
+}
+
 void ScriptActionsFalse::OnCopy() 
 {
 	if (m_falseAction) {
 		ScriptAction *pCopy = m_falseAction->duplicate();
+        
+		// Apply smart copy increment to the copied action
+		if (m_bSmartCopyEnabled)
+			applySmartCopyToAction(pCopy);
+
 		pCopy->setNextAction(m_falseAction->getNext());
 		m_falseAction->setNextAction(pCopy);
 		m_index++;

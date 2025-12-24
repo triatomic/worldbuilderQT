@@ -589,6 +589,8 @@ void CMainFrame::onEditScripts()
 		delete m_scriptDialog;
 	}
 
+	m_focusedinScripting = true;
+
 	CRect frameRect;
 	GetWindowRect(&frameRect);
 
@@ -601,6 +603,11 @@ void CMainFrame::onEditScripts()
 	m_scriptDialog->SetWindowPos(NULL, frameRect.left, frameRect.top, 0, 0, SWP_NOZORDER|SWP_NOSIZE);
  	m_scriptDialog->GetWindowRect(&frameRect);
 	m_scriptDialog->ShowWindow(SW_SHOWNA);
+}
+
+void CMainFrame::setFocusInScripting(Bool focus)
+{
+	m_focusedinScripting = focus;
 }
 
 /////////////////////////////////////////////////////////////////////////////

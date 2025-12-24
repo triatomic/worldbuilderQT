@@ -63,6 +63,7 @@ BEGIN_MESSAGE_MAP(ScriptConditionsDlg, CPropertyPage)
 	ON_BN_CLICKED(IDC_NEW, OnNew)
 	ON_BN_CLICKED(IDC_DELETE, OnDelete)
 	ON_BN_CLICKED(IDC_COPY, OnCopy)
+	ON_BN_CLICKED(IDC_SMART_COPY, OnSmartCopy)
 	ON_BN_CLICKED(IDC_MOVE_DOWN, OnMoveDown)
 	ON_BN_CLICKED(IDC_MOVE_UP, OnMoveUp)
 	ON_EN_CHANGE(IDC_EDIT_COMMENT, OnChangeEditComment)
@@ -117,6 +118,21 @@ void ScriptConditionsDlg::loadList(void)
 	}	
 }
 
+BOOL ScriptConditionsDlg::OnSetActive()
+{
+    // CListBox *pList = (CListBox *)GetDlgItem(IDC_ACTION_LIST);
+    // if (pList) {
+    //     pList->ResetContent();  // clear only when activating the tab
+    // }
+
+	m_bSmartCopyEnabled=::AfxGetApp()->GetProfileInt(SCRIPT_DIALOG_SECTION, "SmartCopyDeep", 0);
+
+	CButton *pButton = (CButton*)GetDlgItem(IDC_SMART_COPY);
+	pButton->SetCheck(m_bSmartCopyEnabled ? 1:0);
+
+    // loadList();  // repopulate list
+    return CPropertyPage::OnSetActive();
+}
 
 void ScriptConditionsDlg::OnEditCondition() 
 {
@@ -301,11 +317,90 @@ void ScriptConditionsDlg::OnDelete()
     }
 }
 
+void ScriptConditionsDlg::OnSmartCopy()
+{
+	CButton *pButton = (CButton*)GetDlgItem(IDC_SMART_COPY);
+	m_bSmartCopyEnabled = (pButton->GetCheck() == 1);
+	::AfxGetApp()->WriteProfileInt(SCRIPT_DIALOG_SECTION, "SmartCopyDeep", m_bSmartCopyEnabled ? 1 : 0);
+
+
+	if (m_bSmartCopyEnabled && !::AfxGetApp()->GetProfileInt("ToolTips", "SmartCopyInfoShown", 0))
+	{
+		AfxMessageBox(
+			"This feature will auto increment values on your copied script's parameters\n\n"
+			"Example:   Add  1  to counter 'Counter01' -> click copy ->   Add  1  to counter 'Counter02'\n\n"
+			"Note: This does not support all parameters. Contact Adriane if you want other parameters to be supported adios.",
+			MB_OK | MB_ICONINFORMATION
+		);
+		::AfxGetApp()->WriteProfileInt("ToolTips", "SmartCopyInfoShown", 1);
+	}
+}
+
+void ScriptConditionsDlg::applySmartCopyToCondition(Condition* pCondition)
+{
+    if (!pCondition) return;
+
+    // Increment parameters inside the action
+    for (int i = 0; i < pCondition->getNumParameters(); ++i) {
+        Parameter* param = pCondition->getParameter(i);
+        if (!param) continue;
+        
+        // For now, always increment these parameter types (condition set to true)
+        if (true) {  // You can adjust this condition later for testing
+            if (
+                param->getParameterType() == Parameter::TEXT_STRING ||
+                param->getParameterType() == Parameter::TEAM ||
+                param->getParameterType() == Parameter::WAYPOINT ||
+                param->getParameterType() == Parameter::SCRIPT ||
+                param->getParameterType() == Parameter::SCRIPT_SUBROUTINE ||
+                param->getParameterType() == Parameter::UNIT ||
+                param->getParameterType() == Parameter::REVEALNAME ||
+                param->getParameterType() == Parameter::COUNTER ||
+                param->getParameterType() == Parameter::FLAG ||
+                param->getParameterType() == Parameter::SIDE
+            )
+            {
+                AsciiString newVal = incrementStringNumber(param->getString());
+                param->friend_setString(newVal);
+            }
+        }
+    }
+}
+
+AsciiString ScriptConditionsDlg::incrementStringNumber(const AsciiString& input)
+{
+    const char* str = input.str();
+    int len = strlen(str);
+
+    // Find trailing number
+    int pos = len - 1;
+    while (pos >= 0 && isdigit(str[pos])) pos--;
+
+    if (pos == len - 1) {
+        // No number at end, return unchanged
+        return input;
+    }
+
+    CString prefix(str, pos + 1); // text before number
+    CString numberStr(str + pos + 1);
+    int number = atoi(numberStr);
+    number++;
+
+    CString result;
+    result.Format("%s%0*d", prefix, numberStr.GetLength(), number);
+    return AsciiString(result);
+}
+
 void ScriptConditionsDlg::OnCopy() 
 {
 	if (m_condition) {
 		OrCondition *pSavOr = m_orCondition;
 		Condition *pCopy = m_condition->duplicate();
+
+		if (m_bSmartCopyEnabled) {
+			applySmartCopyToCondition(pCopy);
+		}
+
 		pCopy->setNextCondition(m_condition->getNext());
 		m_condition->setNextCondition(pCopy);
 		loadList();

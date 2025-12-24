@@ -96,6 +96,8 @@ public:
 	void ScheduleAdjustViewAfterResize(void);
 	void adjustWindowSize(Bool forcedResolution = false, Bool dynamicResolution = false);
 	Bool isAutoSaving(void) {return m_autoSaving;};
+	Bool isFocusedOnScripting(void) {return m_focusedinScripting;};
+	void setFocusInScripting(Bool focus);
 	Bool showAutoSaveMessage(void) {return m_showAutoSaveMessage;};
 	void handleCameraChange(void);
 	void onEditScripts();
@@ -141,6 +143,7 @@ protected:  // control bar embedded members
     // Int m_newHeight;
 	// Bool m_disableOnSize;
 
+	Bool							m_focusedinScripting;  ///< True if focus is in scripting window.
 	Bool							m_showAutoSaveMessage;  ///< True if we are autosaving.
 	Bool							m_autoSaving;  ///< True if we are autosaving.
 	UINT							m_hAutoSaveTimer;  ///< Timer that triggers for autosave.

@@ -41,6 +41,7 @@
 #include "Common/ThingFactory.h"
 #include "WaypointOptions.h"
 #include "Common/UnicodeString.h"
+#include "MainFrm.h"
 
 #include "Common/GlobalData.h"
 
@@ -57,7 +58,6 @@
 
 static const Int K_LOCAL_TEAMS_VERSION_1 = 1;
 
-#define SCRIPT_DIALOG_SECTION "ScriptDialog"
 
 static const char* NEUTRAL_NAME_STR = "(neutral)";
 ScriptDialog *ScriptDialog::m_staticThis = NULL;
@@ -1947,6 +1947,7 @@ void ScriptDialog::applySmartCopyIncrement(Script* pScr)
                     param->getParameterType() == Parameter::UNIT ||
                     param->getParameterType() == Parameter::REVEALNAME ||
 					param->getParameterType() == Parameter::COUNTER ||
+					param->getParameterType() == Parameter::FLAG ||
 					param->getParameterType() == Parameter::SIDE
                 )
                 {
@@ -1971,6 +1972,7 @@ void ScriptDialog::applySmartCopyIncrement(Script* pScr)
                 param->getParameterType() == Parameter::UNIT ||
                 param->getParameterType() == Parameter::REVEALNAME ||
 				param->getParameterType() == Parameter::COUNTER ||
+				param->getParameterType() == Parameter::FLAG ||
 				param->getParameterType() == Parameter::SIDE
             )
             {
@@ -1994,6 +1996,7 @@ void ScriptDialog::applySmartCopyIncrement(Script* pScr)
                 param->getParameterType() == Parameter::UNIT ||
                 param->getParameterType() == Parameter::REVEALNAME ||
 				param->getParameterType() == Parameter::COUNTER ||
+				param->getParameterType() == Parameter::FLAG ||
 				param->getParameterType() == Parameter::SIDE
             )
             {
@@ -2068,7 +2071,7 @@ void ScriptDialog::OnCopyScript()
                 applySmartCopyIncrement(pDup);
 
             AsciiString scriptName = pDup->getName();
-            scriptName.concat(" C");
+            // scriptName.concat(" C");
             pDup->setName(scriptName);
 
             pNewGroup->addScript(pDup, scriptIndex);
@@ -2963,13 +2966,22 @@ void ScriptDialog::OnOK()
 		REF_PTR_RELEASE(pUndo); // belongs to pDoc now.
 
 		SaveScriptWarningsState();
+
+		// Clear focus in scripting mode in main frame
+		if (CMainFrame::GetMainFrame()) {
+			CMainFrame::GetMainFrame()->setFocusInScripting(false);
+		}
+
         CDialog::OnOK();  // Call the default OK behavior if the search box isn't focused
-    }
+	}
 }
 
 void ScriptDialog::OnCancel() 
 {
-	
+	// Clear focus in scripting mode in main frame
+	if (CMainFrame::GetMainFrame()) {
+		CMainFrame::GetMainFrame()->setFocusInScripting(false);
+	}
 	CDialog::OnCancel();
 }
 
@@ -3047,6 +3059,7 @@ void ScriptDialog::doDropOn(HTREEITEM hDrag, HTREEITEM hTarget)
 	ScriptList *pSL = m_sides.getSideInfo(m_curSelection.m_playerIndex)->getScriptList();
 	ScriptGroup *pGroup = getCurGroup();
 	if (pSL == NULL) return;
+	
 	if (pScript) {
 		dragScript = pScript->duplicate();
 		if (pGroup) {
@@ -3061,6 +3074,73 @@ void ScriptDialog::doDropOn(HTREEITEM hDrag, HTREEITEM hTarget)
 				target.m_scriptIndex--;
 		}
 	}	else if (drag.m_objType == ListType::GROUP_TYPE) {
+		// NEW CODE: Check if dropping a group onto another group
+		if (target.m_objType == ListType::GROUP_TYPE) {
+			// Ask user if they want to merge
+			int result = AfxMessageBox(
+				"Do you want to merge these script groups?\n\n"
+				"YES: Merge scripts from the dragged group into the target group\n"
+				"NO: Reorder the groups normally",
+				MB_YESNOCANCEL | MB_ICONQUESTION
+			);
+			
+			if (result == IDCANCEL) {
+				return; // User cancelled, abort the operation
+			}
+			
+			if (result == IDYES) {
+				// MERGE OPERATION
+				ScriptGroup *sourceGroup = pGroup;
+				
+				// Get the target group
+				m_curSelection = target;
+				ScriptGroup *targetGroup = getCurGroup();
+				
+				if (!targetGroup || !sourceGroup) {
+					AfxMessageBox("Error: Could not find groups for merging.", MB_OK | MB_ICONERROR);
+					return;
+				}
+				
+				// Copy all scripts from source to target
+				Int scriptCount = 0;
+				Script *pScr = sourceGroup->getScript();
+				while (pScr) {
+					scriptCount++;
+					pScr = pScr->getNext();
+				}
+				
+				// Add scripts to target group at the end
+				for (Script *pScrn = sourceGroup->getScript(); pScrn; pScrn = pScrn->getNext()) {
+					Script *pDup = pScrn->duplicate();
+					// Find the end position in target group
+					Int endPos = 0;
+					Script *pTargetScr = targetGroup->getScript();
+					while (pTargetScr) {
+						endPos++;
+						pTargetScr = pTargetScr->getNext();
+					}
+					targetGroup->addScript(pDup, endPos);
+				}
+				
+				// Delete the source group
+				m_curSelection = drag;
+				pSL = m_sides.getSideInfo(m_curSelection.m_playerIndex)->getScriptList();
+				pSL->deleteGroup(sourceGroup);
+				
+				// Reload and update
+				reloadPlayer(drag.m_playerIndex, pSL);
+				updateSelection(target);
+				updateIcons(TVI_ROOT);
+				
+				CString msg;
+				msg.Format("Successfully merged %d script(s) into the target group.", scriptCount);
+				AfxMessageBox(msg, MB_OK | MB_ICONINFORMATION);
+				return;
+			}
+			// If IDNO, fall through to normal reordering logic below
+		}
+		
+		// ORIGINAL CODE: Normal group reordering
 		dragGroup = pGroup->duplicate();
 		pSL->deleteGroup(pGroup);
 		if (drag.m_objType != ListType::SCRIPT_IN_PLAYER_TYPE &&

@@ -25,6 +25,8 @@
 // ScriptDialog.h : header file
 //
 
+#define SCRIPT_DIALOG_SECTION "ScriptDialog"
+
 #include "GameLogic/SidesList.h"
 #include <afxtempl.h> // for CArray, CMap, etc -- please review this one
 

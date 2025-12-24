@@ -4729,7 +4729,10 @@ void WbView3d::OnUpdateOnWindowLODMode3(CCmdUI* pCmdUI)
 
 void WbView3d::OnKillFocus(CWnd* pNewWnd)
 {
-    pauseEditTimer();
+	if (CMainFrame::GetMainFrame() && !CMainFrame::GetMainFrame()->isFocusedOnScripting()) {
+		pauseEditTimer();
+	}
+
     WbView::OnKillFocus(pNewWnd);
 }
 
