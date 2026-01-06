@@ -650,6 +650,8 @@ void WbView::OnViewShowObjects()
 	// Ensure mutual exclusivity
 	if (m_showObjects) {
 		m_showObjectsSelected = 0;
+	} else {
+		m_showObjectsSelected = 1;
 	}
 
 	Invalidate(false);

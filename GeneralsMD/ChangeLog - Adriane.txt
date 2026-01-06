@@ -441,15 +441,25 @@ XXX
 
 12/22/2025
 ======================================================
-== ScriptDialog ==
+== Script Editor ==
 - Added FLAG on the script for smart copy to work on
 - Added MergeOptions for script group
 
 
 12/24/2025
 ======================================================
-== System ==
-- Allow total time to increment if script dialog is open
-- Seperate Smart Copy Support for sub menus in ScriptDialog
+== Script Editor ==
+- Allow total time to increment if script editor is open
+- Seperate Smart Copy Support for sub menus in Script Editor
     > Actions - TRUE, Actions - FALSE, Conditions
 - Fixed a bug where pointer options doesnt load previous settings
+
+1/1/2026
+======================================================
+== Script Editor ==
+- Add Debug Text option for selected individual script
+- Merge Support for individual scripts
+- Edited forced behavior for merging
+- Forced renaming of non named scripts in initialization
+- Name Guards for folder and individual scripts
+- Bugged object icons toggle fixed 

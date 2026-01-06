@@ -323,7 +323,9 @@
 #define IDC_PATCH_GC                    1129
 #define IDC_CONDITION_TREE              1130
 #define IDC_CONDITION_LIST              1130
+#define IDC_ADD_DEBUG                   1130
 #define IDC_EDIT_CONDITION              1131
+#define IDC_REMOVE_DEBUG                1131
 #define IDC_CONDITION_TYPE              1132
 #define IDC_CAPTION                     1133
 #define IDC_COMBO                       1134
@@ -419,6 +421,7 @@
 #define IDC_WARNINGS                    1173
 #define IDC_DISABLEREFERENCE            1173
 #define IDC_EDIT_X                      1174
+#define IDC_SCRIPT_MERGE                1174
 #define IDC_EDIT_Y                      1175
 #define IDC_OBJECT_TREEVIEW             1175
 #define IDC_EDIT_Z                      1176

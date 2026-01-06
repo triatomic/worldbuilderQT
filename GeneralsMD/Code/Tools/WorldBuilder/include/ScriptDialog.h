@@ -104,6 +104,7 @@ public:
 
 protected:
 	Bool m_bSmartCopyEnabled;
+	Bool m_bAutoMergeScripts;
 
 	ListType	m_curSelection;
 	CImageList m_imageList;
@@ -175,6 +176,9 @@ protected:
 	afx_msg void OnEditScript();
 	afx_msg void OnCopyScript();
 	afx_msg void OnDelete();
+	afx_msg void OnAddDebug();
+	afx_msg void OnRemoveDebug();
+	afx_msg void OnAutoMergeScripts();
 	afx_msg void OnVerify();
 	afx_msg void OnVerifyAll();
 	afx_msg void OnPatchGC();

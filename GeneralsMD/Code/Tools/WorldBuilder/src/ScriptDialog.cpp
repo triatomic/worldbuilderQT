@@ -197,6 +197,7 @@ ScriptDialog::ScriptDialog(CWnd* pParent /*=NULL*/)
 	m_updating = true;
 	m_bNewIcons = false;
 	m_bSmartCopyEnabled = false;
+	m_bAutoMergeScripts = false;
 	//{{AFX_DATA_INIT(ScriptDialog)
 		// NOTE: the ClassWizard will add member initialization here
 	//}}AFX_DATA_INIT
@@ -225,6 +226,9 @@ BEGIN_MESSAGE_MAP(ScriptDialog, CDialog)
 	ON_BN_CLICKED(IDC_NEW_SCRIPT, OnNewScript)
 	ON_BN_CLICKED(IDC_EDIT_SCRIPT, OnEditScript)
 	ON_BN_CLICKED(IDC_COPY_SCRIPT, OnCopyScript)
+	ON_BN_CLICKED(IDC_ADD_DEBUG, OnAddDebug)
+	ON_BN_CLICKED(IDC_REMOVE_DEBUG, OnRemoveDebug)
+	ON_BN_CLICKED(IDC_SCRIPT_MERGE, OnAutoMergeScripts)
 	ON_BN_CLICKED(IDC_DELETE, OnDelete)
 	ON_BN_CLICKED(IDC_VERIFY, OnVerify)
 	ON_BN_CLICKED(IDC_VERIFYALL, OnVerifyAll)
@@ -320,6 +324,12 @@ void ScriptDialog::OnSelchangedScriptTree(NMHDR* pNMHDR, LRESULT* pResult)
 	
 	pWnd = GetDlgItem(IDC_COPY_SCRIPT);
 	pWnd->EnableWindow(pScript!=NULL || pGroup!=NULL);
+
+	pWnd = GetDlgItem(IDC_ADD_DEBUG);
+	pWnd->EnableWindow(pScript!=NULL);
+
+	pWnd = GetDlgItem(IDC_REMOVE_DEBUG);
+	pWnd->EnableWindow(pScript!=NULL);
 
 	pWnd = GetDlgItem(IDC_DELETE);
 	pWnd->EnableWindow(m_curSelection.m_objType != ListType::PLAYER_TYPE);
@@ -792,6 +802,24 @@ void ScriptDialog::OnSmartCopy()
 		);
 	}
 
+}
+
+void ScriptDialog::OnAutoMergeScripts()
+{
+	CButton *pButton = (CButton*)GetDlgItem(IDC_SCRIPT_MERGE);
+	m_bAutoMergeScripts = (pButton->GetCheck() == 1);
+	::AfxGetApp()->WriteProfileInt(SCRIPT_DIALOG_SECTION, "AutoMergeScripts", m_bAutoMergeScripts ? 1 : 0);
+
+	if (m_bAutoMergeScripts)
+	{
+		AfxMessageBox(
+			"Auto-Merge allows you to combine items using drag and drop.\n\n"
+			"> To merge scripts: hold CTRL, then drag one script onto another.\n"
+			"> To merge script folders: hold CTRL, then drag one folder onto another.\n\n"
+			"Without holding CTRL, drag and drop will work normally (move/reorder only).",
+			MB_OK | MB_ICONINFORMATION
+		);
+	}
 }
 
 void ScriptDialog::OnAutoVerify()
@@ -1284,6 +1312,11 @@ BOOL ScriptDialog::OnInitDialog()
 	CButton *pButton = (CButton*)GetDlgItem(IDC_SMART_COPY);
 	pButton->SetCheck(m_bSmartCopyEnabled ? 1:0);
 
+	m_bAutoMergeScripts=::AfxGetApp()->GetProfileInt(SCRIPT_DIALOG_SECTION, "AutoMergeScripts", 0);
+
+	pButton = (CButton*)GetDlgItem(IDC_SCRIPT_MERGE);
+	pButton->SetCheck(m_bAutoMergeScripts ? 1:0);
+
 	m_autoUpdateWarnings=::AfxGetApp()->GetProfileInt(SCRIPT_DIALOG_SECTION, "AutoVerifyScripts", 1);
 
 	pButton = (CButton*)GetDlgItem(IDC_AUTO_VERIFY);
@@ -1363,6 +1396,86 @@ BOOL ScriptDialog::OnInitDialog()
 		// }
 	}
 
+	// ============================================================================
+	// FORCE RENAME UNNAMED SCRIPTS AND GROUPS
+	// ============================================================================
+
+	Int totalRenamedScripts = 0;
+	Int totalRenamedGroups = 0;
+	Int unnamedScriptCounter = 1;
+	Int unnamedGroupCounter = 1;
+
+	for (i = 0; i < m_sides.getNumSides(); i++) {
+		ScriptList *pSL = m_sides.getSideInfo(i)->getScriptList();
+		if (!pSL) continue;
+		
+		Dict *d = m_sides.getSideInfo(i)->getDict();
+		AsciiString playerName = d->getAsciiString(TheKey_playerName);
+		if (playerName.isEmpty()) playerName = NEUTRAL_NAME_STR;
+		
+		// Fix ungrouped scripts
+		Script *pScr;
+		for (pScr = pSL->getScript(); pScr; pScr = pScr->getNext()) {
+			if (pScr->getName().isEmpty()) {
+				AsciiString newName;
+				newName.format("[UNNAMED_SCRIPT_%d]", unnamedScriptCounter);
+				pScr->setName(newName);
+				totalRenamedScripts++;
+				unnamedScriptCounter++;
+				
+				DEBUG_LOG(("Renamed unnamed script in %s to: %s\n", playerName.str(), newName.str()));
+			}
+		}
+		
+		// Fix grouped scripts
+		ScriptGroup *pGroup;
+		for (pGroup = pSL->getScriptGroup(); pGroup; pGroup = pGroup->getNext()) {
+			
+			// Fix unnamed group
+			if (pGroup->getName().isEmpty()) {
+				AsciiString newName;
+				newName.format("[UNNAMED_GROUP_%d]", unnamedGroupCounter);
+				pGroup->setName(newName);
+				totalRenamedGroups++;
+				unnamedGroupCounter++;
+				
+				DEBUG_LOG(("Renamed unnamed group in %s to: %s\n", playerName.str(), newName.str()));
+			}
+			
+			// Fix scripts within the group
+			for (pScr = pGroup->getScript(); pScr; pScr = pScr->getNext()) {
+				if (pScr->getName().isEmpty()) {
+					AsciiString newName;
+					newName.format("[UNNAMED_SCRIPT_%d]", unnamedScriptCounter);
+					pScr->setName(newName);
+					totalRenamedScripts++;
+					unnamedScriptCounter++;
+					
+					AsciiString groupName = pGroup->getName();
+					DEBUG_LOG(("Renamed unnamed script in group '%s' (%s) to: %s\n", 
+							groupName.str(), playerName.str(), newName.str()));
+				}
+			}
+		}
+	}
+
+	// Show notification if any were renamed
+	if (totalRenamedScripts > 0 || totalRenamedGroups > 0) {
+		CString msg;
+		msg.Format("Auto-renamed %d unnamed script(s) and %d unnamed group(s).\n\n"
+				"These items are now visible in the tree view with [UNNAMED_*] prefix.\n\n"
+				"You can now delete them or rename them properly.\n\n"
+				"Check the debug output for details.",
+				totalRenamedScripts, totalRenamedGroups);
+		AfxMessageBox(msg, MB_OK | MB_ICONINFORMATION);
+		
+		DEBUG_LOG(("\n=== AUTO-RENAME SUMMARY ===\n"));
+		DEBUG_LOG(("Total Scripts Renamed: %d\n", totalRenamedScripts));
+		DEBUG_LOG(("Total Groups Renamed: %d\n", totalRenamedGroups));
+		DEBUG_LOG(("===========================\n\n"));
+	}
+
+
 	if (pTree) {
 		m_imageList.Create(IDB_FOLDERSCRIPT, 16, 2, ILC_COLOR4);
 		pTree->SetImageList(&m_imageList, TVSIL_STATE);
@@ -1393,6 +1506,212 @@ BOOL ScriptDialog::OnInitDialog()
 	pButton->SetCheck(m_bNewIcons ? 1:0);
 	OnNewIcons();
 
+
+#if 0 // Debug: Report unnamed scripts
+	AsciiString unnamedReport;
+	Int totalUnnamedScripts = 0;
+	Int totalUnnamedGroups = 0;
+
+	for (i = 0; i < m_sides.getNumSides(); i++) {
+		ScriptList *pSL = m_sides.getSideInfo(i)->getScriptList();
+		if (!pSL) continue;
+		
+		Dict *d = m_sides.getSideInfo(i)->getDict();
+		AsciiString playerName = d->getAsciiString(TheKey_playerName);
+		if (playerName.isEmpty()) playerName = NEUTRAL_NAME_STR;
+		
+		Bool playerHasUnnamed = false;
+		AsciiString playerReport;
+		
+		// Check ungrouped scripts
+		Script *pScr;
+		for (pScr = pSL->getScript(); pScr; pScr = pScr->getNext()) {
+			if (pScr->getName().isEmpty()) {
+				if (!playerHasUnnamed) {
+					playerReport.format("\n[%s]\n", playerName.str());
+					playerHasUnnamed = true;
+				}
+				
+				totalUnnamedScripts++;
+				
+				// Build script details
+				AsciiString scriptInfo;
+				scriptInfo.format("  - Unnamed Script (ungrouped)\n");
+				
+				// Count conditions
+				Int conditionCount = 0;
+				for (OrCondition *pOr = pScr->getOrCondition(); pOr; pOr = pOr->getNextOrCondition()) {
+					for (Condition *c = pOr->getFirstAndCondition(); c; c = c->getNext()) {
+						conditionCount++;
+					}
+				}
+				
+				// Count true actions
+				Int trueActionCount = 0;
+				ScriptAction *pTrueAction = pScr->getAction();
+				while (pTrueAction) {
+					trueActionCount++;
+					pTrueAction = pTrueAction->getNext();
+				}
+				
+				// Count false actions
+				Int falseActionCount = 0;
+				ScriptAction *pFalseAction = pScr->getFalseAction();
+				while (pFalseAction) {
+					falseActionCount++;
+					pFalseAction = pFalseAction->getNext();
+				}
+				
+				AsciiString details;
+				details.format("    Conditions: %d, True Actions: %d, False Actions: %d\n", 
+							conditionCount, trueActionCount, falseActionCount);
+				scriptInfo.concat(details);
+				
+				// Add comment if available
+				if (!pScr->getComment().isEmpty()) {
+					AsciiString comment = "    Comment: ";
+					AsciiString fullComment = pScr->getComment();
+					
+					// Truncate if too long (manually)
+					if (fullComment.getLength() > 80) {
+						const char* commentStr = fullComment.str();
+						char truncated[81];
+						strncpy(truncated, commentStr, 77);
+						truncated[77] = '\0';
+						comment.concat(truncated);
+						comment.concat("...");
+					} else {
+						comment.concat(fullComment);
+					}
+					comment.concat("\n");
+					scriptInfo.concat(comment);
+				}
+
+				playerReport.concat(scriptInfo);
+			}
+		}
+		
+		// Check grouped scripts
+		ScriptGroup *pGroup;
+		for (pGroup = pSL->getScriptGroup(); pGroup; pGroup = pGroup->getNext()) {
+			
+			// Check if group itself is unnamed
+			if (pGroup->getName().isEmpty()) {
+				if (!playerHasUnnamed) {
+					playerReport.format("\n[%s]\n", playerName.str());
+					playerHasUnnamed = true;
+				}
+				totalUnnamedGroups++;
+				playerReport.concat("  - Unnamed Script Group\n");
+			}
+			
+			// Check scripts within the group
+			for (pScr = pGroup->getScript(); pScr; pScr = pScr->getNext()) {
+				if (pScr->getName().isEmpty()) {
+					if (!playerHasUnnamed) {
+						playerReport.format("\n[%s]\n", playerName.str());
+						playerHasUnnamed = true;
+					}
+					
+					totalUnnamedScripts++;
+					
+					// Build script details
+					AsciiString scriptInfo;
+					AsciiString groupName = pGroup->getName().isEmpty() ? "Unnamed Group" : pGroup->getName();
+					scriptInfo.format("  - Unnamed Script (in group: %s)\n", groupName.str());
+					
+					// Count conditions
+					Int conditionCount = 0;
+					for (OrCondition *pOr = pScr->getOrCondition(); pOr; pOr = pOr->getNextOrCondition()) {
+						for (Condition *c = pOr->getFirstAndCondition(); c; c = c->getNext()) {
+							conditionCount++;
+						}
+					}
+					
+					// Count true actions
+					Int trueActionCount = 0;
+					ScriptAction *pTrueAction = pScr->getAction();
+					while (pTrueAction) {
+						trueActionCount++;
+						pTrueAction = pTrueAction->getNext();
+					}
+					
+					// Count false actions
+					Int falseActionCount = 0;
+					ScriptAction *pFalseAction = pScr->getFalseAction();
+					while (pFalseAction) {
+						falseActionCount++;
+						pFalseAction = pFalseAction->getNext();
+					}
+					
+					AsciiString details;
+					details.format("    Conditions: %d, True Actions: %d, False Actions: %d\n", 
+								conditionCount, trueActionCount, falseActionCount);
+					scriptInfo.concat(details);
+					
+					// Add comment if available
+					if (!pScr->getComment().isEmpty()) {
+						AsciiString comment = "    Comment: ";
+						AsciiString fullComment = pScr->getComment();
+						
+						// Truncate if too long (manually)
+						if (fullComment.getLength() > 80) {
+							const char* commentStr = fullComment.str();
+							char truncated[81];
+							strncpy(truncated, commentStr, 77);
+							truncated[77] = '\0';
+							comment.concat(truncated);
+							comment.concat("...");
+						} else {
+							comment.concat(fullComment);
+						}
+						comment.concat("\n");
+						scriptInfo.concat(comment);
+					}
+					
+					playerReport.concat(scriptInfo);
+				}
+			}
+		}
+		
+		if (playerHasUnnamed) {
+			unnamedReport.concat(playerReport);
+		}
+	}
+
+	// Display report if any unnamed scripts/groups found
+	if (totalUnnamedScripts > 0 || totalUnnamedGroups > 0) {
+		AsciiString header;
+		header.format("=== UNNAMED SCRIPTS REPORT ===\n");
+		header.concat("Found unnamed scripts/groups that may cause issues:\n");
+		header.concat("---------------------------------------------\n");
+		
+		AsciiString summary;
+		summary.format("\nTotal Unnamed Scripts: %d\n", totalUnnamedScripts);
+		summary.concat("Total Unnamed Groups: ");
+		char buf[32];
+		sprintf(buf, "%d", totalUnnamedGroups);
+		summary.concat(buf);
+		summary.concat("\n\n");
+		summary.concat("These scripts will not appear in the tree view and cannot be referenced.\n");
+		summary.concat("Please assign names to them or delete them if they are not needed.");
+		
+		AsciiString fullReport = header;
+		fullReport.concat(unnamedReport);
+		fullReport.concat(summary);
+		
+		// Log to debug output
+		DEBUG_LOG(("%s\n", fullReport.str()));
+		
+		// Show message box with option to see full report
+		CString msg;
+		msg.Format("Found %d unnamed script(s) and %d unnamed group(s).\n\n"
+				"These items will not appear in the tree view.\n\n"
+				"Check the WorldBuilder debug output window for details.",
+				totalUnnamedScripts, totalUnnamedGroups);
+		AfxMessageBox(msg, MB_OK | MB_ICONWARNING);
+	}
+#endif
 	
 	return FALSE;  // return TRUE unless you set the focus to a control
 	              // EXCEPTION: OCX Property Pages should return FALSE
@@ -1776,6 +2095,21 @@ void ScriptDialog::OnNewFolder()
 		ScriptGroup *pNewGroup = newInstance( ScriptGroup);
 		EditGroup editDlg(pNewGroup);
 		if (IDOK==editDlg.DoModal()) {
+
+			AsciiString name = pNewGroup->getName();
+			name.trim();
+
+			if (name.isEmpty()) {
+				AfxMessageBox(
+					"Error: Script folder name cannot be empty.\n\n"
+					"Please enter a valid name.",
+					MB_OK | MB_ICONERROR
+				);
+
+				pNewGroup->deleteInstance();
+				return;
+			}
+
 			pSL->addGroup(pNewGroup, ndx);
 			reloadPlayer(savSel.m_playerIndex, pSL);
 			savSel.m_groupIndex = ndx;
@@ -1821,6 +2155,21 @@ void ScriptDialog::OnNewScript()
 	editDialog.AddPage(&sf);
 
 	if (IDOK == editDialog.DoModal()) {
+
+		AsciiString name = pNewScript->getName();
+		name.trim();
+
+		if (name.isEmpty()) {
+			AfxMessageBox(
+				"Error: Script name cannot be empty.\n\n"
+				"Please enter a valid name.",
+				MB_OK | MB_ICONERROR
+			);
+
+			pNewScript->deleteInstance();
+			return;
+		}
+
 		insertScript(pNewScript);
 	}	else {
 		pNewScript->deleteInstance();
@@ -2121,6 +2470,140 @@ void ScriptDialog::OnDelete()
 	}
 	updateIcons(TVI_ROOT);
 }
+
+void ScriptDialog::OnAddDebug() 
+{
+    Script *pScript = getCurScript();
+    if (!pScript) {
+        AfxMessageBox("No script selected. Please select a script first.", MB_OK | MB_ICONWARNING);
+        return;
+    }
+
+    // Create the debug action (SHOW_MILITARY_CAPTION)
+    ScriptAction *debugAction = newInstance(ScriptAction)(ScriptAction::SHOW_MILITARY_CAPTION);
+    
+    // Set first parameter: script name + " called"
+    AsciiString debugText = "[Debug] "; 
+	debugText.concat(pScript->getName());
+    debugText.concat(" called");
+    debugAction->getParameter(0)->friend_setString(debugText);
+    
+    // ---- Duration based on text length ----
+    const int msPerChar = 400;
+    int textLength = debugText.getLength();
+
+    int durationMs = textLength * msPerChar;
+
+    // Clamp to sane limits
+    if (durationMs < 2000)  durationMs = 2000;   // minimum 2s
+    if (durationMs > 15000) durationMs = 15000;  // maximum 15s
+
+    debugAction->getParameter(1)->friend_setInt(durationMs);
+    // --------------------------------------
+    
+    // Add the action at the END of the existing TRUE actions
+    ScriptAction *lastAction = pScript->getAction();
+    if (lastAction) {
+        // Find the last action in the chain
+        while (lastAction->getNext()) {
+            lastAction = lastAction->getNext();
+        }
+        lastAction->setNextAction(debugAction);
+    } else {
+        // No actions exist yet, set as first action
+        pScript->setAction(debugAction);
+    }
+    
+    // Mark script as dirty to trigger warning updates
+    pScript->setDirty(true);
+    
+    // Update the tree view
+    CTreeCtrl *pTree = (CTreeCtrl*)GetDlgItem(IDC_SCRIPT_TREE);
+    HTREEITEM item = findItem(m_curSelection);
+    if (item) {
+        pTree->SetItemText(item, formatScriptLabel(pScript, m_bCleanScriptName).str());
+        pTree->SelectItem(NULL);
+        updateWarnings();
+        pTree->SelectItem(item);
+    }
+    updateIcons(TVI_ROOT);
+    
+    MessageBeep(MB_ICONWARNING);
+}
+
+void ScriptDialog::OnRemoveDebug()
+{
+    Script *pScript = getCurScript();
+    if (!pScript) {
+        AfxMessageBox("No script selected. Please select a script first.", MB_OK | MB_ICONWARNING);
+        return;
+    }
+
+    ScriptAction *currentAction = pScript->getAction();
+    ScriptAction *prevAction = NULL;
+    int removedCount = 0;
+
+    while (currentAction) {
+        bool shouldRemove = false;
+
+        // Check if this is a SHOW_MILITARY_CAPTION action with "[Debug]" prefix
+        if (currentAction->getActionType() == ScriptAction::SHOW_MILITARY_CAPTION) {
+            Parameter *param = currentAction->getParameter(0);
+            if (param && param->getParameterType() == Parameter::TEXT_STRING) {
+                AsciiString text = param->getString();
+                if (text.startsWith("[Debug] ")) {
+                    shouldRemove = true;
+                }
+            }
+        }
+
+        if (shouldRemove) {
+            ScriptAction *toDelete = currentAction;
+            currentAction = currentAction->getNext();
+
+            // Unlink from chain
+            if (prevAction) {
+                prevAction->setNextAction(currentAction);
+            } else {
+                // Removing first action
+                pScript->setAction(currentAction);
+            }
+
+            // Delete the action
+            toDelete->setNextAction(NULL);
+            toDelete->deleteInstance();
+            
+            removedCount++;
+        } else {
+            // Move to next action
+            prevAction = currentAction;
+            currentAction = currentAction->getNext();
+        }
+    }
+
+    if (removedCount > 0) {
+        // Mark script as dirty
+        pScript->setDirty(true);
+
+        // Update the tree view
+        CTreeCtrl *pTree = (CTreeCtrl*)GetDlgItem(IDC_SCRIPT_TREE);
+        HTREEITEM item = findItem(m_curSelection);
+        if (item) {
+            pTree->SetItemText(item, formatScriptLabel(pScript, m_bCleanScriptName).str());
+            pTree->SelectItem(NULL);
+            updateWarnings();
+            pTree->SelectItem(item);
+        }
+        updateIcons(TVI_ROOT);
+
+        CString msg;
+        msg.Format("Removed %d debug action(s).", removedCount);
+        AfxMessageBox(msg, MB_OK | MB_ICONINFORMATION);
+    } else {
+        AfxMessageBox("No debug actions found in this script.", MB_OK | MB_ICONINFORMATION);
+    }
+}
+
 
 class LocalMFCFileOutputStream : public OutputStream
 {
@@ -3058,9 +3541,114 @@ void ScriptDialog::doDropOn(HTREEITEM hDrag, HTREEITEM hTarget)
 	Script *pScript = getCurScript();
 	ScriptList *pSL = m_sides.getSideInfo(m_curSelection.m_playerIndex)->getScriptList();
 	ScriptGroup *pGroup = getCurGroup();
+	bool isCtrlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+
 	if (pSL == NULL) return;
 	
 	if (pScript) {
+		// NEW CODE: Check if dropping a script onto another script with auto-merge enabled
+		if (m_bAutoMergeScripts && isCtrlDown &&
+		    (target.m_objType == ListType::SCRIPT_IN_PLAYER_TYPE || 
+		     target.m_objType == ListType::SCRIPT_IN_GROUP_TYPE)) {
+			
+			// Get the target script
+			m_curSelection = target;
+			Script *targetScript = getCurScript();
+			
+			if (targetScript && pScript != targetScript) {
+				// MERGE OPERATION
+				Script *sourceScript = pScript;
+				
+				// Count actions being merged
+				Int trueActionCount = 0;
+				Int falseActionCount = 0;
+				
+				// Copy all true actions from source to target
+				ScriptAction *pAction = sourceScript->getAction();
+				
+				// Find the end of target's true action chain
+				ScriptAction *pTargetLastTrue = targetScript->getAction();
+				if (pTargetLastTrue) {
+					while (pTargetLastTrue->getNext()) {
+						pTargetLastTrue = pTargetLastTrue->getNext();
+					}
+				}
+				
+				// Append source true actions
+				while (pAction) {
+					trueActionCount++;
+					ScriptAction *pDup = pAction->duplicate();
+					if (pTargetLastTrue) {
+						pTargetLastTrue->setNextAction(pDup);
+						pTargetLastTrue = pDup;
+					} else {
+						targetScript->setAction(pDup);
+						pTargetLastTrue = pDup;
+					}
+					pAction = pAction->getNext();
+				}
+				
+				// Copy all false actions from source to target
+				pAction = sourceScript->getFalseAction();
+				
+				// Find the end of target's false action chain
+				ScriptAction *pTargetLastFalse = targetScript->getFalseAction();
+				if (pTargetLastFalse) {
+					while (pTargetLastFalse->getNext()) {
+						pTargetLastFalse = pTargetLastFalse->getNext();
+					}
+				}
+				
+				// Append source false actions
+				while (pAction) {
+					falseActionCount++;
+					ScriptAction *pDup = pAction->duplicate();
+					if (pTargetLastFalse) {
+						pTargetLastFalse->setNextAction(pDup);
+						pTargetLastFalse = pDup;
+					} else {
+						targetScript->setFalseAction(pDup);
+						pTargetLastFalse = pDup;
+					}
+					pAction = pAction->getNext();
+				}
+				
+				// Delete the source script
+				m_curSelection = drag;
+				pGroup = getCurGroup();
+				pSL = m_sides.getSideInfo(m_curSelection.m_playerIndex)->getScriptList();
+				
+				if (pGroup) {
+					pGroup->deleteScript(sourceScript);
+				} else {
+					pSL->deleteScript(sourceScript);
+				}
+				
+				// Mark target script as dirty and update warnings
+				targetScript->setDirty(true);
+				updateScriptWarning(targetScript);
+				
+				// Reload and update
+				pTree->DeleteItem(hDrag);
+				reloadPlayer(target.m_playerIndex, m_sides.getSideInfo(target.m_playerIndex)->getScriptList());
+				updateSelection(target);
+				updateIcons(TVI_ROOT);
+				
+				// Update the tree item text to refresh the display
+				HTREEITEM targetItem = findItem(target);
+				if (targetItem) {
+					pTree->SetItemText(targetItem, formatScriptLabel(targetScript, m_bCleanScriptName).str());
+				}
+				
+				CString msg;
+				msg.Format("Successfully merged script:\n%d true action(s)\n%d false action(s)", 
+				           trueActionCount, falseActionCount);
+				AfxMessageBox(msg, MB_OK | MB_ICONINFORMATION);
+				return;
+			}
+		}
+		
+		// ORIGINAL CODE: Normal script moving/reordering
 		dragScript = pScript->duplicate();
 		if (pGroup) {
 			pGroup->deleteScript(pScript);
@@ -3074,73 +3662,59 @@ void ScriptDialog::doDropOn(HTREEITEM hDrag, HTREEITEM hTarget)
 				target.m_scriptIndex--;
 		}
 	}	else if (drag.m_objType == ListType::GROUP_TYPE) {
-		// NEW CODE: Check if dropping a group onto another group
-		if (target.m_objType == ListType::GROUP_TYPE) {
-			// Ask user if they want to merge
-			int result = AfxMessageBox(
-				"Do you want to merge these script groups?\n\n"
-				"YES: Merge scripts from the dragged group into the target group\n"
-				"NO: Reorder the groups normally",
-				MB_YESNOCANCEL | MB_ICONQUESTION
-			);
+		// NEW CODE: Check if dropping a group onto another group with auto-merge enabled
+		if (m_bAutoMergeScripts && isCtrlDown && target.m_objType == ListType::GROUP_TYPE) {
+			// MERGE OPERATION for groups
+			ScriptGroup *sourceGroup = pGroup;
 			
-			if (result == IDCANCEL) {
-				return; // User cancelled, abort the operation
-			}
+			// Get the target group
+			m_curSelection = target;
+			ScriptGroup *targetGroup = getCurGroup();
 			
-			if (result == IDYES) {
-				// MERGE OPERATION
-				ScriptGroup *sourceGroup = pGroup;
-				
-				// Get the target group
-				m_curSelection = target;
-				ScriptGroup *targetGroup = getCurGroup();
-				
-				if (!targetGroup || !sourceGroup) {
-					AfxMessageBox("Error: Could not find groups for merging.", MB_OK | MB_ICONERROR);
-					return;
-				}
-				
-				// Copy all scripts from source to target
-				Int scriptCount = 0;
-				Script *pScr = sourceGroup->getScript();
-				while (pScr) {
-					scriptCount++;
-					pScr = pScr->getNext();
-				}
-				
-				// Add scripts to target group at the end
-				for (Script *pScrn = sourceGroup->getScript(); pScrn; pScrn = pScrn->getNext()) {
-					Script *pDup = pScrn->duplicate();
-					// Find the end position in target group
-					Int endPos = 0;
-					Script *pTargetScr = targetGroup->getScript();
-					while (pTargetScr) {
-						endPos++;
-						pTargetScr = pTargetScr->getNext();
-					}
-					targetGroup->addScript(pDup, endPos);
-				}
-				
-				// Delete the source group
-				m_curSelection = drag;
-				pSL = m_sides.getSideInfo(m_curSelection.m_playerIndex)->getScriptList();
-				pSL->deleteGroup(sourceGroup);
-				
-				// Reload and update
-				reloadPlayer(drag.m_playerIndex, pSL);
-				updateSelection(target);
-				updateIcons(TVI_ROOT);
-				
-				CString msg;
-				msg.Format("Successfully merged %d script(s) into the target group.", scriptCount);
-				AfxMessageBox(msg, MB_OK | MB_ICONINFORMATION);
+			if (!targetGroup || !sourceGroup) {
+				AfxMessageBox("Error: Could not find groups for merging.", MB_OK | MB_ICONERROR);
 				return;
 			}
-			// If IDNO, fall through to normal reordering logic below
+			
+			// Copy all scripts from source to target
+			Int scriptCount = 0;
+			Script *pScr = sourceGroup->getScript();
+			while (pScr) {
+				scriptCount++;
+				pScr = pScr->getNext();
+			}
+			
+			// Add scripts to target group at the end
+			for (Script *pScrn = sourceGroup->getScript(); pScrn; pScrn = pScrn->getNext()) {
+				Script *pDup = pScrn->duplicate();
+				// Find the end position in target group
+				Int endPos = 0;
+				Script *pTargetScr = targetGroup->getScript();
+				while (pTargetScr) {
+					endPos++;
+					pTargetScr = pTargetScr->getNext();
+				}
+				targetGroup->addScript(pDup, endPos);
+			}
+			
+			// Delete the source group
+			m_curSelection = drag;
+			pSL = m_sides.getSideInfo(m_curSelection.m_playerIndex)->getScriptList();
+			pSL->deleteGroup(sourceGroup);
+			
+			// Reload and update
+			pTree->DeleteItem(hDrag);
+			reloadPlayer(drag.m_playerIndex, pSL);
+			updateSelection(target);
+			updateIcons(TVI_ROOT);
+			
+			CString msg;
+			msg.Format("Successfully merged %d script(s) into the target group.", scriptCount);
+			AfxMessageBox(msg, MB_OK | MB_ICONINFORMATION);
+			return;
 		}
 		
-		// ORIGINAL CODE: Normal group reordering
+		// ORIGINAL CODE (without popup): Normal group reordering
 		dragGroup = pGroup->duplicate();
 		pSL->deleteGroup(pGroup);
 		if (drag.m_objType != ListType::SCRIPT_IN_PLAYER_TYPE &&

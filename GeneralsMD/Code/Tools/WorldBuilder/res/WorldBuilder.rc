@@ -1151,19 +1151,19 @@ END
 IDD_ScriptDialog DIALOGEX 0, 0, 690, 328
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION
 CAPTION "Scripts"
-FONT 8, "MS Sans Serif", 0, 0, 0x1
+FONT 8, "MS Sans Serif"
 BEGIN
     DEFPUSHBUTTON   "OK",IDOK,633,289,50,14
-    PUSHBUTTON      "New &Script...",IDC_NEW_SCRIPT,633,103,50,14
-    PUSHBUTTON      "&Edit...",IDC_EDIT_SCRIPT,633,119,50,14
-    PUSHBUTTON      "&Copy",IDC_COPY_SCRIPT,633,171,50,14
-    PUSHBUTTON      "&Delete",IDC_DELETE,633,187,50,14
-    PUSHBUTTON      "Import Scripts",IDC_LOAD,632,257,51,14
-    PUSHBUTTON      "Export Scripts",IDC_SAVE,633,238,50,14
+    PUSHBUTTON      "New &Script...",IDC_NEW_SCRIPT,633,114,50,14
+    PUSHBUTTON      "&Edit...",IDC_EDIT_SCRIPT,633,130,50,14
+    PUSHBUTTON      "&Copy",IDC_COPY_SCRIPT,633,166,50,14
+    PUSHBUTTON      "&Delete",IDC_DELETE,633,182,50,14
+    PUSHBUTTON      "Import Scripts",IDC_LOAD,632,258,51,14
+    PUSHBUTTON      "Export Scripts",IDC_SAVE,633,239,50,14
     CONTROL         "Tree1",IDC_SCRIPT_TREE,"SysTreeView32",TVS_HASBUTTONS | 
                     TVS_HASLINES | TVS_LINESATROOT | TVS_SHOWSELALWAYS | 
                     WS_TABSTOP,7,25,254,297,WS_EX_CLIENTEDGE
-    PUSHBUTTON      "New &Folder...",IDC_NEW_FOLDER,633,87,50,14
+    PUSHBUTTON      "New &Folder...",IDC_NEW_FOLDER,633,98,50,14
     EDITTEXT        IDC_SCRIPT_DESCRIPTION,263,25,363,191,ES_MULTILINE | 
                     ES_READONLY | WS_VSCROLL | WS_HSCROLL
     PUSHBUTTON      "Cancel",IDCANCEL,633,308,50,14
@@ -1171,8 +1171,8 @@ BEGIN
                     ES_READONLY | WS_VSCROLL
     CONTROL         "Auto Verify",IDC_AUTO_VERIFY,"Button",BS_AUTOCHECKBOX | 
                     WS_TABSTOP,632,7,51,14
-    PUSHBUTTON      "&Verify",IDC_VERIFY,633,44,50,14,NOT WS_VISIBLE
-    PUSHBUTTON      "&Patch ""GC_""",IDC_PATCH_GC,633,204,50,14
+    PUSHBUTTON      "&Verify",IDC_VERIFY,576,7,50,14,NOT WS_VISIBLE
+    PUSHBUTTON      "&Patch ""GC_""",IDC_PATCH_GC,633,199,50,14
     EDITTEXT        IDC_SCRIPT_SEARCH,34,7,127,14
     PUSHBUTTON      "Find Next",IDC_FIND_NEXT,165,7,41,14
     LTEXT           "Search:",IDC_STATIC,7,7,26,13,SS_CENTERIMAGE
@@ -1180,20 +1180,23 @@ BEGIN
                     WS_TABSTOP,215,7,68,14
     CONTROL         "New Icons",IDC_NEWICONS,"Button",BS_AUTOCHECKBOX | 
                     WS_TABSTOP,287,7,48,14
-    CONTROL         "Disable Script Deep Scan On Load  | Fast Load",
-                    IDC_DEEPSCAN,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,424,7,
-                    162,14
-    PUSHBUTTON      "Re- Verify All",IDC_VERIFYALL,633,24,50,14
+    CONTROL         "Fast Load",IDC_DEEPSCAN,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,424,7,49,14
+    PUSHBUTTON      "Re- Verify All",IDC_VERIFYALL,633,21,50,14
     CONTROL         "Smart Copy",IDC_SMART_COPY,"Button",BS_AUTOCHECKBOX | 
-                    WS_TABSTOP,635,155,48,14
+                    WS_TABSTOP,635,150,48,14
     CONTROL         "Clean Script Name",IDC_CLEANSCRIPTNAME,"Button",
                     BS_AUTOCHECKBOX | WS_TABSTOP,339,7,75,14
     CONTROL         "Detect References via picked Parameters",
                     IDC_REFRENCEMODE1,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,
-                    478,218,150,14
-    CONTROL         "Disable references (reduces lag when moving through scripts)",
+                    404,218,150,14
+    CONTROL         "Disable references (reduces input lag)",
                     IDC_DISABLEREFERENCE,"Button",BS_AUTOCHECKBOX | 
-                    WS_TABSTOP,264,218,207,14
+                    WS_TABSTOP,264,218,133,14
+    PUSHBUTTON      "Add Debug",IDC_ADD_DEBUG,633,55,50,14
+    PUSHBUTTON      "Delete Debug",IDC_REMOVE_DEBUG,633,72,50,14
+    CONTROL         "Script Merge",IDC_SCRIPT_MERGE,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,481,7,55,14
 END
 
 IDD_ScriptTabWindow DIALOG DISCARDABLE  0, 0, 391, 255
