@@ -42,6 +42,11 @@ protected:
 	static Int m_feather;
 	static Int m_rate;
 	static Int m_radius;
+
+	static Bool m_enableMirror;
+	static Bool m_mirrorX;   // left/right
+	static Bool m_mirrorY;   // top/bottom
+	static Bool m_mirrorDiag; // diagonal only (XY corner)
 public:
 	FeatherTool(void);
 	~FeatherTool(void);
@@ -49,7 +54,14 @@ public:
 	static void setFeather(Int feather);
 	static void setRate(Int rate);
 	static void setRadius(Int Radius);
+
+	static void toggleMirror() { m_enableMirror = !m_enableMirror; }
+	static void toggleMirrorX() { m_mirrorX = !m_mirrorX; }
+	static void toggleMirrorY() { m_mirrorY = !m_mirrorY; }
+	static void toggleMirrorXY() { m_mirrorDiag = !m_mirrorDiag; }
+
 public:
+	void applyFeatherAt(CPoint ndx, IRegion2D& partialRange, Bool& redoRate);
 	virtual void mouseDown(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBuilderDoc *pDoc);
 	virtual void mouseUp(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBuilderDoc *pDoc);
 	virtual void mouseMoved(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBuilderDoc *pDoc);

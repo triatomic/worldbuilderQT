@@ -58,6 +58,11 @@ class RampOptions : public COptionsPanel
 		afx_msg void OnApply();
 		afx_msg void OnWidthChange();
 
+		afx_msg void OnToggleMirror();
+		afx_msg void OnToggleMirrorX();
+		afx_msg void OnToggleMirrorY();
+		afx_msg void OnToggleMirrorXY();
+
 	DECLARE_MESSAGE_MAP()
 };
 

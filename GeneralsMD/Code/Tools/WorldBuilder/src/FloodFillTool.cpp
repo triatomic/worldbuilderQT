@@ -36,6 +36,10 @@
 //
 
 Bool FloodFillTool::m_adjustCliffTextures = false;
+Bool FloodFillTool::m_enableMirror;
+Bool FloodFillTool::m_mirrorX;
+Bool FloodFillTool::m_mirrorY;
+Bool FloodFillTool::m_mirrorDiag;
 
 /// Constructor
 FloodFillTool::FloodFillTool(void) :
@@ -75,7 +79,19 @@ void FloodFillTool::setCursor(void)
 	}
 }
 
+void FloodFillTool::applyFillAt(CPoint pt, WorldHeightMapEdit* htMapEditCopy, Bool shiftKey, Bool &didIt)
+{
+    if (pt.x < 0 || pt.x >= htMapEditCopy->getXExtent()) return;
+    if (pt.y < 0 || pt.y >= htMapEditCopy->getYExtent()) return;
 
+    if (m_adjustCliffTextures) {
+        if (htMapEditCopy->doCliffAdjustment(pt.x, pt.y))
+            didIt = true;
+    } else {
+        if (htMapEditCopy->floodFill(pt.x, pt.y, m_textureClassToDraw, shiftKey))
+            didIt = true;
+    }
+}
 
 /// Left click code.  Sets m_textureClassToDraw and calls eitherMouseDown()
 /// Perform the tool behavior on mouse down.
@@ -84,36 +100,68 @@ has been set by the calling routine.  Then builds
 the command, and passes it to the doc. */
 void FloodFillTool::mouseUp(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBuilderDoc *pDoc) 
 {
-	Coord3D cpt;
-	pView->viewToDocCoords(viewPt, &cpt);
+    Coord3D cpt;
+    pView->viewToDocCoords(viewPt, &cpt);
 
-	CPoint ndx;
-	if (!pDoc->getCellIndexFromCoord(cpt, &ndx)) {
-		return;
-	}
+    CPoint ndx;
+    if (!pDoc->getCellIndexFromCoord(cpt, &ndx)) {
+        return;
+    }
 
-	if (m == TRACK_L)
-		m_textureClassToDraw = TerrainMaterial::getFgTexClass();
-	else 
-		m_textureClassToDraw = TerrainMaterial::getBgTexClass();
+    if (m == TRACK_L)
+        m_textureClassToDraw = TerrainMaterial::getFgTexClass();
+    else 
+        m_textureClassToDraw = TerrainMaterial::getBgTexClass();
 
-//	WorldHeightMapEdit *pMap = pDoc->GetHeightMap();
-	WorldHeightMapEdit *htMapEditCopy = pDoc->GetHeightMap()->duplicate();
-	Bool didIt = false;
-	Bool shiftKey = (0x8000 & ::GetAsyncKeyState(VK_SHIFT))!=0;
-	if (m_adjustCliffTextures) {
-		didIt = htMapEditCopy->doCliffAdjustment(ndx.x, ndx.y);
-	} else {
-		didIt = htMapEditCopy->floodFill(ndx.x, ndx.y, m_textureClassToDraw, shiftKey);
-	}
-	if (didIt) {
-		htMapEditCopy->optimizeTiles(); // force to optimize tileset
-		IRegion2D partialRange = {0,0,0,0};
-		pDoc->updateHeightMap(htMapEditCopy, false, partialRange);
-		WBDocUndoable *pUndo = new WBDocUndoable(pDoc, htMapEditCopy);
-		pDoc->AddAndDoUndoable(pUndo);
-		REF_PTR_RELEASE(pUndo); // belongs to pDoc now.
-	} 
-	REF_PTR_RELEASE(htMapEditCopy);
+    WorldHeightMapEdit *htMapEditCopy = pDoc->GetHeightMap()->duplicate();
+    Bool didIt = false;
+    Bool shiftKey = (0x8000 & ::GetAsyncKeyState(VK_SHIFT)) != 0;
+
+    // Primary stroke
+    applyFillAt(ndx, htMapEditCopy, shiftKey, didIt);
+
+    // Mirror across X centre (left/right)
+    if (m_enableMirror && (m_mirrorX || m_mirrorDiag))
+    {
+        CPoint mirrorX;
+        mirrorX.x = htMapEditCopy->getXExtent() - 1 - ndx.x;
+        mirrorX.y = ndx.y;
+        if (m_mirrorX)
+            applyFillAt(mirrorX, htMapEditCopy, shiftKey, didIt);
+
+        // Mirror across Y centre (top/bottom)
+        if (m_mirrorY)
+        {
+            CPoint mirrorY;
+            mirrorY.x = ndx.x;
+            mirrorY.y = htMapEditCopy->getYExtent() - 1 - ndx.y;
+            applyFillAt(mirrorY, htMapEditCopy, shiftKey, didIt);
+        }
+
+        // Diagonal: opposite corner
+        if (m_mirrorDiag || (m_mirrorX && m_mirrorY))
+        {
+            CPoint mirrorXY;
+            mirrorXY.x = htMapEditCopy->getXExtent() - 1 - ndx.x;
+            mirrorXY.y = htMapEditCopy->getYExtent() - 1 - ndx.y;
+            applyFillAt(mirrorXY, htMapEditCopy, shiftKey, didIt);
+        }
+    }
+    else if (m_enableMirror && m_mirrorY)
+    {
+        CPoint mirrorY;
+        mirrorY.x = ndx.x;
+        mirrorY.y = htMapEditCopy->getYExtent() - 1 - ndx.y;
+        applyFillAt(mirrorY, htMapEditCopy, shiftKey, didIt);
+    }
+
+    if (didIt) {
+        htMapEditCopy->optimizeTiles();
+        IRegion2D partialRange = {0, 0, 0, 0};
+        pDoc->updateHeightMap(htMapEditCopy, false, partialRange);
+        WBDocUndoable *pUndo = new WBDocUndoable(pDoc, htMapEditCopy);
+        pDoc->AddAndDoUndoable(pUndo);
+        REF_PTR_RELEASE(pUndo);
+    }
+    REF_PTR_RELEASE(htMapEditCopy);
 }
-

@@ -33,6 +33,10 @@
 
 
 Bool AutoEdgeOutTool::m_autoEdgeToolActive = false;
+Bool AutoEdgeOutTool::m_enableMirror;
+Bool AutoEdgeOutTool::m_mirrorX;
+Bool AutoEdgeOutTool::m_mirrorY;
+Bool AutoEdgeOutTool::m_mirrorDiag;
 //
 // AutoEdgeOutTool class.
 //
@@ -72,45 +76,86 @@ void AutoEdgeOutTool::mouseMoved(TTrackingMode m, CPoint viewPt, WbView* pView, 
 	return;
 }
 
+/** Helper: apply blend or unblend at a given cell index. */
+void AutoEdgeOutTool::applyEdgeAt(CPoint pt, WorldHeightMapEdit* htMapEditCopy, Bool shiftKey)
+{
+    if (pt.x < 0 || pt.x >= htMapEditCopy->getXExtent()) return;
+    if (pt.y < 0 || pt.y >= htMapEditCopy->getYExtent()) return;
+
+    if (shiftKey) {
+        htMapEditCopy->unblendArea(pt.x, pt.y);
+    } else {
+        htMapEditCopy->autoBlendOut(
+            pt.x,
+            pt.y,
+            BlendMaterial::getBlendTexClass(),
+            BlendMaterial::isHorizVertGap(),
+            BlendMaterial::isDiagGap(),
+            BlendMaterial::isRevalBlends()
+        );
+    }
+}
+
 /** Execute the tool on mouse down - Create a copy of the height map
 * to edit, blend the edges, and give the undoable command to the doc.
 * If Shift is held, unblend the area instead (remove blend tiles). */
 void AutoEdgeOutTool::mouseDown(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBuilderDoc *pDoc) 
 {
-	if (m != TRACK_L) return;
+    if (m != TRACK_L) return;
 
-	Coord3D cpt;
-	pView->viewToDocCoords(viewPt, &cpt);
+    Coord3D cpt;
+    pView->viewToDocCoords(viewPt, &cpt);
 
-	CPoint ndx;
-	if (!pDoc->getCellIndexFromCoord(cpt, &ndx)) {
-		return;
-	}
+    CPoint ndx;
+    if (!pDoc->getCellIndexFromCoord(cpt, &ndx)) {
+        return;
+    }
 
     Bool shiftKey = (0x8000 & ::GetAsyncKeyState(VK_SHIFT)) != 0;
-//    WorldHeightMapEdit *pMap = pDoc->GetHeightMap();
     WorldHeightMapEdit *htMapEditCopy = pDoc->GetHeightMap()->duplicate();
-    
-    if (shiftKey) {
-        // Unblend mode - remove blend tiles from the clicked texture area
-        htMapEditCopy->unblendArea(ndx.x, ndx.y);
-    } else {
-        // Normal blend mode
-        htMapEditCopy->autoBlendOut(
-            ndx.x, 
-            ndx.y, 
-            BlendMaterial::getBlendTexClass(), 
-            BlendMaterial::isHorizVertGap(), 
-            BlendMaterial::isDiagGap(),
-            BlendMaterial::isRevalBlends()
-        );
-    }
-	
-	IRegion2D partialRange = {0,0,0,0};
-	pDoc->updateHeightMap(htMapEditCopy, false, partialRange);
-	WBDocUndoable *pUndo = new WBDocUndoable(pDoc, htMapEditCopy);
-	pDoc->AddAndDoUndoable(pUndo);
-	REF_PTR_RELEASE(pUndo); // belongs to pDoc now.
-	REF_PTR_RELEASE(htMapEditCopy);
-}
 
+    // Primary stroke
+    applyEdgeAt(ndx, htMapEditCopy, shiftKey);
+
+    // Mirror across X centre (left/right)
+    if (m_enableMirror && (m_mirrorX || m_mirrorDiag))
+    {
+        CPoint mirrorX;
+        mirrorX.x = htMapEditCopy->getXExtent() - 1 - ndx.x;
+        mirrorX.y = ndx.y;
+        if (m_mirrorX)
+            applyEdgeAt(mirrorX, htMapEditCopy, shiftKey);
+
+        // Mirror across Y centre (top/bottom)
+        if (m_mirrorY)
+        {
+            CPoint mirrorY;
+            mirrorY.x = ndx.x;
+            mirrorY.y = htMapEditCopy->getYExtent() - 1 - ndx.y;
+            applyEdgeAt(mirrorY, htMapEditCopy, shiftKey);
+        }
+
+        // Diagonal: opposite corner
+        if (m_mirrorDiag || (m_mirrorX && m_mirrorY))
+        {
+            CPoint mirrorXY;
+            mirrorXY.x = htMapEditCopy->getXExtent() - 1 - ndx.x;
+            mirrorXY.y = htMapEditCopy->getYExtent() - 1 - ndx.y;
+            applyEdgeAt(mirrorXY, htMapEditCopy, shiftKey);
+        }
+    }
+    else if (m_enableMirror && m_mirrorY)
+    {
+        CPoint mirrorY;
+        mirrorY.x = ndx.x;
+        mirrorY.y = htMapEditCopy->getYExtent() - 1 - ndx.y;
+        applyEdgeAt(mirrorY, htMapEditCopy, shiftKey);
+    }
+
+    IRegion2D partialRange = {0, 0, 0, 0};
+    pDoc->updateHeightMap(htMapEditCopy, false, partialRange);
+    WBDocUndoable *pUndo = new WBDocUndoable(pDoc, htMapEditCopy);
+    pDoc->AddAndDoUndoable(pUndo);
+    REF_PTR_RELEASE(pUndo);
+    REF_PTR_RELEASE(htMapEditCopy);
+}

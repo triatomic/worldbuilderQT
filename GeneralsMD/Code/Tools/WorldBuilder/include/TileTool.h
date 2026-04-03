@@ -103,6 +103,11 @@ protected:
 	static Int m_currentHeight;
 	static Int m_copyModeWidth; 
 
+	static Bool m_enableMirror;
+	static Bool m_mirrorX;   // left/right
+    static Bool m_mirrorY;   // top/bottom
+    static Bool m_mirrorDiag; // diagonal only (XY corner)
+
 public:
  	virtual void activate(); ///< Become the current tool.
 
@@ -113,6 +118,16 @@ public:
 	virtual Int getWidth(void) {return m_currentWidth;};
 	static void setHeight(Int height) ;
 	virtual Int getHeight(void) {return m_currentHeight;};
+
+	static Bool getEnableMirror() { return m_enableMirror; }
+	static Bool getMirrorX() { return m_mirrorX; }
+	static Bool getMirrorY() { return m_mirrorY; }
+	static Bool getMirrorDiag() { return m_mirrorDiag; }
+
+	static void toggleMirror() { m_enableMirror = !m_enableMirror; }
+	static void toggleMirrorX() { m_mirrorX = !m_mirrorX; }
+	static void toggleMirrorY() { m_mirrorY = !m_mirrorY; }
+	static void toggleMirrorXY() { m_mirrorDiag = !m_mirrorDiag; }
 
 	// Used by TerrainMaterial dialog to get/set current width.
 	static Int getCurrentHeight(void) {return m_currentHeight;};

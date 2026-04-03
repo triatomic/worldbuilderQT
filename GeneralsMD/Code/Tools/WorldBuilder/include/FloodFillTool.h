@@ -41,11 +41,22 @@ protected:
 	Int			m_textureClassToDraw; ///< The texture to fill with.  Foreground for mousedDown, background for mouseDownRt.
 	HCURSOR m_cliffCursor;
 	static Bool m_adjustCliffTextures;
+	static Bool m_enableMirror;
+	static Bool m_mirrorX;   // left/right
+    static Bool m_mirrorY;   // top/bottom
+    static Bool m_mirrorDiag; // diagonal only (XY corner)
+
 
 public:
+    void applyFillAt(CPoint pt, WorldHeightMapEdit* htMapEditCopy, Bool shiftKey, Bool &didIt);
 	virtual void mouseUp(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBuilderDoc *pDoc);
 	virtual void activate(); ///< Become the current tool.
 	virtual void setCursor(void);
+
+	static void toggleMirror() { m_enableMirror = !m_enableMirror; }
+	static void toggleMirrorX() { m_mirrorX = !m_mirrorX; }
+	static void toggleMirrorY() { m_mirrorY = !m_mirrorY; }
+	static void toggleMirrorXY() { m_mirrorDiag = !m_mirrorDiag; }
 
 	Bool getAdjustCliffs(void) {return m_adjustCliffTextures;}
 	void setAdjustCliffs(Bool val) {m_adjustCliffTextures = val;}

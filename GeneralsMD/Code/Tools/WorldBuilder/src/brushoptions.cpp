@@ -271,12 +271,37 @@ void BrushOptions::PopSliderFinished(const long sliderID, long theVal)
 
 }
 
+void BrushOptions::OnToggleMirror()
+{
+	BrushTool::toggleMirror();
+}
+
+void BrushOptions::OnToggleMirrorX()
+{
+	BrushTool::toggleMirrorX();
+}
+
+void BrushOptions::OnToggleMirrorY()
+{
+	BrushTool::toggleMirrorY();
+}
+
+void BrushOptions::OnToggleMirrorXY()
+{
+	BrushTool::toggleMirrorXY();
+}
+
 
 BEGIN_MESSAGE_MAP(BrushOptions, COptionsPanel)
 	//{{AFX_MSG_MAP(BrushOptions)
 	ON_EN_CHANGE(IDC_FEATHER_EDIT, OnChangeFeatherEdit)
 	ON_EN_CHANGE(IDC_SIZE_EDIT, OnChangeSizeEdit)
 	ON_EN_CHANGE(IDC_HEIGHT_EDIT, OnChangeHeightEdit)
+
+	ON_BN_CLICKED(IDC_TOGGLE_MIRROR, OnToggleMirror)
+	ON_BN_CLICKED(IDC_TOGGLE_MIRRORX, OnToggleMirrorX)
+	ON_BN_CLICKED(IDC_TOGGLE_MIRRORY, OnToggleMirrorY)
+	ON_BN_CLICKED(IDC_TOGGLE_MIRRORXY, OnToggleMirrorXY)
 	ON_WM_HSCROLL()
 	//}}AFX_MSG_MAP
 END_MESSAGE_MAP()

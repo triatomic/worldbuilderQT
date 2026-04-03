@@ -22,6 +22,7 @@
 //
 #define IDPREVIEWSOUND                  3
 #define IDC_PREVIEWSOUND                3
+#define IDC_SAVE_ACTUAL                 3
 #define IDD_ABOUTBOX                    100
 #define IDR_MAINFRAME                   128
 #define IDR_MAPDOC                      128
@@ -651,6 +652,10 @@
 #define IDC_TRAINSWP_LBLH1              1366
 #define IDC_TRAINSWP_LBLH0              1367
 #define IDC_AIWP_LBLH0                  1368
+#define IDC_TOGGLE_MIRRORX              1370
+#define IDC_TOGGLE_MIRRORXY             1371
+#define IDC_TOGGLE_MIRRORY              1372
+#define IDC_TOGGLE_MIRROR               1373
 #define IDC_STATIC_MAPOBJECT_GENERAL    1379
 #define IDC_STATIC_MAPOBJECT_LOGICAL    1380
 #define IDC_STATIC_MAPOBJECT_SOUND      1381
@@ -905,7 +910,7 @@
 #define _APS_3D_CONTROLS                     1
 #define _APS_NEXT_RESOURCE_VALUE        243
 #define _APS_NEXT_COMMAND_VALUE         33348
-#define _APS_NEXT_CONTROL_VALUE         1369
+#define _APS_NEXT_CONTROL_VALUE         1370
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

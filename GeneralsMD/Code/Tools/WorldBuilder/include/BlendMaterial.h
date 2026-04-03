@@ -83,6 +83,12 @@ protected:
 	afx_msg void OnHorizontalAndVerticalGap();
 	afx_msg void OnDiagonalGap();
 
+	afx_msg void OnToggleMirror();
+	afx_msg void OnToggleMirrorX();
+	afx_msg void OnToggleMirrorY();
+	afx_msg void OnToggleMirrorXY();
+	
+
 public:
 	static void updateBlendPointerToolTip();
 	static Bool isHorizVertGap(void) {return m_hvgap;}

@@ -225,11 +225,35 @@ void FeatherOptions::PopSliderFinished(const long sliderID, long theVal)
 
 }
 
+void FeatherOptions::OnToggleMirror()
+{
+	FeatherTool::toggleMirror();
+}
+
+void FeatherOptions::OnToggleMirrorX()
+{
+	FeatherTool::toggleMirrorX();
+}
+
+void FeatherOptions::OnToggleMirrorY()
+{
+	FeatherTool::toggleMirrorY();
+}
+
+void FeatherOptions::OnToggleMirrorXY()
+{
+	FeatherTool::toggleMirrorXY();
+}
 
 BEGIN_MESSAGE_MAP(FeatherOptions, COptionsPanel)
 	//{{AFX_MSG_MAP(FeatherOptions)
 	ON_EN_CHANGE(IDC_SIZE_EDIT, OnChangeSizeEdit)
 	ON_WM_HSCROLL()
+
+	ON_BN_CLICKED(IDC_TOGGLE_MIRROR, OnToggleMirror)
+	ON_BN_CLICKED(IDC_TOGGLE_MIRRORX, OnToggleMirrorX)
+	ON_BN_CLICKED(IDC_TOGGLE_MIRRORY, OnToggleMirrorY)
+	ON_BN_CLICKED(IDC_TOGGLE_MIRRORXY, OnToggleMirrorXY)
 	//}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 

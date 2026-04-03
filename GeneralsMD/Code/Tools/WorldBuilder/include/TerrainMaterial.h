@@ -82,6 +82,12 @@ protected:
 	afx_msg void OnRotate180();
 	afx_msg void OnRotate270();
 	afx_msg void OnImportFavoritesFromMapFolder();
+
+	afx_msg void OnToggleMirror();
+	afx_msg void OnToggleMirrorX();
+	afx_msg void OnToggleMirrorY();
+	afx_msg void OnToggleMirrorXY();
+
 	//}}AFX_MSG
 	DECLARE_MESSAGE_MAP()
 

@@ -592,10 +592,8 @@ void TileTool::mouseMoved(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldB
 		Coord3D cpt;
 		pView->viewToDocCoords(viewPt, &cpt);
 
-		// Access the static copy buffer directly
 		TileTool::TerrainCopyBuffer &buf = TileTool::s_copyBuffer;
 
-		// Only enable feedback if buffer actually contains valid data
 		if (!buf.heightData.empty() && !buf.heightData[0].empty() && TerrainMaterial::isCopyTerrainMode()) {
 			DrawObject::m_terrainPasteFeedback = true;
 			DrawObject::m_terrainPasteFeedbackRotation = TerrainMaterial::getCopyRotation();
@@ -626,6 +624,10 @@ void TileTool::mouseMoved(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldB
 	Int totalMaxX = 0;
 	Int totalMaxY = 0;
 
+	// Cache map extents for mirror calculations
+	const Int mapW = m_htMapEditCopy->getXExtent();
+	const Int mapH = m_htMapEditCopy->getYExtent();
+
 	count /= 2;
 	if (count<1) count = 1;
 	for (k=0; k<=count; k++) {
@@ -641,6 +643,7 @@ void TileTool::mouseMoved(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldB
 			DEBUG_ASSERTCRASH(curViewPt.x == viewPt.x, ("Bad x"));
 			DEBUG_ASSERTCRASH(curViewPt.y == viewPt.y, ("Bad y"));
 		}
+
 		CPoint ndx;
 		Int width = getWidth();
 		pView->viewToDocCoords(curViewPt, &cpt);
@@ -650,28 +653,63 @@ void TileTool::mouseMoved(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldB
 		m_prevXIndex = ndx.x;
 		m_prevYIndex = ndx.y;
 
-		Int i, j;
-		Int minX = ndx.x - (width)/2;
-		Int minY = ndx.y - (width)/2;
-		for (i=minX; i<minX+width; i++) {
-			if (i<0 || i>=m_htMapEditCopy->getXExtent()) continue;
-			for (j=minY; j<minY+width; j++) {
-				if (j<0 || j>=m_htMapEditCopy->getYExtent()) continue;
-				if (TerrainMaterial::isPaintingPathingInfo()) {
-					m_htMapEditCopy->setCliff(i, j, !TerrainMaterial::isPaintingPassable());
-				} else {
-					if (m_htMapEditCopy->setTileNdx(i, j, m_textureClassToDraw, width==1)) {
-						fullUpdate = true;
+		// Build list of center indices to paint (primary + mirrors)
+		CPoint centers[4];
+		Int centerCount = 0;
+
+		centers[centerCount++] = ndx; // always paint primary
+
+		if (BigTileTool::getEnableMirror()) {
+			DEBUG_LOG(("Mirror enabled: calculating mirrored centers...\n"));
+			// Mirrored center indices
+			Int mx = (mapW - 1) - ndx.x; // X mirror
+			Int my = (mapH - 1) - ndx.y; // Y mirror
+
+			if (BigTileTool::getMirrorX()) {
+				CPoint p; p.x = mx; p.y = ndx.y;
+				centers[centerCount++] = p;
+			}
+			if (BigTileTool::getMirrorY()) {
+				CPoint p; p.x = ndx.x; p.y = my;
+				centers[centerCount++] = p;
+			}
+			// Diagonal (XY corner) — only when both X and Y mirrors are also active,
+			// or when mirrorDiag is standalone
+			if (BigTileTool::getMirrorDiag() || (BigTileTool::getMirrorX() && BigTileTool::getMirrorY())) {
+				CPoint p; p.x = mx; p.y = my;
+				centers[centerCount++] = p;
+			}
+		}
+
+		// Paint all centers
+		for (Int c = 0; c < centerCount; c++) {
+			Int cx = centers[c].x;
+			Int cy = centers[c].y;
+
+			Int i, j;
+			Int minX = cx - (width)/2;
+			Int minY = cy - (width)/2;
+			for (i=minX; i<minX+width; i++) {
+				if (i<0 || i>=mapW) continue;
+				for (j=minY; j<minY+width; j++) {
+					if (j<0 || j>=mapH) continue;
+					if (TerrainMaterial::isPaintingPathingInfo()) {
+						m_htMapEditCopy->setCliff(i, j, !TerrainMaterial::isPaintingPassable());
+					} else {
+						if (m_htMapEditCopy->setTileNdx(i, j, m_textureClassToDraw, width==1)) {
+							fullUpdate = true;
+						}
 					}
+					didAnything = true;
+					if (totalMinX>i) totalMinX = i;
+					if (totalMinY>j) totalMinY = j;
+					if (totalMaxX<i) totalMaxX = i;
+					if (totalMaxY<j) totalMaxY = j;
 				}
-				didAnything = true;
-				if (totalMinX>i) totalMinX = i;
-				if (totalMinY>j) totalMinY = j;
-				if (totalMaxX<i) totalMaxX = i;
-				if (totalMaxY<j) totalMaxY = j;
 			}
 		}
 	}
+
 	if (didAnything) {
 		IRegion2D partialRange;
 		partialRange.lo.x = totalMinX;
@@ -679,7 +717,7 @@ void TileTool::mouseMoved(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldB
 		partialRange.lo.y = totalMinY;
 		partialRange.hi.y = totalMaxY+1;
 		if (fullUpdate) {
-			m_htMapEditCopy->optimizeTiles(); // force to optimize tileset
+			m_htMapEditCopy->optimizeTiles();
 		}
 		pDoc->updateHeightMap(m_htMapEditCopy, !fullUpdate, partialRange);
 	}
@@ -779,6 +817,11 @@ void TileTool::applyTerrainArea(WorldHeightMapEdit* pMap, Int destX, Int destY)
 Int BigTileTool::m_currentWidth = 0;
 Int BigTileTool::m_currentHeight = 0;
 Int BigTileTool::m_copyModeWidth = 0;
+
+Bool BigTileTool::m_enableMirror;
+Bool BigTileTool::m_mirrorX;
+Bool BigTileTool::m_mirrorY;
+Bool BigTileTool::m_mirrorDiag;
 
 /// Constructor
 BigTileTool::BigTileTool(void)

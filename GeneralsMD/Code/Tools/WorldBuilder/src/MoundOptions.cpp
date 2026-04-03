@@ -274,12 +274,38 @@ void MoundOptions::PopSliderFinished(const long sliderID, long theVal)
 }
 
 
+void MoundOptions::OnToggleMirror()
+{
+	MoundTool::toggleMirror();
+}
+
+void MoundOptions::OnToggleMirrorX()
+{
+	MoundTool::toggleMirrorX();
+}
+
+void MoundOptions::OnToggleMirrorY()
+{
+	MoundTool::toggleMirrorY();
+}
+
+void MoundOptions::OnToggleMirrorXY()
+{
+	MoundTool::toggleMirrorXY();
+}
+
+
 BEGIN_MESSAGE_MAP(MoundOptions, COptionsPanel)
 	//{{AFX_MSG_MAP(MoundOptions)
 	ON_WM_HSCROLL()
 	ON_EN_CHANGE(IDC_FEATHER_EDIT, OnChangeFeatherEdit)
 	ON_EN_CHANGE(IDC_SIZE_EDIT, OnChangeSizeEdit)
 	ON_EN_CHANGE(IDC_HEIGHT_EDIT, OnChangeHeightEdit)
+
+	ON_BN_CLICKED(IDC_TOGGLE_MIRROR, OnToggleMirror)
+	ON_BN_CLICKED(IDC_TOGGLE_MIRRORX, OnToggleMirrorX)
+	ON_BN_CLICKED(IDC_TOGGLE_MIRRORY, OnToggleMirrorY)
+	ON_BN_CLICKED(IDC_TOGGLE_MIRRORXY, OnToggleMirrorXY)
 	//}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 

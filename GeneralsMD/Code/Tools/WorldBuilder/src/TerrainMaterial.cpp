@@ -33,6 +33,7 @@
 #include "W3DDevice/GameClient/TerrainTex.h"	  
 #include "W3DDevice/GameClient/HeightMap.h"
 #include "DrawObject.h"
+#include "FloodFillTool.h"
 
 TerrainMaterial *TerrainMaterial::m_staticThis = NULL;
 
@@ -96,6 +97,11 @@ BEGIN_MESSAGE_MAP(TerrainMaterial, COptionsPanel)
 	ON_BN_CLICKED(IDC_TERRAIN_ROTATE2, OnRotate90)
 	ON_BN_CLICKED(IDC_TERRAIN_ROTATE3, OnRotate180)
 	ON_BN_CLICKED(IDC_TERRAIN_ROTATE4, OnRotate270)
+
+	ON_BN_CLICKED(IDC_TOGGLE_MIRROR, OnToggleMirror)
+	ON_BN_CLICKED(IDC_TOGGLE_MIRRORX, OnToggleMirrorX)
+	ON_BN_CLICKED(IDC_TOGGLE_MIRRORY, OnToggleMirrorY)
+	ON_BN_CLICKED(IDC_TOGGLE_MIRRORXY, OnToggleMirrorXY)
 
 	ON_BN_CLICKED(IDC_SET_FAV, OnSetFavorite)
 	ON_BN_CLICKED(IDC_DEL_FAV, OnDeleteFavorite)
@@ -1229,4 +1235,29 @@ void TerrainMaterial::ExpandAllItems(CTreeCtrl& treeCtrl, HTREEITEM hItem)
 
         hItem = treeCtrl.GetNextSiblingItem(hItem);
     }
+}
+
+void TerrainMaterial::OnToggleMirror()
+{
+	BigTileTool::toggleMirror();
+	FloodFillTool::toggleMirror();
+}
+
+void TerrainMaterial::OnToggleMirrorX()
+{
+	BigTileTool::toggleMirrorX();
+	FloodFillTool::toggleMirrorX();
+}
+
+void TerrainMaterial::OnToggleMirrorY()
+{
+	BigTileTool::toggleMirrorY();
+	FloodFillTool::toggleMirrorY();
+}
+
+void TerrainMaterial::OnToggleMirrorXY()
+{
+	BigTileTool::toggleMirrorXY();
+	FloodFillTool::toggleMirrorXY();
+
 }

@@ -33,6 +33,7 @@
 
 #include "StdAfx.h"
 #include "RampOptions.h"
+#include "RampTool.h"
 
 RampOptions::RampOptions(CWnd* pParent) : COptionsPanel(RampOptions::IDD, pParent)
 {
@@ -79,9 +80,34 @@ void RampOptions::OnWidthChange()
 	m_rampWidth = atof(str.GetBuffer(0));
 }
 
+void RampOptions::OnToggleMirror()
+{
+	RampTool::toggleMirror();
+}
+
+void RampOptions::OnToggleMirrorX()
+{
+	RampTool::toggleMirrorX();
+}
+
+void RampOptions::OnToggleMirrorY()
+{
+	RampTool::toggleMirrorY();
+}
+
+void RampOptions::OnToggleMirrorXY()
+{
+	RampTool::toggleMirrorXY();
+}
+
 extern RampOptions* TheRampOptions = NULL;
 
 BEGIN_MESSAGE_MAP(RampOptions, COptionsPanel)
 	ON_BN_CLICKED(IDC_RO_APPLY, OnApply)
 	ON_EN_CHANGE(IDC_RO_WIDTH, OnWidthChange)
+
+	ON_BN_CLICKED(IDC_TOGGLE_MIRROR, OnToggleMirror)
+	ON_BN_CLICKED(IDC_TOGGLE_MIRRORX, OnToggleMirrorX)
+	ON_BN_CLICKED(IDC_TOGGLE_MIRRORY, OnToggleMirrorY)
+	ON_BN_CLICKED(IDC_TOGGLE_MIRRORXY, OnToggleMirrorXY)
 END_MESSAGE_MAP()

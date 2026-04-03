@@ -43,6 +43,11 @@ protected:
 	static Int m_brushWidth;
 	static Int m_brushFeather;
 
+	static Bool m_enableMirror;
+	static Bool m_mirrorX;   // left/right
+    static Bool m_mirrorY;   // top/bottom
+    static Bool m_mirrorDiag; // diagonal only (XY corner)
+
 public:
 	MoundTool(void);
 	~MoundTool(void);
@@ -55,11 +60,20 @@ public:
 	static void setWidth(Int width);
 	static void setFeather(Int feather);
 
+	static void toggleMirror() { m_enableMirror = !m_enableMirror; }
+	static void toggleMirrorX() { m_mirrorX = !m_mirrorX; }
+	static void toggleMirrorY() { m_mirrorY = !m_mirrorY; }
+	static void toggleMirrorXY() { m_mirrorDiag = !m_mirrorDiag; }
+	
+
+
 public:
 	virtual void mouseDown(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBuilderDoc *pDoc);
 	virtual void mouseUp(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBuilderDoc *pDoc);
 	virtual void mouseMoved(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBuilderDoc *pDoc);
 	virtual WorldHeightMapEdit *getHeightMap(void) {return m_htMapEditCopy;};
+
+	void applyMoundAt(CPoint ndx, CWorldBuilderDoc* pDoc, IRegion2D& partialRange);
 	virtual void activate(); ///< Become the current tool.
 };
 

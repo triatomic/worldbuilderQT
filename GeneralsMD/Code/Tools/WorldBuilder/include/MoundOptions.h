@@ -72,6 +72,11 @@ protected:
 	afx_msg void OnChangeFeatherEdit();
 	afx_msg void OnChangeSizeEdit();
 	afx_msg void OnChangeHeightEdit();
+
+	afx_msg void OnToggleMirror();
+	afx_msg void OnToggleMirrorX();
+	afx_msg void OnToggleMirrorY();
+	afx_msg void OnToggleMirrorXY();
 	//}}AFX_MSG
 	DECLARE_MESSAGE_MAP()
 

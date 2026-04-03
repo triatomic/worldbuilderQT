@@ -30,7 +30,8 @@
 #include "TileTool.h"
 #include "PointerTool.h"
 #include "Common/TerrainTypes.h"
-#include "W3DDevice/GameClient/TerrainTex.h"	  
+#include "W3DDevice/GameClient/TerrainTex.h"
+#include "AutoEdgeOutTool.h"	  
 
 BlendMaterial *BlendMaterial::m_staticThis = NULL;
 
@@ -63,11 +64,36 @@ void BlendMaterial::DoDataExchange(CDataExchange* pDX)
 	//}}AFX_DATA_MAP
 }
 
+void BlendMaterial::OnToggleMirror()
+{
+	AutoEdgeOutTool::toggleMirror();
+}
+
+void BlendMaterial::OnToggleMirrorX()
+{
+	AutoEdgeOutTool::toggleMirrorX();
+}
+
+void BlendMaterial::OnToggleMirrorY()
+{
+	AutoEdgeOutTool::toggleMirrorY();
+}
+
+void BlendMaterial::OnToggleMirrorXY()
+{
+	AutoEdgeOutTool::toggleMirrorXY();
+}
+
 
 BEGIN_MESSAGE_MAP(BlendMaterial, COptionsPanel)
 	ON_BN_CLICKED(IDC_HVGAP, OnHorizontalAndVerticalGap)
 	ON_BN_CLICKED(IDC_DGAP, OnDiagonalGap)
 	ON_BN_CLICKED(IDC_REVALIDATEBLENDS, OnReevaluateBlends)
+
+	ON_BN_CLICKED(IDC_TOGGLE_MIRROR, OnToggleMirror)
+	ON_BN_CLICKED(IDC_TOGGLE_MIRRORX, OnToggleMirrorX)
+	ON_BN_CLICKED(IDC_TOGGLE_MIRRORY, OnToggleMirrorY)
+	ON_BN_CLICKED(IDC_TOGGLE_MIRRORXY, OnToggleMirrorXY)
 	//{{AFX_MSG_MAP(BlendMaterial)
 	//}}AFX_MSG_MAP
 END_MESSAGE_MAP()

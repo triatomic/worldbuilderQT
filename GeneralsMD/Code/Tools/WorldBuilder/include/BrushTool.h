@@ -43,6 +43,12 @@ protected:
 	static Bool m_brushSquare;
 	static Int m_brushHeight;
 
+	static Bool m_enableMirror;
+	static Bool m_mirrorX;   // left/right
+    static Bool m_mirrorY;   // top/bottom
+    static Bool m_mirrorDiag; // diagonal only (XY corner)
+
+
 public:
 	BrushTool(void);
 	~BrushTool(void);
@@ -55,10 +61,16 @@ public:
 	static void setFeather(Int feather);
 	static void setHeight(Int height);
 
+	static void toggleMirror() { m_enableMirror = !m_enableMirror; }
+	static void toggleMirrorX() { m_mirrorX = !m_mirrorX; }
+	static void toggleMirrorY() { m_mirrorY = !m_mirrorY; }
+	static void toggleMirrorXY() { m_mirrorDiag = !m_mirrorDiag; }
+
 public:
 	virtual void mouseDown(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBuilderDoc *pDoc);
 	virtual void mouseUp(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBuilderDoc *pDoc);
 	virtual void mouseMoved(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBuilderDoc *pDoc);
+	void applyBrushAt(CPoint ndx, WorldHeightMapEdit* pDoc_htMap, IRegion2D& partialRange);
 	virtual WorldHeightMapEdit *getHeightMap(void) {return m_htMapEditCopy;};
 	virtual void activate(); ///< Become the current tool.
 	virtual Bool followsTerrain(void) {return false;};
