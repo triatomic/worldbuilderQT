@@ -673,65 +673,71 @@ FONT 8, "MS Sans Serif"
 BEGIN
     CONTROL         "",IDC_TERRAIN_TREEVIEW,"Static",SS_BLACKFRAME | 
                     SS_SUNKEN,5,20,190,135
-    PUSHBUTTON      "Swap",IDC_SWAP_TEXTURES,96,265,25,16
+    PUSHBUTTON      "Swap",IDC_SWAP_TEXTURES,92,303,34,13
     CONTROL         "",IDC_TERRAIN_SWATCHES,"Static",SS_BLACKFRAME | 
-                    SS_SUNKEN,130,244,65,55
-    LTEXT           "Gravel",IDC_TERRAIN_NAME,5,246,123,9
-    EDITTEXT        IDC_SIZE_EDIT,22,262,17,12,ES_AUTOHSCROLL
-    RTEXT           "Cell",IDC_STATIC,5,263,12,8
-    PUSHBUTTON      "1",IDC_SIZE_POPUP,41,262,8,12,BS_BITMAP
-    LTEXT           "35 FT.",IDC_WIDTH_LABEL,5,276,43,8
+                    SS_SUNKEN,130,268,65,55
+    LTEXT           "Gravel",IDC_TERRAIN_NAME,5,270,123,9
+    EDITTEXT        IDC_SIZE_EDIT,22,286,17,12,ES_AUTOHSCROLL
+    RTEXT           "Cell",IDC_STATIC,5,287,12,8
+    PUSHBUTTON      "1",IDC_SIZE_POPUP,41,286,8,12,BS_BITMAP
+    LTEXT           "35 FT.",IDC_WIDTH_LABEL,5,300,43,8
     CONTROL         "Paint passable/impassable terrain",IDC_PASSABLE_CHECK,
-                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,5,292,122,12
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,5,316,122,12
     CONTROL         "Passable",IDC_PASSABLE,"Button",BS_AUTORADIOBUTTON,29,
-                    306,55,10
+                    330,55,10
     CONTROL         "Impassable",IDC_IMPASSABLE,"Button",BS_AUTORADIOBUTTON,
-                    115,306,61,10
+                    115,330,61,10
     CONTROL         "Copy",IDC_TERRAIN_COPY_SELECT,"Button",
-                    BS_AUTORADIOBUTTON | WS_GROUP,27,335,58,10
+                    BS_AUTORADIOBUTTON | WS_GROUP,27,359,58,10
     CONTROL         "Paste",IDC_TERRAIN_COPY_APPLY,"Button",
-                    BS_AUTORADIOBUTTON,27,346,57,10
+                    BS_AUTORADIOBUTTON,27,370,57,10
     CONTROL         "Texture Copy",IDC_COPY_MODE,"Button",BS_AUTOCHECKBOX | 
-                    WS_TABSTOP,5,323,61,8
-    CONTROL         "",IDC_STATIC,"Static",SS_ETCHEDHORZ | WS_GROUP,5,319,
-                    188,1
+                    WS_TABSTOP,5,347,61,8
+    CONTROL         "",IDC_STATIC,"Static",SS_ETCHEDHORZ | WS_GROUP,5,343,
+                    187,1
     CONTROL         "0",IDC_TERRAIN_ROTATE1,"Button",BS_AUTORADIOBUTTON | 
-                    WS_GROUP,115,335,28,10
-    CONTROL         "90",IDC_TERRAIN_ROTATE2,"Button",BS_AUTORADIOBUTTON,115,
-                    346,28,10
+                    WS_GROUP,91,358,28,10
+    CONTROL         "90",IDC_TERRAIN_ROTATE2,"Button",BS_AUTORADIOBUTTON,91,
+                    369,28,10
     CONTROL         "180",IDC_TERRAIN_ROTATE3,"Button",BS_AUTORADIOBUTTON,
-                    150,335,28,10
+                    126,358,28,10
     CONTROL         "270",IDC_TERRAIN_ROTATE4,"Button",BS_AUTORADIOBUTTON,
-                    150,346,28,10
-    LTEXT           "Hold shift key to swap textures",IDC_DEV_NOTE,12,364,
-                    176,9
-    GROUPBOX        "Developer Note:",IDC_STATIC,5,355,190,24
+                    126,369,28,10
     CONTROL         "",IDC_TERRAIN_TREEVIEW_FAV,"Static",SS_BLACKFRAME | 
-                    SS_SUNKEN,5,193,190,49
-    LTEXT           "Favorites:",IDC_STATIC,5,183,36,8
-    PUSHBUTTON      "Set as favorite",IDC_SET_FAV,54,181,52,10
-    PUSHBUTTON      "Delete favorite",IDC_DEL_FAV,110,181,52,10
-    PUSHBUTTON      "Import",IDC_REL_FAV,165,181,30,10
+                    SS_SUNKEN,5,169,190,49
+    LTEXT           "Favorites:",IDC_STATIC,5,158,36,8
+    PUSHBUTTON      "Set as favorite",IDC_SET_FAV,54,156,52,10
+    PUSHBUTTON      "Delete favorite",IDC_DEL_FAV,110,156,52,10
+    PUSHBUTTON      "Import",IDC_REL_FAV,165,156,30,10
     CONTROL         "Terrain Copy",IDC_COPY_MODE2,"Button",BS_AUTOCHECKBOX | 
-                    WS_TABSTOP,82,323,55,8
-    EDITTEXT        IDC_Z_EDIT,59,262,17,12,ES_AUTOHSCROLL
-    RTEXT           "Z",IDC_STATIC,49,264,8,8
-    PUSHBUTTON      "1",IDC_Z_POPUP,78,262,8,12,BS_BITMAP
+                    WS_TABSTOP,82,347,55,8
+    EDITTEXT        IDC_Z_EDIT,69,286,17,12,ES_AUTOHSCROLL
+    RTEXT           "Z",IDC_STATIC,49,288,17,8
+    PUSHBUTTON      "1",IDC_Z_POPUP,88,286,8,12,BS_BITMAP
     CONTROL         "Raise Only",IDC_COPY_MODE2_1,"Button",BS_AUTOCHECKBOX | 
-                    WS_TABSTOP,139,323,48,8
+                    WS_TABSTOP,139,347,48,8
     LTEXT           "Search:",IDC_STATIC,3,7,25,8
     EDITTEXT        IDC_OBJECT_SEARCH_EDIT,31,5,106,12,ES_AUTOHSCROLL
     PUSHBUTTON      "Find",IDC_OBJECT_SEARCH_BUTTON,141,5,26,12
     PUSHBUTTON      "Reset",IDC_OBJECT_SEARCH_RESET_BTN,170,5,26,12
-    GROUPBOX        "Advanced Mirror Options",IDC_STATIC,4,156,190,23
+    GROUPBOX        "Advanced Mirror Options",IDC_STATIC,5,219,190,23
     CONTROL         "Mirror X",IDC_TOGGLE_MIRRORX,"Button",BS_AUTOCHECKBOX | 
-                    WS_TABSTOP,68,165,37,11
+                    WS_TABSTOP,69,228,37,11
     CONTROL         "Diagonal",IDC_TOGGLE_MIRRORXY,"Button",BS_AUTOCHECKBOX | 
-                    WS_TABSTOP,108,165,43,11
+                    WS_TABSTOP,109,228,43,11
     CONTROL         "Mirror Y",IDC_TOGGLE_MIRRORY,"Button",BS_AUTOCHECKBOX | 
-                    WS_TABSTOP,152,165,37,11
+                    WS_TABSTOP,153,228,37,11
     CONTROL         "Toggle",IDC_TOGGLE_MIRROR,"Button",BS_AUTOCHECKBOX | 
-                    WS_TABSTOP,11,165,50,11
+                    WS_TABSTOP,11,228,50,11
+    GROUPBOX        "Single Click Paint Mode",IDC_STATIC,5,243,190,23
+    CONTROL         "Toggle",IDC_TOGGLE_PAINTMODE,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,11,251,36,11
+    COMBOBOX        IDC_PAINT_MODE_COMBO,118,250,77,100,CBS_DROPDOWNLIST | 
+                    WS_VSCROLL | WS_TABSTOP
+    CONTROL         "No Mixing",IDC_TOGGLE_NOMIX,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,69,251,44,11
+    CONTROL         "Flip",IDC_COPY_MODE_FLIP,"Button",BS_AUTOCHECKBOX | 
+                    WS_DISABLED | WS_TABSTOP,170,371,25,8
 END
 
 IDD_MOUND_OPTIONS DIALOG DISCARDABLE  0, 0, 200, 182
@@ -1892,19 +1898,22 @@ FONT 8, "MS Sans Serif"
 BEGIN
     DEFPUSHBUTTON   "OK",IDOK,70,242,50,14
     PUSHBUTTON      "Cancel",IDCANCEL,138,242,50,14
-    COMBOBOX        IDC_MAP_WEATHER,62,54,112,104,CBS_DROPDOWNLIST | 
+    COMBOBOX        IDC_MAP_WEATHER,62,110,112,104,CBS_DROPDOWNLIST | 
                     WS_VSCROLL | WS_TABSTOP
-    RTEXT           "Time",IDC_STATIC,7,40,49,8
-    COMBOBOX        IDC_MAP_TIMEOFDAY,62,38,112,97,CBS_DROPDOWNLIST | 
+    RTEXT           "Time",IDC_STATIC,7,96,49,8
+    COMBOBOX        IDC_MAP_TIMEOFDAY,62,94,112,97,CBS_DROPDOWNLIST | 
                     WS_VSCROLL | WS_TABSTOP
-    RTEXT           "Weather",IDC_STATIC,8,56,49,8
-    EDITTEXT        IDC_MAP_TITLE,62,7,112,12,ES_AUTOHSCROLL
-    EDITTEXT        IDC_MAP_DESCRIPTION,7,73,181,155,ES_MULTILINE | 
-                    ES_AUTOHSCROLL | WS_VSCROLL | WS_HSCROLL
-    RTEXT           "Map Name",IDC_STATIC,7,7,49,10
-    RTEXT           "Compression",IDC_STATIC,7,24,49,8
-    COMBOBOX        IDC_MAP_COMPRESSION,62,22,112,97,CBS_DROPDOWNLIST | 
+    RTEXT           "Weather",IDC_STATIC,8,112,49,8
+    EDITTEXT        IDC_MAP_TITLE,63,15,112,12,ES_AUTOHSCROLL
+    EDITTEXT        IDC_MAP_DESCRIPTION,7,132,181,104,ES_MULTILINE | 
+                    ES_AUTOHSCROLL | WS_DISABLED | WS_VSCROLL | WS_HSCROLL
+    RTEXT           "Map Name",IDC_STATIC,17,16,41,10
+    RTEXT           "Compression",IDC_STATIC,7,80,49,8
+    COMBOBOX        IDC_MAP_COMPRESSION,62,78,112,97,CBS_DROPDOWNLIST | 
                     WS_VSCROLL | WS_TABSTOP
+    GROUPBOX        "",IDC_STATIC,7,7,181,62
+    LTEXT           "Do not fill this area. It is reserved for EA/mod developers to tag the map as an official map. If you use this section, your map may not appear in the unofficial section of the skirmish lobby.",
+                    IDC_STATIC,14,30,167,35
 END
 
 IDD_LAYERSLIST DIALOG DISCARDABLE  0, 0, 221, 265

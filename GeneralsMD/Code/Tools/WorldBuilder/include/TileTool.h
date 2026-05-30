@@ -108,6 +108,8 @@ protected:
     static Bool m_mirrorY;   // top/bottom
     static Bool m_mirrorDiag; // diagonal only (XY corner)
 
+	static Bool m_enableNoMixing; // if true, don't allow blending of different texture classes when auto-blending.
+
 public:
  	virtual void activate(); ///< Become the current tool.
 
@@ -124,10 +126,14 @@ public:
 	static Bool getMirrorY() { return m_mirrorY; }
 	static Bool getMirrorDiag() { return m_mirrorDiag; }
 
+	static Bool getEnableNoMixing() { return m_enableNoMixing; }
+
 	static void toggleMirror() { m_enableMirror = !m_enableMirror; }
 	static void toggleMirrorX() { m_mirrorX = !m_mirrorX; }
 	static void toggleMirrorY() { m_mirrorY = !m_mirrorY; }
 	static void toggleMirrorXY() { m_mirrorDiag = !m_mirrorDiag; }
+
+	static void toggleNoMixing() { m_enableNoMixing = !m_enableNoMixing; }
 
 	// Used by TerrainMaterial dialog to get/set current width.
 	static Int getCurrentHeight(void) {return m_currentHeight;};

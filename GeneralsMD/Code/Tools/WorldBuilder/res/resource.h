@@ -412,6 +412,7 @@
 #define IDC_CHECK4                      1170
 #define IDC_TRANSPORTS_RETURN           1170
 #define IDC_SMART_COPY                  1170
+#define IDC_COPY_MODE_FLIP              1170
 #define IDC_PLAYER_ATTITUDE_OUT         1171
 #define IDC_CHECK5                      1171
 #define IDC_AVOID_THREATS               1171
@@ -656,6 +657,9 @@
 #define IDC_TOGGLE_MIRRORXY             1371
 #define IDC_TOGGLE_MIRRORY              1372
 #define IDC_TOGGLE_MIRROR               1373
+#define IDC_PAINT_MODE_COMBO            1374
+#define IDC_TOGGLE_PAINTMODE            1377
+#define IDC_TOGGLE_NOMIX                1378
 #define IDC_STATIC_MAPOBJECT_GENERAL    1379
 #define IDC_STATIC_MAPOBJECT_LOGICAL    1380
 #define IDC_STATIC_MAPOBJECT_SOUND      1381

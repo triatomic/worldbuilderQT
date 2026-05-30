@@ -37,6 +37,7 @@
 // TileTool class.
 //
 
+static Int s_paintDensity = 60; // percent, for scatter mode
 static BOOL g_warnedforcopy = false; 
 TileTool::TerrainCopyBuffer TileTool::s_copyBuffer;
 std::vector<TileTool::TileTextureData> TileTool::m_copiedTileTextures;
@@ -299,6 +300,368 @@ TBlendTileInfo rotateBlendInfo(const TBlendTileInfo &info, int rotation)
     return out;
 }
 
+// ── Add this helper above all paint functions ──────────────────────────────
+static bool shouldPaintCell(WorldHeightMapEdit* map,
+                             int x, int y,
+                             int texClass, int boundaryTexClass)
+{
+    if (!BigTileTool::getEnableNoMixing()) return true;
+    Int existing = map->getTextureClass(x, y, true);
+    return (existing == boundaryTexClass || existing == texClass);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Mode 1 — organic blob.
+//
+// Paints a roughly circular region using a "drunken walk" seeding approach:
+// every cell inside the radius gets painted with probability that falls off
+// smoothly from the centre.  The result looks hand-placed rather than
+// perfectly circular.
+// ─────────────────────────────────────────────────────────────────────────
+static void paintBlobRegion(WorldHeightMapEdit* map,
+                             Int cx, Int cy, Int radius,
+                             Int texClass, Int boundaryTexClass = -1)
+{
+    if (radius < 1) radius = 1;
+    Int mapW = map->getXExtent();
+    Int mapH = map->getYExtent();
+
+    for (Int dy = -radius; dy <= radius; ++dy) {
+        for (Int dx = -radius; dx <= radius; ++dx) {
+            Int x = cx + dx;
+            Int y = cy + dy;
+            if (x < 0 || y < 0 || x >= mapW || y >= mapH) continue;
+
+            float distSq = (float)(dx * dx + dy * dy) / (float)(radius * radius);
+            if (distSq > 1.0f) continue;
+
+            // ── no-mixing gate (snake logic) ──────────────────────────────
+            if (BigTileTool::getEnableNoMixing() && boundaryTexClass != -1) {
+                Int existing = map->getTextureClass(x, y, true);
+                if (existing != boundaryTexClass && existing != texClass) continue;
+            }
+            // ─────────────────────────────────────────────────────────────
+
+            float prob = 1.0f - (distSq * 0.75f);
+            float r    = (float)(rand() % 1000) / 1000.0f;
+            if (r < prob)
+                map->setTileNdx(x, y, texClass, /*updateBlends=*/false);
+        }
+    }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────
+// Mode 2 — checkerboard.
+//
+// Alternates between fg and bg texture based on (x + y) % 2.  Shift-click
+// paints the inverse phase.  Useful for transition/dithering effects.
+// ─────────────────────────────────────────────────────────────────────────
+static void paintCheckerboard(WorldHeightMapEdit* map,
+                               Int cx, Int cy, Int radius,
+                               Int texClass)
+{
+    if (radius < 1) radius = 1;
+    Int mapW = map->getXExtent();
+    Int mapH = map->getYExtent();
+    Int altClass = TerrainMaterial::getBgTexClass(); // even squares get bg
+
+    for (Int dy = -radius; dy <= radius; ++dy) {
+        for (Int dx = -radius; dx <= radius; ++dx) {
+            Int x = cx + dx;
+            Int y = cy + dy;
+            if (x < 0 || y < 0 || x >= mapW || y >= mapH) continue;
+
+            float distSq = (float)(dx * dx + dy * dy) / (float)(radius * radius);
+            if (distSq > 1.0f) continue;
+
+            // checkerboard phase: fg on odd squares, bg on even
+            Int phase = (x + y) & 1;
+            Int paintClass = phase ? texClass : altClass;
+            map->setTileNdx(x, y, paintClass, false);
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Mode 3 — scatter / stipple.
+//
+// Paints random tiles within the brush circle at a given density percentage
+// (0–100).  Each tile rolls independently, so strokes build up naturally
+// with repeated passes.
+// ─────────────────────────────────────────────────────────────────────────
+static void paintScatter(WorldHeightMapEdit* map,
+                          Int cx, Int cy, Int radius,
+                          Int texClass, Int densityPct,
+                          Int boundaryTexClass = -1)
+{
+    const float DENSITY_SCALE = 0.50f;
+    if (radius < 1) radius = 1;
+    if (densityPct <= 0)  return;
+    if (densityPct > 100) densityPct = 100;
+
+    Int mapW = map->getXExtent();
+    Int mapH = map->getYExtent();
+
+    for (Int dy = -radius; dy <= radius; ++dy) {
+        for (Int dx = -radius; dx <= radius; ++dx) {
+            Int x = cx + dx;
+            Int y = cy + dy;
+            if (x < 0 || y < 0 || x >= mapW || y >= mapH) continue;
+
+            float distSq = (float)(dx*dx + dy*dy) / (float)(radius*radius);
+            if (distSq > 1.0f) continue;
+
+            if (!shouldPaintCell(map, x, y, texClass, boundaryTexClass)) continue;  // <-- NEW
+
+            int finalDensity = (int)(densityPct * DENSITY_SCALE);
+            if ((rand() % 100) < finalDensity)
+                map->setTileNdx(x, y, texClass, false);
+        }
+    }
+}
+
+// New helper — like paintBlobRegion but only paints cells whose current
+// texture matches `boundaryTexClass`.  This stops the snake from leaking
+// onto a third (unrelated) texture.
+static void paintBlobRegionBounded(WorldHeightMapEdit* map,
+                                    Int cx, Int cy, Int radius,
+                                    Int texClass, Int boundaryTexClass)
+{
+    if (radius < 1) radius = 1;
+    Int mapW = map->getXExtent();
+    Int mapH = map->getYExtent();
+
+    const Int   kMargin      = 2;
+    const float kProbFalloff = 0.75f;
+    const Int   kRandScale   = 1000;
+
+    for (Int dy = -radius; dy <= radius; ++dy) {
+        for (Int dx = -radius; dx <= radius; ++dx) {
+            Int x = cx + dx;
+            Int y = cy + dy;
+            if (x < 0 || y < 0 || x >= mapW || y >= mapH) continue;
+
+            float distSq = (float)(dx * dx + dy * dy) / (float)(radius * radius);
+            if (distSq > 1.0f) continue;
+
+            Int existing = map->getTextureClass(x, y, true);
+            if (existing != boundaryTexClass && existing != texClass) continue;
+
+            bool nearForeign = false;
+            for (Int ny = y - kMargin; ny <= y + kMargin && !nearForeign; ++ny) {
+                for (Int nx = x - kMargin; nx <= x + kMargin && !nearForeign; ++nx) {
+                    if (nx == x && ny == y) continue;
+                    if (nx < 0 || ny < 0 || nx >= mapW || ny >= mapH) continue;
+                    Int neighborClass = map->getTextureClass(nx, ny, true);
+                    if (neighborClass != boundaryTexClass && neighborClass != texClass)
+                        nearForeign = true;
+                }
+            }
+            if (nearForeign) continue;
+
+            float prob = 1.0f - (distSq * kProbFalloff);
+            float r    = (float)(rand() % kRandScale) / (float)kRandScale;
+            if (r < prob) {
+                map->setTileNdx(x, y, texClass, /*updateBlends=*/false);
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Mode 4 — snake / drunken walk.
+//
+// Walks a random path confined within SNAKE_MAX_WANDER tiles of the origin,
+// stamping a rectangular brush at each step.
+// ─────────────────────────────────────────────────────────────────────────
+
+// ── Tweak these ───────────────────────────────────────────────────────────
+static const int SNAKE_STEPS_PER_RADIUS  = 8;   // total walk steps = radius × this
+static const int SNAKE_BRUSH_W_CELLS     = 1;   // stamp width  in cells (absolute, not half)
+static const int SNAKE_BRUSH_H_CELLS     = 1;   // stamp height in cells (absolute, not half)
+static const int SNAKE_DIR_COUNT         = 4;   // 4 = cardinal only, 8 = diagonal too
+// ─────────────────────────────────────────────────────────────────────────
+
+static void paintSnakeStamp(WorldHeightMapEdit* map,
+                             int cx, int cy,
+                             int texClass, int boundaryTexClass,
+                             bool noMixing)
+{
+    Int mapW = map->getXExtent();
+    Int mapH = map->getYExtent();
+
+    for (int dy = 0; dy < SNAKE_BRUSH_H_CELLS; ++dy)
+    {
+        for (int dx = 0; dx < SNAKE_BRUSH_W_CELLS; ++dx)
+        {
+            int tx = cx + dx;
+            int ty = cy + dy;
+            if (tx < 0 || ty < 0 || tx >= mapW || ty >= mapH) continue;
+
+            if (noMixing)
+            {
+                Int existing = map->getTextureClass(tx, ty, true);
+                if (existing != boundaryTexClass && existing != texClass) continue;
+            }
+
+            map->setTileNdx(tx, ty, texClass, /*updateBlends=*/false);
+        }
+    }
+}
+
+static void paintSnake(WorldHeightMapEdit* map, int x, int y, int radius, int texClass)
+{
+    Int boundaryTexClass = map->getTextureClass(x, y, true);
+    bool noMixing = BigTileTool::getEnableNoMixing();
+
+    static const int dx8[8] = {  1, -1,  0,  0,  1, -1,  1, -1 };
+    static const int dy8[8] = {  0,  0,  1, -1,  1,  1, -1, -1 };
+
+    int cx = x;
+    int cy = y;
+    int steps = radius * SNAKE_STEPS_PER_RADIUS;
+
+    for (int i = 0; i < steps; ++i)
+    {
+        paintSnakeStamp(map, cx, cy, texClass, boundaryTexClass, noMixing);
+
+        int dir = rand() % SNAKE_DIR_COUNT;
+        cx += dx8[dir];
+        cy += dy8[dir];
+
+        // Leash: keep the head within radius of the origin
+        if (abs(cx - x) > radius) cx += (cx > x ? -1 : 1);
+        if (abs(cy - y) > radius) cy += (cy > y ? -1 : 1);
+    }
+}
+
+static void paintOctopus(WorldHeightMapEdit* map, int x, int y, int radius, int texClass)
+{
+    // ── sample boundary once at click origin (snake pattern) ──────────────
+    Int boundaryTexClass = map->getTextureClass(x, y, true);
+    // ─────────────────────────────────────────────────────────────────────
+
+    int numArms = 8;
+    int armLength = radius * 2;
+
+    for (int arm = 0; arm < numArms; ++arm)
+    {
+        double angle = (2 * M_PI / numArms) * arm;
+        int cx = x;
+        int cy = y;
+
+        for (int step = 0; step < armLength; ++step)
+        {
+            paintBlobRegion(map, cx, cy, 1, texClass, boundaryTexClass); // pass boundary
+
+            cx += (int)(cos(angle) + ((rand() % 3) - 1) * 0.5);
+            cy += (int)(sin(angle) + ((rand() % 3) - 1) * 0.5);
+        }
+    }
+}
+
+static void paintBlob2(WorldHeightMapEdit* map, int x, int y, int radius, int texClass)
+{
+    // ── sample boundary once at click origin (snake pattern) ──────────────
+    Int boundaryTexClass = map->getTextureClass(x, y, true);
+    // ─────────────────────────────────────────────────────────────────────
+
+    int cx = x;
+    int cy = y;
+    int steps = radius * 5;
+
+    for (int i = 0; i < steps; ++i)
+    {
+        paintBlobRegion(map, cx, cy, 1, texClass, boundaryTexClass); // pass boundary
+
+        int dir = rand() % 8;
+        switch (dir)
+        {
+            case 0: cx++; break;
+            case 1: cx--; break;
+            case 2: cy++; break;
+            case 3: cy--; break;
+            case 4: cx++; cy++; break;
+            case 5: cx--; cy++; break;
+            case 6: cx++; cy--; break;
+            case 7: cx--; cy--; break;
+        }
+
+        if (abs(cx - x) > radius) cx += (cx > x ? -1 : 1);
+        if (abs(cy - y) > radius) cy += (cy > y ? -1 : 1);
+    }
+}
+
+static void paintCircle(WorldHeightMapEdit* map, int cx, int cy, int radius, int texClass)
+{
+	if (radius < 1) radius = 1;
+	Int mapW = map->getXExtent();
+	Int mapH = map->getYExtent();
+
+	for (Int dy = -radius; dy <= radius; ++dy) {
+		for (Int dx = -radius; dx <= radius; ++dx) {
+			Int x = cx + dx;
+			Int y = cy + dy;
+			if (x < 0 || y < 0 || x >= mapW || y >= mapH) continue;
+
+			float distSq = (float)(dx * dx + dy * dy) / (float)(radius * radius);
+			if (distSq > 1.0f) continue;
+
+			map->setTileNdx(x, y, texClass, false);
+		}
+	}
+}
+
+static void paintRing(WorldHeightMapEdit* map, int cx, int cy, int radius, int texClass)
+{
+	if (radius < 1) radius = 1;
+	Int mapW = map->getXExtent();
+	Int mapH = map->getYExtent();
+
+	int innerRadiusSq = (radius - 1) * (radius - 1);
+	int outerRadiusSq = radius * radius;
+
+	for (Int dy = -radius; dy <= radius; ++dy) {
+		for (Int dx = -radius; dx <= radius; ++dx) {
+			Int x = cx + dx;
+			Int y = cy + dy;
+			if (x < 0 || y < 0 || x >= mapW || y >= mapH) continue;
+
+			float distSq = dx * dx + dy * dy;
+			if (distSq > outerRadiusSq || distSq < innerRadiusSq) continue;
+
+			map->setTileNdx(x, y, texClass, false);
+		}
+	}
+}
+
+static void paintSquareBorder(WorldHeightMapEdit* map, int cx, int cy, int radius, int texClass)
+{
+	if (radius < 1) radius = 1;
+	Int mapW = map->getXExtent();
+	Int mapH = map->getYExtent();
+
+	for (Int dy = -radius; dy <= radius; ++dy) {
+		for (Int dx = -radius; dx <= radius; ++dx) {
+			Int x = cx + dx;
+			Int y = cy + dy;
+			if (x < 0 || y < 0 || x >= mapW || y >= mapH) continue;
+
+			if (abs(dx) == radius || abs(dy) == radius) {
+				map->setTileNdx(x, y, texClass, false);
+			}
+		}
+	}
+}
+
+Int TerrainMaterial::getPaintDensity()  { return s_paintDensity; }
+void TerrainMaterial::setPaintDensity(Int d) {
+    if (d < 0)   d = 0;
+    if (d > 100) d = 100;
+    s_paintDensity = d;
+}
+
 /// Common mouse down code for left and right clicks.
 void TileTool::mouseDown(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBuilderDoc *pDoc) 
 {
@@ -312,6 +675,115 @@ void TileTool::mouseDown(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBu
     getCenterIndex(&cpt, width, &ndx, pDoc);
 
 	Int rotation = TerrainMaterial::getCopyRotation();
+
+	if (TerrainMaterial::isTogglePaintMode()) {
+		Int radius = getWidth();
+		Int texClass = TerrainMaterial::getFgTexClass();
+		Bool shiftKey = (0x8000 & ::GetAsyncKeyState(VK_SHIFT)) != 0;
+		if (shiftKey)
+			texClass = TerrainMaterial::getBgTexClass();
+
+		REF_PTR_RELEASE(m_htMapEditCopy);
+		m_htMapEditCopy = pDoc->GetHeightMap()->duplicate();
+
+		Int mode = TerrainMaterial::getPaintMode();
+
+		// Build mirror centers — same logic as mouseMoved
+		const Int mapW = m_htMapEditCopy->getXExtent();
+		const Int mapH = m_htMapEditCopy->getYExtent();
+
+		CPoint centers[4];
+		Int centerCount = 0;
+		centers[centerCount++] = ndx;
+
+		// Disabled for now 
+		// if (BigTileTool::getEnableMirror()) {
+		// 	Int mx = (mapW - 1) - ndx.x;
+		// 	Int my = (mapH - 1) - ndx.y;
+
+		// 	if (BigTileTool::getMirrorX()) {
+		// 		CPoint p; p.x = mx; p.y = ndx.y;
+		// 		centers[centerCount++] = p;
+		// 	}
+		// 	if (BigTileTool::getMirrorY()) {
+		// 		CPoint p; p.x = ndx.x; p.y = my;
+		// 		centers[centerCount++] = p;
+		// 	}
+		// 	if (BigTileTool::getMirrorDiag() || (BigTileTool::getMirrorX() && BigTileTool::getMirrorY())) {
+		// 		CPoint p; p.x = mx; p.y = my;
+		// 		centers[centerCount++] = p;
+		// 	}
+		// }
+
+		unsigned int shapeSeed = (unsigned int)(ndx.x * 73856093 ^ ndx.y * 19349663);
+
+		// Paint all mirrored centers
+		for (Int c = 0; c < centerCount; c++) {
+			Int cx = centers[c].x;
+			Int cy = centers[c].y;
+
+			// if(BigTileTool::getEnableMirror()){
+			// 	srand(shapeSeed); 
+			// }
+
+			Int boundaryTexClass = m_htMapEditCopy->getTextureClass(cx, cy, true);
+
+			switch (mode) {
+				case 1:
+					paintBlob2(m_htMapEditCopy, cx, cy, radius, texClass);
+					break;
+				case 2:
+					paintBlobRegion(m_htMapEditCopy, cx, cy, radius, texClass, boundaryTexClass);
+					break;
+				case 3:
+					paintScatter(m_htMapEditCopy, cx, cy, radius, texClass,
+								TerrainMaterial::getPaintDensity());
+					// NOTE: no break here matches your original fall-through to case 4
+				case 4:
+					paintSnake(m_htMapEditCopy, cx, cy, radius, texClass);
+					break;
+				case 5:
+					paintOctopus(m_htMapEditCopy, cx, cy, radius, texClass);
+					break;
+				case 6:
+					paintCircle(m_htMapEditCopy, cx, cy, radius, texClass);
+					break;
+				case 7:
+					paintRing(m_htMapEditCopy, cx, cy, radius, texClass);
+					break;
+				case 8:
+					paintSquareBorder(m_htMapEditCopy, cx, cy, radius, texClass);
+					break;
+				default:
+					paintBlobRegion(m_htMapEditCopy, cx, cy, radius, texClass);
+					break;
+			}
+		}
+
+		m_htMapEditCopy->optimizeTiles();
+
+		// Expand update region to cover all centers
+		IRegion2D rgn = { INT_MAX, INT_MAX, 0, 0 };
+		for (Int d = 0; d < centerCount; d++) {
+			Int lo_x = centers[d].x - radius;
+			Int lo_y = centers[d].y - radius;
+			Int hi_x = centers[d].x + radius + 1;
+			Int hi_y = centers[d].y + radius + 1;
+			if (lo_x < rgn.lo.x) rgn.lo.x = lo_x;
+			if (lo_y < rgn.lo.y) rgn.lo.y = lo_y;
+			if (hi_x > rgn.hi.x) rgn.hi.x = hi_x;
+			if (hi_y > rgn.hi.y) rgn.hi.y = hi_y;
+		}
+		// Clamp to map extents
+		if (rgn.lo.x < 0) rgn.lo.x = 0;
+		if (rgn.lo.y < 0) rgn.lo.y = 0;
+		if (rgn.hi.x > m_htMapEditCopy->getXExtent()) rgn.hi.x = m_htMapEditCopy->getXExtent();
+		if (rgn.hi.y > m_htMapEditCopy->getYExtent()) rgn.hi.y = m_htMapEditCopy->getYExtent();
+
+		pDoc->updateHeightMap(m_htMapEditCopy, false, rgn);
+		pView->UpdateWindow();
+		return;
+	}
 
     // Check if we are in copy select mode (we'll copy the texture at the selected tile)
     if (TerrainMaterial::isCopySelectMode()) {
@@ -553,7 +1025,7 @@ void TileTool::mouseDown(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBu
     m_prevYIndex = -1;
     m_prevViewPt = viewPt;
 
-    if (!TerrainMaterial::isCopySelectMode() && !TerrainMaterial::isCopyApplyMode()) {
+    if (!TerrainMaterial::isCopySelectMode() && !TerrainMaterial::isCopyApplyMode() && !TerrainMaterial::isTogglePaintMode()) {
 		REF_PTR_RELEASE(m_htMapEditCopy);
 		m_htMapEditCopy = pDoc->GetHeightMap()->duplicate();
         mouseMoved(m, viewPt, pView, pDoc); // Only paint in normal mode
@@ -587,6 +1059,15 @@ void TileTool::mouseMoved(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldB
 
 	pView->viewToDocCoords(viewPt, &cpt);
 	DrawObject::setFeedbackPos(cpt);
+
+	if(TerrainMaterial::isTogglePaintMode()) {
+		// In toggle paint mode, we only want to show feedback but not actually paint until mouse up
+		// DrawObject::m_togglePaintFeedback = true;
+		pView->Invalidate();
+		return;
+	} else {
+		// DrawObject::m_togglePaintFeedback = false;
+	}
 
 	if (TerrainMaterial::isCopyApplyMode()) {
 		Coord3D cpt;
@@ -823,6 +1304,8 @@ Bool BigTileTool::m_mirrorX;
 Bool BigTileTool::m_mirrorY;
 Bool BigTileTool::m_mirrorDiag;
 
+Bool BigTileTool::m_enableNoMixing = false;
+
 /// Constructor
 BigTileTool::BigTileTool(void)
 {
@@ -850,5 +1333,12 @@ void BigTileTool::activate()
 	TerrainMaterial::setWidth(m_currentWidth);
 	TerrainMaterial::setHeight(m_currentHeight);
 	DrawObject::setDoBrushFeedback(true);
-	DrawObject::setBrushFeedbackParms(true, m_currentWidth, 0, m_currentHeight);
+
+	if(TerrainMaterial::isTogglePaintMode()) {
+		// we go into radius mode
+		DrawObject::setBrushFeedbackParms(false, m_currentWidth, 0, m_currentHeight);
+	} else {
+		// square
+		DrawObject::setBrushFeedbackParms(true, m_currentWidth, 0, m_currentHeight);
+	}
 }

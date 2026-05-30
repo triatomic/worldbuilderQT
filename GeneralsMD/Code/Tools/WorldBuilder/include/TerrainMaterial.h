@@ -72,6 +72,9 @@ protected:
 	afx_msg void OnCopyModeTerrain();
 	afx_msg void OnRaiseOnly();
 
+	afx_msg void OnTogglePaintMode();
+	afx_msg void OnPaintModeCombo();
+
 	afx_msg void OnSearch();
 	afx_msg void OnReset();
 	
@@ -87,6 +90,8 @@ protected:
 	afx_msg void OnToggleMirrorX();
 	afx_msg void OnToggleMirrorY();
 	afx_msg void OnToggleMirrorXY();
+
+	afx_msg void OnToggleNoMixing();
 
 	//}}AFX_MSG
 	DECLARE_MESSAGE_MAP()
@@ -117,6 +122,10 @@ protected:
 	static Bool m_onCopySelectMode;
 	static Bool m_onCopyApplyMode;
 	static Int m_copyRotation; 
+
+	static Bool m_patternPaintMode;
+	static Int m_paintMode;
+
 	CString m_lastLoadedMapPath;
 
 protected:
@@ -149,6 +158,12 @@ public:
 	static Bool isCopySelectMode(void) {return m_onCopySelectMode;}
 	static Bool isCopyApplyMode(void) {return m_onCopyApplyMode;}
 	static Int getCopyRotation(void) {return m_copyRotation;}
+
+	static Bool isTogglePaintMode(void) {return m_patternPaintMode;}
+	static Int getPaintMode(void) {return m_paintMode;}
+
+	static Int  getPaintDensity();    // returns 0-100 for mode 3
+	static void setPaintDensity(Int d);
 	// static void ReloadFavorites();
 
 public:

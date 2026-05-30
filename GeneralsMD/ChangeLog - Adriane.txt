@@ -468,3 +468,17 @@ XXX
 ======================================================
 == All Tools Related to Terrain ==
 - Added Support for mirroring terrain details
+
+== Script Editor ==
+- Ok button now replaced with Save + close
+- Added a new button that intercepts ctrl + s which saves the current scripts on the script editor
+- Fixed a bug where the script editor stays opened after opening a new map
+
+
+5/30/2026
+======================================================
+== Tile Tool ==
+- Paint Support with custom shapes
+
+== System ==
+- Removed cancel on the toast dialog

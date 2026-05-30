@@ -52,8 +52,12 @@ Bool TerrainMaterial::m_onCopyApplyMode(false);
 Bool TerrainMaterial::m_onCopySelectMode(false);
 Bool TerrainMaterial::m_copyTerrainMode(false);
 Bool TerrainMaterial::m_copyTextureMode(false);
-Bool TerrainMaterial::m_raiseOnly(false);
 Int TerrainMaterial::m_copyRotation(0);
+Bool TerrainMaterial::m_raiseOnly(false);
+
+Bool TerrainMaterial::m_patternPaintMode(false);
+Int TerrainMaterial::m_paintMode(1);
+
 
 TerrainMaterial::TerrainMaterial(CWnd* pParent /*=NULL*/) :
 	m_updating(false),
@@ -84,6 +88,9 @@ BEGIN_MESSAGE_MAP(TerrainMaterial, COptionsPanel)
 	ON_BN_CLICKED(IDC_PASSABLE_CHECK, OnPassableCheck)
 	ON_BN_CLICKED(IDC_PASSABLE, OnPassable)
 
+	ON_BN_CLICKED(IDC_TOGGLE_PAINTMODE, OnTogglePaintMode)
+	ON_CBN_SELCHANGE(IDC_PAINT_MODE_COMBO, OnPaintModeCombo)
+
 	ON_BN_CLICKED(IDC_COPY_MODE2, OnCopyModeTerrain)
 	ON_BN_CLICKED(IDC_COPY_MODE2_1, OnRaiseOnly)
 	ON_BN_CLICKED(IDC_COPY_MODE, OnCopyMode)
@@ -102,6 +109,8 @@ BEGIN_MESSAGE_MAP(TerrainMaterial, COptionsPanel)
 	ON_BN_CLICKED(IDC_TOGGLE_MIRRORX, OnToggleMirrorX)
 	ON_BN_CLICKED(IDC_TOGGLE_MIRRORY, OnToggleMirrorY)
 	ON_BN_CLICKED(IDC_TOGGLE_MIRRORXY, OnToggleMirrorXY)
+
+	ON_BN_CLICKED(IDC_TOGGLE_NOMIX, OnToggleNoMixing)
 
 	ON_BN_CLICKED(IDC_SET_FAV, OnSetFavorite)
 	ON_BN_CLICKED(IDC_DEL_FAV, OnDeleteFavorite)
@@ -188,6 +197,24 @@ void TerrainMaterial::setToolOptions(Bool singleCell, Bool floodfill)
 			m_staticThis->m_suppressWidthEditSave = false;
 		}
 
+		CButton* mirrorToggle = (CButton*)m_staticThis->GetDlgItem(IDC_TOGGLE_MIRROR);
+		bool mirrorActive = (mirrorToggle->GetCheck() != 0);
+
+		CButton* paintModeToggle = (CButton*)m_staticThis->GetDlgItem(IDC_TOGGLE_PAINTMODE);
+		CButton* noMixToggle = (CButton*)m_staticThis->GetDlgItem(IDC_TOGGLE_NOMIX);
+		paintModeToggle->EnableWindow(!singleCell && !mirrorActive);
+		noMixToggle->EnableWindow(!singleCell && !mirrorActive);
+
+		paintModeToggle->SetCheck(singleCell ? FALSE : m_patternPaintMode);
+		
+		if(singleCell){
+			m_patternPaintMode = false;
+		}
+
+		CComboBox* paintModeCombo = (CComboBox*)m_staticThis->GetDlgItem(IDC_PAINT_MODE_COMBO);
+		paintModeCombo->EnableWindow(!singleCell && !mirrorActive);
+
+
 		CButton* pCheckBox = (CButton*)m_staticThis->GetDlgItem(IDC_COPY_MODE);
 		CButton* pCheckBox2 = (CButton*)m_staticThis->GetDlgItem(IDC_COPY_MODE2);
 		CButton* pCheckBox3 = (CButton*)m_staticThis->GetDlgItem(IDC_COPY_MODE2_1);
@@ -202,6 +229,15 @@ void TerrainMaterial::setToolOptions(Bool singleCell, Bool floodfill)
 		pCheckBox->EnableWindow(!singleCell);
 		pCheckBox2->EnableWindow(!singleCell);
 		pCheckBox3->EnableWindow(!singleCell && (pCheckBox2->GetCheck() != 0));
+
+		CButton *owner = (CButton*)m_staticThis->GetDlgItem(IDC_COPY_MODE);
+		CButton *owner2 = (CButton*)m_staticThis->GetDlgItem(IDC_COPY_MODE2);
+		CButton *owner3 = (CButton*)m_staticThis->GetDlgItem(IDC_COPY_MODE2_1);
+		owner->EnableWindow(!m_patternPaintMode);
+		owner2->EnableWindow(!m_patternPaintMode);
+		owner3->EnableWindow(!m_patternPaintMode);
+		CButton *button = (CButton *)m_staticThis->GetDlgItem(IDC_TERRAIN_COPY_APPLY);
+		button->EnableWindow(!m_patternPaintMode);
 
 		CWnd *pEdit = m_staticThis->GetDlgItem(IDC_SIZE_EDIT);
 		if (pEdit) {
@@ -535,6 +571,19 @@ BOOL TerrainMaterial::OnInitDialog()
 
 	pWnd = GetDlgItem(IDC_TERRAIN_SWATCHES);
 	pWnd->GetWindowRect(&rect);
+
+	CComboBox* paintModeCombo = (CComboBox*)GetDlgItem(IDC_PAINT_MODE_COMBO);
+	paintModeCombo->AddString("Blob");
+	paintModeCombo->AddString("Scatter A");
+	// paintModeCombo->AddString("Checker");
+	paintModeCombo->AddString("Scatter B");
+	paintModeCombo->AddString("Snake");
+	paintModeCombo->AddString("Octopus");
+	paintModeCombo->AddString("Circle");
+	paintModeCombo->AddString("Ring");
+	paintModeCombo->AddString("Square");
+
+	paintModeCombo->SetCurSel(0);
 
 	CWnd* pFavWnd = GetDlgItem(IDC_TERRAIN_TREEVIEW_FAV);
 	CRect favRect;
@@ -1108,6 +1157,50 @@ void TerrainMaterial::OnCopyModeTerrain()
     copyMode();
 }
 
+void TerrainMaterial::OnTogglePaintMode() 
+{
+	m_patternPaintMode = !m_patternPaintMode;
+	// Disable copy mode block and pathing controls when pattern paint mode is active
+	CButton *owner = (CButton*) GetDlgItem(IDC_COPY_MODE);
+	CButton *owner2 = (CButton*) GetDlgItem(IDC_COPY_MODE2);
+	CButton *owner3 = (CButton*) GetDlgItem(IDC_COPY_MODE2_1);
+	owner->EnableWindow(!m_patternPaintMode);
+	owner2->EnableWindow(!m_patternPaintMode);
+	owner3->EnableWindow(!m_patternPaintMode);
+	CButton *button = (CButton *)GetDlgItem(IDC_TERRAIN_COPY_APPLY);
+	button->EnableWindow(!m_patternPaintMode);
+
+	button = (CButton *)GetDlgItem(IDC_TERRAIN_COPY_SELECT);
+	button->EnableWindow(!m_patternPaintMode);
+
+	// Disable pathing controls when paint mode is active
+	button = (CButton *)GetDlgItem(IDC_PASSABLE_CHECK);
+	button->EnableWindow(!m_patternPaintMode);
+
+	// Disable the mirror option under paint mode for now since they are randomized blobbs and hard to replicate on the other side of the mirror.
+	CButton *mirrorToggle = (CButton*) GetDlgItem(IDC_TOGGLE_MIRROR);
+	CButton *mirrorXToggle = (CButton*) GetDlgItem(IDC_TOGGLE_MIRRORX);
+	CButton *mirrorYToggle = (CButton*) GetDlgItem(IDC_TOGGLE_MIRRORY);
+	CButton *mirrorXYToggle = (CButton*) GetDlgItem(IDC_TOGGLE_MIRRORXY);
+	mirrorToggle->SetCheck(FALSE);
+
+	mirrorToggle->EnableWindow(!m_patternPaintMode);
+	mirrorXToggle->EnableWindow(!m_patternPaintMode);
+	mirrorYToggle->EnableWindow(!m_patternPaintMode);
+	mirrorXYToggle->EnableWindow(!m_patternPaintMode);
+
+	// DrawObject::setDoBrushFeedback(true);
+	DrawObject::setBrushFeedbackParms(false, m_currentWidth, 0);
+}
+
+void TerrainMaterial::OnPaintModeCombo() 
+{
+	CComboBox* paintModeCombo = (CComboBox*)m_staticThis->GetDlgItem(IDC_PAINT_MODE_COMBO);
+	int sel = paintModeCombo->GetCurSel();
+	m_paintMode = sel + 1; // +1 because combo box is 0-indexed but our modes are 1-indexed
+}
+
+
 void TerrainMaterial::OnCopySelect() 
 {
 	m_onCopyApplyMode = false;
@@ -1237,10 +1330,29 @@ void TerrainMaterial::ExpandAllItems(CTreeCtrl& treeCtrl, HTREEITEM hItem)
     }
 }
 
+
 void TerrainMaterial::OnToggleMirror()
 {
-	BigTileTool::toggleMirror();
-	FloodFillTool::toggleMirror();
+    BigTileTool::toggleMirror();
+    FloodFillTool::toggleMirror();
+
+    CButton* mirrorToggle = (CButton*)GetDlgItem(IDC_TOGGLE_MIRROR);
+    bool mirrorActive = (mirrorToggle->GetCheck() != 0);
+
+    CButton* paintModeToggle = (CButton*)GetDlgItem(IDC_TOGGLE_PAINTMODE);
+    CButton* noMixToggle = (CButton*)GetDlgItem(IDC_TOGGLE_NOMIX);
+    CComboBox* paintModeCombo = (CComboBox*)GetDlgItem(IDC_PAINT_MODE_COMBO);
+
+    paintModeToggle->EnableWindow(!mirrorActive);
+    noMixToggle->EnableWindow(!mirrorActive);
+    paintModeCombo->EnableWindow(!mirrorActive);
+
+    // if (mirrorActive && m_patternPaintMode)
+    // {
+    //     m_patternPaintMode = false;
+    //     paintModeToggle->SetCheck(FALSE);
+    //     DrawObject::setBrushFeedbackParms(false, m_currentWidth, 0);
+    // }
 }
 
 void TerrainMaterial::OnToggleMirrorX()
@@ -1261,3 +1373,9 @@ void TerrainMaterial::OnToggleMirrorXY()
 	FloodFillTool::toggleMirrorXY();
 
 }
+
+void TerrainMaterial::OnToggleNoMixing()
+{
+	BigTileTool::toggleNoMixing();
+}
+

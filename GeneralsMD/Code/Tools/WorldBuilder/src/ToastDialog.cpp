@@ -34,6 +34,10 @@ BOOL CToastDialog::OnInitDialog()
 {
     CDialog::OnInitDialog();
 
+    // Hide Cancel button by default for now -- it doesnt have any purpose atm
+    if (CWnd* pCancel = GetDlgItem(IDCANCEL))
+        pCancel->ShowWindow(SW_HIDE);
+
     // Register this toast
     s_activeToasts.push_back(this);
 
