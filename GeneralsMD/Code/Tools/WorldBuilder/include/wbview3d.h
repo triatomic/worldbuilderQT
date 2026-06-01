@@ -202,6 +202,8 @@ protected:
 	afx_msg void OnUpdateTexFilterAniso16X(CCmdUI* pCmdUI);
 	afx_msg void OnTextShadow();
 	afx_msg void OnUpdateTextShadow(CCmdUI* pCmdUI);
+	afx_msg void OnTextAntialias();
+	afx_msg void OnUpdateTextAntialias(CCmdUI* pCmdUI);
 	afx_msg void OnViewShowSubDraw();
 	afx_msg void OnUpdateViewShowSubDraw(CCmdUI* pCmdUI);
 	afx_msg void OnViewShowBaseRadius();
@@ -280,8 +282,10 @@ private:
 	Bool m_showBuildZoneFeedback;
 	Int m_lod;
 	Bool m_textShadow;
+	Bool m_textAntialias;					///< grayscale antialiasing for viewport labels
 	void setMSAA(D3DMULTISAMPLE_TYPE type);
 	void setTextureFilter(int mode);
+	void createLabelFont();					///< (re)create m3DFont honoring m_textAntialias
 
 
 	ID3DXFont*							m3DFont;

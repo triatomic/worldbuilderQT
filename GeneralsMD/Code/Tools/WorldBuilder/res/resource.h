@@ -858,6 +858,7 @@
 #define ID_MINIMAP_RES_256              33373
 #define ID_MINIMAP_RES_512              33374
 #define ID_MINIMAP_RES_2048             33375
+#define ID_TEXT_ANTIALIAS               33376
 #define IDD_MINIMAP                     243
 #define IDS_NEW                         61446
 #define IDS_RESIZE                      61447
@@ -931,7 +932,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_3D_CONTROLS                     1
 #define _APS_NEXT_RESOURCE_VALUE        244
-#define _APS_NEXT_COMMAND_VALUE         33376
+#define _APS_NEXT_COMMAND_VALUE         33377
 #define _APS_NEXT_CONTROL_VALUE         1370
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

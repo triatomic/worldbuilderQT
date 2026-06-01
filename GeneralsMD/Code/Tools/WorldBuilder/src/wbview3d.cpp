@@ -642,6 +642,7 @@ WbView3d::WbView3d() :
 	
 	m_lod = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "LODMode", 2);
 	m_textShadow = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "TextShadow", 1) != 0;
+	m_textAntialias = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "TextAntialias", 1) != 0;
 
 	int msaaMode = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "MSAAMode", 0);
 	DX8Wrapper::Set_Multi_Sample_Type((D3DMULTISAMPLE_TYPE)msaaMode);
@@ -774,37 +775,7 @@ void WbView3d::ReAcquireResources(void)
 		// TheTerrainRenderObject->worldBuilderUpdateBridgeTowers( m_assetManager, m_scene );
 	}
 	m_drawObject->initData();
-	IDirect3DDevice8* pDev = DX8Wrapper::_Get_D3D_Device8();
-	if (pDev) {
-
-//		CDC* pDC = GetDC();
-		LOGFONT logFont;
-		logFont.lfHeight = 20;
-		logFont.lfWidth = 0;
-		logFont.lfEscapement = 0;
-		logFont.lfOrientation = 0;
-		logFont.lfWeight = FW_REGULAR;
-		logFont.lfItalic = FALSE;
-		logFont.lfUnderline = FALSE;
-		logFont.lfStrikeOut = FALSE;
-		logFont.lfCharSet = ANSI_CHARSET;
-		logFont.lfOutPrecision = OUT_DEFAULT_PRECIS;
-		logFont.lfClipPrecision = CLIP_DEFAULT_PRECIS;
-		logFont.lfQuality = DEFAULT_QUALITY;
-		logFont.lfPitchAndFamily = DEFAULT_PITCH;
-		strcpy(logFont.lfFaceName, "Arial");
-
-		HFONT hFont = CreateFontIndirect(&logFont);
-		if (hFont) {
-			D3DXCreateFont(pDev, hFont, &m3DFont);
-			DeleteObject(hFont);
-		} else {
-			m3DFont = NULL;
-		}
-		
-	} else {
-		m3DFont = NULL;
-	}
+	createLabelFont();
 
 }
 
@@ -3006,6 +2977,8 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_UPDATE_COMMAND_UI(ID_TEXFILTER_ANISO16X, OnUpdateTexFilterAniso16X)
 	ON_COMMAND(ID_TEXT_SHADOW, OnTextShadow)
 	ON_UPDATE_COMMAND_UI(ID_TEXT_SHADOW, OnUpdateTextShadow)
+	ON_COMMAND(ID_TEXT_ANTIALIAS, OnTextAntialias)
+	ON_UPDATE_COMMAND_UI(ID_TEXT_ANTIALIAS, OnUpdateTextAntialias)
 
 	ON_COMMAND(ID_REVALIDATE_RENDER, OnRefreshSceneObjects)
 	//}}AFX_MSG_MAP
@@ -3068,37 +3041,7 @@ void WbView3d::initWW3D()
 			}
 		}
 
-		IDirect3DDevice8* pDev = DX8Wrapper::_Get_D3D_Device8();
-		if (pDev) {
-
-//			CDC* pDC = GetDC();
-			LOGFONT logFont;
-			logFont.lfHeight = 20;
-			logFont.lfWidth = 0;
-			logFont.lfEscapement = 0;
-			logFont.lfOrientation = 0;
-			logFont.lfWeight = FW_REGULAR;
-			logFont.lfItalic = FALSE;
-			logFont.lfUnderline = FALSE;
-			logFont.lfStrikeOut = FALSE;
-			logFont.lfCharSet = ANSI_CHARSET;
-			logFont.lfOutPrecision = OUT_DEFAULT_PRECIS;
-			logFont.lfClipPrecision = CLIP_DEFAULT_PRECIS;
-			logFont.lfQuality = DEFAULT_QUALITY;
-			logFont.lfPitchAndFamily = DEFAULT_PITCH;
-			strcpy(logFont.lfFaceName, "Arial");
-
-			HFONT hFont = CreateFontIndirect(&logFont);
-			if (hFont) {
-				D3DXCreateFont(pDev, hFont, &m3DFont);
-				DeleteObject(hFont);
-			} else {
-				m3DFont = NULL;
-			}
-			
-		} else {
-			m3DFont = NULL;
-		}
+		createLabelFont();
 
 		int texFilterMode = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "TexFilterMode", 0);
 		if (texFilterMode == 1) {
@@ -4957,6 +4900,56 @@ void WbView3d::OnTextShadow()
 void WbView3d::OnUpdateTextShadow(CCmdUI* pCmdUI)
 {
 	pCmdUI->SetCheck(m_textShadow);
+}
+
+// ----------------------------------------------------------------------------
+// (Re)create the viewport label font, honoring the grayscale-antialias setting.
+// Safe to call again at runtime to apply a toggle (releases the old font first).
+void WbView3d::createLabelFont()
+{
+	if (m3DFont) {
+		((ID3DXFont*)m3DFont)->Release();
+		m3DFont = NULL;
+	}
+
+	IDirect3DDevice8* pDev = DX8Wrapper::_Get_D3D_Device8();
+	if (!pDev)
+		return;
+
+	LOGFONT logFont;
+	logFont.lfHeight = 20;
+	logFont.lfWidth = 0;
+	logFont.lfEscapement = 0;
+	logFont.lfOrientation = 0;
+	logFont.lfWeight = FW_REGULAR;
+	logFont.lfItalic = FALSE;
+	logFont.lfUnderline = FALSE;
+	logFont.lfStrikeOut = FALSE;
+	logFont.lfCharSet = ANSI_CHARSET;
+	logFont.lfOutPrecision = OUT_DEFAULT_PRECIS;
+	logFont.lfClipPrecision = CLIP_DEFAULT_PRECIS;
+	logFont.lfQuality = m_textAntialias ? ANTIALIASED_QUALITY : DEFAULT_QUALITY;
+	logFont.lfPitchAndFamily = DEFAULT_PITCH;
+	strcpy(logFont.lfFaceName, "Arial");
+
+	HFONT hFont = CreateFontIndirect(&logFont);
+	if (hFont) {
+		D3DXCreateFont(pDev, hFont, &m3DFont);
+		DeleteObject(hFont);
+	}
+}
+
+void WbView3d::OnTextAntialias()
+{
+	m_textAntialias = !m_textAntialias;
+	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "TextAntialias", m_textAntialias ? 1 : 0);
+	createLabelFont();		// rebuild the font with the new quality
+	Invalidate();
+}
+
+void WbView3d::OnUpdateTextAntialias(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(m_textAntialias);
 }
 
 void WbView3d::OnKillFocus(CWnd* pNewWnd)

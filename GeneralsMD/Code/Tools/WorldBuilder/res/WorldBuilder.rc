@@ -349,7 +349,6 @@ BEGIN
                 MENUITEM "2048 x 2048 (slow)",  ID_MINIMAP_RES_2048
             END
         END
-        MENUITEM "Text Shadow",             ID_TEXT_SHADOW
         MENUITEM SEPARATOR
         MENUITEM "Show All of 3d Map\tCtrl+A",  ID_VIEW_SHOWENTIRE3DMAP
         POPUP "Partial Map Size"
@@ -363,6 +362,11 @@ BEGIN
             MENUITEM "192x192",                     ID_VIEW_PARTIALMAPSIZE_192X192
 
         END
+    END
+    POPUP "Text Rendering"
+    BEGIN
+        MENUITEM "Shadow",                      ID_TEXT_SHADOW
+        MENUITEM "Antialiasing",                ID_TEXT_ANTIALIAS
     END
     POPUP "&Window"
     BEGIN
