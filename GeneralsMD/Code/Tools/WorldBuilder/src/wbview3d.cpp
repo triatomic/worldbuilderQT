@@ -640,6 +640,9 @@ WbView3d::WbView3d() :
 	
 	m_lod = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "LODMode", 2);
 
+	int msaaMode = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "MSAAMode", 0);
+	DX8Wrapper::Set_Multi_Sample_Type((D3DMULTISAMPLE_TYPE)msaaMode);
+
 	m_cameraOffset.x = m_cameraOffset.y = m_cameraOffset.z = 1;
 
 	for (Int i=0; i<MAX_GLOBAL_LIGHTS; i++)
@@ -2938,6 +2941,15 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_COMMAND(ID_LOD_MODE_3, OnWindowLODMode3)
 	ON_UPDATE_COMMAND_UI(ID_LOD_MODE_3, OnUpdateOnWindowLODMode3)
 
+	ON_COMMAND(ID_MSAA_NONE, OnMSAANone)
+	ON_UPDATE_COMMAND_UI(ID_MSAA_NONE, OnUpdateMSAANone)
+	ON_COMMAND(ID_MSAA_2X, OnMSAA2X)
+	ON_UPDATE_COMMAND_UI(ID_MSAA_2X, OnUpdateMSAA2X)
+	ON_COMMAND(ID_MSAA_4X, OnMSAA4X)
+	ON_UPDATE_COMMAND_UI(ID_MSAA_4X, OnUpdateMSAA4X)
+	ON_COMMAND(ID_MSAA_8X, OnMSAA8X)
+	ON_UPDATE_COMMAND_UI(ID_MSAA_8X, OnUpdateMSAA8X)
+
 	ON_COMMAND(ID_REVALIDATE_RENDER, OnRefreshSceneObjects)
 	//}}AFX_MSG_MAP
 END_MESSAGE_MAP()
@@ -4722,10 +4734,27 @@ void WbView3d::OnWindowLODMode3()
 	invalObjectInView(NULL);
 }
 
-void WbView3d::OnUpdateOnWindowLODMode3(CCmdUI* pCmdUI) 
+void WbView3d::OnUpdateOnWindowLODMode3(CCmdUI* pCmdUI)
 {
     pCmdUI->SetCheck(m_lod == 3);
 }
+
+void WbView3d::setMSAA(D3DMULTISAMPLE_TYPE type)
+{
+	DX8Wrapper::Set_Multi_Sample_Type(type);
+	DX8Wrapper::Reset_Device(true);
+	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "MSAAMode", (int)type);
+}
+
+void WbView3d::OnMSAANone() { setMSAA(D3DMULTISAMPLE_NONE); }
+void WbView3d::OnMSAA2X()   { setMSAA(D3DMULTISAMPLE_2_SAMPLES); }
+void WbView3d::OnMSAA4X()   { setMSAA(D3DMULTISAMPLE_4_SAMPLES); }
+void WbView3d::OnMSAA8X()   { setMSAA(D3DMULTISAMPLE_8_SAMPLES); }
+
+void WbView3d::OnUpdateMSAANone(CCmdUI* pCmdUI) { pCmdUI->SetCheck(DX8Wrapper::Get_Multi_Sample_Type() == D3DMULTISAMPLE_NONE); }
+void WbView3d::OnUpdateMSAA2X(CCmdUI* pCmdUI)   { pCmdUI->SetCheck(DX8Wrapper::Get_Multi_Sample_Type() == D3DMULTISAMPLE_2_SAMPLES); }
+void WbView3d::OnUpdateMSAA4X(CCmdUI* pCmdUI)   { pCmdUI->SetCheck(DX8Wrapper::Get_Multi_Sample_Type() == D3DMULTISAMPLE_4_SAMPLES); }
+void WbView3d::OnUpdateMSAA8X(CCmdUI* pCmdUI)   { pCmdUI->SetCheck(DX8Wrapper::Get_Multi_Sample_Type() == D3DMULTISAMPLE_8_SAMPLES); }
 
 void WbView3d::OnKillFocus(CWnd* pNewWnd)
 {

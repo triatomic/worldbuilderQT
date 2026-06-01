@@ -315,8 +315,16 @@ BEGIN
     BEGIN
         MENUITEM "Save My Potato!",             ID_LOD_MODE_1
         MENUITEM "My shit is average",          ID_LOD_MODE_2
-        MENUITEM "Lets lag the whole worldbuilder | NASA PC Required!", 
+        MENUITEM "Lets lag the whole worldbuilder | NASA PC Required!",
                                                 ID_LOD_MODE_3
+        MENUITEM SEPARATOR
+        POPUP "MSAA"
+        BEGIN
+            MENUITEM "Off",                     ID_MSAA_NONE
+            MENUITEM "2x",                      ID_MSAA_2X
+            MENUITEM "4x",                      ID_MSAA_4X
+            MENUITEM "8x",                      ID_MSAA_8X
+        END
         MENUITEM SEPARATOR
         MENUITEM "Show All of 3d Map\tCtrl+A",  ID_VIEW_SHOWENTIRE3DMAP
         POPUP "Partial Map Size"

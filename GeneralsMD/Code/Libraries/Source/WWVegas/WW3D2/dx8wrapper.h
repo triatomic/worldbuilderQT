@@ -568,6 +568,9 @@ public:
 
 	static void Set_Draw_Polygon_Low_Bound_Limit(unsigned n) { DrawPolygonLowBoundLimit=n; }
 
+	static void Set_Multi_Sample_Type(D3DMULTISAMPLE_TYPE type) { s_MultiSampleType = type; }
+	static D3DMULTISAMPLE_TYPE Get_Multi_Sample_Type() { return s_MultiSampleType; }
+
 protected:
 
 	static bool	Create_Device(void);
@@ -642,6 +645,7 @@ protected:
 	static int								TextureBitDepth;
 	static bool								IsWindowed;
 	static D3DFORMAT					DisplayFormat;
+	static D3DMULTISAMPLE_TYPE			s_MultiSampleType;
 	
 	static D3DMATRIX						old_world;
 	static D3DMATRIX						old_view;

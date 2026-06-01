@@ -110,6 +110,7 @@ int								DX8Wrapper::BitDepth										= DEFAULT_BIT_DEPTH;
 int								DX8Wrapper::TextureBitDepth							= DEFAULT_TEXTURE_BIT_DEPTH;
 bool								DX8Wrapper::IsWindowed									= false;
 D3DFORMAT					DX8Wrapper::DisplayFormat	= D3DFMT_UNKNOWN;
+D3DMULTISAMPLE_TYPE			DX8Wrapper::s_MultiSampleType = D3DMULTISAMPLE_NONE;
 
 D3DMATRIX						DX8Wrapper::old_world;
 D3DMATRIX						DX8Wrapper::old_view;
@@ -644,6 +645,8 @@ bool DX8Wrapper::Reset_Device(bool reload_assets)
 		memset(Vertex_Shader_Constants,0,sizeof(Vector4)*MAX_VERTEX_SHADER_CONSTANTS);
 		memset(Pixel_Shader_Constants,0,sizeof(Vector4)*MAX_PIXEL_SHADER_CONSTANTS);
 
+		_PresentParameters.MultiSampleType = s_MultiSampleType;
+
 		HRESULT hr=_Get_D3D_Device8()->TestCooperativeLevel();
 		if (hr != D3DERR_DEVICELOST )
 		{	DX8CALL_HRES(Reset(&_PresentParameters),hr)
@@ -662,6 +665,10 @@ bool DX8Wrapper::Reset_Device(bool reload_assets)
 		}
 		Invalidate_Cached_Render_States();
 		Set_Default_Global_Render_States();
+		if (s_MultiSampleType != D3DMULTISAMPLE_NONE) {
+			D3DDevice->SetRenderState(D3DRS_MULTISAMPLEANTIALIAS, TRUE);
+			D3DDevice->SetRenderState(D3DRS_MULTISAMPLEMASK, 0xffffffff);
+		}
 		SHD_INIT_SHADERS;
 		WWDEBUG_SAY(("Device reset completed\n"));
 		return true;
@@ -971,8 +978,7 @@ bool DX8Wrapper::Set_Render_Device(int dev, int width, int height, int bits, int
 	_PresentParameters.BackBufferHeight = ResolutionHeight;
 	_PresentParameters.BackBufferCount = IsWindowed ? 1 : 2;
 	
-	_PresentParameters.MultiSampleType = D3DMULTISAMPLE_NONE;
-	//I changed this to discard all the time (even when full-screen) since that the most efficient. 07-16-03 MW:
+	_PresentParameters.MultiSampleType = s_MultiSampleType;
 	_PresentParameters.SwapEffect = D3DSWAPEFFECT_DISCARD;//IsWindowed ? D3DSWAPEFFECT_DISCARD : D3DSWAPEFFECT_FLIP;		// Shouldn't this be D3DSWAPEFFECT_FLIP?
 	_PresentParameters.hDeviceWindow = _Hwnd;
 	_PresentParameters.Windowed = IsWindowed;
@@ -3782,8 +3788,10 @@ void DX8Wrapper::Apply_Default_State()
 	//Set_DX8_Render_State(D3DRS_POINTSCALE_A, 0);
 	//Set_DX8_Render_State(D3DRS_POINTSCALE_B, 0);
 	//Set_DX8_Render_State(D3DRS_POINTSCALE_C, 0);
-	//Set_DX8_Render_State(D3DRS_MULTISAMPLEANTIALIAS, TRUE);
-	//Set_DX8_Render_State(D3DRS_MULTISAMPLEMASK, 0xffffffff);
+	if (s_MultiSampleType != D3DMULTISAMPLE_NONE) {
+		Set_DX8_Render_State(D3DRS_MULTISAMPLEANTIALIAS, TRUE);
+		Set_DX8_Render_State(D3DRS_MULTISAMPLEMASK, 0xffffffff);
+	}
 	//Set_DX8_Render_State(D3DRS_PATCHEDGESTYLE, D3DPATCHEDGE_DISCRETE);
 	//Set_DX8_Render_State(D3DRS_PATCHSEGMENTS, 0x3f800000);
 	//Set_DX8_Render_State(D3DRS_DEBUGMONITORTOKEN, D3DDMT_ENABLE);
