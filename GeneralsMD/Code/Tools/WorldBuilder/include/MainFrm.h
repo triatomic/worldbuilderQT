@@ -57,6 +57,7 @@
 #define TOOLTIP_SECTION "ToolTips"
 
 class LayersList;
+class MinimapDialog;
 class ScriptDialog;
 
 class CMainFrame : public CFrameWnd
@@ -131,6 +132,7 @@ protected:  // control bar embedded members
 	GlobalLightOptions	m_globalLightOptions;
 	CameraOptions				m_cameraOptions;
 	LayersList*					m_layersList;
+	MinimapDialog*			m_minimapDialog;
 	ScriptDialog*				m_scriptDialog;
 	RulerOptions				m_rulerOptions;
 	

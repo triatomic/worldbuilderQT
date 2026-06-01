@@ -50,6 +50,7 @@
 #include "CUndoable.h"
 #include "LayersList.h"
 #include "MainFrm.h"
+#include "MinimapDialog.h"
 #include "NewHeightMap.h"
 #include "SaveMap.h"
 #include "ScriptDialog.h"
@@ -1457,6 +1458,8 @@ void CWorldBuilderDoc::SetHeightMap(WorldHeightMapEdit *pMap, Bool doUpdate)
 			pWView->updateHeightMapInView(m_heightMap, false, partialRange);
 			pWView->Invalidate(false);
 		}
+		if (TheMinimapDialog && TheMinimapDialog->IsWindowVisible())
+			TheMinimapDialog->rebuildTerrain();
 	}
 }
 
@@ -1897,6 +1900,8 @@ void CWorldBuilderDoc::invalObject(MapObject *pMapObj)
 		ASSERT_VALID(pWView);
 		pWView->invalObjectInView(pMapObj);
 	}
+	// Minimap refresh is handled in WbView3d::invalObjectInView (the common funnel for
+	// both this path and direct p3View->invalObjectInView callers).
 }
 
 void CWorldBuilderDoc::invalCell(int xIndex, int yIndex)
@@ -1950,6 +1955,11 @@ void CWorldBuilderDoc::updateHeightMap(WorldHeightMap *htMap, Bool partial, cons
 		pWView->updateHeightMapInView(htMap, partial, partialRange);
 		pWView->Invalidate();
 	}
+
+	// Keep the minimap in sync while the user paints/sculpts terrain. Use the
+	// throttled request so a continuous brush stroke doesn't resample every frame.
+	if (TheMinimapDialog && TheMinimapDialog->IsWindowVisible())
+		TheMinimapDialog->requestRebuild();
 }
 
 void CWorldBuilderDoc::LoadEditTime(const CString& mapPath)

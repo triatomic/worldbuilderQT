@@ -26,6 +26,7 @@
 
 #include "DrawObject.h"
 #include "LayersList.h"
+#include "MinimapDialog.h"
 #include "WHeightMapEdit.h"
 #include "wbview3d.h"
 #include "WorldBuilder.h"
@@ -80,6 +81,7 @@ CMainFrame::CMainFrame()
 	m_hAutoSaveTimer = NULL;
 	m_autoSaving = false;
 	m_layersList = NULL;
+	m_minimapDialog = NULL;
 	m_curDialogID = IDD_NO_OPTIONS;
 	m_scriptDialog = NULL;
 	// DragAcceptFiles(TRUE);
@@ -110,6 +112,10 @@ CMainFrame::~CMainFrame()
 {
 	if (m_layersList) {
 		delete m_layersList;
+	}
+
+	if (m_minimapDialog) {
+		delete m_minimapDialog;
 	}
 
 	if (m_scriptDialog) {
@@ -334,7 +340,15 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	frameRect.top = ::AfxGetApp()->GetProfileInt(LAYERS_LIST_SECTION, "Top", optionsRect.bottom + 100);
 	frameRect.left =::AfxGetApp()->GetProfileInt(LAYERS_LIST_SECTION, "Left", optionsRect.left);
 	m_layersList->SetWindowPos(NULL, frameRect.left, frameRect.top, 0, 0, SWP_NOZORDER | SWP_NOSIZE);
-  
+
+	// Minimap as a floating modeless tool window.
+	m_minimapDialog = new MinimapDialog(this);
+	m_minimapDialog->Create(MinimapDialog::IDD, this);
+	m_minimapDialog->ShowWindow(::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowMinimap", 0) ? SW_SHOW : SW_HIDE);
+	frameRect.top = ::AfxGetApp()->GetProfileInt(MINIMAP_SECTION, "Top", 100);
+	frameRect.left = ::AfxGetApp()->GetProfileInt(MINIMAP_SECTION, "Left", 100);
+	m_minimapDialog->SetWindowPos(NULL, frameRect.left, frameRect.top, 0, 0, SWP_NOZORDER | SWP_NOSIZE);
+
 	Int sbf = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowBrushFeedback", 1);
 	if (sbf != 0) {
 		DrawObject::enableFeedback();

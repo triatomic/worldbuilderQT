@@ -50,6 +50,18 @@ static Bool _positionIsTooCliffyForTrees(Coord3D pos);
 //-------------------------------------------------------------------------------------------------
 /** See if a location is underwater, and what the water height is. */
 //-------------------------------------------------------------------------------------------------
+// Fast guard: does the map have ANY water area trigger at all? Lets callers that
+// sample underwater-ness across a whole grid (e.g. the minimap) skip the per-point
+// localIsUnderwater scan entirely on the common no-water map.
+Bool localHasWaterAreas(void)
+{
+	for (PolygonTrigger *pTrig = PolygonTrigger::getFirstPolygonTrigger(); pTrig; pTrig = pTrig->getNext()) {
+		if (pTrig->isWaterArea())
+			return true;
+	}
+	return false;
+}
+
 Bool localIsUnderwater( Real x, Real y)
 {
 	ICoord3D iLoc;

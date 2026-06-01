@@ -848,6 +848,17 @@
 #define ID_TEXT_SHADOW                  33363
 #define ID_TEXFILTER_DEFAULT            33364
 #define ID_TEXFILTER_ANISO16X           33365
+#define ID_VIEW_MINIMAP                 33366
+#define ID_MINIMAP_SHOWOBJECTS          33367
+#define ID_MINIMAP_REFRESH_OFF          33368
+#define ID_MINIMAP_REFRESH_100          33369
+#define ID_MINIMAP_REFRESH_250          33370
+#define ID_MINIMAP_REFRESH_1000         33371
+#define ID_MINIMAP_RES_128              33372
+#define ID_MINIMAP_RES_256              33373
+#define ID_MINIMAP_RES_512              33374
+#define ID_MINIMAP_RES_2048             33375
+#define IDD_MINIMAP                     243
 #define IDS_NEW                         61446
 #define IDS_RESIZE                      61447
 #define IDS_REMOVING_INUSE_TEAM         61448
@@ -919,8 +930,8 @@
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_3D_CONTROLS                     1
-#define _APS_NEXT_RESOURCE_VALUE        243
-#define _APS_NEXT_COMMAND_VALUE         33348
+#define _APS_NEXT_RESOURCE_VALUE        244
+#define _APS_NEXT_COMMAND_VALUE         33376
 #define _APS_NEXT_CONTROL_VALUE         1370
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

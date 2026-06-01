@@ -309,6 +309,7 @@ BEGIN
         MENUITEM "&Toolbar",                    ID_VIEW_TOOLBAR
         MENUITEM "&Status Bar",                 ID_VIEW_STATUS_BAR
         MENUITEM "Layers List",                 ID_VIEW_LAYERS_LIST
+        MENUITEM "Minimap",                     ID_VIEW_MINIMAP
         MENUITEM SEPARATOR
     END
     POPUP "&Level Of Detail"
@@ -329,6 +330,24 @@ BEGIN
         BEGIN
             MENUITEM "Default",                 ID_TEXFILTER_DEFAULT
             MENUITEM "Anisotropic 16x",         ID_TEXFILTER_ANISO16X
+        END
+        POPUP "Minimap"
+        BEGIN
+            MENUITEM "Show Objects",            ID_MINIMAP_SHOWOBJECTS
+            POPUP "Refresh Rate"
+            BEGIN
+                MENUITEM "Off (manual)",        ID_MINIMAP_REFRESH_OFF
+                MENUITEM "Fast (100 ms)",       ID_MINIMAP_REFRESH_100
+                MENUITEM "Normal (250 ms)",     ID_MINIMAP_REFRESH_250
+                MENUITEM "Slow (1000 ms)",      ID_MINIMAP_REFRESH_1000
+            END
+            POPUP "Resolution"
+            BEGIN
+                MENUITEM "128 x 128",           ID_MINIMAP_RES_128
+                MENUITEM "256 x 256",           ID_MINIMAP_RES_256
+                MENUITEM "512 x 512",           ID_MINIMAP_RES_512
+                MENUITEM "2048 x 2048 (slow)",  ID_MINIMAP_RES_2048
+            END
         END
         MENUITEM "Text Shadow",             ID_TEXT_SHADOW
         MENUITEM SEPARATOR
@@ -2342,6 +2361,14 @@ BEGIN
                     192,33
     DEFPUSHBUTTON   "OK",IDOK,204,1,27,14
     PUSHBUTTON      "Cancel",IDCANCEL,204,20,27,14
+END
+
+IDD_MINIMAP DIALOG DISCARDABLE  0, 0, 170, 170
+STYLE WS_POPUP | WS_CAPTION | WS_SYSMENU
+EXSTYLE WS_EX_TOOLWINDOW
+CAPTION "Minimap"
+FONT 8, "MS Sans Serif"
+BEGIN
 END
 
 

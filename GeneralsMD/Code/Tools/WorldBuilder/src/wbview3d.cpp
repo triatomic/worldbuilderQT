@@ -95,6 +95,7 @@
 #include "GameClient/View.h"
 #include "GlobalLightOptions.h"
 #include "LayersList.h"
+#include "MinimapDialog.h"
 #include "ImpassableOptions.h"
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
 // #include "CUndoable.h"
@@ -645,12 +646,6 @@ WbView3d::WbView3d() :
 	int msaaMode = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "MSAAMode", 0);
 	DX8Wrapper::Set_Multi_Sample_Type((D3DMULTISAMPLE_TYPE)msaaMode);
 
-	int texFilterMode = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "TexFilterMode", 0);
-	if (texFilterMode == 1) {
-		TextureFilterClass::Set_Max_Anisotropy(16);
-		WW3D::Set_Texture_Filter(TextureFilterClass::TEXTURE_FILTER_ANISOTROPIC);
-	}
-
 	m_cameraOffset.x = m_cameraOffset.y = m_cameraOffset.z = 1;
 
 	for (Int i=0; i<MAX_GLOBAL_LIGHTS; i++)
@@ -1106,12 +1101,18 @@ void WbView3d::resetRenderObjects()
 // ----------------------------------------------------------------------------
 void WbView3d::stepTimeOfDay()
 {
-	TheWritableGlobalData->m_timeOfDay = (TimeOfDay)(TheGlobalData->m_timeOfDay+1); 
+	TheWritableGlobalData->m_timeOfDay = (TimeOfDay)(TheGlobalData->m_timeOfDay+1);
 	if (TheGlobalData->m_timeOfDay >= TIME_OF_DAY_COUNT) {
 		TheWritableGlobalData->m_timeOfDay = TIME_OF_DAY_FIRST;
 	}
 	resetRenderObjects();
 	invalObjectInView(NULL);
+
+	// Time-of-day changes the terrain tint, so the minimap needs a full resample.
+	// This is an explicit user action (like load/toggle), so rebuild immediately
+	// rather than via the throttle (which honors "Refresh Rate: Off").
+	if (TheMinimapDialog && TheMinimapDialog->IsWindowVisible())
+		TheMinimapDialog->rebuildTerrain();
 }
 
 // ----------------------------------------------------------------------------
@@ -2083,16 +2084,23 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 		updateLights(); 
 	}
 	if (isScorch) {
-		updateScorches(); 
+		updateScorches();
 	}
 	Invalidate(false);
+
+	// Objects added/moved/deleted/modified all funnel through here (both the doc's
+	// invalObject path and direct p3View->invalObjectInView(NULL) callers), so this
+	// is the single place to refresh the minimap's object overlay. Pass terrainChanged
+	// = false so it re-composites the cached terrain instead of resampling (cheap).
+	if (TheMinimapDialog && TheMinimapDialog->IsWindowVisible())
+		TheMinimapDialog->requestRebuild(false);
 
 	--m_updateCount;
 }
 
 
 // ----------------------------------------------------------------------------
-void WbView3d::updateHeightMapInView(WorldHeightMap *htMap, Bool partial, const IRegion2D &partialRange) 
+void WbView3d::updateHeightMapInView(WorldHeightMap *htMap, Bool partial, const IRegion2D &partialRange)
 {
 	if (htMap == NULL) 
 		return;
@@ -2144,6 +2152,21 @@ void WbView3d::setCenterInView(Real x, Real y)
 		redraw();
 		updateHysteresis();
 		drawLabels();
+		CMainFrame::GetMainFrame()->handleCameraChange();
+	}
+}
+
+void WbView3d::setCenterInViewDeferred(Real x, Real y)
+{
+	if (x != m_centerPt.X || y != m_centerPt.Y) {
+		m_centerPt.X = x;
+		m_centerPt.Y = y;
+		constrainCenterPt();
+		updateHysteresis();
+		// Do NOT render here. Let the 3D view's own OnPaint/OnTimer loop do the
+		// D3D present on its own thread/window context. Rendering from the Minimap
+		// dialog's message handler corrupts the device and blanks the viewport.
+		Invalidate(FALSE);
 		CMainFrame::GetMainFrame()->handleCameraChange();
 	}
 }
@@ -2926,6 +2949,26 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_GARRISONED, OnUpdateViewGarrisoned)
 	ON_COMMAND(ID_VIEW_LAYERS_LIST, OnViewLayersList)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_LAYERS_LIST, OnUpdateViewLayersList)
+	ON_COMMAND(ID_VIEW_MINIMAP, OnViewMinimap)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_MINIMAP, OnUpdateViewMinimap)
+	ON_COMMAND(ID_MINIMAP_SHOWOBJECTS, OnMinimapShowObjects)
+	ON_UPDATE_COMMAND_UI(ID_MINIMAP_SHOWOBJECTS, OnUpdateMinimapShowObjects)
+	ON_COMMAND(ID_MINIMAP_REFRESH_OFF, OnMinimapRefreshOff)
+	ON_COMMAND(ID_MINIMAP_REFRESH_100, OnMinimapRefresh100)
+	ON_COMMAND(ID_MINIMAP_REFRESH_250, OnMinimapRefresh250)
+	ON_COMMAND(ID_MINIMAP_REFRESH_1000, OnMinimapRefresh1000)
+	ON_UPDATE_COMMAND_UI(ID_MINIMAP_REFRESH_OFF, OnUpdateMinimapRefreshOff)
+	ON_UPDATE_COMMAND_UI(ID_MINIMAP_REFRESH_100, OnUpdateMinimapRefresh100)
+	ON_UPDATE_COMMAND_UI(ID_MINIMAP_REFRESH_250, OnUpdateMinimapRefresh250)
+	ON_UPDATE_COMMAND_UI(ID_MINIMAP_REFRESH_1000, OnUpdateMinimapRefresh1000)
+	ON_COMMAND(ID_MINIMAP_RES_128, OnMinimapRes128)
+	ON_COMMAND(ID_MINIMAP_RES_256, OnMinimapRes256)
+	ON_COMMAND(ID_MINIMAP_RES_512, OnMinimapRes512)
+	ON_COMMAND(ID_MINIMAP_RES_2048, OnMinimapRes2048)
+	ON_UPDATE_COMMAND_UI(ID_MINIMAP_RES_128, OnUpdateMinimapRes128)
+	ON_UPDATE_COMMAND_UI(ID_MINIMAP_RES_256, OnUpdateMinimapRes256)
+	ON_UPDATE_COMMAND_UI(ID_MINIMAP_RES_512, OnUpdateMinimapRes512)
+	ON_UPDATE_COMMAND_UI(ID_MINIMAP_RES_2048, OnUpdateMinimapRes2048)
 	ON_COMMAND(ID_VIEW_SHOWMAPBOUNDARIES, OnViewShowMapBoundaries)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_SHOWMAPBOUNDARIES, OnUpdateViewShowMapBoundaries)
 	ON_COMMAND(ID_VIEW_RULERGRID, OnViewShowRulerGrid)
@@ -3055,6 +3098,12 @@ void WbView3d::initWW3D()
 			
 		} else {
 			m3DFont = NULL;
+		}
+
+		int texFilterMode = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "TexFilterMode", 0);
+		if (texFilterMode == 1) {
+			TextureFilterClass::Set_Max_Anisotropy(16);
+			WW3D::Set_Texture_Filter(TextureFilterClass::TEXTURE_FILTER_ANISOTROPIC);
 		}
 
 		WW3D::Enable_Static_Sort_Lists(true);
@@ -4564,9 +4613,90 @@ void WbView3d::OnViewLayersList()
 	}
 }
 
-void WbView3d::OnUpdateViewLayersList(CCmdUI* pCmdUI) 
+void WbView3d::OnUpdateViewLayersList(CCmdUI* pCmdUI)
 {
 	pCmdUI->SetCheck(m_showLayersList ? 1 : 0);
+}
+
+void WbView3d::OnViewMinimap()
+{
+	if (TheMinimapDialog)
+	{
+		Bool visible = TheMinimapDialog->IsWindowVisible();
+		TheMinimapDialog->ShowWindow(visible ? SW_HIDE : SW_SHOW);
+		::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "ShowMinimap", visible ? 0 : 1);
+		if (!visible)
+			TheMinimapDialog->rebuildTerrain();
+	}
+}
+
+void WbView3d::OnUpdateViewMinimap(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(TheMinimapDialog && TheMinimapDialog->IsWindowVisible() ? 1 : 0);
+}
+
+// --- Minimap submenu: Show Objects ------------------------------------------
+void WbView3d::OnMinimapShowObjects()
+{
+	if (TheMinimapDialog)
+		TheMinimapDialog->setShowObjects(!TheMinimapDialog->getShowObjects());
+}
+void WbView3d::OnUpdateMinimapShowObjects(CCmdUI* pCmdUI)
+{
+	pCmdUI->Enable(TheMinimapDialog != NULL);
+	pCmdUI->SetCheck(TheMinimapDialog && TheMinimapDialog->getShowObjects() ? 1 : 0);
+}
+
+// --- Minimap submenu: Refresh Rate (radio) ----------------------------------
+void WbView3d::OnMinimapRefreshOff()  { if (TheMinimapDialog) TheMinimapDialog->setRefreshDelayMs(0); }
+void WbView3d::OnMinimapRefresh100()  { if (TheMinimapDialog) TheMinimapDialog->setRefreshDelayMs(100); }
+void WbView3d::OnMinimapRefresh250()  { if (TheMinimapDialog) TheMinimapDialog->setRefreshDelayMs(250); }
+void WbView3d::OnMinimapRefresh1000() { if (TheMinimapDialog) TheMinimapDialog->setRefreshDelayMs(1000); }
+void WbView3d::OnUpdateMinimapRefreshOff(CCmdUI* pCmdUI)
+{
+	pCmdUI->Enable(TheMinimapDialog != NULL);
+	pCmdUI->SetCheck(TheMinimapDialog && TheMinimapDialog->getRefreshDelayMs() == 0 ? 1 : 0);
+}
+void WbView3d::OnUpdateMinimapRefresh100(CCmdUI* pCmdUI)
+{
+	pCmdUI->Enable(TheMinimapDialog != NULL);
+	pCmdUI->SetCheck(TheMinimapDialog && TheMinimapDialog->getRefreshDelayMs() == 100 ? 1 : 0);
+}
+void WbView3d::OnUpdateMinimapRefresh250(CCmdUI* pCmdUI)
+{
+	pCmdUI->Enable(TheMinimapDialog != NULL);
+	pCmdUI->SetCheck(TheMinimapDialog && TheMinimapDialog->getRefreshDelayMs() == 250 ? 1 : 0);
+}
+void WbView3d::OnUpdateMinimapRefresh1000(CCmdUI* pCmdUI)
+{
+	pCmdUI->Enable(TheMinimapDialog != NULL);
+	pCmdUI->SetCheck(TheMinimapDialog && TheMinimapDialog->getRefreshDelayMs() == 1000 ? 1 : 0);
+}
+
+// --- Minimap submenu: Resolution (radio) ------------------------------------
+void WbView3d::OnMinimapRes128()  { if (TheMinimapDialog) TheMinimapDialog->setResolution(128); }
+void WbView3d::OnMinimapRes256()  { if (TheMinimapDialog) TheMinimapDialog->setResolution(256); }
+void WbView3d::OnMinimapRes512()  { if (TheMinimapDialog) TheMinimapDialog->setResolution(512); }
+void WbView3d::OnMinimapRes2048() { if (TheMinimapDialog) TheMinimapDialog->setResolution(2048); }
+void WbView3d::OnUpdateMinimapRes128(CCmdUI* pCmdUI)
+{
+	pCmdUI->Enable(TheMinimapDialog != NULL);
+	pCmdUI->SetCheck(TheMinimapDialog && TheMinimapDialog->getResolution() == 128 ? 1 : 0);
+}
+void WbView3d::OnUpdateMinimapRes256(CCmdUI* pCmdUI)
+{
+	pCmdUI->Enable(TheMinimapDialog != NULL);
+	pCmdUI->SetCheck(TheMinimapDialog && TheMinimapDialog->getResolution() == 256 ? 1 : 0);
+}
+void WbView3d::OnUpdateMinimapRes512(CCmdUI* pCmdUI)
+{
+	pCmdUI->Enable(TheMinimapDialog != NULL);
+	pCmdUI->SetCheck(TheMinimapDialog && TheMinimapDialog->getResolution() == 512 ? 1 : 0);
+}
+void WbView3d::OnUpdateMinimapRes2048(CCmdUI* pCmdUI)
+{
+	pCmdUI->Enable(TheMinimapDialog != NULL);
+	pCmdUI->SetCheck(TheMinimapDialog && TheMinimapDialog->getResolution() == 2048 ? 1 : 0);
 }
 
 void WbView3d::OnViewShowMapBoundaries()
