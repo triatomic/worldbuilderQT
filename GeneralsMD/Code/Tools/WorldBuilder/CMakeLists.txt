@@ -92,6 +92,7 @@ set(WORLDBUILDER_SRC
     "src/WaterTool.cpp"
     "src/WaypointOptions.cpp"
     "src/WaypointTool.cpp"
+    "src/WBFontAtlas.cpp"
     "src/WBFrameWnd.cpp"
     "src/WBHeightMap.cpp"
     "src/WBPopupSlider.cpp"

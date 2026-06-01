@@ -790,5 +790,9 @@ void CMainFrame::OnEditCameraoptions()
 void CMainFrame::handleCameraChange(void)
 {
 	m_cameraOptions.update();
+
+	// Camera moved/zoomed -> redraw the minimap view box (object-only, cheap path).
+	if (TheMinimapDialog && TheMinimapDialog->IsWindowVisible())
+		TheMinimapDialog->requestRebuild(false);
 }
 

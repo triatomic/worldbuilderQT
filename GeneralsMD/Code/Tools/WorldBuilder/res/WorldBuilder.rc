@@ -337,6 +337,8 @@ BEGIN
             POPUP "Refresh Rate"
             BEGIN
                 MENUITEM "Off (manual)",        ID_MINIMAP_REFRESH_OFF
+                MENUITEM "Superfast (16 ms)",   ID_MINIMAP_REFRESH_16
+                MENUITEM "Very fast (33 ms)",   ID_MINIMAP_REFRESH_33
                 MENUITEM "Fast (100 ms)",       ID_MINIMAP_REFRESH_100
                 MENUITEM "Normal (250 ms)",     ID_MINIMAP_REFRESH_250
                 MENUITEM "Slow (1000 ms)",      ID_MINIMAP_REFRESH_1000

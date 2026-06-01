@@ -41,6 +41,7 @@
 #include "Common/GlobalData.h"
 #include "Common/ModelState.h"
 #include "dx8wrapper.h"
+#include "WBFontAtlas.h"
 
 //#include "GameLogic/Module/BodyModule.h" -- Yikes... not necessary to include this! (KM)
 enum BodyDamageType; //Ahhhh much better!
@@ -155,10 +156,14 @@ protected:
 	afx_msg void OnMinimapShowObjects();
 	afx_msg void OnUpdateMinimapShowObjects(CCmdUI* pCmdUI);
 	afx_msg void OnMinimapRefreshOff();
+	afx_msg void OnMinimapRefresh16();
+	afx_msg void OnMinimapRefresh33();
 	afx_msg void OnMinimapRefresh100();
 	afx_msg void OnMinimapRefresh250();
 	afx_msg void OnMinimapRefresh1000();
 	afx_msg void OnUpdateMinimapRefreshOff(CCmdUI* pCmdUI);
+	afx_msg void OnUpdateMinimapRefresh16(CCmdUI* pCmdUI);
+	afx_msg void OnUpdateMinimapRefresh33(CCmdUI* pCmdUI);
 	afx_msg void OnUpdateMinimapRefresh100(CCmdUI* pCmdUI);
 	afx_msg void OnUpdateMinimapRefresh250(CCmdUI* pCmdUI);
 	afx_msg void OnUpdateMinimapRefresh1000(CCmdUI* pCmdUI);
@@ -288,7 +293,8 @@ private:
 	void createLabelFont();					///< (re)create m3DFont honoring m_textAntialias
 
 
-	ID3DXFont*							m3DFont;
+	ID3DXFont*							m3DFont;		// legacy; unused (labels use the GDI atlas)
+	WBFontAtlas							m_fontAtlas;	// GDI-built glyph atlas -> D3D quads
 	Int											m_pickPixels;
 	Int											m_partialMapSize;
 	Real m_lastTrackingZ;     // stores last used ghost placement height
@@ -363,6 +369,11 @@ public:
 	Vector3 getCameraTarget(void) { return m_cameraTarget; }
 	Real getCameraAngle(void) { return m_cameraAngle; }
 	CPoint getActualWinSize(void) {return m_actualWinSize;}
+
+	/// Fill corners[4] with the world-space ground-plane points of the view frustum
+	/// (the 4 viewport corners cast to the ground), for drawing a minimap view box.
+	/// Order: top-left, top-right, bottom-right, bottom-left. Returns false if no camera.
+	Bool getViewFrustumGroundCorners(Coord3D corners[4]);
 
 	Real getLastTrackingZ(void) { return m_lastTrackingZ; }
 	Bool getLastTrackingZIsFromHighElev(void) { return m_lastTrackingZIsFromHighElev; }

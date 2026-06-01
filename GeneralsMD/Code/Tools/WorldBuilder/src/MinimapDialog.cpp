@@ -178,7 +178,17 @@ void MinimapDialog::requestRebuild(Bool terrainChanged)
 	if (!::IsWindow(m_hWnd) || !IsWindowVisible())
 		return;
 
-	// 0 = manual: don't auto-rebuild on edits (only on load/toggle).
+	// Object-only / camera changes are cheap (recomposite cached terrain, no resample),
+	// just like the in-game radar. Refresh them immediately so units/buildings and the
+	// view box track instantly, with no throttle delay. Only when the cached terrain is
+	// stale (a terrain edit is pending) do we fall through to the debounced resample.
+	if (!terrainChanged && m_terrainValid)
+	{
+		refreshObjects();
+		return;
+	}
+
+	// 0 = manual: don't auto-rebuild on terrain edits (only on load/toggle).
 	if (m_refreshDelayMs <= 0)
 		return;
 
@@ -238,6 +248,11 @@ void MinimapDialog::OnPaint()
 		0, 0, clientRect.Width(), clientRect.Height(),
 		0, 0, m_resolution, m_resolution,
 		m_pixelBuffer, &bmi, DIB_RGB_COLORS, SRCCOPY);
+
+	// Draw the camera view box as a GDI overlay at full client resolution (not baked
+	// into the low-res buffer), so the lines are smooth and the thickness is crisp
+	// regardless of the sampling resolution.
+	drawViewBoxOverlay(dc.m_hDC, clientRect.Width(), clientRect.Height());
 }
 
 void MinimapDialog::centerViewAtClient(CPoint point)
@@ -536,6 +551,9 @@ void MinimapDialog::refreshObjects()
 	if (m_showObjects)
 		drawObjects();
 
+	// The camera view box is drawn as a GDI overlay in OnPaint (display resolution),
+	// not baked into the buffer.
+
 	m_terrainBuilt = true;
 	if (IsWindow(m_hWnd))
 		Invalidate(FALSE);
@@ -640,6 +658,83 @@ void MinimapDialog::fillDiamond(Int cx, Int cy, Int size, UnsignedInt color)
 	}
 }
 
+// Map a world position to a minimap buffer cell (top-down, row already flipped).
+// Always writes a cell CLAMPED to the buffer; returns FALSE if the point was off-map
+// (caller may skip object dots) or TRUE if in-range. Shared by dots and the view box.
+Bool MinimapDialog::worldToMinimap(Real worldX, Real worldY, Int *mx, Int *my)
+{
+	CWorldBuilderDoc* pDoc = CWorldBuilderDoc::GetActiveDoc();
+	if (!pDoc) return FALSE;
+	WorldHeightMapEdit *pMap = pDoc->GetHeightMap();
+	if (!pMap) return FALSE;
+
+	Int border = pMap->getBorderSize();
+	Real xSpan = INT_TO_REAL(pMap->getXExtent() - 2 * border);
+	Real ySpan = INT_TO_REAL(pMap->getYExtent() - 2 * border);
+	if (xSpan <= 0.0f || ySpan <= 0.0f) return FALSE;
+
+	Int x = REAL_TO_INT((worldX / MAP_XY_FACTOR / xSpan) * m_resolution);
+	Int y = REAL_TO_INT((worldY / MAP_XY_FACTOR / ySpan) * m_resolution);
+	Bool inRange = (x >= 0 && x < m_resolution && y >= 0 && y < m_resolution);
+
+	if (x < 0) x = 0;  if (x >= m_resolution) x = m_resolution - 1;
+	if (y < 0) y = 0;  if (y >= m_resolution) y = m_resolution - 1;
+
+	*mx = x;
+	*my = m_resolution - 1 - y;		// flip to top-down buffer row
+	return inRange;
+}
+
+// Draw the 3D view's camera frustum as a box, like the game radar's view box. Drawn
+// as a GDI overlay in client space (full display resolution) so the lines are smooth
+// and the thickness is crisp regardless of the sampling resolution. Corners come from
+// WbView3d::getViewFrustumGroundCorners (ground-plane projection of the 4 viewport
+// corners).
+void MinimapDialog::drawViewBoxOverlay(HDC hdc, Int clientW, Int clientH)
+{
+	CWorldBuilderDoc* pDoc = CWorldBuilderDoc::GetActiveDoc();
+	if (!pDoc) return;
+	WorldHeightMapEdit *pMap = pDoc->GetHeightMap();
+	if (!pMap) return;
+	WbView3d *p3d = pDoc->Get3DView();
+	if (!p3d) return;
+
+	Coord3D corners[4];
+	if (!p3d->getViewFrustumGroundCorners(corners))
+		return;
+
+	Int border = pMap->getBorderSize();
+	Real xSpan = INT_TO_REAL(pMap->getXExtent() - 2 * border);
+	Real ySpan = INT_TO_REAL(pMap->getYExtent() - 2 * border);
+	if (xSpan <= 0.0f || ySpan <= 0.0f) return;
+
+	// Map each world corner to client pixels (fraction of map span * client size),
+	// clamped to the client so off-map corners still bound the box. Y is flipped
+	// (world +y is up, client +y is down).
+	POINT pts[5];
+	for (int i = 0; i < 4; ++i)
+	{
+		Real fx = (corners[i].x / MAP_XY_FACTOR) / xSpan;
+		Real fy = (corners[i].y / MAP_XY_FACTOR) / ySpan;
+		if (fx < 0.0f) fx = 0.0f;  if (fx > 1.0f) fx = 1.0f;
+		if (fy < 0.0f) fy = 0.0f;  if (fy > 1.0f) fy = 1.0f;
+		pts[i].x = (LONG)(fx * clientW);
+		pts[i].y = (LONG)((1.0f - fy) * clientH);
+	}
+	pts[4] = pts[0];	// close the loop
+
+	// Thick yellow pen.
+	Int thickness = clientW / 128;		// ~2px at 256 client, scales with size
+	if (thickness < 2) thickness = 2;
+	HPEN pen = CreatePen(PS_SOLID, thickness, RGB(255, 255, 0));
+	HGDIOBJ oldPen = SelectObject(hdc, pen);
+	HGDIOBJ oldBrush = SelectObject(hdc, GetStockObject(NULL_BRUSH));
+	Polyline(hdc, pts, 5);
+	SelectObject(hdc, oldPen);
+	SelectObject(hdc, oldBrush);
+	DeleteObject(pen);
+}
+
 // Overlay map objects, adapting the Thrax minimap upgrade:
 //   - units:     filled square blip in the owner's house color
 //   - structures: black-outlined box with house-color fill (distinct from units)
@@ -649,18 +744,7 @@ void MinimapDialog::fillDiamond(Int cx, Int cy, Int size, UnsignedInt color)
 // so world-row maps to (m_resolution-1 - row).
 void MinimapDialog::drawObjects()
 {
-	CWorldBuilderDoc* pDoc = CWorldBuilderDoc::GetActiveDoc();
-	if (!pDoc)
-		return;
-	WorldHeightMapEdit *pMap = pDoc->GetHeightMap();
-	if (!pMap)
-		return;
-
-	Int border = pMap->getBorderSize();
-	Real xSpan = INT_TO_REAL(pMap->getXExtent() - 2 * border);
-	Real ySpan = INT_TO_REAL(pMap->getYExtent() - 2 * border);
-	if (xSpan <= 0.0f || ySpan <= 0.0f)
-		return;
+	// worldToMinimap (used per object) validates the doc/heightmap and span.
 
 	// Thrax reference sizes are tuned for a 512-cell radar; scale to our resolution.
 	const Int kRefRes = 512;
@@ -691,17 +775,11 @@ void MinimapDialog::drawObjects()
 		if (!isStructure && !isUnit)
 			continue;								// skip props/trees/debris/system/audio
 
-		// World position -> cell-space (index from border) -> minimap cell.
+		// World position -> minimap cell (top-down, row flipped). Skip if off-map.
 		const Coord3D *loc = pObj->getLocation();
-		Real cellX = loc->x / MAP_XY_FACTOR;
-		Real cellY = loc->y / MAP_XY_FACTOR;
-
-		Int mx = REAL_TO_INT((cellX / xSpan) * m_resolution);
-		Int my = REAL_TO_INT((cellY / ySpan) * m_resolution);
-		if (mx < 0 || mx >= m_resolution || my < 0 || my >= m_resolution)
+		Int mx, cy;
+		if (!worldToMinimap(loc->x, loc->y, &mx, &cy))
 			continue;
-
-		Int cy = m_resolution - 1 - my;				// flip to top-down buffer row
 
 		if (isUnit)
 		{

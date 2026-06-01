@@ -2142,6 +2142,53 @@ void WbView3d::setCenterInViewDeferred(Real x, Real y)
 	}
 }
 
+Bool WbView3d::getViewFrustumGroundCorners(Coord3D corners[4])
+{
+	if (!m_camera)
+		return FALSE;
+
+	// Cast a ray from the camera through each viewport corner (normalized device
+	// space, -1..1) and intersect the ground plane z = groundLevel. groundLevel is
+	// the world Z the camera center looks at (m_centerPt.Z scaled like setupCamera).
+	const Real groundZ = m_centerPt.Z * MAP_XY_FACTOR;
+	const Vector3 eye = m_camera->Get_Position();
+
+	// NDC corners in view order: top-left, top-right, bottom-right, bottom-left.
+	// (+Y is up in view space, so top = +1.)
+	static const Vector2 ndc[4] = {
+		Vector2(-1.0f,  1.0f),
+		Vector2( 1.0f,  1.0f),
+		Vector2( 1.0f, -1.0f),
+		Vector2(-1.0f, -1.0f)
+	};
+
+	for (int i = 0; i < 4; ++i)
+	{
+		Vector3 onPlane;
+		m_camera->Un_Project(onPlane, ndc[i]);
+		Vector3 dir = onPlane - eye;
+
+		// Intersect ray eye + t*dir with plane z = groundZ.
+		Real denom = dir.Z;
+		Real t;
+		if (denom > -1.0e-6f && denom < 1.0e-6f)
+			t = 1.0f;					// ray parallel to ground; degenerate, just use the plane pt
+		else
+			t = (groundZ - eye.Z) / denom;
+
+		// If the corner points away from the ground (t<=0, looking at the horizon),
+		// push it far out along the ray so the box edge still spans the view.
+		if (t <= 0.0f)
+			t = 100000.0f;
+
+		Vector3 hit = eye + dir * t;
+		corners[i].x = hit.X;
+		corners[i].y = hit.Y;
+		corners[i].z = hit.Z;
+	}
+	return TRUE;
+}
+
 //=============================================================================
 // WbView3d::picked3dObjectInView
 //=============================================================================
@@ -2848,13 +2895,20 @@ void WbView3d::render()
 		}
 		
 		// Draw the 3d obj icons on top of the rest of the data.
-		WW3D::Render(m_overlayScene,m_camera);	
-		//if (mytext) mytext->Render();
-		if (m3DFont) {
+		WW3D::Render(m_overlayScene,m_camera);
+
+		// Viewport labels: rendered as textured quads from the GDI glyph atlas,
+		// batched into the back buffer BEFORE End_Render so the text is part of the
+		// presented frame (flicker-free). drawLabels(NULL) queues the glyphs.
+		if (m_fontAtlas.isValid()) {
+			IDirect3DDevice8 *dev = DX8Wrapper::_Get_D3D_Device8();
+			CRect rc;
+			GetClientRect(&rc);
+			m_fontAtlas.begin(dev, rc.Width(), rc.Height());
 			drawLabels(NULL);
+			m_fontAtlas.end();
 		}
 
-		
 		WW3D::End_Render();
 	}
 	--m_updateCount;
@@ -2925,10 +2979,14 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_COMMAND(ID_MINIMAP_SHOWOBJECTS, OnMinimapShowObjects)
 	ON_UPDATE_COMMAND_UI(ID_MINIMAP_SHOWOBJECTS, OnUpdateMinimapShowObjects)
 	ON_COMMAND(ID_MINIMAP_REFRESH_OFF, OnMinimapRefreshOff)
+	ON_COMMAND(ID_MINIMAP_REFRESH_16, OnMinimapRefresh16)
+	ON_COMMAND(ID_MINIMAP_REFRESH_33, OnMinimapRefresh33)
 	ON_COMMAND(ID_MINIMAP_REFRESH_100, OnMinimapRefresh100)
 	ON_COMMAND(ID_MINIMAP_REFRESH_250, OnMinimapRefresh250)
 	ON_COMMAND(ID_MINIMAP_REFRESH_1000, OnMinimapRefresh1000)
 	ON_UPDATE_COMMAND_UI(ID_MINIMAP_REFRESH_OFF, OnUpdateMinimapRefreshOff)
+	ON_UPDATE_COMMAND_UI(ID_MINIMAP_REFRESH_16, OnUpdateMinimapRefresh16)
+	ON_UPDATE_COMMAND_UI(ID_MINIMAP_REFRESH_33, OnUpdateMinimapRefresh33)
 	ON_UPDATE_COMMAND_UI(ID_MINIMAP_REFRESH_100, OnUpdateMinimapRefresh100)
 	ON_UPDATE_COMMAND_UI(ID_MINIMAP_REFRESH_250, OnUpdateMinimapRefresh250)
 	ON_UPDATE_COMMAND_UI(ID_MINIMAP_REFRESH_1000, OnUpdateMinimapRefresh1000)
@@ -3329,25 +3387,8 @@ void WbView3d::drawStatusLabels(CPoint basePt, int offset, const char* text, voi
 	int red = 0, green = 255, blue = 255;
 	AsciiString label = text;
 
-	if (m3DFont && !hdc) {
-		if (m_textShadow) {
-			RECT shadowRct = { labelPt.x + 2, labelPt.y + 1, labelPt.x + 2, labelPt.y + 1 };
-			((ID3DXFont*)m3DFont)->DrawText(label.str(), label.getLength(), &shadowRct,
-				DT_LEFT | DT_NOCLIP | DT_TOP | DT_SINGLELINE, 0xFF000000);
-		}
-		DWORD textColor = 0xFF000000 | (red << 16) | (green << 8) | blue;
-		RECT rct = { labelPt.x + 1, labelPt.y, labelPt.x + 1, labelPt.y };
-		((ID3DXFont*)m3DFont)->DrawText(label.str(), label.getLength(), &rct,
-			DT_LEFT | DT_NOCLIP | DT_TOP | DT_SINGLELINE, textColor);
-	} else if (!m3DFont) {
-		::SetBkMode(hdc, TRANSPARENT);
-		if (m_textShadow) {
-			::SetTextColor(hdc, RGB(0, 0, 0));
-			::TextOut(hdc, labelPt.x + 2, labelPt.y + 1, label.str(), label.getLength());
-		}
-		::SetTextColor(hdc, RGB(red, green, blue));
-		::TextOut(hdc, labelPt.x + 1, labelPt.y, label.str(), label.getLength());
-	}
+	UnsignedInt argb = 0xFF000000 | (red << 16) | (green << 8) | blue;
+	m_fontAtlas.drawText(labelPt.x, labelPt.y, label.str(), label.getLength(), argb, m_textShadow);
 }
 
 /// This is actually draw any 2d graphics and/or feedback.
@@ -3552,25 +3593,8 @@ void WbView3d::drawLabels(HDC hdc)
 				CPoint labelPt = pt;
 				labelPt.y += i * 15;
 
-				if (m3DFont && !hdc) {
-					if (m_textShadow) {
-						RECT shadowRct = { labelPt.x + 2, labelPt.y + 1, labelPt.x + 2, labelPt.y + 1 };
-						m3DFont->DrawText(label.str(), label.getLength(), &shadowRct,
-							DT_LEFT | DT_NOCLIP | DT_TOP | DT_SINGLELINE, 0xFF000000);
-					}
-					DWORD textColor = 0xFF000000 | (red << 16) | (green << 8) | blue;
-					RECT rct = { labelPt.x + 1, labelPt.y, labelPt.x + 1, labelPt.y };
-					m3DFont->DrawText(label.str(), label.getLength(), &rct,
-						DT_LEFT | DT_NOCLIP | DT_TOP | DT_SINGLELINE, textColor);
-				} else if (!m3DFont) {
-					::SetBkMode(hdc, TRANSPARENT);
-					if (m_textShadow) {
-						::SetTextColor(hdc, RGB(0, 0, 0));
-						::TextOut(hdc, labelPt.x + 2, labelPt.y + 1, label.str(), label.getLength());
-					}
-					::SetTextColor(hdc, RGB(red, green, blue));
-					::TextOut(hdc, labelPt.x + 1, labelPt.y, label.str(), label.getLength());
-				}
+				UnsignedInt argb = 0xFF000000 | (red << 16) | (green << 8) | blue;
+				m_fontAtlas.drawText(labelPt.x, labelPt.y, label.str(), label.getLength(), argb, m_textShadow);
 			}
 
 			int statusOffset = 1; // Start after the main 4 label lines
@@ -3643,31 +3667,9 @@ void WbView3d::drawLabels(HDC hdc)
 					pt.x = rClient.left + sx;
 					pt.y = rClient.top + sy;
 
-					// Draw the label for each point
-					if (m3DFont && !hdc) {
-						if (m_textShadow) {
-							RECT shadowRct;
-							shadowRct.top = shadowRct.bottom = pt.y + 1;
-							shadowRct.left = shadowRct.right = pt.x + 1;
-							m3DFont->DrawText(triggerName.str(), triggerName.getLength(), &shadowRct,
-											DT_LEFT | DT_NOCLIP | DT_TOP | DT_SINGLELINE,
-											0xFF000000);
-						}
-						RECT rct;
-						rct.top = rct.bottom = pt.y;
-						rct.left = rct.right = pt.x;
-						m3DFont->DrawText(triggerName.str(), triggerName.getLength(), &rct,
-										DT_LEFT | DT_NOCLIP | DT_TOP | DT_SINGLELINE,
-										0xAFFF8800);
-					} else if (!m3DFont) {
-						::SetBkMode(hdc, TRANSPARENT);
-						if (m_textShadow) {
-							::SetTextColor(hdc, RGB(0, 0, 0));
-							::TextOut(hdc, pt.x + 1, pt.y + 1, triggerName.str(), triggerName.getLength());
-						}
-						::SetTextColor(hdc, RGB(238, 130, 238));
-						::TextOut(hdc, pt.x, pt.y, triggerName.str(), triggerName.getLength());
-					}
+					// Draw the label for each point (violet, like the legacy GDI path).
+					m_fontAtlas.drawText(pt.x, pt.y, triggerName.str(), triggerName.getLength(),
+						0xFFEE82EE, m_textShadow);
 				}
 			}
 		}
@@ -3690,7 +3692,7 @@ void WbView3d::drawLabels(HDC hdc)
 		) {
 		const CString text = _T(PointerTool::getLastPointerInfoString());
 		// DEBUG_LOG(("PointerTool::getLastPointerInfoString() returned: \"%s\"\n", (LPCTSTR)text));
-		if (text.IsEmpty() || !m3DFont)
+		if (text.IsEmpty())
 			return;
 
 		// Get mouse position
@@ -3698,51 +3700,19 @@ void WbView3d::drawLabels(HDC hdc)
 		GetCursorPos(&pt);
 		ScreenToClient(&pt);
 
-		const int offsetX = 32;
-		const int offsetY = 8;
-		const int width   = 300;
-		const int height  = 50;
+		const int tx = pt.x + 32;
+		const int ty = pt.y + 8;
 
-		// Base draw rect
-		RECT baseRect = {
-			pt.x + offsetX,
-			pt.y + offsetY,
-			pt.x + offsetX + width,
-			pt.y + offsetY + height
-		};
-
-		// Outline color (black)
-		const DWORD outlineColor = 0xFF000000;
-		// Main text color (white)
-		const DWORD mainColor = 0xFFFFFFFF;
-
-		// Offsets for outline (8 directions)
+		// 8-direction black outline + white fill, via the glyph atlas.
 		const int outlineOffsets[8][2] = {
 			{-1, -1}, { 1, -1}, {-1,  1}, { 1,  1},
 			{-1,  0}, { 1,  0}, { 0, -1}, { 0,  1}
 		};
-
-		// Draw outline
 		for (int i = 0; i < 8; ++i) {
-			RECT outlineRect = baseRect;
-			OffsetRect(&outlineRect, outlineOffsets[i][0], outlineOffsets[i][1]);
-			m3DFont->DrawText(
-				text,
-				text.GetLength(),
-				&outlineRect,
-				DT_LEFT | DT_TOP | DT_NOCLIP | DT_WORDBREAK,
-				outlineColor
-			);
+			m_fontAtlas.drawText(tx + outlineOffsets[i][0], ty + outlineOffsets[i][1],
+				(const char*)(LPCTSTR)text, text.GetLength(), 0xFF000000, false);
 		}
-
-		// Draw main text
-		m3DFont->DrawText(
-			text,
-			text.GetLength(),
-			&baseRect,
-			DT_LEFT | DT_TOP | DT_NOCLIP | DT_WORDBREAK,
-			mainColor
-		);
+		m_fontAtlas.drawText(tx, ty, (const char*)(LPCTSTR)text, text.GetLength(), 0xFFFFFFFF, false);
 	}
 
 	CString text;
@@ -3751,20 +3721,8 @@ void WbView3d::drawLabels(HDC hdc)
 	const int offsetX = 10;
 	const int offsetY = 10;
 
-	if (m3DFont) {
-		RECT rct = { offsetX, offsetY, offsetX + 400, offsetY + 30 };
-		m3DFont->DrawText(
-			text,
-			text.GetLength(),
-			&rct,
-			DT_LEFT | DT_TOP | DT_NOCLIP | DT_SINGLELINE,
-			0xFFFFFFFF
-		);
-	} else if (hdc) {
-		::SetBkMode(hdc, TRANSPARENT);
-		::SetTextColor(hdc, RGB(255, 255, 255));
-		::TextOut(hdc, offsetX, offsetY, text, text.GetLength());
-	}
+	m_fontAtlas.drawText(offsetX, offsetY, (const char*)(LPCTSTR)text, text.GetLength(),
+		0xFFFFFFFF, m_textShadow);
 
     // === EDIT TIMER DISPLAY (Bottom Left) ===
     AsciiString editTimeStr = formatEditTime();
@@ -3774,40 +3732,16 @@ void WbView3d::drawLabels(HDC hdc)
 		
 		const int offsetX = 10;
 		const int offsetY = rClient.bottom + 70;
-		
-		if (m3DFont && !hdc) {
-			RECT rct = { offsetX, offsetY, offsetX + 400, offsetY + 30 };
-			m3DFont->DrawText(
-				editTimeStr.str(),
-				editTimeStr.getLength(),
-				&rct,
-				DT_LEFT | DT_TOP | DT_NOCLIP | DT_SINGLELINE,
-				0xFFFFFFFF // White color
-			);
-		} else if (hdc && !m3DFont) {
-			::SetBkMode(hdc, TRANSPARENT);
-			::SetTextColor(hdc, RGB(255, 255, 255));
-			::TextOut(hdc, offsetX, offsetY, editTimeStr.str(), editTimeStr.getLength());
-		}
+
+		m_fontAtlas.drawText(offsetX, offsetY, editTimeStr.str(), editTimeStr.getLength(),
+			0xFFFFFFFF, m_textShadow);
 	}
 
 	if (CMainFrame::GetMainFrame()->showAutoSaveMessage()){
 		CString autoSaveText = _T("Auto-saving in 10 seconds...");
 
-		if (m3DFont) {
-			RECT rct = { offsetX, offsetY + 20, offsetX + 400, offsetY + 50 };
-			m3DFont->DrawText(
-				autoSaveText,
-				autoSaveText.GetLength(),
-				&rct,
-				DT_LEFT | DT_TOP | DT_NOCLIP | DT_SINGLELINE,
-				0xFFFFFF00 // Yellow color
-			);
-		} else if (hdc) {
-			::SetBkMode(hdc, TRANSPARENT);
-			::SetTextColor(hdc, RGB(255, 255, 0)); // Yellow color
-			::TextOut(hdc, offsetX, offsetY + 20, autoSaveText, autoSaveText.GetLength());
-		}
+		m_fontAtlas.drawText(offsetX, offsetY + 20, (const char*)(LPCTSTR)autoSaveText,
+			autoSaveText.GetLength(), 0xFFFFFF00 /* yellow */, m_textShadow);
 	}
 
 	if (hdc && m_doRulerFeedback) {
@@ -4592,6 +4526,8 @@ void WbView3d::OnUpdateMinimapShowObjects(CCmdUI* pCmdUI)
 
 // --- Minimap submenu: Refresh Rate (radio) ----------------------------------
 void WbView3d::OnMinimapRefreshOff()  { if (TheMinimapDialog) TheMinimapDialog->setRefreshDelayMs(0); }
+void WbView3d::OnMinimapRefresh16()   { if (TheMinimapDialog) TheMinimapDialog->setRefreshDelayMs(16); }
+void WbView3d::OnMinimapRefresh33()   { if (TheMinimapDialog) TheMinimapDialog->setRefreshDelayMs(33); }
 void WbView3d::OnMinimapRefresh100()  { if (TheMinimapDialog) TheMinimapDialog->setRefreshDelayMs(100); }
 void WbView3d::OnMinimapRefresh250()  { if (TheMinimapDialog) TheMinimapDialog->setRefreshDelayMs(250); }
 void WbView3d::OnMinimapRefresh1000() { if (TheMinimapDialog) TheMinimapDialog->setRefreshDelayMs(1000); }
@@ -4599,6 +4535,16 @@ void WbView3d::OnUpdateMinimapRefreshOff(CCmdUI* pCmdUI)
 {
 	pCmdUI->Enable(TheMinimapDialog != NULL);
 	pCmdUI->SetCheck(TheMinimapDialog && TheMinimapDialog->getRefreshDelayMs() == 0 ? 1 : 0);
+}
+void WbView3d::OnUpdateMinimapRefresh16(CCmdUI* pCmdUI)
+{
+	pCmdUI->Enable(TheMinimapDialog != NULL);
+	pCmdUI->SetCheck(TheMinimapDialog && TheMinimapDialog->getRefreshDelayMs() == 16 ? 1 : 0);
+}
+void WbView3d::OnUpdateMinimapRefresh33(CCmdUI* pCmdUI)
+{
+	pCmdUI->Enable(TheMinimapDialog != NULL);
+	pCmdUI->SetCheck(TheMinimapDialog && TheMinimapDialog->getRefreshDelayMs() == 33 ? 1 : 0);
 }
 void WbView3d::OnUpdateMinimapRefresh100(CCmdUI* pCmdUI)
 {
@@ -4903,8 +4849,11 @@ void WbView3d::OnUpdateTextShadow(CCmdUI* pCmdUI)
 }
 
 // ----------------------------------------------------------------------------
-// (Re)create the viewport label font, honoring the grayscale-antialias setting.
-// Safe to call again at runtime to apply a toggle (releases the old font first).
+// (Re)build the viewport label glyph atlas, honoring the antialias setting.
+// Viewport labels are rendered as textured quads from this atlas (see render()),
+// so the text is part of the presented D3D frame and never flickers. Safe to call
+// again at runtime to apply the AA toggle (build() releases the old atlas).
+// m3DFont is left NULL (the legacy D3DX text path is retired).
 void WbView3d::createLabelFont()
 {
 	if (m3DFont) {
@@ -4912,31 +4861,9 @@ void WbView3d::createLabelFont()
 		m3DFont = NULL;
 	}
 
-	IDirect3DDevice8* pDev = DX8Wrapper::_Get_D3D_Device8();
-	if (!pDev)
-		return;
-
-	LOGFONT logFont;
-	logFont.lfHeight = 20;
-	logFont.lfWidth = 0;
-	logFont.lfEscapement = 0;
-	logFont.lfOrientation = 0;
-	logFont.lfWeight = FW_REGULAR;
-	logFont.lfItalic = FALSE;
-	logFont.lfUnderline = FALSE;
-	logFont.lfStrikeOut = FALSE;
-	logFont.lfCharSet = ANSI_CHARSET;
-	logFont.lfOutPrecision = OUT_DEFAULT_PRECIS;
-	logFont.lfClipPrecision = CLIP_DEFAULT_PRECIS;
-	logFont.lfQuality = m_textAntialias ? ANTIALIASED_QUALITY : DEFAULT_QUALITY;
-	logFont.lfPitchAndFamily = DEFAULT_PITCH;
-	strcpy(logFont.lfFaceName, "Arial");
-
-	HFONT hFont = CreateFontIndirect(&logFont);
-	if (hFont) {
-		D3DXCreateFont(pDev, hFont, &m3DFont);
-		DeleteObject(hFont);
-	}
+	// Arial 20, ABC widths derived by pixel-scanning each rendered glyph (robust
+	// under ClearType / bitmap fonts / font substitution).
+	m_fontAtlas.build("Arial", 20, /*bold*/false, m_textAntialias ? true : false);
 }
 
 void WbView3d::OnTextAntialias()

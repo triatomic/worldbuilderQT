@@ -45,7 +45,7 @@ public:
 
 	void rebuildTerrain();			///< Resample the terrain (expensive); then composite objects.
 	void refreshObjects();			///< Cheap: re-composite cached terrain + objects (no resample).
-	void requestRebuild(Bool terrainChanged = true);	///< Throttle a refresh; object-only edits skip the resample.
+	void requestRebuild(Bool terrainChanged = true);	///< Object/camera changes refresh instantly; terrain edits are throttled.
 
 	// --- configuration (persisted to registry under MINIMAP_SECTION) ---
 	void setShowObjects(Bool show);
@@ -78,8 +78,10 @@ private:
 	void centerViewAtClient(CPoint point);
 	void allocBuffer();				///< (Re)allocate the buffers for the current resolution.
 	void drawObjects();				///< Overlay map objects (units/structures) onto the buffer.
+	void drawViewBoxOverlay(HDC hdc, Int clientW, Int clientH);	///< GDI camera-frustum box (display res).
 	void fillRect(Int cx, Int cy, Int w, Int h, UnsignedInt color);	///< centered, clipped buffer fill.
 	void fillDiamond(Int cx, Int cy, Int size, UnsignedInt color);	///< centered, clipped diamond fill (units).
+	Bool worldToMinimap(Real worldX, Real worldY, Int *mx, Int *my);	///< world coords -> minimap cell.
 	inline UnsignedInt &pixel(Int x, Int y) { return m_pixelBuffer[y * m_resolution + x]; }
 
 	UnsignedInt *m_pixelBuffer;		///< composited (terrain + objects), shown via the DIB.
