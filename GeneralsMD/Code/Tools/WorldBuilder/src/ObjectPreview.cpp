@@ -209,16 +209,22 @@ static UnsignedByte * generatePreview( const ThingTemplate *tt )
 			Real dist = sphere.Radius*0.5;
 			model->Set_Position(Vector3(-sphere.Center.X, -sphere.Center.Y, -sphere.Center.Z));
 
-			// Create reflection texture
-			TextureClass *objectTexture = DX8Wrapper::Create_Render_Target (PREVIEW_WIDTH, PREVIEW_HEIGHT);
+			// Create render target with its own depth buffer so it works when
+			// the main back buffer uses MSAA (mismatched multisample types
+			// between render target and depth surface cause D3D8 to fail).
+			TextureClass *objectTexture = NULL;
+			ZTextureClass *objectDepth = NULL;
+			DX8Wrapper::Create_Render_Target(PREVIEW_WIDTH, PREVIEW_HEIGHT,
+				WW3D_FORMAT_X8R8G8B8, WW3D_ZFORMAT_D16, &objectTexture, &objectDepth);
 			if (!objectTexture)
 			{
+				REF_PTR_RELEASE(objectDepth);
 				model->Release_Ref();
 				return NULL;
 			}
 
-			// Set the render target
-			DX8Wrapper::Set_Render_Target_With_Z(objectTexture);
+			// Set the render target with its paired depth buffer
+			DX8Wrapper::Set_Render_Target_With_Z(objectTexture, objectDepth);
 
 			// create the camera
 			Bool orthoCamera = false;
@@ -255,6 +261,7 @@ static UnsignedByte * generatePreview( const ThingTemplate *tt )
 
 			REF_PTR_RELEASE(surface);
 
+			REF_PTR_RELEASE(objectDepth);
 			REF_PTR_RELEASE(objectTexture);
 			REF_PTR_RELEASE(camera);
 			return data;
