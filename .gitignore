@@ -28,6 +28,8 @@ CPackSourceConfig.cmake
 *.sln
 *.vcxproj*
 *.vcproj
+*.aps
+RCa*
 .cproject
 .project
 *~

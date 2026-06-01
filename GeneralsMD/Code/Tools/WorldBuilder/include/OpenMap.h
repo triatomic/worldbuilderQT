@@ -63,6 +63,15 @@ protected:
 	void OnResetSearch();
 	Bool m_usingSystemDir;
     CStringArray m_fullMapList;   // original unfiltered list
+
+	// --- Packed Maps (.big archive) support ---
+	enum PackedMode { PM_OFF = 0, PM_LIST_BIGS, PM_LIST_MAPS_IN_BIG };
+	PackedMode   m_packedMode;
+	CString      m_currentBig;            ///< path of the .big currently being browsed (PM_LIST_MAPS_IN_BIG)
+	CStringArray m_packedMapPaths;        ///< in-archive .map paths, parallel to the listbox entries
+	void populatePackedBigList();         ///< scan cwd for *.big, list them
+	void populatePackedMapList( const CString &bigPath ); ///< open a .big, list the maps inside
+	Bool extractPackedMap( const CString &bigPath, const CString &archiveMapPath, CString &outMapPath ); ///< extract a map folder to temp; outMapPath = extracted .map
 protected:
 
 	// Generated message map functions
@@ -70,6 +79,7 @@ protected:
 	afx_msg void OnBrowse();
 	afx_msg void OnSystemMaps();
 	afx_msg void OnUserMaps();
+	afx_msg void OnPackedMaps();
 	virtual void OnOK();
 	virtual BOOL OnInitDialog();
 	afx_msg void OnDblclkOpenList();

@@ -642,6 +642,7 @@
 #define IDC_MAP_SEARCH_EDIT             1355
 #define IDC_MAP_FIND_BUTTON             1356
 #define IDC_MAP_SEARCH_RESET_BTN        1357
+#define IDC_PACKED_MAPS                 1369
 #define IDC_AIWP_LBL1                   1358
 #define IDC_AIWP_LBL2                   1359
 #define IDC_AIWP_LBL3                   1360
@@ -861,6 +862,7 @@
 #define ID_TEXT_ANTIALIAS               33376
 #define ID_MINIMAP_REFRESH_16           33377
 #define ID_MINIMAP_REFRESH_33           33378
+#define ID_MINIMAP_SHOWROADS            33379
 #define IDD_MINIMAP                     243
 #define IDS_NEW                         61446
 #define IDS_RESIZE                      61447
@@ -934,8 +936,8 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_3D_CONTROLS                     1
 #define _APS_NEXT_RESOURCE_VALUE        244
-#define _APS_NEXT_COMMAND_VALUE         33379
-#define _APS_NEXT_CONTROL_VALUE         1370
+#define _APS_NEXT_COMMAND_VALUE         33380
+#define _APS_NEXT_CONTROL_VALUE         1371
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

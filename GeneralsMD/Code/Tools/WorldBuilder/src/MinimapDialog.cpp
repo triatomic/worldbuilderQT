@@ -31,8 +31,13 @@
 #include "Common/PlayerTemplate.h"
 #include "Common/GlobalData.h"
 #include "GameLogic/SidesList.h"
+#include "GameClient/TerrainRoads.h"
+#include "Common/FileSystem.h"
+#include "Common/MapReaderWriterInfo.h"
+#include "W3DDevice/GameClient/TileData.h"
 
 Bool localIsUnderwater(Real x, Real y);
+static void clearRoadTexCache();
 Bool localHasWaterAreas(void);
 
 MinimapDialog *TheMinimapDialog = NULL;
@@ -64,11 +69,13 @@ MinimapDialog::MinimapDialog(CWnd *pParent)
 	  m_dragging(false),
 	  m_rebuildPending(false),
 	  m_showObjects(true),
+	  m_showRoads(true),
 	  m_refreshDelayMs(250)
 {
 	// Load persisted config (clamp to valid ranges).
 	m_resolution     = ::AfxGetApp()->GetProfileInt(MINIMAP_SECTION, "Resolution", MINIMAP_RES_DEFAULT);
 	m_showObjects    = ::AfxGetApp()->GetProfileInt(MINIMAP_SECTION, "ShowObjects", 1) ? true : false;
+	m_showRoads      = ::AfxGetApp()->GetProfileInt(MINIMAP_SECTION, "ShowRoads", 1) ? true : false;
 	m_refreshDelayMs = ::AfxGetApp()->GetProfileInt(MINIMAP_SECTION, "RefreshDelayMs", 250);
 	if (m_resolution < MINIMAP_RES_MIN) m_resolution = MINIMAP_RES_MIN;
 	if (m_resolution > MINIMAP_RES_MAX) m_resolution = MINIMAP_RES_MAX;
@@ -83,6 +90,7 @@ MinimapDialog::~MinimapDialog()
 		TheMinimapDialog = NULL;
 	delete [] m_pixelBuffer;
 	delete [] m_terrainBuffer;
+	clearRoadTexCache();
 }
 
 void MinimapDialog::allocBuffer()
@@ -127,6 +135,20 @@ void MinimapDialog::setShowObjects(Bool show)
 	if (IsWindowVisible())
 	{
 		// Toggling objects doesn't change terrain; reuse the cached resample if we have one.
+		if (m_terrainValid)
+			refreshObjects();
+		else
+			rebuildTerrain();
+	}
+}
+
+void MinimapDialog::setShowRoads(Bool show)
+{
+	m_showRoads = show;
+	::AfxGetApp()->WriteProfileInt(MINIMAP_SECTION, "ShowRoads", show ? 1 : 0);
+	if (IsWindowVisible())
+	{
+		// Roads are composited over the cached terrain; reuse the resample if valid.
 		if (m_terrainValid)
 			refreshObjects();
 		else
@@ -388,6 +410,10 @@ void MinimapDialog::interpolateColorForHeight(RGBColor *color,
 
 void MinimapDialog::rebuildTerrain()
 {
+	// Road textures are tied to the map; clear the cache so the next drawRoads()
+	// reloads textures fresh (handles map close/reopen and resolution changes).
+	clearRoadTexCache();
+
 	CWorldBuilderDoc* pDoc = CWorldBuilderDoc::GetActiveDoc();
 	if (!pDoc)
 		return;
@@ -547,6 +573,10 @@ void MinimapDialog::refreshObjects()
 {
 	Int n = m_resolution * m_resolution;
 	memcpy(m_pixelBuffer, m_terrainBuffer, sizeof(UnsignedInt) * n);
+
+	// Roads first (under object dots); independently toggleable from objects.
+	if (m_showRoads)
+		drawRoads();
 
 	if (m_showObjects)
 		drawObjects();
@@ -735,6 +765,288 @@ void MinimapDialog::drawViewBoxOverlay(HDC hdc, Int clientW, Int clientH)
 	DeleteObject(pen);
 }
 
+// ----------------------------------------------------------------------------
+// Road texture cache: loads each road TGA from Art/Terrain/ once per map at its
+// NATIVE dimensions into a simple RGBA buffer (not the 64-tile grid that
+// WorldHeightMap::readTiles assumes), for per-pixel sampling in drawThickLine.
+// Cleared in rebuildTerrain() (map change) and in the destructor.
+
+struct RoadTex
+{
+	UnsignedByte *rgba;		// w*h*4, RGBA, top-down. NULL = load failed.
+	Int           w, h;
+};
+
+struct RoadTexEntry
+{
+	AsciiString name;
+	RoadTex     tex;
+};
+
+static RoadTexEntry s_roadTexCache[64];
+static Int          s_roadTexCount = 0;
+
+// Minimal TGA loader: handles 24/32-bit uncompressed (0x2) and RLE (0xA) targa,
+// the two formats the game's own targa reader supports. Loads at native size,
+// stored top-down RGBA. Returns false on failure.
+static Bool loadTGA(const char *path, RoadTex *out)
+{
+	out->rgba = NULL; out->w = out->h = 0;
+
+	CachedFileInputStream stream;
+	if (!stream.open(AsciiString(path)))
+		return FALSE;
+
+#pragma pack(push, 1)
+	struct TgaHdr {
+		UnsignedByte idLength, colorMapType, imageType;
+		UnsignedByte colorMapInfo[5];
+		Short xOrigin, yOrigin, imageWidth, imageHeight;
+		UnsignedByte pixelDepth, flags;
+	} hdr;
+#pragma pack(pop)
+
+	if (stream.read(&hdr, sizeof(hdr)) != sizeof(hdr)) return FALSE;
+	if (hdr.colorMapType != 0) return FALSE;
+	if (hdr.imageType != 0x2 && hdr.imageType != 0xA) return FALSE;
+	if (hdr.pixelDepth < 24 || hdr.pixelDepth > 32) return FALSE;
+
+	Int w = hdr.imageWidth, h = hdr.imageHeight;
+	if (w <= 0 || h <= 0 || w > 4096 || h > 4096) return FALSE;
+
+	if (hdr.idLength > 0) stream.absoluteSeek(stream.tell() + hdr.idLength);
+
+	Int bpp = (hdr.pixelDepth + 7) / 8;	// 3 or 4
+	Bool compressed = (hdr.imageType & 0x08) != 0;
+	Bool topDown = (hdr.flags & 0x20) != 0;
+
+	UnsignedByte *rgba = new UnsignedByte[w * h * 4];
+	Int total = w * h;
+	Int pixelIdx = 0;
+	UnsignedByte buf[4];
+	Int repeat = 0; Bool running = false;
+
+	while (pixelIdx < total) {
+		if (compressed && repeat == 0) {
+			UnsignedByte flag;
+			if (stream.read(&flag, 1) != 1) { delete [] rgba; return FALSE; }
+			repeat = (flag & 0x7f) + 1;
+			running = (flag & 0x80) != 0;
+			if (running) stream.read(buf, bpp);
+		}
+		if (compressed) --repeat;
+		if (!compressed || !running)
+			stream.read(buf, bpp);
+
+		UnsignedByte b = buf[0], g = buf[1], r = buf[2];
+		UnsignedByte a = (bpp == 4) ? buf[3] : 255;
+
+		// Destination row: TGA is bottom-up unless the top-down flag is set.
+		Int x = pixelIdx % w;
+		Int srcRow = pixelIdx / w;
+		Int dstRow = topDown ? srcRow : (h - 1 - srcRow);
+		UnsignedByte *d = rgba + (dstRow * w + x) * 4;
+		d[0] = r; d[1] = g; d[2] = b; d[3] = a;
+		++pixelIdx;
+	}
+
+	out->rgba = rgba; out->w = w; out->h = h;
+	return TRUE;
+}
+
+static RoadTex *getRoadTex(const AsciiString &texName)
+{
+	for (Int i = 0; i < s_roadTexCount; ++i)
+		if (s_roadTexCache[i].name == texName)
+			return s_roadTexCache[i].tex.rgba ? &s_roadTexCache[i].tex : NULL;
+
+	RoadTex tex; tex.rgba = NULL; tex.w = tex.h = 0;
+	if (!texName.isEmpty()) {
+		char path[_MAX_PATH];
+		sprintf(path, "%s%s", TERRAIN_TGA_DIR_PATH, texName.str());
+		loadTGA(path, &tex);
+	}
+
+	RoadTex *result = NULL;
+	if (s_roadTexCount < 64) {
+		s_roadTexCache[s_roadTexCount].name = texName;
+		s_roadTexCache[s_roadTexCount].tex = tex;
+		result = tex.rgba ? &s_roadTexCache[s_roadTexCount].tex : NULL;
+		++s_roadTexCount;
+	} else if (tex.rgba) {
+		delete [] tex.rgba;	// cache full; drop
+	}
+	return result;
+}
+
+static void clearRoadTexCache()
+{
+	for (Int i = 0; i < s_roadTexCount; ++i)
+		if (s_roadTexCache[i].tex.rgba) {
+			delete [] s_roadTexCache[i].tex.rgba;
+			s_roadTexCache[i].tex.rgba = NULL;
+		}
+	s_roadTexCount = 0;
+}
+
+// Sample a native-size RGBA road texture at normalized (u, v) in [0,1], tiling,
+// with bilinear filtering. Returns packed 0x00RRGGBB (B in low byte for the DIB).
+static UnsignedInt sampleRoadTex(const RoadTex *t, Real u, Real v)
+{
+	u = u - (Real)floor(u);	// wrap into [0,1)
+	v = v - (Real)floor(v);
+
+	Real fx = u * t->w - 0.5f;
+	Real fy = v * t->h - 0.5f;
+	Int x0 = (Int)floor(fx), y0 = (Int)floor(fy);
+	Real du = fx - x0, dv = fy - y0;
+	Int x1 = x0 + 1, y1 = y0 + 1;
+	// Wrap (tile) the integer coords.
+	x0 = ((x0 % t->w) + t->w) % t->w;  x1 = ((x1 % t->w) + t->w) % t->w;
+	y0 = ((y0 % t->h) + t->h) % t->h;  y1 = ((y1 % t->h) + t->h) % t->h;
+
+	const UnsignedByte *p = t->rgba;
+	const UnsignedByte *c00 = p + (y0 * t->w + x0) * 4;
+	const UnsignedByte *c10 = p + (y0 * t->w + x1) * 4;
+	const UnsignedByte *c01 = p + (y1 * t->w + x0) * 4;
+	const UnsignedByte *c11 = p + (y1 * t->w + x1) * 4;
+
+	Real r = c00[0]*(1-du)*(1-dv) + c10[0]*du*(1-dv) + c01[0]*(1-du)*dv + c11[0]*du*dv;
+	Real g = c00[1]*(1-du)*(1-dv) + c10[1]*du*(1-dv) + c01[1]*(1-du)*dv + c11[1]*du*dv;
+	Real b = c00[2]*(1-du)*(1-dv) + c10[2]*du*(1-dv) + c01[2]*(1-du)*dv + c11[2]*du*dv;
+
+	UnsignedInt ri = (UnsignedInt)(r + 0.5f); if (ri > 255) ri = 255;
+	UnsignedInt gi = (UnsignedInt)(g + 0.5f); if (gi > 255) gi = 255;
+	UnsignedInt bi = (UnsignedInt)(b + 0.5f); if (bi > 255) bi = 255;
+	return (bi) | (gi << 8) | (ri << 16) | (0xFFu << 24);
+}
+
+// Textured thick line: for each pixel, compute UV from (U=distance along road tiling
+// every 64 buffer pixels, V=perpendicular offset 0=left edge 1=right edge 0.5=center),
+// sample the road texture at that UV with bilinear filtering. Falls back to flat color
+// if no tile is available.
+void MinimapDialog::drawThickLine(Int x0, Int y0, Int x1, Int y1, Int halfW, UnsignedInt color,
+	RoadTex *tex, Real segLenPx)
+{
+	Int dx = x1 - x0, dy = y1 - y0;
+	Int steps = (abs(dx) > abs(dy)) ? abs(dx) : abs(dy);
+	if (steps == 0) {
+		fillRect(x0, y0, halfW * 2 + 1, halfW * 2 + 1, color);
+		return;
+	}
+
+	Real stepX = (Real)dx / steps;
+	Real stepY = (Real)dy / steps;
+	Real cx = (Real)x0, cy = (Real)y0;
+	Int  diameter = halfW * 2 + 1;
+
+	// Texture tiling rate along the road: tile roughly every 32 buffer pixels so the
+	// asphalt detail reads at minimap scale (the road texture's length wraps).
+	const Real tileEveryPx = 32.0f;
+
+	for (Int s = 0; s <= steps; ++s) {
+		Int px = REAL_TO_INT(cx);
+		Int py = REAL_TO_INT(cy);
+
+		Real u = (Real)s / tileEveryPx;	// along the road (sampleRoadTex wraps it)
+
+		for (Int oy = -halfW; oy <= halfW; ++oy) {
+			Int py2 = py + oy;
+			if (py2 < 0 || py2 >= m_resolution) continue;
+			for (Int ox = -halfW; ox <= halfW; ++ox) {
+				Int px2 = px + ox;
+				if (px2 < 0 || px2 >= m_resolution) continue;
+
+				UnsignedInt c;
+				if (tex) {
+					// V: across the road width, 0 (one edge) -> 1 (other edge).
+					Real v = (diameter > 1) ? ((Real)(oy + halfW) / (Real)(diameter - 1)) : 0.5f;
+					c = sampleRoadTex(tex, u, v);
+				} else {
+					c = color;
+				}
+				m_pixelBuffer[py2 * m_resolution + px2] = c;
+			}
+		}
+		cx += stepX;
+		cy += stepY;
+	}
+}
+
+// Rasterize all road and bridge segments into the pixel buffer, drawn BEFORE object
+// dots so roads appear underneath units/structures. Per-pixel colors come from the
+// road type's TGA texture (loaded via CachedFileInputStream, cached by name), sampled
+// with bilinear filtering and proper UV tiling along the road length.
+void MinimapDialog::drawRoads()
+{
+	if (!TheTerrainRoads)
+		return;
+
+	CWorldBuilderDoc *pDoc = CWorldBuilderDoc::GetActiveDoc();
+	if (!pDoc) return;
+	WorldHeightMapEdit *pMap = pDoc->GetHeightMap();
+	if (!pMap) return;
+
+	Int border = pMap->getBorderSize();
+	Real xSpan = INT_TO_REAL(pMap->getXExtent() - 2 * border);
+	Real ySpan = INT_TO_REAL(pMap->getYExtent() - 2 * border);
+	if (xSpan <= 0.0f || ySpan <= 0.0f) return;
+
+	// Scale factor: world units -> buffer pixels (use the smaller axis to be conservative).
+	Real worldToPixel = (Real)m_resolution / (xSpan < ySpan ? xSpan : ySpan);
+
+	// Fallback flat colors used only when no texture could be loaded.
+	const UnsignedInt roadColor   = packBGRA(0x504848);
+	const UnsignedInt bridgeColor = packBGRA(0x706858);
+
+	for (MapObject *pObj = MapObject::getFirstMapObject(); pObj; pObj = pObj->getNext())
+	{
+		// Roads are stored as linked pairs: POINT1 -> POINT2 (adjacent in the list).
+		if (!pObj->getFlag(FLAG_ROAD_POINT1) && !pObj->getFlag(FLAG_BRIDGE_POINT1))
+			continue;
+
+		Bool isBridge = pObj->getFlag(FLAG_BRIDGE_POINT1);
+
+		MapObject *pObj2 = pObj->getNext();
+		if (!pObj2)
+			continue;
+		if (isBridge ? !pObj2->getFlag(FLAG_BRIDGE_POINT2) : !pObj2->getFlag(FLAG_ROAD_POINT2))
+			continue;
+
+		const Coord3D *loc1 = pObj->getLocation();
+		const Coord3D *loc2 = pObj2->getLocation();
+
+		Int mx1, my1, mx2, my2;
+		worldToMinimap(loc1->x, loc1->y, &mx1, &my1);
+		worldToMinimap(loc2->x, loc2->y, &mx2, &my2);
+
+		// Look up road type for width and texture.
+		Real roadWidth = 16.0f;
+		RoadTex *tex = NULL;
+		TerrainRoadType *roadType = TheTerrainRoads->findRoadOrBridge(pObj->getName());
+		if (roadType) {
+			roadWidth = roadType->getRoadWidth();
+			tex = getRoadTex(roadType->getTexture());
+		}
+
+		// World-unit width -> buffer half-width. worldToPixel is pixels-per-cell and
+		// roadWidth is world units, so divide by MAP_XY_FACTOR to get cells first.
+		// Cap so roads stay road-like (not slabs) at any resolution.
+		Int halfW = REAL_TO_INT(roadWidth * worldToPixel / MAP_XY_FACTOR / 2.0f);
+		if (halfW < 1) halfW = 1;
+		Int maxHalf = m_resolution / 64;	// ~ up to 4px at 256, 8px at 512
+		if (maxHalf < 1) maxHalf = 1;
+		if (halfW > maxHalf) halfW = maxHalf;
+
+		// Segment length in buffer pixels, for UV tiling.
+		Real ddx = (Real)(mx2 - mx1), ddy = (Real)(my2 - my1);
+		Real segLen = sqrtf(ddx * ddx + ddy * ddy);
+
+		UnsignedInt fallback = isBridge ? bridgeColor : roadColor;
+		drawThickLine(mx1, my1, mx2, my2, halfW, fallback, tex, segLen);
+	}
+}
+
 // Overlay map objects, adapting the Thrax minimap upgrade:
 //   - units:     filled square blip in the owner's house color
 //   - structures: black-outlined box with house-color fill (distinct from units)
@@ -744,7 +1056,8 @@ void MinimapDialog::drawViewBoxOverlay(HDC hdc, Int clientW, Int clientH)
 // so world-row maps to (m_resolution-1 - row).
 void MinimapDialog::drawObjects()
 {
-	// worldToMinimap (used per object) validates the doc/heightmap and span.
+	// (Roads are drawn separately in refreshObjects, before this, so they sit under
+	// the object dots and are independently toggleable.)
 
 	// Thrax reference sizes are tuned for a 512-cell radar; scale to our resolution.
 	const Int kRefRes = 512;

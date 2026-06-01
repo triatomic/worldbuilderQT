@@ -334,6 +334,7 @@ BEGIN
         POPUP "Minimap"
         BEGIN
             MENUITEM "Show Objects",            ID_MINIMAP_SHOWOBJECTS
+            MENUITEM "Show Roads",              ID_MINIMAP_SHOWROADS
             POPUP "Refresh Rate"
             BEGIN
                 MENUITEM "Off (manual)",        ID_MINIMAP_REFRESH_OFF
@@ -1087,10 +1088,12 @@ BEGIN
                     LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
     LTEXT           "Open Map:",IDC_STATIC,7,6,67,17,SS_CENTERIMAGE
     PUSHBUTTON      "Browse...",IDC_BROWSE,7,266,61,16
-    CONTROL         "System Maps",IDC_SYSTEMMAPS,"Button",BS_AUTORADIOBUTTON | 
+    CONTROL         "System Maps",IDC_SYSTEMMAPS,"Button",BS_AUTORADIOBUTTON |
                     BS_PUSHLIKE,242,6,54,17
-    CONTROL         "User Maps",IDC_USERMAPS,"Button",BS_AUTORADIOBUTTON | 
-                    BS_PUSHLIKE,183,6,55,17
+    CONTROL         "User Maps",IDC_USERMAPS,"Button",BS_AUTORADIOBUTTON |
+                    BS_PUSHLIKE,186,6,54,17
+    CONTROL         "Packed Maps",IDC_PACKED_MAPS,"Button",BS_AUTORADIOBUTTON |
+                    BS_PUSHLIKE,130,6,54,17
     LTEXT           "Search:",IDC_STATIC,7,28,25,8
     EDITTEXT        IDC_MAP_SEARCH_EDIT,35,26,180,12,ES_AUTOHSCROLL
     PUSHBUTTON      "Find",IDC_MAP_FIND_BUTTON,221,26,41,12

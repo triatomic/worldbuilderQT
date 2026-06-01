@@ -2902,9 +2902,11 @@ void WbView3d::render()
 		// presented frame (flicker-free). drawLabels(NULL) queues the glyphs.
 		if (m_fontAtlas.isValid()) {
 			IDirect3DDevice8 *dev = DX8Wrapper::_Get_D3D_Device8();
-			CRect rc;
-			GetClientRect(&rc);
-			m_fontAtlas.begin(dev, rc.Width(), rc.Height());
+			// Use the actual back-buffer dimensions (what Set_Device_Resolution created),
+			// NOT the client rect. On a dynamic window resize the back buffer is sized to
+			// m_actualWinSize, which can differ from the client rect; mixing the two makes
+			// the XYZRHW text quads stretch. Label projection uses m_actualWinSize too.
+			m_fontAtlas.begin(dev, m_actualWinSize.x, m_actualWinSize.y);
 			drawLabels(NULL);
 			m_fontAtlas.end();
 		}
@@ -2978,6 +2980,8 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_MINIMAP, OnUpdateViewMinimap)
 	ON_COMMAND(ID_MINIMAP_SHOWOBJECTS, OnMinimapShowObjects)
 	ON_UPDATE_COMMAND_UI(ID_MINIMAP_SHOWOBJECTS, OnUpdateMinimapShowObjects)
+	ON_COMMAND(ID_MINIMAP_SHOWROADS, OnMinimapShowRoads)
+	ON_UPDATE_COMMAND_UI(ID_MINIMAP_SHOWROADS, OnUpdateMinimapShowRoads)
 	ON_COMMAND(ID_MINIMAP_REFRESH_OFF, OnMinimapRefreshOff)
 	ON_COMMAND(ID_MINIMAP_REFRESH_16, OnMinimapRefresh16)
 	ON_COMMAND(ID_MINIMAP_REFRESH_33, OnMinimapRefresh33)
@@ -3529,25 +3533,27 @@ void WbView3d::drawLabels(HDC hdc)
 			// Skip label projection if completely nameless + no status
 			if (name.isEmpty() && !m_showWaypoints && objectDictName.isEmpty() && !hasStatusLabel) continue;
 
-			Vector3 world(pos.x + MAP_XY_FACTOR / 2, pos.y, pos.z);
+			// Anchor to the object's true world position. (A world-space X nudge here
+			// projects to a different screen direction at every camera angle, making the
+			// label "float" around the object as you rotate -- so don't add one.)
+			Vector3 world(pos.x, pos.y, pos.z);
 			Vector3 screen;
 			if (CameraClass::INSIDE_FRUSTUM != m_camera->Project(screen, world)) continue;
 
-			CRect rClient;
-			GetClientRect(&rClient);
-
+			// Map into back-buffer pixel space (m_actualWinSize), the same space the
+			// label overlay quads are drawn in -- so labels don't stretch on resize.
 			Int sx, sy;
 			W3DLogicalScreenToPixelScreenHackedForWBLabels(
 				screen.X, screen.Y,
 				&sx, &sy,
-				rClient.Width(), rClient.Height()
+				m_actualWinSize.x, m_actualWinSize.y
 			);
 
-			CPoint pt(rClient.left + sx, rClient.top + sy - 5);
+			CPoint pt(sx, sy - 5);
 
 			// Skip Projection if not visible to this area
 			if(m_lod == 1){
-				CPoint center(rClient.Width() / 2, rClient.Height() / 2);
+				CPoint center(m_actualWinSize.x / 2, m_actualWinSize.y / 2);
 				int dx = pt.x - center.x;
 				int dy = pt.y - center.y;
 				int distSq = dx * dx + dy * dy;
@@ -3652,20 +3658,20 @@ void WbView3d::drawLabels(HDC hdc)
 					Vector3 world, screen;
 					CPoint pt;
 
-					world.Set(loc.x + MAP_XY_FACTOR / 2, loc.y, loc.z);
+					// Anchor to the true trigger-point position (no world-space X nudge,
+					// which would make the label drift around the point on camera rotation).
+					world.Set(loc.x, loc.y, loc.z);
 					if (CameraClass::INSIDE_FRUSTUM != m_camera->Project(screen, world)) {
 						continue;
 					}
 
-					CRect rClient;
-					GetClientRect(&rClient);
-
+					// Back-buffer pixel space (matches the label overlay; resize-safe).
 					Int sx, sy;
 					W3DLogicalScreenToPixelScreenHackedForWBLabels(screen.X, screen.Y,
 												&sx, &sy,
-												rClient.right - rClient.left, rClient.bottom - rClient.top);
-					pt.x = rClient.left + sx;
-					pt.y = rClient.top + sy;
+												m_actualWinSize.x, m_actualWinSize.y);
+					pt.x = sx;
+					pt.y = sy;
 
 					// Draw the label for each point (violet, like the legacy GDI path).
 					m_fontAtlas.drawText(pt.x, pt.y, triggerName.str(), triggerName.getLength(),
@@ -4522,6 +4528,16 @@ void WbView3d::OnUpdateMinimapShowObjects(CCmdUI* pCmdUI)
 {
 	pCmdUI->Enable(TheMinimapDialog != NULL);
 	pCmdUI->SetCheck(TheMinimapDialog && TheMinimapDialog->getShowObjects() ? 1 : 0);
+}
+void WbView3d::OnMinimapShowRoads()
+{
+	if (TheMinimapDialog)
+		TheMinimapDialog->setShowRoads(!TheMinimapDialog->getShowRoads());
+}
+void WbView3d::OnUpdateMinimapShowRoads(CCmdUI* pCmdUI)
+{
+	pCmdUI->Enable(TheMinimapDialog != NULL);
+	pCmdUI->SetCheck(TheMinimapDialog && TheMinimapDialog->getShowRoads() ? 1 : 0);
 }
 
 // --- Minimap submenu: Refresh Rate (radio) ----------------------------------

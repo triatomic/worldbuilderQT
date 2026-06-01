@@ -51,6 +51,9 @@ public:
 	void setShowObjects(Bool show);
 	Bool getShowObjects() const { return m_showObjects; }
 
+	void setShowRoads(Bool show);
+	Bool getShowRoads() const { return m_showRoads; }
+
 	void setRefreshDelayMs(Int ms);		///< 0 = manual (rebuild only on load/toggle).
 	Int  getRefreshDelayMs() const { return m_refreshDelayMs; }
 
@@ -78,6 +81,9 @@ private:
 	void centerViewAtClient(CPoint point);
 	void allocBuffer();				///< (Re)allocate the buffers for the current resolution.
 	void drawObjects();				///< Overlay map objects (units/structures) onto the buffer.
+	void drawRoads();				///< Rasterize road/bridge segments into the buffer (drawn under objects).
+	void drawThickLine(Int x0, Int y0, Int x1, Int y1, Int halfW, UnsignedInt color,
+		struct RoadTex *tex = NULL, Real segLenPx = 0.0f);	///< Textured (or flat) thick line into the buffer.
 	void drawViewBoxOverlay(HDC hdc, Int clientW, Int clientH);	///< GDI camera-frustum box (display res).
 	void fillRect(Int cx, Int cy, Int w, Int h, UnsignedInt color);	///< centered, clipped buffer fill.
 	void fillDiamond(Int cx, Int cy, Int size, UnsignedInt color);	///< centered, clipped diamond fill (units).
@@ -93,6 +99,7 @@ private:
 	Bool m_rebuildPending;			///< A terrain change is waiting to be resampled.
 
 	Bool m_showObjects;				///< draw unit/structure dots over the terrain.
+	Bool m_showRoads;				///< draw road/bridge segments over the terrain.
 	Int  m_refreshDelayMs;			///< throttle delay; 0 = manual.
 };
 
