@@ -2988,6 +2988,8 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_UPDATE_COMMAND_UI(ID_MINIMAP_SHOWOBJECTS, OnUpdateMinimapShowObjects)
 	ON_COMMAND(ID_MINIMAP_SHOWROADS, OnMinimapShowRoads)
 	ON_UPDATE_COMMAND_UI(ID_MINIMAP_SHOWROADS, OnUpdateMinimapShowRoads)
+	ON_COMMAND(ID_MINIMAP_CULLOBJECTS, OnMinimapCullObjects)
+	ON_UPDATE_COMMAND_UI(ID_MINIMAP_CULLOBJECTS, OnUpdateMinimapCullObjects)
 	ON_COMMAND(ID_MINIMAP_REFRESH_OFF, OnMinimapRefreshOff)
 	ON_COMMAND(ID_MINIMAP_REFRESH_16, OnMinimapRefresh16)
 	ON_COMMAND(ID_MINIMAP_REFRESH_33, OnMinimapRefresh33)
@@ -4544,6 +4546,16 @@ void WbView3d::OnUpdateMinimapShowRoads(CCmdUI* pCmdUI)
 {
 	pCmdUI->Enable(TheMinimapDialog != NULL);
 	pCmdUI->SetCheck(TheMinimapDialog && TheMinimapDialog->getShowRoads() ? 1 : 0);
+}
+void WbView3d::OnMinimapCullObjects()
+{
+	if (TheMinimapDialog)
+		TheMinimapDialog->setCullObjects(!TheMinimapDialog->getCullObjects());
+}
+void WbView3d::OnUpdateMinimapCullObjects(CCmdUI* pCmdUI)
+{
+	pCmdUI->Enable(TheMinimapDialog != NULL);
+	pCmdUI->SetCheck(TheMinimapDialog && TheMinimapDialog->getCullObjects() ? 1 : 0);
 }
 
 // --- Minimap submenu: Refresh Rate (radio) ----------------------------------

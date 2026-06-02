@@ -35,9 +35,12 @@
 #include "Common/FileSystem.h"
 #include "Common/MapReaderWriterInfo.h"
 #include "W3DDevice/GameClient/TileData.h"
+#include "ddsfile.h"
+#include "ww3dformat.h"
 
 Bool localIsUnderwater(Real x, Real y);
 static void clearRoadTexCache();
+static void getDayNightTint(Real *tintR, Real *tintG, Real *tintB);
 Bool localHasWaterAreas(void);
 
 MinimapDialog *TheMinimapDialog = NULL;
@@ -49,6 +52,16 @@ static const UINT_PTR MINIMAP_REBUILD_TIMER = 0xB01;	// arbitrary timer id
 
 // Display size of the dialog client (the buffer is stretched to fill it).
 static const int MINIMAP_DISPLAY_SIZE = 256;
+
+// Cap on the resolution we actually RESAMPLE the terrain at (the expensive O(n^2)
+// getTerrainColorAt loop). The buffer / display can be larger (e.g. the 2048
+// Resolution setting) -- we resample at this cap and nearest-upsample into the full
+// buffer. Since the dialog client is only ~256px, sampling above this is invisible
+// but blocks the single UI thread long enough to stall the 3D viewport. 512 = 2x
+// the display, plenty of detail.
+static const int MINIMAP_RESAMPLE_CAP = 512;
+
+Bool MinimapDialog::s_loading = false;
 
 BEGIN_MESSAGE_MAP(MinimapDialog, CDialog)
 	ON_WM_PAINT()
@@ -68,6 +81,7 @@ MinimapDialog::MinimapDialog(CWnd *pParent)
 	  m_terrainBuilt(false),
 	  m_dragging(false),
 	  m_rebuildPending(false),
+	  m_inRebuild(false),
 	  m_showObjects(true),
 	  m_showRoads(true),
 	  m_refreshDelayMs(250)
@@ -76,6 +90,7 @@ MinimapDialog::MinimapDialog(CWnd *pParent)
 	m_resolution     = ::AfxGetApp()->GetProfileInt(MINIMAP_SECTION, "Resolution", MINIMAP_RES_DEFAULT);
 	m_showObjects    = ::AfxGetApp()->GetProfileInt(MINIMAP_SECTION, "ShowObjects", 1) ? true : false;
 	m_showRoads      = ::AfxGetApp()->GetProfileInt(MINIMAP_SECTION, "ShowRoads", 1) ? true : false;
+	m_cullObjects    = ::AfxGetApp()->GetProfileInt(MINIMAP_SECTION, "CullObjects", 0) ? true : false;
 	m_refreshDelayMs = ::AfxGetApp()->GetProfileInt(MINIMAP_SECTION, "RefreshDelayMs", 250);
 	if (m_resolution < MINIMAP_RES_MIN) m_resolution = MINIMAP_RES_MIN;
 	if (m_resolution > MINIMAP_RES_MAX) m_resolution = MINIMAP_RES_MAX;
@@ -156,6 +171,20 @@ void MinimapDialog::setShowRoads(Bool show)
 	}
 }
 
+void MinimapDialog::setCullObjects(Bool cull)
+{
+	m_cullObjects = cull;
+	::AfxGetApp()->WriteProfileInt(MINIMAP_SECTION, "CullObjects", cull ? 1 : 0);
+	if (IsWindowVisible())
+	{
+		// Object-only change: reuse the cached terrain resample (cheap recomposite).
+		if (m_terrainValid)
+			refreshObjects();
+		else
+			rebuildTerrain();
+	}
+}
+
 void MinimapDialog::setRefreshDelayMs(Int ms)
 {
 	if (ms < 0) ms = 0;
@@ -195,8 +224,33 @@ void MinimapDialog::OnMove(int x, int y)
 	::AfxGetApp()->WriteProfileInt(MINIMAP_SECTION, "Left", rect.left);
 }
 
+// Bracket a map load/teardown. While loading, suppress all minimap rebuilds (a modal
+// MessageBox during OnOpenDocument pumps messages and could otherwise fire the pending
+// rebuild timer against a half-swapped document). When loading ends, kick one clean
+// rebuild against the now-valid new map.
+void MinimapDialog::setLoading(Bool loading)
+{
+	s_loading = loading;
+	if (!TheMinimapDialog)
+		return;
+	if (loading)
+	{
+		// Cancel any pending throttled rebuild from the outgoing map.
+		if (::IsWindow(TheMinimapDialog->m_hWnd))
+			TheMinimapDialog->KillTimer(MINIMAP_REBUILD_TIMER);
+		TheMinimapDialog->m_rebuildPending = false;
+		TheMinimapDialog->m_terrainValid = false;
+	}
+	else if (TheMinimapDialog->IsWindowVisible())
+	{
+		TheMinimapDialog->rebuildTerrain();		// one clean rebuild for the new map
+	}
+}
+
 void MinimapDialog::requestRebuild(Bool terrainChanged)
 {
+	if (s_loading)					// a map load/teardown is in progress -- don't fight it
+		return;
 	if (!::IsWindow(m_hWnd) || !IsWindowVisible())
 		return;
 
@@ -410,17 +464,34 @@ void MinimapDialog::interpolateColorForHeight(RGBColor *color,
 
 void MinimapDialog::rebuildTerrain()
 {
+	// Suppress while a map load/teardown is in progress (setLoading(false) clears the
+	// flag before kicking the one intended post-load rebuild, so that call passes).
+	if (s_loading)
+		return;
+
+	// Re-entrancy guard: a modal MessageBox / nested message pump can fire the rebuild
+	// timer while we're already mid-rebuild. Don't recurse into a half-done resample.
+	if (m_inRebuild)
+		return;
+	m_inRebuild = true;
+
 	// Road textures are tied to the map; clear the cache so the next drawRoads()
 	// reloads textures fresh (handles map close/reopen and resolution changes).
 	clearRoadTexCache();
 
 	CWorldBuilderDoc* pDoc = CWorldBuilderDoc::GetActiveDoc();
 	if (!pDoc)
+	{
+		m_inRebuild = false;
 		return;
+	}
 
 	WorldHeightMapEdit *pMap = pDoc->GetHeightMap();
 	if (!pMap)
+	{
+		m_inRebuild = false;
 		return;
+	}
 
 	RGBColor waterColor;
 	waterColor.red = 0.55f;
@@ -428,35 +499,31 @@ void MinimapDialog::rebuildTerrain()
 	waterColor.blue = 1.0f;
 
 	// Day/night tint: getTerrainColorAt returns the raw texture color (no lighting),
-	// so apply the current time-of-day terrain lighting ourselves the way the 3D scene
-	// does (ambient + sun diffuse), so the minimap darkens at night like the viewport.
-	// Toggled with Ctrl+D (WbView3d::stepTimeOfDay changes TheGlobalData->m_timeOfDay).
-	Real tintR = 1.0f, tintG = 1.0f, tintB = 1.0f;
-	if (TheGlobalData)
-	{
-		const GlobalData::TerrainLighting *tl =
-			&TheGlobalData->m_terrainLighting[TheGlobalData->m_timeOfDay][0];	// 0 = sun
-		tintR = tl->ambient.red   + tl->diffuse.red;
-		tintG = tl->ambient.green + tl->diffuse.green;
-		tintB = tl->ambient.blue  + tl->diffuse.blue;
-		if (tintR > 1.0f) tintR = 1.0f;  if (tintR < 0.0f) tintR = 0.0f;
-		if (tintG > 1.0f) tintG = 1.0f;  if (tintG < 0.0f) tintG = 0.0f;
-		if (tintB > 1.0f) tintB = 1.0f;  if (tintB < 0.0f) tintB = 0.0f;
-	}
+	// so apply the current time-of-day terrain lighting ourselves (the same tint roads
+	// use), so the minimap darkens at night like the viewport.
+	Real tintR, tintG, tintB;
+	getDayNightTint(&tintR, &tintG, &tintB);
 
 	const Int   border = pMap->getBorderSize();
-	const Real  xSample = INT_TO_REAL(pMap->getXExtent() - (2 * border)) / (Real)m_resolution;
-	const Real  ySample = INT_TO_REAL(pMap->getYExtent() - (2 * border)) / (Real)m_resolution;
-	const Int   res = m_resolution;
+	const Int   res = m_resolution;					// full buffer / display resolution
+
+	// Resample the terrain at a capped resolution (sampleRes), then nearest-upsample
+	// into the full-res buffer. This keeps the expensive O(n^2) getTerrainColorAt loop
+	// bounded -- at the 2048 setting it would otherwise run ~4M times and, because the
+	// whole rebuild is synchronous on the single UI thread, block (stall) the 3D
+	// viewport's paint for the duration. The dialog client is only ~256px, so sampling
+	// above the cap is invisible anyway.
+	const Int   sampleRes = (res < MINIMAP_RESAMPLE_CAP) ? res : MINIMAP_RESAMPLE_CAP;
+	const Real  xSample = INT_TO_REAL(pMap->getXExtent() - (2 * border)) / (Real)sampleRes;
+	const Real  ySample = INT_TO_REAL(pMap->getYExtent() - (2 * border)) / (Real)sampleRes;
 
 	// Precompute the per-index heightmap coords (world cell) and terrain-sample coords
-	// (MAP_XY_FACTOR-scaled, border removed) once per row/column, instead of redoing
-	// the multiplies for all 9 neighbors of every pixel.
-	Real *cellX = new Real[res];	// heightmap index along X (for getHeight)
-	Real *cellY = new Real[res];	// heightmap index along Y
-	Real *mapX  = new Real[res];	// scaled sample coord along X (for getTerrainColorAt / water)
-	Real *mapY  = new Real[res];	// scaled sample coord along Y
-	for (Int i = 0; i < res; ++i)
+	// (MAP_XY_FACTOR-scaled, border removed) once per row/column.
+	Real *cellX = new Real[sampleRes];	// heightmap index along X (for getHeight)
+	Real *cellY = new Real[sampleRes];	// heightmap index along Y
+	Real *mapX  = new Real[sampleRes];	// scaled sample coord along X (for getTerrainColorAt / water)
+	Real *mapY  = new Real[sampleRes];	// scaled sample coord along Y
+	for (Int i = 0; i < sampleRes; ++i)
 	{
 		cellX[i] = i * xSample + border;
 		cellY[i] = i * ySample + border;
@@ -469,9 +536,9 @@ void MinimapDialog::rebuildTerrain()
 	Real minHeight = 10000.0f;
 	Real avgHeight = 0.0f;
 	Int count = 0;
-	for (Int y = 0; y < res; ++y)
+	for (Int y = 0; y < sampleRes; ++y)
 	{
-		for (Int x = 0; x < res; ++x)
+		for (Int x = 0; x < sampleRes; ++x)
 		{
 			Real h = pMap->getHeight(cellX[x], cellY[y]);
 			avgHeight += h;
@@ -486,68 +553,34 @@ void MinimapDialog::rebuildTerrain()
 	// of which loops all polygon triggers) — the single biggest per-pixel cost.
 	const Bool hasWater = localHasWaterAreas();
 
-	for (Int y = 0; y < res; ++y)
+	// Resample into a sampleRes x sampleRes scratch buffer (top-down, world-row y ->
+	// row (sampleRes-1 - y)). Single sample per pixel.
+	UnsignedInt *sample = new UnsignedInt[sampleRes * sampleRes];
+	for (Int y = 0; y < sampleRes; ++y)
 	{
-		for (Int x = 0; x < res; ++x)
+		for (Int x = 0; x < sampleRes; ++x)
 		{
 			Real z = pMap->getHeight(cellX[x], cellY[y]);
 
 			RGBColor color;
-			RGBColor sampleColor;
-			Int samples = 0;
-			sampleColor.red = sampleColor.green = sampleColor.blue = 0.0f;
 
 			if (hasWater && localIsUnderwater(mapX[x], mapY[y]))
 			{
-				for (Int j = y - 1; j <= y + 1; ++j)
-				{
-					if (j < 0 || j >= res) continue;
-					for (Int i = x - 1; i <= x + 1; ++i)
-					{
-						if (i < 0 || i >= res) continue;
-						if (localIsUnderwater(mapX[i], mapY[j]))
-						{
-							color = waterColor;
-							Real underwaterZ = pMap->getHeight(cellX[i], cellY[j]);
-							interpolateColorForHeight(&color, underwaterZ,
-								pMap->getMaxHeightValue(), avgHeight, pMap->getMinHeightValue());
-							sampleColor.red   += color.red;
-							sampleColor.green += color.green;
-							sampleColor.blue  += color.blue;
-							++samples;
-						}
-					}
-				}
+				color = waterColor;
+				interpolateColorForHeight(&color, z,
+					pMap->getMaxHeightValue(), avgHeight, pMap->getMinHeightValue());
 			}
 			else
 			{
-				for (Int j = y - 1; j <= y + 1; ++j)
-				{
-					if (j < 0 || j >= res) continue;
-					for (Int i = x - 1; i <= x + 1; ++i)
-					{
-						if (i < 0 || i >= res) continue;
-						pMap->getTerrainColorAt(mapX[i], mapY[j], &color);
-						interpolateColorForHeight(&color, z, maxHeight, avgHeight, minHeight);
-						sampleColor.red   += color.red;
-						sampleColor.green += color.green;
-						sampleColor.blue  += color.blue;
-						++samples;
-					}
-				}
+				pMap->getTerrainColorAt(mapX[x], mapY[y], &color);
+				interpolateColorForHeight(&color, z, maxHeight, avgHeight, minHeight);
 			}
 
-			if (samples == 0) samples = 1;
-			Real inv = 1.0f / (Real)samples;
-			color.red   = sampleColor.red   * inv * tintR;
-			color.green = sampleColor.green * inv * tintG;
-			color.blue  = sampleColor.blue  * inv * tintB;
+			color.red   *= tintR;
+			color.green *= tintG;
+			color.blue  *= tintB;
 
-			// 32-bit BI_RGB DIB: 0x00RRGGBB (byte order B,G,R,X). Top-down DIB
-			// (biHeight<0) => buffer row 0 is the top scanline, so write world-row
-			// y to buffer row (res-1 - y) to keep the map right-side up. Terrain goes
-			// into the cached terrain buffer; objects are composited afterward.
-			m_terrainBuffer[(res - 1 - y) * res + x] =
+			sample[(sampleRes - 1 - y) * sampleRes + x] =
 				(REAL_TO_INT(color.blue * 255))       |
 				(REAL_TO_INT(color.green * 255) << 8)  |
 				(REAL_TO_INT(color.red * 255) << 16)   |
@@ -555,6 +588,25 @@ void MinimapDialog::rebuildTerrain()
 		}
 	}
 
+	// Upsample (nearest) the scratch buffer into the full-res cached terrain buffer.
+	// Both are already top-down, so this is a straight scale with no row flip.
+	if (sampleRes == res)
+	{
+		memcpy(m_terrainBuffer, sample, sizeof(UnsignedInt) * res * res);
+	}
+	else
+	{
+		for (Int y = 0; y < res; ++y)
+		{
+			Int sy = (y * sampleRes) / res;
+			const UnsignedInt *srow = sample + sy * sampleRes;
+			UnsignedInt *drow = m_terrainBuffer + y * res;
+			for (Int x = 0; x < res; ++x)
+				drow[x] = srow[(x * sampleRes) / res];
+		}
+	}
+
+	delete [] sample;
 	delete [] cellX;
 	delete [] cellY;
 	delete [] mapX;
@@ -564,7 +616,7 @@ void MinimapDialog::rebuildTerrain()
 
 	// Composite terrain + objects into the displayed buffer.
 	refreshObjects();
-	return;
+	m_inRebuild = false;
 }
 
 // Cheap path: copy the cached terrain into the displayed buffer and overlay objects,
@@ -722,6 +774,39 @@ Bool MinimapDialog::worldToMinimap(Real worldX, Real worldY, Int *mx, Int *my)
 	return inRange;
 }
 
+// Is the world-space point (worldX, worldY) inside the 3D camera's ground footprint
+// (the same convex quad the yellow view box draws)? Used to cull object blips to only
+// those the 3D viewer can see. Corners come from WbView3d::getViewFrustumGroundCorners
+// in world units -- the same units as MapObject::getLocation -- so we test directly.
+// Standard convex-polygon test: the point is inside iff it lies on the same side of
+// every edge (all edge cross-products share one sign). A small epsilon keeps blips on
+// the boundary visible.
+Bool MinimapDialog::isInViewFrustum(Real worldX, Real worldY)
+{
+	CWorldBuilderDoc *pDoc = CWorldBuilderDoc::GetActiveDoc();
+	if (!pDoc) return TRUE;					// no doc -> don't cull
+	WbView3d *p3d = pDoc->Get3DView();
+	if (!p3d) return TRUE;
+
+	Coord3D corners[4];
+	if (!p3d->getViewFrustumGroundCorners(corners))
+		return TRUE;						// can't determine -> show it (fail open)
+
+	Int positive = 0, negative = 0;
+	for (Int i = 0; i < 4; ++i)
+	{
+		const Coord3D &a = corners[i];
+		const Coord3D &b = corners[(i + 1) & 3];
+		Real ex = b.x - a.x, ey = b.y - a.y;	// edge vector
+		Real px = worldX - a.x, py = worldY - a.y;	// point relative to edge start
+		Real cross = ex * py - ey * px;
+		if (cross >  0.001f) ++positive;
+		if (cross < -0.001f) ++negative;
+	}
+	// Inside a convex quad: never straddles (only one sign present).
+	return (positive == 0 || negative == 0);
+}
+
 // Draw the 3D view's camera frustum as a box, like the game radar's view box. Drawn
 // as a GDI overlay in client space (full display resolution) so the lines are smooth
 // and the thickness is crisp regardless of the sampling resolution. Corners come from
@@ -795,68 +880,42 @@ struct RoadTexEntry
 static RoadTexEntry s_roadTexCache[64];
 static Int          s_roadTexCount = 0;
 
-// Minimal TGA loader: handles 24/32-bit uncompressed (0x2) and RLE (0xA) targa,
-// the two formats the game's own targa reader supports. Loads at native size,
-// stored top-down RGBA. Returns false on failure.
-static Bool loadTGA(const char *path, RoadTex *out)
+// Load a road texture by its (.tga) name into a native-size RGBA buffer.
+//
+// Road textures are NOT loose files under Art/Terrain/ -- they live inside the
+// game's .big archives and ship as DXT-compressed .dds (the engine references the
+// .tga name but loads the .dds equivalent). So we reuse the engine's own
+// DDSFileClass: it swaps the .tga extension to .dds, resolves the file through the
+// file factory (which sees the BIG archives), and decodes the DXT block compression.
+// Get_Pixel returns 0xAARRGGBB; we store it top-down as RGBA. Returns false on
+// failure (caller falls back to a flat color).
+static Bool loadRoadTexture(const AsciiString &texName, RoadTex *out)
 {
 	out->rgba = NULL; out->w = out->h = 0;
-
-	CachedFileInputStream stream;
-	if (!stream.open(AsciiString(path)))
+	if (texName.isEmpty())
 		return FALSE;
 
-#pragma pack(push, 1)
-	struct TgaHdr {
-		UnsignedByte idLength, colorMapType, imageType;
-		UnsignedByte colorMapInfo[5];
-		Short xOrigin, yOrigin, imageWidth, imageHeight;
-		UnsignedByte pixelDepth, flags;
-	} hdr;
-#pragma pack(pop)
+	// DDSFileClass rewrites the last 3 chars to "dds", so the name must end in a
+	// 3-char extension (the road type names always carry ".tga").
+	DDSFileClass dds(texName.str(), 0);
+	if (!dds.Is_Available() || !dds.Load())
+		return FALSE;
 
-	if (stream.read(&hdr, sizeof(hdr)) != sizeof(hdr)) return FALSE;
-	if (hdr.colorMapType != 0) return FALSE;
-	if (hdr.imageType != 0x2 && hdr.imageType != 0xA) return FALSE;
-	if (hdr.pixelDepth < 24 || hdr.pixelDepth > 32) return FALSE;
-
-	Int w = hdr.imageWidth, h = hdr.imageHeight;
-	if (w <= 0 || h <= 0 || w > 4096 || h > 4096) return FALSE;
-
-	if (hdr.idLength > 0) stream.absoluteSeek(stream.tell() + hdr.idLength);
-
-	Int bpp = (hdr.pixelDepth + 7) / 8;	// 3 or 4
-	Bool compressed = (hdr.imageType & 0x08) != 0;
-	Bool topDown = (hdr.flags & 0x20) != 0;
+	Int w = (Int)dds.Get_Width(0);
+	Int h = (Int)dds.Get_Height(0);
+	if (w <= 0 || h <= 0 || w > 4096 || h > 4096)
+		return FALSE;
 
 	UnsignedByte *rgba = new UnsignedByte[w * h * 4];
-	Int total = w * h;
-	Int pixelIdx = 0;
-	UnsignedByte buf[4];
-	Int repeat = 0; Bool running = false;
-
-	while (pixelIdx < total) {
-		if (compressed && repeat == 0) {
-			UnsignedByte flag;
-			if (stream.read(&flag, 1) != 1) { delete [] rgba; return FALSE; }
-			repeat = (flag & 0x7f) + 1;
-			running = (flag & 0x80) != 0;
-			if (running) stream.read(buf, bpp);
+	for (Int y = 0; y < h; ++y) {
+		for (Int x = 0; x < w; ++x) {
+			unsigned argb = dds.Get_Pixel(0, x, y);	// 0xAARRGGBB
+			UnsignedByte *d = rgba + (y * w + x) * 4;
+			d[0] = (UnsignedByte)((argb >> 16) & 0xff);	// R
+			d[1] = (UnsignedByte)((argb >>  8) & 0xff);	// G
+			d[2] = (UnsignedByte)((argb      ) & 0xff);	// B
+			d[3] = (UnsignedByte)((argb >> 24) & 0xff);	// A
 		}
-		if (compressed) --repeat;
-		if (!compressed || !running)
-			stream.read(buf, bpp);
-
-		UnsignedByte b = buf[0], g = buf[1], r = buf[2];
-		UnsignedByte a = (bpp == 4) ? buf[3] : 255;
-
-		// Destination row: TGA is bottom-up unless the top-down flag is set.
-		Int x = pixelIdx % w;
-		Int srcRow = pixelIdx / w;
-		Int dstRow = topDown ? srcRow : (h - 1 - srcRow);
-		UnsignedByte *d = rgba + (dstRow * w + x) * 4;
-		d[0] = r; d[1] = g; d[2] = b; d[3] = a;
-		++pixelIdx;
 	}
 
 	out->rgba = rgba; out->w = w; out->h = h;
@@ -870,11 +929,7 @@ static RoadTex *getRoadTex(const AsciiString &texName)
 			return s_roadTexCache[i].tex.rgba ? &s_roadTexCache[i].tex : NULL;
 
 	RoadTex tex; tex.rgba = NULL; tex.w = tex.h = 0;
-	if (!texName.isEmpty()) {
-		char path[_MAX_PATH];
-		sprintf(path, "%s%s", TERRAIN_TGA_DIR_PATH, texName.str());
-		loadTGA(path, &tex);
-	}
+	loadRoadTexture(texName, &tex);
 
 	RoadTex *result = NULL;
 	if (s_roadTexCount < 64) {
@@ -899,7 +954,8 @@ static void clearRoadTexCache()
 }
 
 // Sample a native-size RGBA road texture at normalized (u, v) in [0,1], tiling,
-// with bilinear filtering. Returns packed 0x00RRGGBB (B in low byte for the DIB).
+// with bilinear filtering. Returns packed 0xAARRGGBB -- the alpha is the texture's
+// own alpha (interpolated), used to blend the road edge into the terrain.
 static UnsignedInt sampleRoadTex(const RoadTex *t, Real u, Real v)
 {
 	u = u - (Real)floor(u);	// wrap into [0,1)
@@ -920,65 +976,157 @@ static UnsignedInt sampleRoadTex(const RoadTex *t, Real u, Real v)
 	const UnsignedByte *c01 = p + (y1 * t->w + x0) * 4;
 	const UnsignedByte *c11 = p + (y1 * t->w + x1) * 4;
 
-	Real r = c00[0]*(1-du)*(1-dv) + c10[0]*du*(1-dv) + c01[0]*(1-du)*dv + c11[0]*du*dv;
-	Real g = c00[1]*(1-du)*(1-dv) + c10[1]*du*(1-dv) + c01[1]*(1-du)*dv + c11[1]*du*dv;
-	Real b = c00[2]*(1-du)*(1-dv) + c10[2]*du*(1-dv) + c01[2]*(1-du)*dv + c11[2]*du*dv;
+	Real w00 = (1-du)*(1-dv), w10 = du*(1-dv), w01 = (1-du)*dv, w11 = du*dv;
+	Real r = c00[0]*w00 + c10[0]*w10 + c01[0]*w01 + c11[0]*w11;
+	Real g = c00[1]*w00 + c10[1]*w10 + c01[1]*w01 + c11[1]*w11;
+	Real b = c00[2]*w00 + c10[2]*w10 + c01[2]*w01 + c11[2]*w11;
+	Real a = c00[3]*w00 + c10[3]*w10 + c01[3]*w01 + c11[3]*w11;
 
 	UnsignedInt ri = (UnsignedInt)(r + 0.5f); if (ri > 255) ri = 255;
 	UnsignedInt gi = (UnsignedInt)(g + 0.5f); if (gi > 255) gi = 255;
 	UnsignedInt bi = (UnsignedInt)(b + 0.5f); if (bi > 255) bi = 255;
-	return (bi) | (gi << 8) | (ri << 16) | (0xFFu << 24);
+	UnsignedInt ai = (UnsignedInt)(a + 0.5f); if (ai > 255) ai = 255;
+	return (bi) | (gi << 8) | (ri << 16) | (ai << 24);
 }
 
-// Textured thick line: for each pixel, compute UV from (U=distance along road tiling
-// every 64 buffer pixels, V=perpendicular offset 0=left edge 1=right edge 0.5=center),
-// sample the road texture at that UV with bilinear filtering. Falls back to flat color
-// if no tile is available.
-void MinimapDialog::drawThickLine(Int x0, Int y0, Int x1, Int y1, Int halfW, UnsignedInt color,
-	RoadTex *tex, Real segLenPx)
+// Alpha-blend src (0x__RRGGBB, in DIB byte order B|G<<8|R<<16) over dst by coverage
+// alpha in [0,255]. Used to feather road edges into the terrain underneath.
+static inline UnsignedInt blendOver(UnsignedInt dst, UnsignedInt src, UnsignedInt a)
 {
-	Int dx = x1 - x0, dy = y1 - y0;
-	Int steps = (abs(dx) > abs(dy)) ? abs(dx) : abs(dy);
-	if (steps == 0) {
-		fillRect(x0, y0, halfW * 2 + 1, halfW * 2 + 1, color);
+	if (a >= 255) return src | 0xFF000000u;
+	if (a == 0)   return dst;
+	UnsignedInt ia = 255 - a;
+	UnsignedInt sb = src & 0xff, sg = (src >> 8) & 0xff, sr = (src >> 16) & 0xff;
+	UnsignedInt db = dst & 0xff, dg = (dst >> 8) & 0xff, dr = (dst >> 16) & 0xff;
+	UnsignedInt ob = (sb * a + db * ia + 127) / 255;
+	UnsignedInt og = (sg * a + dg * ia + 127) / 255;
+	UnsignedInt or_ = (sr * a + dr * ia + 127) / 255;
+	return ob | (og << 8) | (or_ << 16) | 0xFF000000u;
+}
+
+// Current time-of-day terrain lighting tint (ambient + sun diffuse), clamped to
+// [0,1] per channel. The terrain resample applies this so the minimap darkens at
+// night like the 3D view; roads apply the same tint so they track day/night too.
+// Toggled with Ctrl+D (WbView3d::stepTimeOfDay changes TheGlobalData->m_timeOfDay).
+static void getDayNightTint(Real *tintR, Real *tintG, Real *tintB)
+{
+	*tintR = *tintG = *tintB = 1.0f;
+	if (!TheGlobalData)
+		return;
+	const GlobalData::TerrainLighting *tl =
+		&TheGlobalData->m_terrainLighting[TheGlobalData->m_timeOfDay][0];	// 0 = sun
+	Real r = tl->ambient.red   + tl->diffuse.red;
+	Real g = tl->ambient.green + tl->diffuse.green;
+	Real b = tl->ambient.blue  + tl->diffuse.blue;
+	if (r > 1.0f) r = 1.0f;  if (r < 0.0f) r = 0.0f;
+	if (g > 1.0f) g = 1.0f;  if (g < 0.0f) g = 0.0f;
+	if (b > 1.0f) b = 1.0f;  if (b < 0.0f) b = 0.0f;
+	*tintR = r; *tintG = g; *tintB = b;
+}
+
+// Multiply a packed 0x__RRGGBB color (DIB byte order: B | G<<8 | R<<16) by a tint.
+static inline UnsignedInt applyTint(UnsignedInt c, Real tintR, Real tintG, Real tintB)
+{
+	UnsignedInt b = c & 0xff, g = (c >> 8) & 0xff, r = (c >> 16) & 0xff;
+	UnsignedInt rr = (UnsignedInt)(r * tintR + 0.5f); if (rr > 255) rr = 255;
+	UnsignedInt gg = (UnsignedInt)(g * tintG + 0.5f); if (gg > 255) gg = 255;
+	UnsignedInt bb = (UnsignedInt)(b * tintB + 0.5f); if (bb > 255) bb = 255;
+	return bb | (gg << 8) | (rr << 16) | (c & 0xFF000000u);
+}
+
+// Rasterize a road segment as an ORIENTED QUAD rather than stamping a square per
+// centerline step. For every pixel inside the segment's bounding box we project onto
+// the segment axis (-> U, distance along the road, used for texture tiling) and onto
+// the perpendicular (-> signed distance from the centerline). Pixels within halfW of
+// the centerline are part of the road; the outer ~1px is feathered with coverage
+// anti-aliasing, and the result is alpha-blended into the terrain using the texture's
+// own alpha. Each covered pixel is written exactly once (no diagonal overdraw), so
+// this is both straighter-edged AND cheaper than the old square-stamp loop.
+//
+// halfEnd extends the band slightly past each endpoint so consecutive segments meet
+// without a gap at bends (a cheap miter substitute).
+void MinimapDialog::drawThickLine(Int x0, Int y0, Int x1, Int y1, Int halfW, UnsignedInt color,
+	RoadTex *tex, Real segLenPx, Real tintR, Real tintG, Real tintB)
+{
+	Real ax = (Real)(x1 - x0), ay = (Real)(y1 - y0);
+	Real len = sqrtf(ax * ax + ay * ay);
+
+	Real fHalf = (Real)halfW + 0.5f;			// half-width including the AA edge pixel
+	const Real aaWidth = 1.0f;					// width (px) of the feathered edge band
+	const Real tileEveryPx = 32.0f;				// texture wraps roughly every 32 px
+
+	if (len < 0.5f) {
+		// Degenerate (single point): draw a small filled disc so dots/joints still show.
+		Int r = halfW; if (r < 1) r = 1;
+		for (Int oy = -r; oy <= r; ++oy)
+			for (Int ox = -r; ox <= r; ++ox) {
+				Int px = x0 + ox, py = y0 + oy;
+				if (px < 0 || px >= m_resolution || py < 0 || py >= m_resolution) continue;
+				if (ox*ox + oy*oy > r*r) continue;
+				UnsignedInt c = tex ? sampleRoadTex(tex, 0.0f, 0.5f) : color;
+				c = applyTint(c, tintR, tintG, tintB);
+				m_pixelBuffer[py * m_resolution + px] =
+					blendOver(m_pixelBuffer[py * m_resolution + px], c, 255);
+			}
 		return;
 	}
 
-	Real stepX = (Real)dx / steps;
-	Real stepY = (Real)dy / steps;
-	Real cx = (Real)x0, cy = (Real)y0;
-	Int  diameter = halfW * 2 + 1;
+	Real inv = 1.0f / len;
+	Real ux = ax * inv, uy = ay * inv;			// unit axis along the road
+	// Perpendicular is (-uy, ux).
 
-	// Texture tiling rate along the road: tile roughly every 32 buffer pixels so the
-	// asphalt detail reads at minimap scale (the road texture's length wraps).
-	const Real tileEveryPx = 32.0f;
+	// Bounding box of the oriented quad (centerline +/- fHalf), clipped to the buffer.
+	Real cxm = (x0 + x1) * 0.5f, cym = (y0 + y1) * 0.5f;
+	Real halfLen = len * 0.5f;
+	Real bxr = fabsf(ux) * halfLen + fabsf(uy) * fHalf;
+	Real byr = fabsf(uy) * halfLen + fabsf(ux) * fHalf;
+	Int minX = (Int)floor(cxm - bxr), maxX = (Int)ceil(cxm + bxr);
+	Int minY = (Int)floor(cym - byr), maxY = (Int)ceil(cym + byr);
+	if (minX < 0) minX = 0;  if (maxX >= m_resolution) maxX = m_resolution - 1;
+	if (minY < 0) minY = 0;  if (maxY >= m_resolution) maxY = m_resolution - 1;
 
-	for (Int s = 0; s <= steps; ++s) {
-		Int px = REAL_TO_INT(cx);
-		Int py = REAL_TO_INT(cy);
+	for (Int py = minY; py <= maxY; ++py) {
+		Real ry = (Real)py - (Real)y0;
+		for (Int px = minX; px <= maxX; ++px) {
+			Real rx = (Real)px - (Real)x0;
 
-		Real u = (Real)s / tileEveryPx;	// along the road (sampleRoadTex wraps it)
+			// Project (rx,ry) onto axis (along) and perpendicular (perp).
+			Real along = rx * ux + ry * uy;
+			Real perp  = rx * (-uy) + ry * ux;
 
-		for (Int oy = -halfW; oy <= halfW; ++oy) {
-			Int py2 = py + oy;
-			if (py2 < 0 || py2 >= m_resolution) continue;
-			for (Int ox = -halfW; ox <= halfW; ++ox) {
-				Int px2 = px + ox;
-				if (px2 < 0 || px2 >= m_resolution) continue;
+			// Allow the band to run the full segment length (clamp along to [0,len] for
+			// the texture coordinate, but draw a touch past the ends for joint coverage).
+			if (along < -0.5f || along > len + 0.5f) continue;
 
-				UnsignedInt c;
-				if (tex) {
-					// V: across the road width, 0 (one edge) -> 1 (other edge).
-					Real v = (diameter > 1) ? ((Real)(oy + halfW) / (Real)(diameter - 1)) : 0.5f;
-					c = sampleRoadTex(tex, u, v);
-				} else {
-					c = color;
-				}
-				m_pixelBuffer[py2 * m_resolution + px2] = c;
+			Real dist = fabsf(perp);
+			if (dist > fHalf) continue;
+
+			// Edge coverage: full inside, linearly fading over the outer aaWidth pixels.
+			Real cov = 1.0f;
+			Real edge = fHalf - dist;			// distance inside the outer edge
+			if (edge < aaWidth) cov = edge / aaWidth;
+			if (cov <= 0.0f) continue;
+			if (cov > 1.0f) cov = 1.0f;
+
+			UnsignedInt c;
+			if (tex) {
+				Real u = along / tileEveryPx;					// along the road
+				Real v = (perp + fHalf) / (2.0f * fHalf);		// 0..1 across the width
+				c = sampleRoadTex(tex, u, v);
+			} else {
+				c = color;
 			}
+			c = applyTint(c, tintR, tintG, tintB);				// day/night, like terrain
+
+			// The road INTERIOR is fully opaque -- we deliberately ignore the texture's
+			// own alpha for the body (road DDS alpha is partial across the asphalt and
+			// would make the whole road translucent / faint). The only feathering is the
+			// geometric edge AA (cov), which blends the road's outline into the terrain.
+			UnsignedInt a = (UnsignedInt)(cov * 255.0f + 0.5f);
+			if (a == 0) continue;
+			Int idx = py * m_resolution + px;
+			m_pixelBuffer[idx] = blendOver(m_pixelBuffer[idx], c, a);
 		}
-		cx += stepX;
-		cy += stepY;
 	}
 }
 
@@ -1007,6 +1155,10 @@ void MinimapDialog::drawRoads()
 	// Fallback flat colors used only when no texture could be loaded.
 	const UnsignedInt roadColor   = packBGRA(0x504848);
 	const UnsignedInt bridgeColor = packBGRA(0x706858);
+
+	// Same day/night tint the terrain resample uses, so roads darken at night too.
+	Real tintR, tintG, tintB;
+	getDayNightTint(&tintR, &tintG, &tintB);
 
 	for (MapObject *pObj = MapObject::getFirstMapObject(); pObj; pObj = pObj->getNext())
 	{
@@ -1052,7 +1204,7 @@ void MinimapDialog::drawRoads()
 		Real segLen = sqrtf(ddx * ddx + ddy * ddy);
 
 		UnsignedInt fallback = isBridge ? bridgeColor : roadColor;
-		drawThickLine(mx1, my1, mx2, my2, halfW, fallback, tex, segLen);
+		drawThickLine(mx1, my1, mx2, my2, halfW, fallback, tex, segLen, tintR, tintG, tintB);
 	}
 }
 
@@ -1099,6 +1251,11 @@ void MinimapDialog::drawObjects()
 
 		// World position -> minimap cell (top-down, row flipped). Skip if off-map.
 		const Coord3D *loc = pObj->getLocation();
+
+		// Optional cull: only blips inside the 3D view frustum (what the 3D viewer sees).
+		if (m_cullObjects && !isInViewFrustum(loc->x, loc->y))
+			continue;
+
 		Int mx, cy;
 		if (!worldToMinimap(loc->x, loc->y, &mx, &cy))
 			continue;

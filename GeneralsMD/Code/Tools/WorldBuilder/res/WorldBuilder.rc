@@ -335,6 +335,7 @@ BEGIN
         BEGIN
             MENUITEM "Show Objects",            ID_MINIMAP_SHOWOBJECTS
             MENUITEM "Show Roads",              ID_MINIMAP_SHOWROADS
+            MENUITEM "Cull Objects To View",    ID_MINIMAP_CULLOBJECTS
             POPUP "Refresh Rate"
             BEGIN
                 MENUITEM "Off (manual)",        ID_MINIMAP_REFRESH_OFF

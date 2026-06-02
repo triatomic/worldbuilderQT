@@ -1988,8 +1988,16 @@ void CWorldBuilderDoc::LoadEditTime(const CString& mapPath)
 	}
 }
 
-BOOL CWorldBuilderDoc::OnOpenDocument(LPCTSTR lpszPathName) 
+BOOL CWorldBuilderDoc::OnOpenDocument(LPCTSTR lpszPathName)
 {
+	// Suppress minimap rebuilds for the whole load. The load pops modal MessageBoxes
+	// (map.ini prompts) whose nested message pump would otherwise fire the minimap's
+	// pending rebuild timer against a half-swapped document and hang. The guard clears
+	// the flag on EVERY return path; clearing (in its dtor) kicks one clean rebuild.
+	struct MinimapLoadGuard {
+		MinimapLoadGuard()  { MinimapDialog::setLoading(true); }
+		~MinimapLoadGuard() { MinimapDialog::setLoading(false); }
+	} minimapLoadGuard;
 
 	if (g_mapiniloaded)
 	{

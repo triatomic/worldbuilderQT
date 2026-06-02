@@ -47,12 +47,23 @@ public:
 	void refreshObjects();			///< Cheap: re-composite cached terrain + objects (no resample).
 	void requestRebuild(Bool terrainChanged = true);	///< Object/camera changes refresh instantly; terrain edits are throttled.
 
+	// Suppress all minimap rebuilds while a map load/teardown is in progress. A modal
+	// MessageBox during OnOpenDocument pumps messages, which can fire the pending
+	// rebuild timer and run rebuildTerrain() against a half-swapped document -> hang.
+	// The doc brackets the load with setLoading(true/false); the false call also kicks
+	// one clean rebuild.
+	static void setLoading(Bool loading);
+	static Bool isLoading() { return s_loading; }
+
 	// --- configuration (persisted to registry under MINIMAP_SECTION) ---
 	void setShowObjects(Bool show);
 	Bool getShowObjects() const { return m_showObjects; }
 
 	void setShowRoads(Bool show);
 	Bool getShowRoads() const { return m_showRoads; }
+
+	void setCullObjects(Bool cull);		///< Only draw object blips inside the 3D view frustum.
+	Bool getCullObjects() const { return m_cullObjects; }
 
 	void setRefreshDelayMs(Int ms);		///< 0 = manual (rebuild only on load/toggle).
 	Int  getRefreshDelayMs() const { return m_refreshDelayMs; }
@@ -83,11 +94,13 @@ private:
 	void drawObjects();				///< Overlay map objects (units/structures) onto the buffer.
 	void drawRoads();				///< Rasterize road/bridge segments into the buffer (drawn under objects).
 	void drawThickLine(Int x0, Int y0, Int x1, Int y1, Int halfW, UnsignedInt color,
-		struct RoadTex *tex = NULL, Real segLenPx = 0.0f);	///< Textured (or flat) thick line into the buffer.
+		struct RoadTex *tex = NULL, Real segLenPx = 0.0f,
+		Real tintR = 1.0f, Real tintG = 1.0f, Real tintB = 1.0f);	///< Textured (or flat) thick line into the buffer.
 	void drawViewBoxOverlay(HDC hdc, Int clientW, Int clientH);	///< GDI camera-frustum box (display res).
 	void fillRect(Int cx, Int cy, Int w, Int h, UnsignedInt color);	///< centered, clipped buffer fill.
 	void fillDiamond(Int cx, Int cy, Int size, UnsignedInt color);	///< centered, clipped diamond fill (units).
 	Bool worldToMinimap(Real worldX, Real worldY, Int *mx, Int *my);	///< world coords -> minimap cell.
+	Bool isInViewFrustum(Real worldX, Real worldY);	///< point (world units) inside the 3D view's ground footprint?
 	inline UnsignedInt &pixel(Int x, Int y) { return m_pixelBuffer[y * m_resolution + x]; }
 
 	UnsignedInt *m_pixelBuffer;		///< composited (terrain + objects), shown via the DIB.
@@ -97,9 +110,12 @@ private:
 	Bool m_terrainBuilt;
 	Bool m_dragging;
 	Bool m_rebuildPending;			///< A terrain change is waiting to be resampled.
+	Bool m_inRebuild;				///< Re-entrancy guard: rebuildTerrain is on the stack.
+	static Bool s_loading;			///< A map load/teardown is in progress (suppress rebuilds).
 
 	Bool m_showObjects;				///< draw unit/structure dots over the terrain.
 	Bool m_showRoads;				///< draw road/bridge segments over the terrain.
+	Bool m_cullObjects;				///< only draw object blips inside the 3D view frustum.
 	Int  m_refreshDelayMs;			///< throttle delay; 0 = manual.
 };
 
