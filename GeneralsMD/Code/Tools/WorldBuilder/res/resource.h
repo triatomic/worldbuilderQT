@@ -855,7 +855,7 @@
 #define ID_MINIMAP_REFRESH_100          33369
 #define ID_MINIMAP_REFRESH_250          33370
 #define ID_MINIMAP_REFRESH_1000         33371
-#define ID_MINIMAP_RES_128              33372
+#define ID_MINIMAP_RES_1024             33372
 #define ID_MINIMAP_RES_256              33373
 #define ID_MINIMAP_RES_512              33374
 #define ID_MINIMAP_RES_2048             33375

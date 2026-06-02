@@ -1208,25 +1208,40 @@ void MinimapDialog::drawRoads()
 //   - units:     filled square blip in the owner's house color
 //   - structures: black-outlined box with house-color fill (distinct from units)
 //   - resource structures (supply/oil): solid black marker
-// Sizes derive from Thrax's base values (unit 8, structure 10, outline 2 at a
-// 512-cell reference) scaled to the current minimap resolution. Buffer is top-down,
-// so world-row maps to (m_resolution-1 - row).
+// Buffer is top-down, so world-row maps to (m_resolution-1 - row).
 void MinimapDialog::drawObjects()
 {
 	// (Roads are drawn separately in refreshObjects, before this, so they sit under
 	// the object dots and are independently toggleable.)
 
-	// Thrax reference sizes are tuned for a 512-cell radar; scale to our resolution.
-	const Int kRefRes = 512;
-	Int unitSize     = (12 * m_resolution + kRefRes - 1) / kRefRes;
-	Int structSize   = (12 * m_resolution + kRefRes - 1) / kRefRes;
-	Int outlineWidth = (2  * m_resolution + kRefRes - 1) / kRefRes;
-	// Units are circles, so they need a few pixels of diameter to read as round
-	// (the buffer is stretched up to the display, but the disc is rasterized at
-	// buffer resolution). Keep an odd diameter so the disc is symmetric.
-	if (unitSize     < 5) unitSize     = 5;
+	// Blips are rasterized into the buffer (m_resolution) but the buffer is stretched to
+	// the dialog client, so a fixed BUFFER size looks huge at 128 and like specks at 2048.
+	// Size them by a target in DISPLAY (client) pixels and convert to buffer pixels:
+	//   bufferPx = displayPx * m_resolution / clientPx
+	// so the on-screen size is the same at every resolution. Use the REAL client size
+	// (the dialog is resizable; a hardcoded 256 was wrong), and keep floors at 1 buffer
+	// px -- a higher floor at low res is exactly what made 128 blips too big. (At very
+	// low res the buffer granularity still limits how small a blip can be, but no longer
+	// inflates it beyond the target.)
+	CRect clientRect;
+	GetClientRect(&clientRect);
+	Int clientPx = clientRect.Width() > 0 ? clientRect.Width() : MINIMAP_DISPLAY_SIZE;
+	#define DISP_TO_BUF(d) (((d) * m_resolution + clientPx / 2) / clientPx)
+	Int unitSize     = DISP_TO_BUF(6);		// ~6 display px
+	Int structSize   = DISP_TO_BUF(6);
+	Int outlineWidth = DISP_TO_BUF(2);		// ~2 display px black border
+	#undef DISP_TO_BUF
+	// Minimal floors (1 buffer px) so a blip never vanishes; odd unit diameter for a
+	// symmetric disc/diamond.
+	if (unitSize     < 1) unitSize     = 1;
 	if ((unitSize & 1) == 0) unitSize += 1;
-	if (structSize   < 5) structSize   = 5;
+	if (structSize   < 1) structSize   = 1;
+	// Outline is a thin rim: clamp to <= structSize/5 per side so the colored inner
+	// fill stays >= ~60% of the box at every resolution (at 2048 the unclamped "2
+	// display px" would otherwise be a ~16px slab dwarfing the fill).
+	Int maxOutline = structSize / 5;
+	if (maxOutline < 1) maxOutline = 1;
+	if (outlineWidth > maxOutline) outlineWidth = maxOutline;
 	if (outlineWidth < 1) outlineWidth = 1;
 
 	const UnsignedInt black = packBGRA(0x000000);
@@ -1266,16 +1281,29 @@ void MinimapDialog::drawObjects()
 		// Structure.
 		if (isResourceStructure(t))
 		{
-			// Solid black marker, slightly larger (matches Thrax resource styling).
-			Int rs = structSize < 7 ? 7 : structSize;
+			// Solid black marker, slightly larger than a normal structure.
+			Int rs = (structSize * 7) / 6;		// ~7 display px (structSize is ~6)
+			if (rs <= structSize) rs = structSize + 1;
 			fillRect(mx, cy, rs, rs, black);
 			continue;
 		}
 
-		// Outlined box: black outer rect, house-color inner fill.
-		fillRect(mx, cy, structSize, structSize, black);
+		// Outlined box: black outer rect, house-color inner fill -- but only when the
+		// box is big enough that the rim stays a minority (inner fill at least as wide
+		// as the two borders combined). At very low resolution (e.g. 128) the box is
+		// only ~3 buffer px, where a 1px rim leaves a 1px center and the outline looks
+		// "super thick"; there, just draw a solid house-color box (still a square, so
+		// it stays distinct from the diamond units).
+		UnsignedInt houseColor = packBGRA(getMapObjectHouseColor(pObj));
 		Int innerW = structSize - outlineWidth * 2;
-		if (innerW < 1) innerW = 1;
-		fillRect(mx, cy, innerW, innerW, packBGRA(getMapObjectHouseColor(pObj)));
+		if (innerW >= outlineWidth * 2)
+		{
+			fillRect(mx, cy, structSize, structSize, black);
+			fillRect(mx, cy, innerW, innerW, houseColor);
+		}
+		else
+		{
+			fillRect(mx, cy, structSize, structSize, houseColor);
+		}
 	}
 }

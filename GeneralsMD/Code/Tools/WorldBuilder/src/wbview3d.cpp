@@ -3002,13 +3002,13 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_UPDATE_COMMAND_UI(ID_MINIMAP_REFRESH_100, OnUpdateMinimapRefresh100)
 	ON_UPDATE_COMMAND_UI(ID_MINIMAP_REFRESH_250, OnUpdateMinimapRefresh250)
 	ON_UPDATE_COMMAND_UI(ID_MINIMAP_REFRESH_1000, OnUpdateMinimapRefresh1000)
-	ON_COMMAND(ID_MINIMAP_RES_128, OnMinimapRes128)
 	ON_COMMAND(ID_MINIMAP_RES_256, OnMinimapRes256)
 	ON_COMMAND(ID_MINIMAP_RES_512, OnMinimapRes512)
+	ON_COMMAND(ID_MINIMAP_RES_1024, OnMinimapRes1024)
 	ON_COMMAND(ID_MINIMAP_RES_2048, OnMinimapRes2048)
-	ON_UPDATE_COMMAND_UI(ID_MINIMAP_RES_128, OnUpdateMinimapRes128)
 	ON_UPDATE_COMMAND_UI(ID_MINIMAP_RES_256, OnUpdateMinimapRes256)
 	ON_UPDATE_COMMAND_UI(ID_MINIMAP_RES_512, OnUpdateMinimapRes512)
+	ON_UPDATE_COMMAND_UI(ID_MINIMAP_RES_1024, OnUpdateMinimapRes1024)
 	ON_UPDATE_COMMAND_UI(ID_MINIMAP_RES_2048, OnUpdateMinimapRes2048)
 	ON_COMMAND(ID_VIEW_SHOWMAPBOUNDARIES, OnViewShowMapBoundaries)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_SHOWMAPBOUNDARIES, OnUpdateViewShowMapBoundaries)
@@ -4597,14 +4597,14 @@ void WbView3d::OnUpdateMinimapRefresh1000(CCmdUI* pCmdUI)
 }
 
 // --- Minimap submenu: Resolution (radio) ------------------------------------
-void WbView3d::OnMinimapRes128()  { if (TheMinimapDialog) TheMinimapDialog->setResolution(128); }
 void WbView3d::OnMinimapRes256()  { if (TheMinimapDialog) TheMinimapDialog->setResolution(256); }
 void WbView3d::OnMinimapRes512()  { if (TheMinimapDialog) TheMinimapDialog->setResolution(512); }
+void WbView3d::OnMinimapRes1024() { if (TheMinimapDialog) TheMinimapDialog->setResolution(1024); }
 void WbView3d::OnMinimapRes2048() { if (TheMinimapDialog) TheMinimapDialog->setResolution(2048); }
-void WbView3d::OnUpdateMinimapRes128(CCmdUI* pCmdUI)
+void WbView3d::OnUpdateMinimapRes1024(CCmdUI* pCmdUI)
 {
 	pCmdUI->Enable(TheMinimapDialog != NULL);
-	pCmdUI->SetCheck(TheMinimapDialog && TheMinimapDialog->getResolution() == 128 ? 1 : 0);
+	pCmdUI->SetCheck(TheMinimapDialog && TheMinimapDialog->getResolution() == 1024 ? 1 : 0);
 }
 void WbView3d::OnUpdateMinimapRes256(CCmdUI* pCmdUI)
 {

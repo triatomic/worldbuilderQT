@@ -171,13 +171,13 @@ protected:
 	afx_msg void OnUpdateMinimapRefresh100(CCmdUI* pCmdUI);
 	afx_msg void OnUpdateMinimapRefresh250(CCmdUI* pCmdUI);
 	afx_msg void OnUpdateMinimapRefresh1000(CCmdUI* pCmdUI);
-	afx_msg void OnMinimapRes128();
 	afx_msg void OnMinimapRes256();
 	afx_msg void OnMinimapRes512();
+	afx_msg void OnMinimapRes1024();
 	afx_msg void OnMinimapRes2048();
-	afx_msg void OnUpdateMinimapRes128(CCmdUI* pCmdUI);
 	afx_msg void OnUpdateMinimapRes256(CCmdUI* pCmdUI);
 	afx_msg void OnUpdateMinimapRes512(CCmdUI* pCmdUI);
+	afx_msg void OnUpdateMinimapRes1024(CCmdUI* pCmdUI);
 	afx_msg void OnUpdateMinimapRes2048(CCmdUI* pCmdUI);
 	afx_msg void OnViewGarrisoned();
 	afx_msg void OnUpdateViewGarrisoned(CCmdUI* pCmdUI);

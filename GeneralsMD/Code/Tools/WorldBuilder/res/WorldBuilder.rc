@@ -347,9 +347,9 @@ BEGIN
             END
             POPUP "Resolution"
             BEGIN
-                MENUITEM "128 x 128",           ID_MINIMAP_RES_128
                 MENUITEM "256 x 256",           ID_MINIMAP_RES_256
                 MENUITEM "512 x 512",           ID_MINIMAP_RES_512
+                MENUITEM "1024 x 1024",         ID_MINIMAP_RES_1024
                 MENUITEM "2048 x 2048 (slow)",  ID_MINIMAP_RES_2048
             END
         END

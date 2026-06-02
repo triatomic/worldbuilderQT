@@ -29,8 +29,8 @@
 // m_resolution * m_resolution UnsignedInts, so large sizes don't bloat the object.
 enum
 {
-	MINIMAP_RES_MIN     = 128,
-	MINIMAP_RES_DEFAULT = 128,
+	MINIMAP_RES_MIN     = 256,
+	MINIMAP_RES_DEFAULT = 256,
 	MINIMAP_RES_MAX     = 2048,
 };
 
