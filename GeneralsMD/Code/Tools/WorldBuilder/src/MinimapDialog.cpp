@@ -32,6 +32,7 @@
 #include "Common/GlobalData.h"
 #include "GameLogic/SidesList.h"
 #include "GameClient/TerrainRoads.h"
+#include "GameClient/Water.h"		// TheWaterTransparency (map.ini-overridable radar water color)
 #include "Common/FileSystem.h"
 #include "Common/MapReaderWriterInfo.h"
 #include "W3DDevice/GameClient/TileData.h"
@@ -243,7 +244,14 @@ void MinimapDialog::setLoading(Bool loading)
 	}
 	else if (TheMinimapDialog->IsWindowVisible())
 	{
-		TheMinimapDialog->rebuildTerrain();		// one clean rebuild for the new map
+		// Force a full resample for the new map (terrain, water color from any new
+		// map.ini override, roads, objects) and repaint -- don't let a cached buffer
+		// or the m_inRebuild guard skip it.
+		TheMinimapDialog->m_terrainValid = false;
+		TheMinimapDialog->m_inRebuild    = false;
+		TheMinimapDialog->rebuildTerrain();
+		if (::IsWindow(TheMinimapDialog->m_hWnd))
+			TheMinimapDialog->Invalidate(FALSE);
 	}
 }
 
@@ -518,10 +526,24 @@ void MinimapDialog::rebuildTerrain()
 		return;
 	}
 
+	// Water color: use the engine's radar water color, which map.ini can override
+	// (WaterTransparency block, "RadarWaterColor"). TheWaterTransparency is an
+	// OVERRIDE<> smart pointer, so this resolves to the map.ini value when one is
+	// loaded, else the default. parseRGBColor stores 0..1, but the built-in default
+	// is the legacy raw 140/140/255 (> 1); normalize those by /255 so both forms work.
 	RGBColor waterColor;
 	waterColor.red = 0.55f;
 	waterColor.green = 0.55f;
 	waterColor.blue = 1.0f;
+	if (TheWaterTransparency)
+	{
+		RGBColor rc = TheWaterTransparency->m_radarColor;
+		if (rc.red > 1.0f || rc.green > 1.0f || rc.blue > 1.0f)
+		{	// legacy raw 0..255 default
+			rc.red /= 255.0f; rc.green /= 255.0f; rc.blue /= 255.0f;
+		}
+		waterColor = rc;
+	}
 
 	// Day/night tint: getTerrainColorAt returns the raw texture color (no lighting),
 	// so apply the current time-of-day terrain lighting ourselves (the same tint roads

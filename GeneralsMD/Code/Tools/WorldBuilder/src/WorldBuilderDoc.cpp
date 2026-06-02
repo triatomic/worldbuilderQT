@@ -35,6 +35,15 @@
 #include "Common/MapReaderWriterInfo.h"
 #include "Common/ThingTemplate.h"
 #include "Common/ThingFactory.h"
+// Stores whose map.ini overrides must be torn down when unloading a map.ini (mirrors
+// the WB INI type table in INI.cpp + the game's own between-match reset()).
+#include "Common/SpecialPower.h"
+#include "Common/Science.h"
+#include "GameLogic/Weapon.h"
+#include "GameLogic/Armor.h"
+#include "GameLogic/ObjectCreationList.h"
+#include "GameClient/FXList.h"
+#include "GameClient/Water.h"
 #include "Common/WellKnownKeys.h"
 
 #include "GameClient/Line2D.h"
@@ -89,6 +98,48 @@ enum DIRECTION
 
 static Bool g_mapiniloaded = false;
 static Bool g_warnedfordupedforthismap = false;
+
+// ----------------------------------------------------------------------------
+// Gracefully unload map.ini overrides.
+//
+// map.ini is loaded with INI_LOAD_CREATE_OVERRIDES, which dangles "override"
+// instances off the base templates in each store (the same mechanism the game uses
+// for map-specific tweaks). Each store's reset() walks its templates and calls
+// Overridable::deleteOverrides(), which deletes ONLY the entries marked as overrides
+// and leaves the base game data intact -- exactly what the game does between matches.
+//
+// We only reset the stores that (a) the WB INI type table (INI.cpp theWbTypeTable)
+// can actually create overrides in AND (b) have a real override-only teardown. Object,
+// Weapon, Science, SpecialPower and Water/Weather qualify. FXList / OCL / Armor have
+// empty reset()s and ParticleSystemManager::reset() is a full wipe (not override-only),
+// so we deliberately skip those -- map.ini overrides to them are rare, and calling
+// their reset would either do nothing or destroy non-override state.
+static void unloadMapIniOverrides(void)
+{
+	if (!g_mapiniloaded)
+		return;
+
+	if (TheThingFactory)       TheThingFactory->reset();        // Object
+	if (TheWeaponStore)        TheWeaponStore->reset();         // Weapon
+	if (TheScienceStore)       TheScienceStore->reset();        // Science
+	if (TheSpecialPowerStore)  TheSpecialPowerStore->reset();   // SpecialPower
+
+	// Water transparency / radar color override (GameLogic does this same dance on its
+	// own reset). TheWaterTransparency is an OVERRIDE<> smart pointer.
+	if (TheWaterTransparency.getNonOverloadedPointer())
+	{
+		WaterTransparencySetting *wt =
+			(WaterTransparencySetting*)TheWaterTransparency.getNonOverloadedPointer();
+		TheWaterTransparency = (WaterTransparencySetting*)wt->deleteOverrides();
+	}
+
+	// Re-link object templates after stripping overrides (resolves names, rebuilds the
+	// upgrade/module references) -- the same call the WB loader makes after parsing.
+	if (TheThingFactory)
+		TheThingFactory->postProcessLoad();
+
+	g_mapiniloaded = false;
+}
 static bool secondGreaterThan(const std::pair<AsciiString, Int>& __t1, const std::pair<AsciiString, Int>& __t2)
 {
 	return __t1.second > __t2.second;
@@ -1999,58 +2050,11 @@ BOOL CWorldBuilderDoc::OnOpenDocument(LPCTSTR lpszPathName)
 		~MinimapLoadGuard() { MinimapDialog::setLoading(false); }
 	} minimapLoadGuard;
 
+	// If a map.ini override was loaded for the previous map, gracefully tear it down
+	// before loading the next map (no more forced restart). This strips only the
+	// map.ini-created overrides and leaves the base game data intact.
 	if (g_mapiniloaded)
-	{
-		MessageBeep(MB_ICONSTOP);
-		int res = MessageBox(
-			NULL,
-			"A Map.ini override was previously loaded.\n\n"
-			"We still have not find a way to clear those stuff on memory - so i am gonna force you to restart.\n"
-			"Press OK to restart now or Cancel to continue editing the same map.\n\n"
-			"This is retarded i know but i do not want to crash your worldbuilder accidentally - Adriane.\n",
-			"Map.ini Cleanup Required",
-			MB_OKCANCEL | MB_ICONERROR
-		);
-
-		if (res == IDOK)
-		{
-			try {
-				CString exePath;
-				GetModuleFileName(NULL, exePath.GetBuffer(_MAX_PATH), _MAX_PATH);
-				exePath.ReleaseBuffer();
-
-				// optional: autosave or clean up before restart
-				if (AfxGetApp()->GetMainWnd())
-					AfxGetApp()->GetMainWnd()->SendMessage(WM_CLOSE);
-
-				// restart the same executable
-				STARTUPINFO si = { sizeof(si) };
-				PROCESS_INFORMATION pi;
-				ZeroMemory(&pi, sizeof(pi));
-				CreateProcess(
-					exePath,             // application path
-					NULL,                // command line
-					NULL, NULL, FALSE,
-					0,                   // no special flags
-					NULL, NULL,          // environment and directory
-					&si, &pi
-				);
-
-				// ensure current process dies
-				::ExitProcess(0);
-			}
-			catch (...) {
-				::ExitProcess(0);
-			}
-
-			return FALSE;
-		}
-		else
-		{
-			// user canceled opening new map
-			return FALSE;
-		}
-	}
+		unloadMapIniOverrides();
 #ifdef ONLY_ONE_AT_A_TIME
 	if (gAlreadyOpen) {
 		::AfxMessageBox(IDS_ONLY_ONE_FILE);
