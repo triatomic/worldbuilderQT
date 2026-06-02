@@ -1214,6 +1214,17 @@ void MinimapDialog::drawRoads()
 	// Scale factor: world units -> buffer pixels (use the smaller axis to be conservative).
 	Real worldToPixel = (Real)m_resolution / (xSpan < ySpan ? xSpan : ySpan);
 
+	// The buffer (m_resolution) is StretchDIBits-shrunk to the dialog client, so a width
+	// measured in BUFFER pixels shrinks on screen as resolution rises -- at 2048 a road
+	// becomes sub-pixel after the shrink and aliases away (the bridge vanishes first).
+	// Size roads by a DISPLAY-pixel target and convert to buffer pixels the same way the
+	// object blips do (see drawObjects), so on-screen thickness is constant at every
+	// resolution. Use the real client width (the dialog is resizable).
+	CRect clientRect;
+	GetClientRect(&clientRect);
+	Int clientPx = clientRect.Width() > 0 ? clientRect.Width() : MINIMAP_DISPLAY_SIZE;
+	#define ROAD_DISP_TO_BUF(d) (((d) * m_resolution + clientPx / 2) / clientPx)
+
 	// Fallback flat colors used only when no texture could be loaded.
 	const UnsignedInt roadColor   = packBGRA(0x504848);
 	const UnsignedInt bridgeColor = packBGRA(0x706858);
@@ -1252,14 +1263,18 @@ void MinimapDialog::drawRoads()
 			tex = getRoadTex(roadType->getTexture());
 		}
 
-		// World-unit width -> buffer half-width. worldToPixel is pixels-per-cell and
-		// roadWidth is world units, so divide by MAP_XY_FACTOR to get cells first.
-		// Cap so roads stay road-like (not slabs) at any resolution.
-		Int halfW = REAL_TO_INT(roadWidth * worldToPixel / MAP_XY_FACTOR / 2.0f);
+		// World-unit width -> DISPLAY-pixel half-width, then -> buffer pixels. roadWidth is
+		// world units; /MAP_XY_FACTOR gives cells; *(clientPx/span) gives display pixels
+		// across the on-screen minimap. Sizing in display px (not buffer px) keeps the
+		// on-screen thickness constant across resolutions -- the 256 look is the reference.
+		Real dispPerCell = (Real)clientPx / (xSpan < ySpan ? xSpan : ySpan);
+		Real halfDisp = roadWidth / MAP_XY_FACTOR * dispPerCell / 2.0f;
+		// Clamp in DISPLAY px: floor at 1 (never sub-pixel after the shrink, so the bridge
+		// stays visible at 2048), cap so roads stay road-like (not slabs) at any resolution.
+		if (halfDisp < 1.0f) halfDisp = 1.0f;
+		if (halfDisp > 4.0f) halfDisp = 4.0f;
+		Int halfW = ROAD_DISP_TO_BUF(REAL_TO_INT(halfDisp));
 		if (halfW < 1) halfW = 1;
-		Int maxHalf = m_resolution / 64;	// ~ up to 4px at 256, 8px at 512
-		if (maxHalf < 1) maxHalf = 1;
-		if (halfW > maxHalf) halfW = maxHalf;
 
 		// Segment length in buffer pixels, for UV tiling.
 		Real ddx = (Real)(mx2 - mx1), ddy = (Real)(my2 - my1);
@@ -1268,6 +1283,7 @@ void MinimapDialog::drawRoads()
 		UnsignedInt fallback = isBridge ? bridgeColor : roadColor;
 		drawThickLine(mx1, my1, mx2, my2, halfW, fallback, tex, segLen, tintR, tintG, tintB);
 	}
+	#undef ROAD_DISP_TO_BUF
 }
 
 // Overlay map objects, adapting the Thrax minimap upgrade:
