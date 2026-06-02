@@ -79,6 +79,13 @@ public:
 	/// restore render state. Must be paired with begin().
 	void end();
 
+	/// Re-draw the geometry from the LAST begin()/end() batch without rebuilding
+	/// it. The vertex array persists between batches, so when the view hasn't
+	/// changed the caller can skip the whole project/measure/queue rebuild and
+	/// just re-issue the cached quads with one DrawPrimitiveUP. Does nothing if
+	/// no batch has been built yet. Not to be called between begin()/end().
+	void reissue(IDirect3DDevice8 *dev, Int viewW, Int viewH);
+
 private:
 	struct Glyph
 	{

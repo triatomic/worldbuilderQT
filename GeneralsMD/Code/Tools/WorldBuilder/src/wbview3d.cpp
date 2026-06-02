@@ -608,6 +608,8 @@ WbView3d::WbView3d() :
 	m_theta(0.0),
 	m_time(0),
 	m_updateCount(0),
+	m_haveLabelCache(false),
+	m_labelEpoch(0),
 	m_needToLoadRoads(0),
 	m_timer(NULL),
 	m_drawObject(NULL),
@@ -1677,6 +1679,7 @@ static void DumpSubObjects(RenderObjClass* obj, const char* modelName)
 void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 {
 	++m_updateCount;
+	++m_labelEpoch;		// objects/properties may have changed -> rebuild label cache
 	Bool updateAllTrees = false;
 	if (m_heightMapRenderObj == NULL) {
 		m_heightMapRenderObj = NEW_REF(WBHeightMap,());
@@ -2075,9 +2078,10 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 // ----------------------------------------------------------------------------
 void WbView3d::updateHeightMapInView(WorldHeightMap *htMap, Bool partial, const IRegion2D &partialRange)
 {
-	if (htMap == NULL) 
+	if (htMap == NULL)
 		return;
 	++m_updateCount;
+	m_haveLabelCache = false;	// new/changed terrain or map -> don't reuse a stale label batch
 
 	if (m_heightMapRenderObj == NULL) {
 		m_heightMapRenderObj = NEW_REF(WBHeightMap,());
@@ -2908,15 +2912,28 @@ void WbView3d::render()
 		// Viewport labels: rendered as textured quads from the GDI glyph atlas,
 		// batched into the back buffer BEFORE End_Render so the text is part of the
 		// presented frame (flicker-free). drawLabels(NULL) queues the glyphs.
+		//
+		// The view repaints on a free-running timer, so most frames are identical to
+		// the last. Rebuilding the (potentially tens-of-thousands-of-verts) label
+		// batch every frame is the dominant cost on label-dense maps. Snapshot the
+		// inputs that affect labels; when unchanged, re-issue the cached vertex batch
+		// (one DrawPrimitiveUP) instead of rebuilding it.
 		if (m_fontAtlas.isValid()) {
 			IDirect3DDevice8 *dev = DX8Wrapper::_Get_D3D_Device8();
 			// Use the actual back-buffer dimensions (what Set_Device_Resolution created),
 			// NOT the client rect. On a dynamic window resize the back buffer is sized to
 			// m_actualWinSize, which can differ from the client rect; mixing the two makes
 			// the XYZRHW text quads stretch. Label projection uses m_actualWinSize too.
-			m_fontAtlas.begin(dev, m_actualWinSize.x, m_actualWinSize.y);
-			drawLabels(NULL);
-			m_fontAtlas.end();
+			LabelCacheKey key = buildLabelKey();
+			if (m_haveLabelCache && key == m_lastLabelKey) {
+				m_fontAtlas.reissue(dev, m_actualWinSize.x, m_actualWinSize.y);
+			} else {
+				m_fontAtlas.begin(dev, m_actualWinSize.x, m_actualWinSize.y);
+				drawLabels(NULL);
+				m_fontAtlas.end();
+				m_lastLabelKey = key;
+				m_haveLabelCache = true;
+			}
 		}
 
 		WW3D::End_Render();
@@ -3385,6 +3402,48 @@ void WbView3d::setEditTime(DWORD seconds)
 	resetEditTimer();
 	m_totalEditTime = seconds * 1000; // Convert seconds to milliseconds
 	startEditTimer();
+}
+
+// --- viewport-label vertex-batch cache --------------------------------------
+
+Bool WbView3d::LabelCacheKey::operator==(const LabelCacheKey &o) const
+{
+	for (int i = 0; i < 12; ++i)
+		if (camXform[i] != o.camXform[i]) return false;
+	return winW == o.winW && winH == o.winH && lod == o.lod &&
+		showNames == o.showNames && showModels == o.showModels &&
+		showWaypoints == o.showWaypoints && showNamesExtra == o.showNamesExtra &&
+		showPolygonTriggers == o.showPolygonTriggers &&
+		lightFeedback == o.lightFeedback && timeOfDay == o.timeOfDay &&
+		epoch == o.epoch;
+}
+
+// Snapshot everything drawLabels() reads to decide label geometry / positions /
+// colours. If this matches the previous frame, the cached vertex batch can be
+// re-issued instead of rebuilt.
+WbView3d::LabelCacheKey WbView3d::buildLabelKey()
+{
+	LabelCacheKey k;
+	if (m_camera) {
+		const Matrix3D &m = m_camera->Get_Transform();
+		for (int r = 0; r < 3; ++r)
+			for (int c = 0; c < 4; ++c)
+				k.camXform[r * 4 + c] = m[r][c];
+	} else {
+		for (int i = 0; i < 12; ++i) k.camXform[i] = 0.0f;
+	}
+	k.winW = m_actualWinSize.x;
+	k.winH = m_actualWinSize.y;
+	k.lod = m_lod;
+	k.showNames = isNamesVisible();
+	k.showModels = m_showModels;
+	k.showWaypoints = m_showWaypoints;
+	k.showNamesExtra = m_showNamesExtra;
+	k.showPolygonTriggers = m_showPolygonTriggers;
+	k.lightFeedback = m_doLightFeedback;
+	k.timeOfDay = (Int)TheGlobalData->m_timeOfDay;
+	k.epoch = m_labelEpoch;
+	return k;
 }
 
 void WbView3d::drawLabels(void)

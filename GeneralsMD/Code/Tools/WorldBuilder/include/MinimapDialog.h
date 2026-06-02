@@ -106,6 +106,10 @@ private:
 
 	UnsignedInt *m_pixelBuffer;		///< composited (terrain + objects), shown via the DIB.
 	UnsignedInt *m_terrainBuffer;	///< cached terrain-only resample; reused when only objects change.
+	UnsignedInt *m_terrainRoadsBuffer;	///< cached terrain+roads layer; roads are camera-invariant,
+									///< so this is reused across camera-only recomposites (cull-on drag)
+									///< and only rebuilt when terrain or roads actually change.
+	Bool m_roadsValid;				///< m_terrainRoadsBuffer is current (terrain+roads composited).
 	Bool m_terrainValid;			///< m_terrainBuffer holds a current resample.
 	Int  m_resolution;				///< current sampling/buffer edge (square).
 	Bool m_terrainBuilt;

@@ -483,7 +483,23 @@ void WBFontAtlas::flushBatch()
 void WBFontAtlas::end()
 {
 	flushBatch();
-	m_vertCount = 0;
+	// NOTE: deliberately do NOT clear m_vertCount here. The built batch is
+	// retained so reissue() can redraw it next frame when the view is unchanged.
+	// begin() resets m_vertCount = 0 before the next rebuild, so keeping it here
+	// is safe.
 	m_dev = NULL;
 	m_inBatch = false;
+}
+
+void WBFontAtlas::reissue(IDirect3DDevice8 *dev, Int viewW, Int viewH)
+{
+	// Redraw the geometry retained from the previous begin()/end() batch, without
+	// rebuilding it. Used when the caller knows the view hasn't changed.
+	if (!dev || m_vertCount < 3 || !m_texture) return;
+	m_dev = dev;
+	m_viewW = viewW;
+	m_viewH = viewH;
+	ensureTexture();
+	flushBatch();
+	m_dev = NULL;
 }

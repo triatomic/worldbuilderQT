@@ -78,6 +78,8 @@ MinimapDialog::MinimapDialog(CWnd *pParent)
 	: CDialog(MinimapDialog::IDD, pParent),
 	  m_pixelBuffer(NULL),
 	  m_terrainBuffer(NULL),
+	  m_terrainRoadsBuffer(NULL),
+	  m_roadsValid(false),
 	  m_terrainValid(false),
 	  m_resolution(MINIMAP_RES_DEFAULT),
 	  m_terrainBuilt(false),
@@ -107,6 +109,7 @@ MinimapDialog::~MinimapDialog()
 		TheMinimapDialog = NULL;
 	delete [] m_pixelBuffer;
 	delete [] m_terrainBuffer;
+	delete [] m_terrainRoadsBuffer;
 	clearRoadTexCache();
 }
 
@@ -114,13 +117,17 @@ void MinimapDialog::allocBuffer()
 {
 	delete [] m_pixelBuffer;
 	delete [] m_terrainBuffer;
+	delete [] m_terrainRoadsBuffer;
 	Int n = m_resolution * m_resolution;
-	m_pixelBuffer   = new UnsignedInt[n];
-	m_terrainBuffer = new UnsignedInt[n];
-	memset(m_pixelBuffer,   0, sizeof(UnsignedInt) * n);
-	memset(m_terrainBuffer, 0, sizeof(UnsignedInt) * n);
+	m_pixelBuffer        = new UnsignedInt[n];
+	m_terrainBuffer      = new UnsignedInt[n];
+	m_terrainRoadsBuffer = new UnsignedInt[n];
+	memset(m_pixelBuffer,        0, sizeof(UnsignedInt) * n);
+	memset(m_terrainBuffer,      0, sizeof(UnsignedInt) * n);
+	memset(m_terrainRoadsBuffer, 0, sizeof(UnsignedInt) * n);
 	m_terrainBuilt = false;
 	m_terrainValid = false;
+	m_roadsValid   = false;
 }
 
 BOOL MinimapDialog::OnInitDialog()
@@ -163,6 +170,7 @@ void MinimapDialog::setShowRoads(Bool show)
 {
 	m_showRoads = show;
 	::AfxGetApp()->WriteProfileInt(MINIMAP_SECTION, "ShowRoads", show ? 1 : 0);
+	m_roadsValid = false;		// road visibility changed; rebuild the terrain+roads cache
 	if (IsWindowVisible())
 	{
 		// Roads are composited over the cached terrain; reuse the resample if valid.
@@ -264,9 +272,12 @@ void MinimapDialog::requestRebuild(Bool terrainChanged)
 		return;
 
 	// Object change (no terrain resample needed): recomposite the cached terrain +
-	// objects. Cheap relative to a resample.
+	// objects. Cheap relative to a resample. An object edit may be a road edit (roads
+	// are MapObjects), so invalidate the terrain+roads cache -- only camera-only
+	// refreshes (requestViewBoxRefresh) keep it, which is where the savings matter.
 	if (!terrainChanged && m_terrainValid)
 	{
+		m_roadsValid = false;
 		refreshObjects();
 		return;
 	}
@@ -279,7 +290,10 @@ void MinimapDialog::requestRebuild(Bool terrainChanged)
 	// can reuse it (cheap recomposite). If any pending request is a terrain change, the
 	// coalesced rebuild must do the full resample.
 	if (terrainChanged)
+	{
 		m_terrainValid = false;
+		m_roadsValid   = false;		// terrain (and possibly road geometry) changed
+	}
 
 	// (Re)start the one-shot throttle timer; the actual work happens in OnTimer once
 	// edits stop arriving for m_refreshDelayMs.
@@ -671,6 +685,7 @@ void MinimapDialog::rebuildTerrain()
 	delete [] mapY;
 
 	m_terrainValid = true;		// cached terrain is now current
+	m_roadsValid   = false;		// fresh terrain (and tint) -> rebuild the terrain+roads cache
 
 	// Composite terrain + objects into the displayed buffer.
 	refreshObjects();
@@ -682,11 +697,29 @@ void MinimapDialog::rebuildTerrain()
 void MinimapDialog::refreshObjects()
 {
 	Int n = m_resolution * m_resolution;
-	memcpy(m_pixelBuffer, m_terrainBuffer, sizeof(UnsignedInt) * n);
 
-	// Roads first (under object dots); independently toggleable from objects.
-	if (m_showRoads)
-		drawRoads();
+	// Roads are camera-invariant, but drawRoads() (per-segment lookup + oriented-quad
+	// rasterize over the whole road network) is expensive. With "Cull Objects To View"
+	// on, every camera move recomposites -- so re-rasterizing roads each time stutters
+	// the minimap-drag pan. Cache a terrain+roads layer and rebuild it only when terrain
+	// or roads actually change; camera-only recomposites then just copy the cache and
+	// redraw the (cheap) object blips.
+	if (!m_roadsValid)
+	{
+		memcpy(m_terrainRoadsBuffer, m_terrainBuffer, sizeof(UnsignedInt) * n);
+		if (m_showRoads)
+		{
+			// drawRoads / drawThickLine write into m_pixelBuffer; point the composite at
+			// the roads-cache buffer for the duration so roads bake into the cache.
+			UnsignedInt *saved = m_pixelBuffer;
+			m_pixelBuffer = m_terrainRoadsBuffer;
+			drawRoads();
+			m_pixelBuffer = saved;
+		}
+		m_roadsValid = true;
+	}
+
+	memcpy(m_pixelBuffer, m_terrainRoadsBuffer, sizeof(UnsignedInt) * n);
 
 	if (m_showObjects)
 		drawObjects();

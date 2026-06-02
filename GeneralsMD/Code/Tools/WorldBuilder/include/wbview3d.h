@@ -299,6 +299,29 @@ private:
 
 	ID3DXFont*							m3DFont;		// legacy; unused (labels use the GDI atlas)
 	WBFontAtlas							m_fontAtlas;	// GDI-built glyph atlas -> D3D quads
+
+	// --- viewport-label vertex-batch cache ---------------------------------
+	// The label batch is rebuilt + resubmitted every frame today, even when the
+	// view is static; on label-dense maps that is the dominant per-frame cost.
+	// We snapshot the inputs that affect label geometry/colour into a key each
+	// frame; when it matches the previous frame we re-issue the cached vertex
+	// batch (m_fontAtlas.reissue) instead of rebuilding it (begin/drawLabels/end).
+	struct LabelCacheKey
+	{
+		Real camXform[12];		// camera transform (3x4) signature
+		Int  winW, winH;
+		Int  lod;
+		Bool showNames, showModels, showWaypoints, showNamesExtra, showPolygonTriggers;
+		Bool lightFeedback;
+		Int  timeOfDay;
+		UnsignedInt epoch;		// bumped on object/property edits
+
+		Bool operator==(const LabelCacheKey &o) const;
+	};
+	LabelCacheKey	m_lastLabelKey;
+	Bool			m_haveLabelCache;	// m_lastLabelKey / the atlas batch are valid
+	UnsignedInt		m_labelEpoch;		// bumped whenever labels may have changed
+	LabelCacheKey	buildLabelKey();
 	Int											m_pickPixels;
 	Int											m_partialMapSize;
 	Real m_lastTrackingZ;     // stores last used ghost placement height
