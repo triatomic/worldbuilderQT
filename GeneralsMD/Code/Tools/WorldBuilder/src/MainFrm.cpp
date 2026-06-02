@@ -345,9 +345,24 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	m_minimapDialog = new MinimapDialog(this);
 	m_minimapDialog->Create(MinimapDialog::IDD, this);
 	m_minimapDialog->ShowWindow(::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowMinimap", 0) ? SW_SHOW : SW_HIDE);
-	frameRect.top = ::AfxGetApp()->GetProfileInt(MINIMAP_SECTION, "Top", 100);
-	frameRect.left = ::AfxGetApp()->GetProfileInt(MINIMAP_SECTION, "Left", 100);
-	m_minimapDialog->SetWindowPos(NULL, frameRect.left, frameRect.top, 0, 0, SWP_NOZORDER | SWP_NOSIZE);
+	// Default to the bottom-right of the work area (like the in-game radar). A -1
+	// sentinel means "never positioned yet", so we compute bottom-right; once the
+	// user moves it, OnMove persists the real coords and they take precedence.
+	int mmTop  = ::AfxGetApp()->GetProfileInt(MINIMAP_SECTION, "Top", -1);
+	int mmLeft = ::AfxGetApp()->GetProfileInt(MINIMAP_SECTION, "Left", -1);
+	if (mmTop < 0 || mmLeft < 0)
+	{
+		CRect work;
+		::SystemParametersInfo(SPI_GETWORKAREA, 0, &work, 0);
+		CRect mmWin;
+		m_minimapDialog->GetWindowRect(&mmWin);
+		const int margin = 8;
+		mmLeft = work.right  - mmWin.Width()  - margin;
+		mmTop  = work.bottom - mmWin.Height() - margin;
+		if (mmLeft < 0) mmLeft = 0;
+		if (mmTop  < 0) mmTop  = 0;
+	}
+	m_minimapDialog->SetWindowPos(NULL, mmLeft, mmTop, 0, 0, SWP_NOZORDER | SWP_NOSIZE);
 
 	Int sbf = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowBrushFeedback", 1);
 	if (sbf != 0) {

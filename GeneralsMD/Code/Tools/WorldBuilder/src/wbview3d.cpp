@@ -2134,6 +2134,12 @@ void WbView3d::setCenterInViewDeferred(Real x, Real y)
 		m_centerPt.Y = y;
 		constrainCenterPt();
 		updateHysteresis();
+		// Rebuild the camera transform NOW (no D3D present -- setupCamera only sets
+		// m_camera's matrix) so the minimap view box, which projects the frustum via
+		// getViewFrustumGroundCorners(), reflects the new center on this same click.
+		// Without this the box reads the stale transform and lags one click behind
+		// (the first click appears to do nothing).
+		setupCamera();
 		// Do NOT render here. Let the 3D view's own OnPaint/OnTimer loop do the
 		// D3D present on its own thread/window context. Rendering from the Minimap
 		// dialog's message handler corrupts the device and blanks the viewport.

@@ -703,8 +703,15 @@ Bool MinimapDialog::worldToMinimap(Real worldX, Real worldY, Int *mx, Int *my)
 	Real ySpan = INT_TO_REAL(pMap->getYExtent() - 2 * border);
 	if (xSpan <= 0.0f || ySpan <= 0.0f) return FALSE;
 
-	Int x = REAL_TO_INT((worldX / MAP_XY_FACTOR / xSpan) * m_resolution);
-	Int y = REAL_TO_INT((worldY / MAP_XY_FACTOR / ySpan) * m_resolution);
+	// Exact inverse of minimapToWorld: that maps cell mx -> (mx*span/res + border)
+	// in heightmap CELL units. getViewFrustumGroundCorners returns WORLD units
+	// (already * MAP_XY_FACTOR), so convert to cells, subtract the border, then
+	// scale to minimap resolution. Omitting the border shifts the view box away
+	// from where a click lands (the two transforms must be inverses).
+	Real cellX = worldX / MAP_XY_FACTOR - border;
+	Real cellY = worldY / MAP_XY_FACTOR - border;
+	Int x = REAL_TO_INT((cellX / xSpan) * m_resolution);
+	Int y = REAL_TO_INT((cellY / ySpan) * m_resolution);
 	Bool inRange = (x >= 0 && x < m_resolution && y >= 0 && y < m_resolution);
 
 	if (x < 0) x = 0;  if (x >= m_resolution) x = m_resolution - 1;
@@ -740,12 +747,14 @@ void MinimapDialog::drawViewBoxOverlay(HDC hdc, Int clientW, Int clientH)
 
 	// Map each world corner to client pixels (fraction of map span * client size),
 	// clamped to the client so off-map corners still bound the box. Y is flipped
-	// (world +y is up, client +y is down).
+	// (world +y is up, client +y is down). Subtract the border so this matches the
+	// click mapping (minimapToWorld) exactly -- otherwise the box is shifted from
+	// where a click recenters the camera.
 	POINT pts[5];
 	for (int i = 0; i < 4; ++i)
 	{
-		Real fx = (corners[i].x / MAP_XY_FACTOR) / xSpan;
-		Real fy = (corners[i].y / MAP_XY_FACTOR) / ySpan;
+		Real fx = (corners[i].x / MAP_XY_FACTOR - border) / xSpan;
+		Real fy = (corners[i].y / MAP_XY_FACTOR - border) / ySpan;
 		if (fx < 0.0f) fx = 0.0f;  if (fx > 1.0f) fx = 1.0f;
 		if (fy < 0.0f) fy = 0.0f;  if (fy > 1.0f) fy = 1.0f;
 		pts[i].x = (LONG)(fx * clientW);
