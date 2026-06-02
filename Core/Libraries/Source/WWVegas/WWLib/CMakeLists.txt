@@ -129,6 +129,8 @@ set(WWLIB_SRC
     vector.cpp
     Vector.H
     visualc.h
+    WBParallel.cpp
+    WBParallel.h
     widestring.cpp
     widestring.h
     win.h

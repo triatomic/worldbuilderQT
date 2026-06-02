@@ -38,6 +38,7 @@
 #include "W3DDevice/GameClient/W3DFileSystem.h"
 #include "Common/GlobalData.h"
 #include "WHeightMapEdit.h"
+#include "WBParallel.h"
 //#include "Common/GameFileSystem.h"
 #include "Common/FileSystem.h"
 #include "Common/ArchiveFileSystem.h"
@@ -87,6 +88,7 @@
 #include "ToastDialog.h"
 
 #include "Common/WellKnownKeys.h"
+#include "Common/CriticalSection.h"
 #ifdef _INTERNAL
 // for occasional debugging...
 //#pragma optimize("", off)
@@ -94,6 +96,15 @@
 #endif
 
 static SubsystemInterfaceList TheSubsystemListRecord;
+
+// WorldBuilder historically left these NULL, which makes the memory pool and
+// string allocators "silently non-threadsafe" (see CriticalSection.h). The game
+// instantiates them in WinMain so the pools are safe under its worker threads.
+// We now run parallel worker threads too (terrain resample, label projection,
+// texture decode), all of which allocate via the pool / AsciiString, so WB must
+// install real critical sections exactly as the game does. Assigned at the very
+// top of InitInstance, before any pooled allocation.
+static CriticalSection critSecUnicode, critSecDma, critSecMemoryPool, critSecDebugLog;
 
 template<class SUBSYSTEM>
 void initSubsystem(SUBSYSTEM*& sysref, SUBSYSTEM* sys, const char* path1 = NULL, const char* path2 = NULL, const char* dirpath = NULL)
@@ -285,7 +296,16 @@ CWorldBuilderApp::~CWorldBuilderApp()
 
 BOOL CWorldBuilderApp::InitInstance()
 {
-	
+
+	// Install the allocator critical sections before ANY pooled allocation, so
+	// the memory pool and string allocators are genuinely thread-safe under our
+	// parallel worker threads. (The game does the equivalent in WinMain; WB used
+	// to leave these NULL and rely on being single-threaded.)
+	TheUnicodeStringCriticalSection = &critSecUnicode;
+	TheDmaCriticalSection = &critSecDma;
+	TheMemoryPoolCriticalSection = &critSecMemoryPool;
+	TheDebugLogCriticalSection = &critSecDebugLog;
+
 //#ifdef _RELEASE
 	if (this->GetProfileInt(APP_SECTION, EULA, 0) == 0) {
 		EulaDialog eulaDialog;
@@ -1201,8 +1221,12 @@ void CWorldBuilderApp::OnAppAbout()
 /////////////////////////////////////////////////////////////////////////////
 // CWorldBuilderApp message handlers
 
-int CWorldBuilderApp::ExitInstance() 
+int CWorldBuilderApp::ExitInstance()
 {
+
+	// Join and destroy the parallel worker pool before tearing down subsystems,
+	// so no worker outlives the data it reads.
+	WBParallel::shutdown();
 
 	WriteProfileString(APP_SECTION, OPEN_FILE_DIR, m_currentDirectory.str());
 	m_currentDirectory.clear();

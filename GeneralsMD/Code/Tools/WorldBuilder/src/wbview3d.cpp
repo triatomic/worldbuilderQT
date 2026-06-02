@@ -24,6 +24,8 @@
 #include "resource.h"
 #include "wwmath.h"
 #include "ww3d.h"
+#include "WBParallel.h"		// parallel fork-join pool for label projection
+#include <vector>
 #include "texturefilter.h"
 #include "scene.h"
 #include "rendobj.h"
@@ -3445,11 +3447,68 @@ void WbView3d::drawLabels(HDC hdc)
 
 
 	int totalWorldCash = 0;
-	
+
 	// Draw labels.
-	MapObject *pMapObj;
-	if (true) {
-		for (pMapObj = MapObject::getFirstMapObject(); pMapObj; pMapObj = pMapObj->getNext()) {
+	//
+	// The per-object work splits into two parts: a parallelizable COMPUTE part
+	// (projection, terrain-height lookup, property dictionary reads, name/color/
+	// status resolution) and a serial EMIT part (m_fontAtlas.drawText /
+	// drawStatusLabels) that drives the D3D8 device and must stay on the UI
+	// thread. We snapshot the object list, fill one LabelRecord per object in a
+	// parallel prepass, then emit serially IN THE ORIGINAL ORDER so the frame is
+	// byte-identical to the single-threaded path. WBParallel falls back to a
+	// serial inline run for small object counts, so light scenes pay no overhead.
+	struct StatusLabel { const char *text; };	// emit text, in fixed order
+	struct LabelRecord {
+		bool   project;					// passed projection + LOD cull -> has name/status labels to emit
+		CPoint pt;
+		// up to 4 name labels (base + 3 waypoint paths), precomputed
+		int          nameCount;
+		AsciiString  nameText[4];
+		int          nameSlot[4];		// original i (0..3) -> vertical offset
+		UnsignedInt  nameArgb[4];
+		// status labels (only when m_showNamesExtra), in emit order
+		bool         showStatus;
+		int          statusCount;
+		const char  *statusText[7];
+		// reductions consumed after the loop
+		int          cashPartial;
+		bool         feedback;			// this is the selected object for light feedback
+		Coord3D      selPos;
+		Real         selRadius;
+	};
+
+	// Snapshot the object list on the UI thread (it must not mutate during the
+	// parallel pass).
+	std::vector<MapObject*> objs;
+	for (MapObject *o = MapObject::getFirstMapObject(); o; o = o->getNext())
+		objs.push_back(o);
+	const int objCount = (int)objs.size();
+
+	std::vector<LabelRecord> recs(objCount);
+
+	// Prime the camera frustum once on this thread. CameraClass::Project() lazily
+	// rebuilds a mutable cached frustum on first use; doing it here means every
+	// worker's Project() sees a valid frustum and only READS it (no data race on
+	// the mutable cache).
+	{
+		Vector3 dummy;
+		m_camera->Project(dummy, Vector3(0, 0, 0));
+	}
+
+	WBParallel::parallelFor(0, objCount, [&](int begin, int end)
+	{
+		for (int oi = begin; oi < end; ++oi) {
+			MapObject *pMapObj = objs[oi];
+			LabelRecord &rec = recs[oi];
+			rec.project = false;
+			rec.nameCount = 0;
+			rec.showStatus = false;
+			rec.statusCount = 0;
+			rec.cashPartial = 0;
+			rec.feedback = false;
+			rec.selRadius = 0.0f;
+
 			const ThingTemplate *tmpl;
 			tmpl = pMapObj->getThingTemplate();
 			if (tmpl && tmpl->isKindOf(KINDOF_SUPPLY_SOURCE)) {
@@ -3466,7 +3525,7 @@ void WbView3d::drawLabels(HDC hdc)
 						int boxes = dockData->m_startingBoxesData;
 
 						// Add to running total (cash value)
-						totalWorldCash += static_cast<int>(boxes * TheGlobalData->m_baseValuePerSupplyBox);
+						rec.cashPartial += static_cast<int>(boxes * TheGlobalData->m_baseValuePerSupplyBox);
 					}
 				}
 			}
@@ -3481,13 +3540,15 @@ void WbView3d::drawLabels(HDC hdc)
 
 			// Light feedback logic
 			if (m_doLightFeedback && pMapObj->isSelected()) {
-				selectedPos = pos;
-				selectedPos.z = terrainZ;
+				rec.feedback = true;
+				rec.selPos = pos;
+				rec.selPos.z = terrainZ;
+				rec.selRadius = 120.0f;
 
 				if (RenderObjClass *selRobj = pMapObj->getRenderObj()) {
 					SphereClass sphere;
 					selRobj->Get_Obj_Space_Bounding_Sphere(sphere);
-					selectedRadius = sphere.Radius + sphere.Center.Length() + 20.0f;
+					rec.selRadius = sphere.Radius + sphere.Center.Length() + 20.0f;
 				}
 			}
 
@@ -3537,7 +3598,7 @@ void WbView3d::drawLabels(HDC hdc)
 			if(!m_showModels && !pMapObj->isSelected()){
 				hasStatusLabel = false;
 			}
-	
+
 			// Skip label projection if completely nameless + no status
 			if (name.isEmpty() && !m_showWaypoints && objectDictName.isEmpty() && !hasStatusLabel) continue;
 
@@ -3568,7 +3629,10 @@ void WbView3d::drawLabels(HDC hdc)
 				if (distSq > 300 * 300) continue;
 			}
 
-			// Loop through all name labels: base + waypoint path labels
+			rec.project = true;
+			rec.pt = pt;
+
+			// Resolve all name labels: base + waypoint path labels.
 			for (Int i = 0; i < 4; i++) {
 				AsciiString label;
 				if (i == 0) {
@@ -3604,46 +3668,71 @@ void WbView3d::drawLabels(HDC hdc)
 					}
 				}
 
-				CPoint labelPt = pt;
-				labelPt.y += i * 15;
-
-				UnsignedInt argb = 0xFF000000 | (red << 16) | (green << 8) | blue;
-				m_fontAtlas.drawText(labelPt.x, labelPt.y, label.str(), label.getLength(), argb, m_textShadow);
+				int n = rec.nameCount++;
+				rec.nameText[n] = label;
+				rec.nameSlot[n] = i;
+				rec.nameArgb[n] = 0xFF000000 | (red << 16) | (green << 8) | blue;
 			}
 
-			int statusOffset = 1; // Start after the main 4 label lines
-
+			// Resolve status labels (emitted after the name lines).
 			if(m_showNamesExtra){
-				// Indestructible
+				rec.showStatus = true;
+
 				if (pMapObj->getProperties()->getBool(TheKey_objectIndestructible, &exists) && exists)
-					drawStatusLabels(pt, statusOffset++, "Indestructible", m3DFont, hdc);
+					rec.statusText[rec.statusCount++] = "Indestructible";
 
-				// Unsellable
 				if (pMapObj->getProperties()->getBool(TheKey_objectUnsellable, &exists) && exists)
-					drawStatusLabels(pt, statusOffset++, "Unsellable", m3DFont, hdc);
+					rec.statusText[rec.statusCount++] = "Unsellable";
 
-				// Targetable
 				if (pMapObj->getProperties()->getBool(TheKey_objectTargetable, &exists) && exists)
-					drawStatusLabels(pt, statusOffset++, "Targetable", m3DFont, hdc);
+					rec.statusText[rec.statusCount++] = "Targetable";
 
-				// Powered (default true)
 				bool isPowered = pMapObj->getProperties()->getBool(TheKey_objectPowered, &exists);
 				if (exists && !isPowered)
-					drawStatusLabels(pt, statusOffset++, "Not Powered", m3DFont, hdc);
+					rec.statusText[rec.statusCount++] = "Not Powered";
 
-				// Enabled (default true)
 				bool isEnabled = pMapObj->getProperties()->getBool(TheKey_objectEnabled, &exists);
 				if (exists && !isEnabled)
-					drawStatusLabels(pt, statusOffset++, "Not Enabled", m3DFont, hdc);
+					rec.statusText[rec.statusCount++] = "Not Enabled";
 
-				// AI Recruitable (default true)
 				bool isAIRecruitable = pMapObj->getProperties()->getBool(TheKey_objectRecruitableAI, &exists);
 				if (exists && !isAIRecruitable)
-					drawStatusLabels(pt, statusOffset++, "Not AI Recruitable", m3DFont, hdc);
+					rec.statusText[rec.statusCount++] = "Not AI Recruitable";
 
 				bool isSelectable = pMapObj->getProperties()->getBool(TheKey_objectSelectable, &exists);
 				if (exists && !isSelectable)
-					drawStatusLabels(pt, statusOffset++, "Not Selectable", m3DFont, hdc);
+					rec.statusText[rec.statusCount++] = "Not Selectable";
+			}
+		}
+	});
+
+	// Serial emit pass (UI thread): walk records in original order so the output
+	// is identical to the single-threaded path. drawText / drawStatusLabels drive
+	// the D3D device and must not run concurrently.
+	if (true) {
+		for (int oi = 0; oi < objCount; ++oi) {
+			const LabelRecord &rec = recs[oi];
+
+			totalWorldCash += rec.cashPartial;
+
+			if (rec.feedback) {
+				selectedPos = rec.selPos;
+				selectedRadius = rec.selRadius;
+			}
+
+			if (!rec.project) continue;
+
+			for (int n = 0; n < rec.nameCount; ++n) {
+				CPoint labelPt = rec.pt;
+				labelPt.y += rec.nameSlot[n] * 15;
+				m_fontAtlas.drawText(labelPt.x, labelPt.y, rec.nameText[n].str(),
+					rec.nameText[n].getLength(), rec.nameArgb[n], m_textShadow);
+			}
+
+			if (rec.showStatus) {
+				int statusOffset = 1; // Start after the main 4 label lines
+				for (int s = 0; s < rec.statusCount; ++s)
+					drawStatusLabels(rec.pt, statusOffset++, rec.statusText[s], m3DFont, hdc);
 			}
 		}
 

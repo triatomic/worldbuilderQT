@@ -38,6 +38,7 @@
 #include "W3DDevice/GameClient/TileData.h"
 #include "ddsfile.h"
 #include "ww3dformat.h"
+#include "WBParallel.h"		// parallel fork-join pool for the terrain resample
 
 Bool localIsUnderwater(Real x, Real y);
 static void clearRoadTexCache();
@@ -603,37 +604,47 @@ void MinimapDialog::rebuildTerrain()
 	// Resample into a sampleRes x sampleRes scratch buffer (top-down, world-row y ->
 	// row (sampleRes-1 - y)). Single sample per pixel.
 	UnsignedInt *sample = new UnsignedInt[sampleRes * sampleRes];
-	for (Int y = 0; y < sampleRes; ++y)
+
+	// Resample across worker threads: each band owns a disjoint range of rows,
+	// and every pixel writes a unique slot in `sample`, so no locking is needed.
+	// Everything the body reads (heightmap, tile mips via getTerrainColorAt, the
+	// polygon-trigger water scan, the precomputed coord tables, and the scalar
+	// tint/water color) is read-only for the duration of this loop. Set
+	// WB_PARALLEL=0 to force this fully serial for A/B validation.
+	WBParallel::parallelFor(0, sampleRes, [&](int yBegin, int yEnd)
 	{
-		for (Int x = 0; x < sampleRes; ++x)
+		for (Int y = yBegin; y < yEnd; ++y)
 		{
-			Real z = pMap->getHeight(cellX[x], cellY[y]);
-
-			RGBColor color;
-
-			if (hasWater && localIsUnderwater(mapX[x], mapY[y]))
+			for (Int x = 0; x < sampleRes; ++x)
 			{
-				color = waterColor;
-				interpolateColorForHeight(&color, z,
-					pMap->getMaxHeightValue(), avgHeight, pMap->getMinHeightValue());
-			}
-			else
-			{
-				pMap->getTerrainColorAt(mapX[x], mapY[y], &color);
-				interpolateColorForHeight(&color, z, maxHeight, avgHeight, minHeight);
-			}
+				Real z = pMap->getHeight(cellX[x], cellY[y]);
 
-			color.red   *= tintR;
-			color.green *= tintG;
-			color.blue  *= tintB;
+				RGBColor color;
 
-			sample[(sampleRes - 1 - y) * sampleRes + x] =
-				(REAL_TO_INT(color.blue * 255))       |
-				(REAL_TO_INT(color.green * 255) << 8)  |
-				(REAL_TO_INT(color.red * 255) << 16)   |
-				(255 << 24);
+				if (hasWater && localIsUnderwater(mapX[x], mapY[y]))
+				{
+					color = waterColor;
+					interpolateColorForHeight(&color, z,
+						pMap->getMaxHeightValue(), avgHeight, pMap->getMinHeightValue());
+				}
+				else
+				{
+					pMap->getTerrainColorAt(mapX[x], mapY[y], &color);
+					interpolateColorForHeight(&color, z, maxHeight, avgHeight, minHeight);
+				}
+
+				color.red   *= tintR;
+				color.green *= tintG;
+				color.blue  *= tintB;
+
+				sample[(sampleRes - 1 - y) * sampleRes + x] =
+					(REAL_TO_INT(color.blue * 255))       |
+					(REAL_TO_INT(color.green * 255) << 8)  |
+					(REAL_TO_INT(color.red * 255) << 16)   |
+					(255 << 24);
+			}
 		}
-	}
+	});
 
 	// Upsample (nearest) the scratch buffer into the full-res cached terrain buffer.
 	// Both are already top-down, so this is a straight scale with no row flip.
