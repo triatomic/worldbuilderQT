@@ -866,6 +866,7 @@
 #define ID_MINIMAP_CULLOBJECTS          33380
 #define ID_TEXT_ANCHOR_DEFAULT          33381
 #define ID_TEXT_ANCHOR_NEW              33382
+#define ID_MINIMAP_SNAP45               33383
 #define IDD_MINIMAP                     243
 #define IDS_NEW                         61446
 #define IDS_RESIZE                      61447
@@ -939,7 +940,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_3D_CONTROLS                     1
 #define _APS_NEXT_RESOURCE_VALUE        244
-#define _APS_NEXT_COMMAND_VALUE         33383
+#define _APS_NEXT_COMMAND_VALUE         33384
 #define _APS_NEXT_CONTROL_VALUE         1371
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

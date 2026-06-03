@@ -159,6 +159,8 @@ protected:
 	afx_msg void OnUpdateMinimapShowRoads(CCmdUI* pCmdUI);
 	afx_msg void OnMinimapCullObjects();
 	afx_msg void OnUpdateMinimapCullObjects(CCmdUI* pCmdUI);
+	afx_msg void OnMinimapSnap45();
+	afx_msg void OnUpdateMinimapSnap45(CCmdUI* pCmdUI);
 	afx_msg void OnMinimapRefreshOff();
 	afx_msg void OnMinimapRefresh16();
 	afx_msg void OnMinimapRefresh33();
@@ -250,6 +252,8 @@ private:
 	CPoint									m_actualWinSize;
 	Real										m_theta;
 	Real										m_cameraAngle;
+	Real										m_cameraAngleRaw;						// unsnapped accumulated rotation; m_cameraAngle is snapped from this when Angle Snap Lock is on
+	Bool										m_snapCameraAngle45;					// Angle Snap Lock: constrain camera rotation to 45-degree steps
 	Real										m_FXPitch;
 	Bool										m_doPitch;
 	Real										m_actualHeightAboveGround;	// for camera tool display only

@@ -602,6 +602,8 @@ WbView3d::WbView3d() :
 	m_mouseWheelOffset(0),
 	m_actualWinSize(0, 0),
 	m_cameraAngle(0.0),
+	m_cameraAngleRaw(0.0),
+	m_snapCameraAngle45(false),
 	m_FXPitch(1.0f),
 	m_actualHeightAboveGround(0.0f),
 	m_cameraGroundZ(0.0f),
@@ -656,6 +658,7 @@ WbView3d::WbView3d() :
 	m_textShadow = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "TextShadow", 1) != 0;
 	m_textAntialias = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "TextAntialias", 1) != 0;
 	m_labelAnchorMode = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "LabelAnchorMode", 0);
+	m_snapCameraAngle45 = (::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "SnapCameraAngle45", 0) != 0);
 
 	int msaaMode = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "MSAAMode", 0);
 	DX8Wrapper::Set_Multi_Sample_Type((D3DMULTISAMPLE_TYPE)msaaMode);
@@ -3040,6 +3043,8 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_UPDATE_COMMAND_UI(ID_MINIMAP_SHOWROADS, OnUpdateMinimapShowRoads)
 	ON_COMMAND(ID_MINIMAP_CULLOBJECTS, OnMinimapCullObjects)
 	ON_UPDATE_COMMAND_UI(ID_MINIMAP_CULLOBJECTS, OnUpdateMinimapCullObjects)
+	ON_COMMAND(ID_MINIMAP_SNAP45, OnMinimapSnap45)
+	ON_UPDATE_COMMAND_UI(ID_MINIMAP_SNAP45, OnUpdateMinimapSnap45)
 	ON_COMMAND(ID_MINIMAP_REFRESH_OFF, OnMinimapRefreshOff)
 	ON_COMMAND(ID_MINIMAP_REFRESH_16, OnMinimapRefresh16)
 	ON_COMMAND(ID_MINIMAP_REFRESH_33, OnMinimapRefresh33)
@@ -4145,6 +4150,7 @@ void WbView3d::setDefaultCamera()
 
 	m_mouseWheelOffset = 0;
 	m_cameraAngle = 0;
+	m_cameraAngleRaw = 0;
 	m_FXPitch = 1.0f;
 	if (m_centerPt.X < 0) m_centerPt.X = 0;
 	if (m_centerPt.Y < 0) m_centerPt.Y = 0;
@@ -4200,10 +4206,24 @@ void WbView3d::setDefaultCamera()
 }
 
 // ----------------------------------------------------------------------------
+// Round an angle (radians) to the nearest 45-degree (PI/4) step.
+static Real snapAngleTo45(Real a)
+{
+	const Real step = PI / 4.0f;
+	return step * floor(a / step + 0.5f);
+}
+
 void WbView3d::rotateCamera(Real delta)
 {
 	if (m_projection) return; // camera doesn't rotate in top down view.
-	m_cameraAngle += delta;
+	// Accumulate the raw (unsnapped) angle so a continuous drag keeps building up even
+	// while the displayed angle is pinned to a 45-degree step. Then derive the actual
+	// camera angle: when Angle Snap Lock is on, snap the raw to the nearest 45-degree
+	// step, so the camera ratchets notch-to-notch (0,45,90,...) as you drag. Without the
+	// separate raw accumulator, snapping m_cameraAngle in place would discard the drag
+	// each event and the camera would never advance past the first step.
+	m_cameraAngleRaw += delta;
+	m_cameraAngle = m_snapCameraAngle45 ? snapAngleTo45(m_cameraAngleRaw) : m_cameraAngleRaw;
 	redraw();
 	drawLabels();
 	CMainFrame::GetMainFrame()->handleCameraChange();
@@ -4763,6 +4783,28 @@ void WbView3d::OnUpdateMinimapCullObjects(CCmdUI* pCmdUI)
 {
 	pCmdUI->Enable(TheMinimapDialog != NULL);
 	pCmdUI->SetCheck(TheMinimapDialog && TheMinimapDialog->getCullObjects() ? 1 : 0);
+}
+
+// --- Minimap menu: Angle Snap Lock (camera rotation -> 45-degree steps) -------
+void WbView3d::OnMinimapSnap45()
+{
+	m_snapCameraAngle45 = !m_snapCameraAngle45;
+	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "SnapCameraAngle45", m_snapCameraAngle45 ? 1 : 0);
+	if (!m_projection)
+	{
+		// Re-derive the camera angle from the raw accumulator: snap to the nearest
+		// 45-degree step when enabling (lands on-grid immediately), or restore the
+		// free raw angle when disabling.
+		m_cameraAngle = m_snapCameraAngle45 ? snapAngleTo45(m_cameraAngleRaw) : m_cameraAngleRaw;
+		redraw();
+		drawLabels();
+		CMainFrame::GetMainFrame()->handleCameraChange();
+	}
+}
+void WbView3d::OnUpdateMinimapSnap45(CCmdUI* pCmdUI)
+{
+	pCmdUI->Enable(TRUE);
+	pCmdUI->SetCheck(m_snapCameraAngle45 ? 1 : 0);
 }
 
 // --- Minimap submenu: Refresh Rate (radio) ----------------------------------
