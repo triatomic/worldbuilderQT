@@ -884,8 +884,8 @@ Bool MinimapDialog::worldToMinimap(Real worldX, Real worldY, Int *mx, Int *my)
 	// removed. This must match the terrain resample mapping, which places minimap
 	// pixel i at world coord MAP_XY_FACTOR * (i * span/res), i.e. NO extra border
 	// term. (Do NOT subtract border again here -- that double-counts it and shifts
-	// every object/road by one border width. The view box uses a different,
-	// absolute-world transform because the camera/frustum coords include the border.)
+	// every object/road by one border width. The view box uses this SAME border-relative
+	// transform: getViewFrustumGroundCorners now returns border-relative corners.)
 	Real cellX = worldX / MAP_XY_FACTOR;
 	Real cellY = worldY / MAP_XY_FACTOR;
 	Int x = REAL_TO_INT((cellX / xSpan) * m_resolution);
@@ -958,14 +958,15 @@ void MinimapDialog::drawViewBoxOverlay(HDC hdc, Int clientW, Int clientH)
 
 	// Map each world corner to client pixels (fraction of map span * client size),
 	// clamped to the client so off-map corners still bound the box. Y is flipped
-	// (world +y is up, client +y is down). Subtract the border so this matches the
-	// click mapping (minimapToWorld) exactly -- otherwise the box is shifted from
-	// where a click recenters the camera.
+	// (world +y is up, client +y is down). The corners are already BORDER-RELATIVE
+	// (getViewFrustumGroundCorners subtracts the border), the same space as object
+	// dots, so this uses the exact same mapping as worldToMinimap -- do NOT subtract
+	// the border again here or the box shifts off the camera.
 	POINT pts[5];
 	for (int i = 0; i < 4; ++i)
 	{
-		Real fx = (corners[i].x / MAP_XY_FACTOR - border) / xSpan;
-		Real fy = (corners[i].y / MAP_XY_FACTOR - border) / ySpan;
+		Real fx = (corners[i].x / MAP_XY_FACTOR) / xSpan;
+		Real fy = (corners[i].y / MAP_XY_FACTOR) / ySpan;
 		if (fx < 0.0f) fx = 0.0f;  if (fx > 1.0f) fx = 1.0f;
 		if (fy < 0.0f) fy = 0.0f;  if (fy > 1.0f) fy = 1.0f;
 		pts[i].x = (LONG)(fx * clientW);

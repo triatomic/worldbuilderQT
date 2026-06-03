@@ -255,6 +255,8 @@ private:
 	Real										m_actualHeightAboveGround;	// for camera tool display only
 	Vector3									m_cameraSource;							// for camera tool display only
 	Vector3									m_cameraTarget;							// for camera tool display only
+	Real										m_cameraGroundZ;						// terrain height (world Z) under the camera center; for the minimap view-box projection
+	Real										m_cameraBorderWorld;					// border size * MAP_XY_FACTOR; subtracted to put frustum corners in border-relative (object) world
 	Int											m_time;
 	Int											m_updateCount;
 	UINT										m_timer;

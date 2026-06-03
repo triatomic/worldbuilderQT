@@ -604,6 +604,8 @@ WbView3d::WbView3d() :
 	m_cameraAngle(0.0),
 	m_FXPitch(1.0f),
 	m_actualHeightAboveGround(0.0f),
+	m_cameraGroundZ(0.0f),
+	m_cameraBorderWorld(0.0f),
 	m_doPitch(false),
 	m_theta(0.0),
 	m_time(0),
@@ -882,7 +884,23 @@ void WbView3d::setupCamera()
 	pos.y = m_centerPt.Y* MAP_XY_FACTOR;
 	pos.z = m_centerPt.Z* MAP_XY_FACTOR;
 
-	Real groundLevel = m_heightMapRenderObj?getHeightAroundPos(m_heightMapRenderObj, pos.x, pos.y) : 0;  
+	Real groundLevel = m_heightMapRenderObj?getHeightAroundPos(m_heightMapRenderObj, pos.x, pos.y) : 0;
+	// Cache the terrain height under the camera so the minimap view box can intersect
+	// the frustum against the real ground (getViewFrustumGroundCorners). m_centerPt.Z is
+	// always 0, so the old "groundZ = m_centerPt.Z * MAP_XY_FACTOR" was a flat z=0 plane,
+	// which drifted the box on non-flat / non-square maps.
+	m_cameraGroundZ = groundLevel;
+
+	// Cache the border offset in world units. The camera/eye is in ABSOLUTE cell-index
+	// world (m_centerPt includes the border), but minimap dots, terrain, and
+	// MapObject::getLocation() are all BORDER-RELATIVE. getViewFrustumGroundCorners
+	// subtracts this so its corners share the object world space (so the drawn box AND
+	// the isInViewFrustum cull line up with the blips instead of being shifted by the
+	// border).
+	{
+		WorldHeightMapEdit *pMapForBorder = WbDoc() ? WbDoc()->GetHeightMap() : NULL;
+		m_cameraBorderWorld = pMapForBorder ? (pMapForBorder->getBorderSize() * MAP_XY_FACTOR) : 0.0f;
+	}
 
 	// set position of camera itself
 	/*
@@ -2167,9 +2185,11 @@ Bool WbView3d::getViewFrustumGroundCorners(Coord3D corners[4])
 		return FALSE;
 
 	// Cast a ray from the camera through each viewport corner (normalized device
-	// space, -1..1) and intersect the ground plane z = groundLevel. groundLevel is
-	// the world Z the camera center looks at (m_centerPt.Z scaled like setupCamera).
-	const Real groundZ = m_centerPt.Z * MAP_XY_FACTOR;
+	// space, -1..1) and intersect the ground plane z = groundZ. groundZ is the actual
+	// terrain height under the camera center, cached by setupCamera. (Do NOT use
+	// m_centerPt.Z here -- it is permanently 0, which intersected a flat z=0 plane and
+	// drifted the box off the camera on non-flat / non-square maps, worst along +Y.)
+	const Real groundZ = m_cameraGroundZ;
 	const Vector3 eye = m_camera->Get_Position();
 
 	// NDC corners in view order: top-left, top-right, bottom-right, bottom-left.
@@ -2201,8 +2221,12 @@ Bool WbView3d::getViewFrustumGroundCorners(Coord3D corners[4])
 			t = 100000.0f;
 
 		Vector3 hit = eye + dir * t;
-		corners[i].x = hit.X;
-		corners[i].y = hit.Y;
+		// Convert from absolute (border-included) world to BORDER-RELATIVE world so the
+		// corners match MapObject::getLocation() -- the space the minimap dots, terrain,
+		// and the isInViewFrustum cull all use. Without this the box and cull are shifted
+		// by border*MAP_XY_FACTOR (the box lands over the wrong part of the map).
+		corners[i].x = hit.X - m_cameraBorderWorld;
+		corners[i].y = hit.Y - m_cameraBorderWorld;
 		corners[i].z = hit.Z;
 	}
 	return TRUE;
