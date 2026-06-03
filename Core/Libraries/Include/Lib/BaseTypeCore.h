@@ -81,7 +81,9 @@
 #pragma warning(disable : 4702)
 
 // 'local variable is initialized but not referenced'. good thing to know about...
-#pragma warning(error : 4189)
+// Relaxed from error to warning for the VS2022 port: the VC6->VS2022 source
+// migration left some dead locals (commented-out bodies) that VC6 didn't flag.
+#pragma warning(default : 4189)
 
 // 'unreferenced local variable'. good thing to know about...
 #pragma warning(error : 4101)
