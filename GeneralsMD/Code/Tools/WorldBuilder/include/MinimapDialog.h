@@ -99,6 +99,7 @@ private:
 		Real tintR = 1.0f, Real tintG = 1.0f, Real tintB = 1.0f);	///< Textured (or flat) thick line into the buffer.
 	void drawViewBoxOverlay(HDC hdc, Int clientW, Int clientH);	///< GDI camera-frustum box (display res).
 	void fillRect(Int cx, Int cy, Int w, Int h, UnsignedInt color);	///< centered, clipped buffer fill.
+	void fillCheckerRect(Int cx, Int cy, Int w, Int h, UnsignedInt colorA, UnsignedInt colorB, Int cell);	///< centered checkerboard fill (cashbox); cell = block size in buffer px.
 	void fillDiamond(Int cx, Int cy, Int size, UnsignedInt color);	///< centered, clipped diamond fill (units).
 	Bool worldToMinimap(Real worldX, Real worldY, Int *mx, Int *my);	///< world coords -> minimap cell.
 	Bool isInViewFrustum(Real worldX, Real worldY);	///< point (world units) inside the 3D view's ground footprint?

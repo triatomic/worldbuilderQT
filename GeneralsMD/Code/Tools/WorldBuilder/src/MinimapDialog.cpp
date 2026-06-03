@@ -774,8 +774,9 @@ static inline UnsignedInt packBGRA(Int rgb)
 	return (UnsignedInt)(b | (g << 8) | (r << 16) | (255 << 24));
 }
 
-// Resource structures (supply docks + oil derricks) get a distinct solid-black
-// marker, matching the Thrax minimap's only building-type-specific styling.
+// Resource structures (supply docks + oil derricks) get a distinct minimap marker:
+// a gold/black checkerboard with a dark-gray outline, so they stand out from the
+// house-colored buildings and don't blend into any single terrain tone.
 static Bool isResourceStructure(const ThingTemplate *t)
 {
 	if (!t)
@@ -798,6 +799,37 @@ void MinimapDialog::fillRect(Int cx, Int cy, Int w, Int h, UnsignedInt color)
 		{
 			if (xx < 0 || xx >= m_resolution) continue;
 			pixel(xx, yy) = color;
+		}
+	}
+}
+
+// Fill an axis-aligned rect with a 2-color checkerboard. Used for resource structures
+// (the "cashbox") so they read as a distinct special marker rather than a flat solid
+// block. w/h are full extents. 'cell' is the checker block size in buffer pixels: it
+// MUST be >= 2 so the pattern survives the COLORONCOLOR StretchDIBits to the client --
+// a 1-pixel-period checker aliases to a solid color (decimation drops every other
+// pixel) at any resolution where the buffer is downscaled, which is exactly the bug
+// that made these go solid black at resolutions other than the ~native one.
+//
+// The block index is RELATIVE to the marker's own origin (left/top), not absolute
+// buffer coords: that locks the checker to the marker box so it translates rigidly as
+// the object moves. Indexing by absolute coords instead makes the box edge slide
+// across a fixed global grid frame-to-frame, which reads as the pattern "crawling" or
+// morphing under the (fixed-width) outline as the unit moves.
+void MinimapDialog::fillCheckerRect(Int cx, Int cy, Int w, Int h,
+								UnsignedInt colorA, UnsignedInt colorB, Int cell)
+{
+	if (cell < 2) cell = 2;
+	Int left = cx - w / 2;
+	Int top  = cy - h / 2;
+	for (Int yy = top; yy < top + h; ++yy)
+	{
+		if (yy < 0 || yy >= m_resolution) continue;
+		for (Int xx = left; xx < left + w; ++xx)
+		{
+			if (xx < 0 || xx >= m_resolution) continue;
+			Int parity = (((xx - left) / cell) + ((yy - top) / cell)) & 1;
+			pixel(xx, yy) = parity ? colorA : colorB;
 		}
 	}
 }
@@ -1326,7 +1358,9 @@ void MinimapDialog::drawObjects()
 	if (outlineWidth > maxOutline) outlineWidth = maxOutline;
 	if (outlineWidth < 1) outlineWidth = 1;
 
-	const UnsignedInt black = packBGRA(0x000000);
+	const UnsignedInt black    = packBGRA(0x000000);
+	const UnsignedInt gold     = packBGRA(0xFFD700);	// resource checkerboard accent
+	const UnsignedInt darkGray = packBGRA(0x404040);	// resource-marker outline
 
 	for (MapObject *pObj = MapObject::getFirstMapObject(); pObj; pObj = pObj->getNext())
 	{
@@ -1363,10 +1397,31 @@ void MinimapDialog::drawObjects()
 		// Structure.
 		if (isResourceStructure(t))
 		{
-			// Solid black marker, slightly larger than a normal structure.
+			// Gold/black checkerboard marker with a dark-gray outline, slightly larger
+			// than a normal structure, so resource buildings (supply docks + oil
+			// derricks) read as distinct and don't blend into any single terrain tone.
 			Int rs = (structSize * 7) / 6;		// ~7 display px (structSize is ~6)
 			if (rs <= structSize) rs = structSize + 1;
-			fillRect(mx, cy, rs, rs, black);
+			// Dark-gray rim: fill the full marker gray, then inset the checker by the
+			// outline width on every side so a gray border remains. Use the same thin
+			// rim width as the house-color boxes; clamp so the checker keeps most of
+			// the marker (and never inverts to nothing at low res).
+			Int rim = outlineWidth;
+			Int inner = rs - rim * 2;
+			if (inner < rs / 2) { rim = 1; inner = rs - 2; }	// keep checker dominant
+			if (inner < 1) { rim = 0; inner = rs; }				// too small for a rim
+			if (rim > 0)
+				fillRect(mx, cy, rs, rs, darkGray);
+			// Checker cell size in buffer px. The buffer is StretchDIBits'd to the
+			// client with COLORONCOLOR (decimation), so a cell must be at least a
+			// couple of DISPLAY px or the pattern aliases to a solid color. Convert a
+			// ~2 display-px target to buffer px (= 2*m_resolution/clientPx), floor 2,
+			// then cap so the marker still holds at least a 2x2 checker (else it's solid).
+			Int cell = (2 * m_resolution + clientPx / 2) / clientPx;
+			if (cell < 2) cell = 2;
+			if (cell > inner / 2) cell = inner / 2;
+			if (cell < 1) cell = 1;					// inner<2 (extreme low res): 1px is all we have
+			fillCheckerRect(mx, cy, inner, inner, gold, black, cell);
 			continue;
 		}
 
