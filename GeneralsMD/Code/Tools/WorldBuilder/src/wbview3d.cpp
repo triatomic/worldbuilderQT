@@ -615,6 +615,8 @@ WbView3d::WbView3d() :
 	m_haveLabelCache(false),
 	m_labelEpoch(0),
 	m_labelAnchorMode(0),
+	m_labelRenderer(0),
+	m_haveGdiPaintKey(false),
 	m_needToLoadRoads(0),
 	m_timer(NULL),
 	m_drawObject(NULL),
@@ -658,6 +660,7 @@ WbView3d::WbView3d() :
 	m_textShadow = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "TextShadow", 1) != 0;
 	m_textAntialias = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "TextAntialias", 1) != 0;
 	m_labelAnchorMode = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "LabelAnchorMode", 0);
+	m_labelRenderer = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "LabelRenderer", 0);
 	m_snapCameraAngle45 = (::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "SnapCameraAngle45", 0) != 0);
 
 	int msaaMode = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "MSAAMode", 0);
@@ -2943,9 +2946,10 @@ void WbView3d::render()
 		// Draw the 3d obj icons on top of the rest of the data.
 		WW3D::Render(m_overlayScene,m_camera);
 
-		// Viewport labels: draw directly with the D3DX font (m3DFont). drawLabels(NULL)
-		// takes the m3DFont->DrawText path (the hdc==NULL branch).
-		if (m3DFont) {
+		// Viewport labels, Old (D3DX) mode: draw directly with m3DFont inside the
+		// frame (flicker-free). drawLabels(NULL) takes the m3DFont->DrawText path.
+		// In New (GDI) mode the labels are drawn instead in OnPaint() via ::TextOut.
+		if (m3DFont && m_labelRenderer == 0) {
 			drawLabels(NULL);
 		}
 
@@ -3087,6 +3091,10 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_UPDATE_COMMAND_UI(ID_TEXT_ANCHOR_DEFAULT, OnUpdateTextAnchorDefault)
 	ON_COMMAND(ID_TEXT_ANCHOR_NEW, OnTextAnchorNew)
 	ON_UPDATE_COMMAND_UI(ID_TEXT_ANCHOR_NEW, OnUpdateTextAnchorNew)
+	ON_COMMAND(ID_TEXT_RENDERER_OLD, OnTextRendererOld)
+	ON_UPDATE_COMMAND_UI(ID_TEXT_RENDERER_OLD, OnUpdateTextRendererOld)
+	ON_COMMAND(ID_TEXT_RENDERER_NEW, OnTextRendererNew)
+	ON_UPDATE_COMMAND_UI(ID_TEXT_RENDERER_NEW, OnUpdateTextRendererNew)
 
 	ON_COMMAND(ID_REVALIDATE_RENDER, OnRefreshSceneObjects)
 	//}}AFX_MSG_MAP
@@ -3267,7 +3275,17 @@ void WbView3d::OnPaint()
 	if (!m_firstPaint) {
 		redraw();
 	}
-	drawLabels(hdc);
+	// New (GDI) mode only: draw labels with raw ::TextOut onto the window HDC, after
+	// the D3D frame has been presented by redraw()/End_Render(). This is what strobes
+	// (the next flip wipes it) -- accepted trade-off. Old (D3DX) mode draws labels
+	// inside the frame in render(), so we must NOT also draw them here.
+	if (m_labelRenderer == 1) {
+		drawLabels(hdc);
+		// Record the view state we just painted, so OnTimer can skip repaints (and
+		// thus the strobe-inducing buffer flip) until something actually changes.
+		m_lastGdiPaintKey = buildLabelKey();
+		m_haveGdiPaintKey = true;
+	}
 	::EndPaint(m_hWnd, &ps);
 	if (m_firstPaint) {
 		CMainFrame::GetMainFrame()->adjustWindowSize();
@@ -3480,7 +3498,9 @@ void WbView3d::drawStatusLabels(CPoint basePt, int offset, const char* text, voi
 	int red = 0, green = 255, blue = 255;
 	AsciiString label = text;
 
-	if (m3DFont && !hdc) {
+	// Route by the label-renderer mode (member m_labelRenderer), not by m3DFont
+	// nullness: Old (0) uses the in-frame D3DX font, New (1) uses raw GDI ::TextOut.
+	if (m_labelRenderer == 0 && m3DFont && !hdc) {
 		if (m_textShadow) {
 			RECT shadowRct = { labelPt.x + 2, labelPt.y + 1, labelPt.x + 2, labelPt.y + 1 };
 			((ID3DXFont*)m3DFont)->DrawText(label.str(), label.getLength(), &shadowRct,
@@ -3490,7 +3510,7 @@ void WbView3d::drawStatusLabels(CPoint basePt, int offset, const char* text, voi
 		RECT rct = { labelPt.x + 1, labelPt.y, labelPt.x + 1, labelPt.y };
 		((ID3DXFont*)m3DFont)->DrawText(label.str(), label.getLength(), &rct,
 			DT_LEFT | DT_NOCLIP | DT_TOP | DT_SINGLELINE, textColor);
-	} else if (!m3DFont) {
+	} else if (m_labelRenderer == 1 && hdc) {
 		::SetBkMode(hdc, TRANSPARENT);
 		if (m_textShadow) {
 			::SetTextColor(hdc, RGB(0, 0, 0));
@@ -3590,6 +3610,30 @@ void WbView3d::drawLabels(HDC hdc)
 	{
 		Vector3 dummy;
 		m_camera->Project(dummy, Vector3(0, 0, 0));
+	}
+
+	// Projection target space. The two renderers draw into DIFFERENT pixel spaces:
+	//  - Old (D3DX): label quads are composited into the D3D back buffer, whose size
+	//    is m_actualWinSize (a fixed/forced resolution that the driver stretches to
+	//    fill the window). Project into m_actualWinSize so the quads land correctly.
+	//  - New (GDI): ::TextOut draws into the window's client HDC at 1:1 client pixels.
+	//    Project into the client rect (and offset by its origin) or the text lands
+	//    offset/scaled relative to the stretched 3D image.
+	// GetClientRect must run on the UI thread (not inside the parallel worker), so we
+	// resolve the projection size/origin here, once, and the workers only read it.
+	Int projW, projH, projOriginX, projOriginY;
+	if (m_labelRenderer == 1) {
+		CRect rClientProj;
+		GetClientRect(&rClientProj);
+		projW = rClientProj.Width();
+		projH = rClientProj.Height();
+		projOriginX = rClientProj.left;
+		projOriginY = rClientProj.top;
+	} else {
+		projW = m_actualWinSize.x;
+		projH = m_actualWinSize.y;
+		projOriginX = 0;
+		projOriginY = 0;
 	}
 
 	WBParallel::parallelFor(0, objCount, [&](int begin, int end)
@@ -3728,20 +3772,20 @@ void WbView3d::drawLabels(HDC hdc)
 			Vector3 screen;
 			if (CameraClass::INSIDE_FRUSTUM != m_camera->Project(screen, world)) continue;
 
-			// Map into back-buffer pixel space (m_actualWinSize), the same space the
-			// label overlay quads are drawn in -- so labels don't stretch on resize.
+			// Map into the renderer's pixel space (back buffer for D3DX, client rect
+			// for GDI; see projW/projH/projOrigin* resolved above).
 			Int sx, sy;
 			W3DLogicalScreenToPixelScreenHackedForWBLabels(
 				screen.X, screen.Y,
 				&sx, &sy,
-				m_actualWinSize.x, m_actualWinSize.y
+				projW, projH
 			);
 
-			CPoint pt(sx, sy - 5);
+			CPoint pt(projOriginX + sx, projOriginY + sy - 5);
 
 			// Skip Projection if not visible to this area
 			if(m_lod == 1){
-				CPoint center(m_actualWinSize.x / 2, m_actualWinSize.y / 2);
+				CPoint center(projOriginX + projW / 2, projOriginY + projH / 2);
 				int dx = pt.x - center.x;
 				int dy = pt.y - center.y;
 				int distSq = dx * dx + dy * dy;
@@ -3851,7 +3895,7 @@ void WbView3d::drawLabels(HDC hdc)
 				int green = (argb >>  8) & 0xFF;
 				int blue  =  argb        & 0xFF;
 
-				if (m3DFont && !hdc) {
+				if (m_labelRenderer == 0 && m3DFont && !hdc) {
 					if (m_textShadow) {
 						RECT shadowRct = { labelPt.x + 2, labelPt.y + 1, labelPt.x + 2, labelPt.y + 1 };
 						m3DFont->DrawText(label.str(), label.getLength(), &shadowRct,
@@ -3861,7 +3905,7 @@ void WbView3d::drawLabels(HDC hdc)
 					RECT rct = { labelPt.x + 1, labelPt.y, labelPt.x + 1, labelPt.y };
 					m3DFont->DrawText(label.str(), label.getLength(), &rct,
 						DT_LEFT | DT_NOCLIP | DT_TOP | DT_SINGLELINE, textColor);
-				} else if (!m3DFont) {
+				} else if (m_labelRenderer == 1 && hdc) {
 					::SetBkMode(hdc, TRANSPARENT);
 					if (m_textShadow) {
 						::SetTextColor(hdc, RGB(0, 0, 0));
@@ -3905,16 +3949,17 @@ void WbView3d::drawLabels(HDC hdc)
 						continue;
 					}
 
-					// Back-buffer pixel space (matches the label overlay; resize-safe).
+					// Renderer pixel space (back buffer for D3DX, client rect for GDI;
+					// see projW/projH/projOrigin* resolved above).
 					Int sx, sy;
 					W3DLogicalScreenToPixelScreenHackedForWBLabels(screen.X, screen.Y,
 												&sx, &sy,
-												m_actualWinSize.x, m_actualWinSize.y);
-					pt.x = sx;
-					pt.y = sy;
+												projW, projH);
+					pt.x = projOriginX + sx;
+					pt.y = projOriginY + sy;
 
 					// Draw the label for each point
-					if (m3DFont && !hdc) {
+					if (m_labelRenderer == 0 && m3DFont && !hdc) {
 						if (m_textShadow) {
 							RECT shadowRct;
 							shadowRct.top = shadowRct.bottom = pt.y + 1;
@@ -3929,7 +3974,7 @@ void WbView3d::drawLabels(HDC hdc)
 						m3DFont->DrawText(triggerName.str(), triggerName.getLength(), &rct,
 										DT_LEFT | DT_NOCLIP | DT_TOP | DT_SINGLELINE,
 										0xAFFF8800);
-					} else if (!m3DFont) {
+					} else if (m_labelRenderer == 1 && hdc) {
 						::SetBkMode(hdc, TRANSPARENT);
 						if (m_textShadow) {
 							::SetTextColor(hdc, RGB(0, 0, 0));
@@ -3960,7 +4005,7 @@ void WbView3d::drawLabels(HDC hdc)
 		) {
 		const CString text = _T(PointerTool::getLastPointerInfoString());
 		// DEBUG_LOG(("PointerTool::getLastPointerInfoString() returned: \"%s\"\n", (LPCTSTR)text));
-		if (text.IsEmpty() || !m3DFont)
+		if (text.IsEmpty() || (m_labelRenderer == 0 && !m3DFont))
 			return;
 
 		// Get mouse position
@@ -3992,27 +4037,38 @@ void WbView3d::drawLabels(HDC hdc)
 			{-1,  0}, { 1,  0}, { 0, -1}, { 0,  1}
 		};
 
-		// Draw outline
-		for (int i = 0; i < 8; ++i) {
-			RECT outlineRect = baseRect;
-			OffsetRect(&outlineRect, outlineOffsets[i][0], outlineOffsets[i][1]);
+		if (m_labelRenderer == 0 && m3DFont && !hdc) {
+			// Draw outline
+			for (int i = 0; i < 8; ++i) {
+				RECT outlineRect = baseRect;
+				OffsetRect(&outlineRect, outlineOffsets[i][0], outlineOffsets[i][1]);
+				m3DFont->DrawText(
+					text,
+					text.GetLength(),
+					&outlineRect,
+					DT_LEFT | DT_TOP | DT_NOCLIP | DT_WORDBREAK,
+					outlineColor
+				);
+			}
+
+			// Draw main text
 			m3DFont->DrawText(
 				text,
 				text.GetLength(),
-				&outlineRect,
+				&baseRect,
 				DT_LEFT | DT_TOP | DT_NOCLIP | DT_WORDBREAK,
-				outlineColor
+				mainColor
 			);
+		} else if (m_labelRenderer == 1 && hdc) {
+			::SetBkMode(hdc, TRANSPARENT);
+			::SetTextColor(hdc, RGB(0, 0, 0));
+			for (int i = 0; i < 8; ++i) {
+				::TextOut(hdc, baseRect.left + outlineOffsets[i][0], baseRect.top + outlineOffsets[i][1],
+					text, text.GetLength());
+			}
+			::SetTextColor(hdc, RGB(255, 255, 255));
+			::TextOut(hdc, baseRect.left, baseRect.top, text, text.GetLength());
 		}
-
-		// Draw main text
-		m3DFont->DrawText(
-			text,
-			text.GetLength(),
-			&baseRect,
-			DT_LEFT | DT_TOP | DT_NOCLIP | DT_WORDBREAK,
-			mainColor
-		);
 	}
 
 	CString text;
@@ -4021,7 +4077,7 @@ void WbView3d::drawLabels(HDC hdc)
 	const int offsetX = 10;
 	const int offsetY = 10;
 
-	if (m3DFont) {
+	if (m_labelRenderer == 0 && m3DFont && !hdc) {
 		RECT rct = { offsetX, offsetY, offsetX + 400, offsetY + 30 };
 		m3DFont->DrawText(
 			text,
@@ -4030,7 +4086,7 @@ void WbView3d::drawLabels(HDC hdc)
 			DT_LEFT | DT_TOP | DT_NOCLIP | DT_SINGLELINE,
 			0xFFFFFFFF
 		);
-	} else if (hdc) {
+	} else if (m_labelRenderer == 1 && hdc) {
 		::SetBkMode(hdc, TRANSPARENT);
 		::SetTextColor(hdc, RGB(255, 255, 255));
 		::TextOut(hdc, offsetX, offsetY, text, text.GetLength());
@@ -4045,7 +4101,7 @@ void WbView3d::drawLabels(HDC hdc)
 		const int offsetX = 10;
 		const int offsetY = rClient.bottom + 70;
 
-		if (m3DFont && !hdc) {
+		if (m_labelRenderer == 0 && m3DFont && !hdc) {
 			RECT rct = { offsetX, offsetY, offsetX + 400, offsetY + 30 };
 			m3DFont->DrawText(
 				editTimeStr.str(),
@@ -4054,7 +4110,7 @@ void WbView3d::drawLabels(HDC hdc)
 				DT_LEFT | DT_TOP | DT_NOCLIP | DT_SINGLELINE,
 				0xFFFFFFFF // White color
 			);
-		} else if (hdc && !m3DFont) {
+		} else if (m_labelRenderer == 1 && hdc) {
 			::SetBkMode(hdc, TRANSPARENT);
 			::SetTextColor(hdc, RGB(255, 255, 255));
 			::TextOut(hdc, offsetX, offsetY, editTimeStr.str(), editTimeStr.getLength());
@@ -4064,7 +4120,7 @@ void WbView3d::drawLabels(HDC hdc)
 	if (CMainFrame::GetMainFrame()->showAutoSaveMessage()){
 		CString autoSaveText = _T("Auto-saving in 10 seconds...");
 
-		if (m3DFont) {
+		if (m_labelRenderer == 0 && m3DFont && !hdc) {
 			RECT rct = { offsetX, offsetY + 20, offsetX + 400, offsetY + 50 };
 			m3DFont->DrawText(
 				autoSaveText,
@@ -4073,7 +4129,7 @@ void WbView3d::drawLabels(HDC hdc)
 				DT_LEFT | DT_TOP | DT_NOCLIP | DT_SINGLELINE,
 				0xFFFFFF00 // Yellow color
 			);
-		} else if (hdc) {
+		} else if (m_labelRenderer == 1 && hdc) {
 			::SetBkMode(hdc, TRANSPARENT);
 			::SetTextColor(hdc, RGB(255, 255, 0)); // Yellow color
 			::TextOut(hdc, offsetX, offsetY + 20, autoSaveText, autoSaveText.GetLength());
@@ -4392,12 +4448,27 @@ Real WbView3d::getCurrentZoom(void)
 }
 
 // ----------------------------------------------------------------------------
-void WbView3d::OnTimer(UINT nIDEvent) 
+void WbView3d::OnTimer(UINT nIDEvent)
 {
-	if (getLastDrawTime()+UPDATE_TIME<::GetTickCount()) 
-	{
-		Invalidate(false);
+	if (getLastDrawTime()+UPDATE_TIME >= ::GetTickCount())
+		return;		// throttle: at most one repaint per UPDATE_TIME
+
+	// GDI label mode coalesces idle repaints to suppress the strobe (see header).
+	// Repaint only when the view actually changed, an interaction is in progress,
+	// or the low-rate fallback elapsed. D3DX mode always free-runs.
+	if (m_labelRenderer == 1) {
+		const UINT GDI_IDLE_FALLBACK_MS = 5000;	// max stale-frame time when "idle"
+
+		Bool interacting = (m_trackingMode != TRACK_NONE) || PointerTool::isMouseDown();
+		LabelCacheKey key = buildLabelKey();
+		Bool changed = !m_haveGdiPaintKey || !(key == m_lastGdiPaintKey);
+		Bool fallbackDue = (getLastDrawTime() + GDI_IDLE_FALLBACK_MS) < ::GetTickCount();
+
+		if (!interacting && !changed && !fallbackDue)
+			return;		// static view: leave the last frame + its GDI text on screen
 	}
+
+	Invalidate(false);
 }
 
 // ----------------------------------------------------------------------------
@@ -5320,6 +5391,36 @@ void WbView3d::OnTextAnchorNew()
 void WbView3d::OnUpdateTextAnchorNew(CCmdUI* pCmdUI)
 {
 	pCmdUI->SetCheck(m_labelAnchorMode == 1);
+}
+
+// Label renderer: Old (D3DX m3DFont, drawn inside the D3D frame -> no flicker) vs
+// New (raw GDI ::TextOut on the window HDC -> sharper but strobes, because D3D8 has no
+// way to draw GDI into the presented frame). Presented as a radio pair under Text
+// Rendering. Clearing m_haveLabelCache forces an immediate rebuild.
+void WbView3d::OnTextRendererOld()
+{
+	m_labelRenderer = 0;
+	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "LabelRenderer", 0);
+	m_haveLabelCache = false;
+	Invalidate();
+}
+
+void WbView3d::OnUpdateTextRendererOld(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(m_labelRenderer == 0);
+}
+
+void WbView3d::OnTextRendererNew()
+{
+	m_labelRenderer = 1;
+	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "LabelRenderer", 1);
+	m_haveLabelCache = false;
+	Invalidate();
+}
+
+void WbView3d::OnUpdateTextRendererNew(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(m_labelRenderer == 1);
 }
 
 void WbView3d::OnKillFocus(CWnd* pNewWnd)

@@ -375,6 +375,9 @@ BEGIN
         MENUITEM SEPARATOR
         MENUITEM "Label Anchor: Default",       ID_TEXT_ANCHOR_DEFAULT
         MENUITEM "Label Anchor: New",           ID_TEXT_ANCHOR_NEW
+        MENUITEM SEPARATOR
+        MENUITEM "Label Renderer: Old (D3DX)",  ID_TEXT_RENDERER_OLD
+        MENUITEM "Label Renderer: New (GDI)",   ID_TEXT_RENDERER_NEW
     END
     POPUP "&Window"
     BEGIN

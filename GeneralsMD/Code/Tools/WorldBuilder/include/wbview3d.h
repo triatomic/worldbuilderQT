@@ -219,6 +219,10 @@ protected:
 	afx_msg void OnUpdateTextAnchorDefault(CCmdUI* pCmdUI);
 	afx_msg void OnTextAnchorNew();
 	afx_msg void OnUpdateTextAnchorNew(CCmdUI* pCmdUI);
+	afx_msg void OnTextRendererOld();
+	afx_msg void OnUpdateTextRendererOld(CCmdUI* pCmdUI);
+	afx_msg void OnTextRendererNew();
+	afx_msg void OnUpdateTextRendererNew(CCmdUI* pCmdUI);
 	afx_msg void OnViewShowSubDraw();
 	afx_msg void OnUpdateViewShowSubDraw(CCmdUI* pCmdUI);
 	afx_msg void OnViewShowBaseRadius();
@@ -303,6 +307,7 @@ private:
 	Bool m_textShadow;
 	Bool m_textAntialias;					///< grayscale antialiasing for viewport labels
 	Int  m_labelAnchorMode;					///< 0 = Default (ground), 1 = New (object center-height)
+	Int  m_labelRenderer;					///< 0 = Old (D3DX m3DFont, in-frame, no flicker), 1 = New (raw GDI TextOut, strobes)
 	void setMSAA(D3DMULTISAMPLE_TYPE type);
 	void setTextureFilter(int mode);
 	void createLabelFont();					///< (re)create m3DFont honoring m_textAntialias
@@ -333,6 +338,18 @@ private:
 	LabelCacheKey	m_lastLabelKey;
 	Bool			m_haveLabelCache;	// m_lastLabelKey / the atlas batch are valid
 	UnsignedInt		m_labelEpoch;		// bumped whenever labels may have changed
+
+	// --- GDI-mode (Label Renderer: New) flicker coalescing -----------------
+	// Raw GDI ::TextOut on the window strobes because every repaint flips the D3D
+	// back buffer (no text) over the whole window before TextOut redraws the text.
+	// On a STATIC view we therefore skip the OnTimer repaint entirely, so the last
+	// presented frame + its GDI text persist on screen (no flip = no wipe = no
+	// strobe). We resume repainting when buildLabelKey() changes, while a mouse
+	// drag / camera track is active, or after a low-rate fallback interval (so
+	// anything that changes without bumping the key still updates within ~5s).
+	// Only consulted when m_labelRenderer == 1; D3DX mode keeps free-running.
+	LabelCacheKey	m_lastGdiPaintKey;	// buildLabelKey() snapshot at the last GDI repaint
+	Bool			m_haveGdiPaintKey;	// m_lastGdiPaintKey is valid
 	LabelCacheKey	buildLabelKey();
 	Int											m_pickPixels;
 	Int											m_partialMapSize;
