@@ -37,6 +37,7 @@
 #include "ObjectTool.h"
 #include "ToastDialog.h"
 #include "DrawObject.h"
+#include "MinimapDialog.h"
 
 
 CString PointerTool::m_lastPointerInfo = _T("");
@@ -868,6 +869,13 @@ void PointerTool::mouseUp(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldB
 	} 
 
 	m_isMouseDown = false;
+
+	// The minimap object-overlay refresh is suppressed during the drag (wbview3d's edit
+	// funnel skips it while isMouseDown(), to keep the framerate up while moving objects
+	// with the minimap open). Now that the drag is done, do the single deferred refresh.
+	if (TheMinimapDialog && TheMinimapDialog->IsWindowVisible())
+		TheMinimapDialog->requestRebuild(false);
+
 	checkForPropertiesPanel();
 }
 
