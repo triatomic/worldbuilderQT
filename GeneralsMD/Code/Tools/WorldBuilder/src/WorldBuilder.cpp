@@ -22,7 +22,6 @@
 #include "StdAfx.h"
 #include <eh.h>
 #include "WorldBuilder.h"
-#include "euladialog.h"
 #include "MainFrm.h"
 #include "OpenMap.h"
 #include "SplashScreen.h"
@@ -117,7 +116,6 @@ void initSubsystem(SUBSYSTEM*& sysref, SUBSYSTEM* sys, const char* path1 = NULL,
 #define APP_SECTION "WorldbuilderApp"
 #define OPEN_FILE_DIR "OpenDirectory"
 #define GAME_DIR "GameDirectory"
-#define EULA "AgreedToEula"
 #define ABOUT_SECTION "AboutWindow"
 
 #define NEWLINE "\r\n"
@@ -305,21 +303,6 @@ BOOL CWorldBuilderApp::InitInstance()
 	TheDmaCriticalSection = &critSecDma;
 	TheMemoryPoolCriticalSection = &critSecMemoryPool;
 	TheDebugLogCriticalSection = &critSecDebugLog;
-
-//#ifdef _RELEASE
-	if (this->GetProfileInt(APP_SECTION, EULA, 0) == 0) {
-		EulaDialog eulaDialog;
-		if (eulaDialog.DoModal() == IDCANCEL) {
-			return FALSE;
-		}
-		/**
-		 * Adriane [Deathscythe] 
-		 * Idk why this thing stores it on c:/windows
-		 * instead of the actual worldbuilder.ini in documents but fuck it -- it works anyways.
-		 */ 
-		this->WriteProfileInt(APP_SECTION, EULA, 1);
-	}
-//#endif
 
 	ApplicationHWnd = GetDesktopWindow();
 
