@@ -1991,8 +1991,40 @@ void DrawObject::updateVBWithBoundingBox(MapObject *pMapObj, CameraClass* camera
 	}
 
 	unsigned long color = 0xFFFFFF00; // Yellow
-	
+
 	GeometryInfo ginfo = pMapObj->getThingTemplate()->getTemplateGeometryInfo();
+
+	// Skip the selection bounding box for objects whose footprint spans (nearly) the
+	// whole map -- e.g. the water/reflection object, which is map-sized -- BUT only when
+	// the 3D camera is at an angle. Map-sized box corners land at the map edges; in the
+	// angled perspective view they fan a huge yellow quad across the viewport that
+	// obscures everything. Looking straight down (top-down camera) the same box reads as
+	// a clean rectangle framing the map, which is fine, so we keep it there. A normal
+	// object's radius is tiny compared to the map, so this only affects the map-spanning
+	// case.
+	if (camera) {
+		CWorldBuilderDoc *pDoc = CWorldBuilderDoc::GetActiveDoc();
+		WorldHeightMapEdit *pMap = pDoc ? pDoc->GetHeightMap() : NULL;
+		if (pMap) {
+			Real mapW = INT_TO_REAL(pMap->getXExtent() - 2 * pMap->getBorderSize()) * MAP_XY_FACTOR;
+			Real mapH = INT_TO_REAL(pMap->getYExtent() - 2 * pMap->getBorderSize()) * MAP_XY_FACTOR;
+			Real mapMin = (mapW < mapH) ? mapW : mapH;
+			Real objRadius = ginfo.getMajorRadius();
+			if (ginfo.getMinorRadius() > objRadius)
+				objRadius = ginfo.getMinorRadius();
+			Bool mapSized = (mapMin > 0.0f && (objRadius * 2.0f) >= (mapMin * 0.5f));
+
+			// How top-down the camera is: in W3D the camera looks down its -Z axis, so its
+			// Z-vector points backward (toward world +Z when looking straight down). That
+			// Z component is ~1.0 looking straight down and falls off as the view tilts.
+			Real camDownness = (Real)fabs(camera->Get_Transform().Get_Z_Vector().Z);
+			const Real TOPDOWN_THRESHOLD = 0.97f;	// ~14 degrees off straight-down still counts as top-down
+			Bool isTopDown = (camDownness >= TOPDOWN_THRESHOLD);
+
+			if (mapSized && !isTopDown)
+				return;
+		}
+	}
 
 	// Bool isSmall =  ginfo.getIsSmall() || pMapObj->getThingTemplate()->isKindOf(KINDOF_LOW_OVERLAPPABLE) || pMapObj->getThingTemplate()->isKindOf(KINDOF_STRUCTURE) ;
 	Bool isSmall =  !pMapObj->getThingTemplate()->isKindOf(KINDOF_STRUCTURE);
