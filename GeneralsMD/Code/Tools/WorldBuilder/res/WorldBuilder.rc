@@ -335,6 +335,7 @@ BEGIN
         BEGIN
             MENUITEM "Show Objects",            ID_MINIMAP_SHOWOBJECTS
             MENUITEM "Show Roads",              ID_MINIMAP_SHOWROADS
+            MENUITEM "Show Full Extent",        ID_MINIMAP_FULLEXTENT
             MENUITEM "Show Border",             ID_MINIMAP_SHOWBORDER
             MENUITEM "Cull Objects To View",    ID_MINIMAP_CULLOBJECTS
             MENUITEM "Angle Snap Lock",         ID_MINIMAP_SNAP45

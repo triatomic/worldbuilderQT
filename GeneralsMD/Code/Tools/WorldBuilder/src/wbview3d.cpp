@@ -3032,6 +3032,8 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_UPDATE_COMMAND_UI(ID_MINIMAP_SHOWROADS, OnUpdateMinimapShowRoads)
 	ON_COMMAND(ID_MINIMAP_SHOWBORDER, OnMinimapShowBorder)
 	ON_UPDATE_COMMAND_UI(ID_MINIMAP_SHOWBORDER, OnUpdateMinimapShowBorder)
+	ON_COMMAND(ID_MINIMAP_FULLEXTENT, OnMinimapFullExtent)
+	ON_UPDATE_COMMAND_UI(ID_MINIMAP_FULLEXTENT, OnUpdateMinimapFullExtent)
 	ON_COMMAND(ID_MINIMAP_CULLOBJECTS, OnMinimapCullObjects)
 	ON_UPDATE_COMMAND_UI(ID_MINIMAP_CULLOBJECTS, OnUpdateMinimapCullObjects)
 	ON_COMMAND(ID_MINIMAP_SNAP45, OnMinimapSnap45)
@@ -4978,8 +4980,20 @@ void WbView3d::OnMinimapShowBorder()
 }
 void WbView3d::OnUpdateMinimapShowBorder(CCmdUI* pCmdUI)
 {
-	pCmdUI->Enable(TheMinimapDialog != NULL);
+	// The orange border only draws in full-extent mode (it would just trace the minimap
+	// edge otherwise), so gray it out when full extent is off.
+	pCmdUI->Enable(TheMinimapDialog != NULL && TheMinimapDialog->getFullExtent());
 	pCmdUI->SetCheck(TheMinimapDialog && TheMinimapDialog->getShowBorder() ? 1 : 0);
+}
+void WbView3d::OnMinimapFullExtent()
+{
+	if (TheMinimapDialog)
+		TheMinimapDialog->setFullExtent(!TheMinimapDialog->getFullExtent());
+}
+void WbView3d::OnUpdateMinimapFullExtent(CCmdUI* pCmdUI)
+{
+	pCmdUI->Enable(TheMinimapDialog != NULL);
+	pCmdUI->SetCheck(TheMinimapDialog && TheMinimapDialog->getFullExtent() ? 1 : 0);
 }
 void WbView3d::OnMinimapCullObjects()
 {

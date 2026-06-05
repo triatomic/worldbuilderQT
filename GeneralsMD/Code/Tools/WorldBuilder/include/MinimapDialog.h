@@ -66,6 +66,9 @@ public:
 	void setShowBorder(Bool show);		///< Draw an orange outline at the playable-area boundary.
 	Bool getShowBorder() const { return m_showBorder; }
 
+	void setFullExtent(Bool full);		///< Map the full heightmap (playable + border) vs. playable area only.
+	Bool getFullExtent() const { return m_fullExtent; }
+
 	void setCullObjects(Bool cull);		///< Only draw object blips inside the 3D view frustum.
 	Bool getCullObjects() const { return m_cullObjects; }
 
@@ -106,6 +109,14 @@ private:
 	void fillCheckerRect(Int cx, Int cy, Int w, Int h, UnsignedInt colorA, UnsignedInt colorB, Int cell);	///< centered checkerboard fill (cashbox); cell = block size in buffer px.
 	void fillDiamond(Int cx, Int cy, Int size, UnsignedInt color);	///< centered, clipped diamond fill (units).
 	Bool worldToMinimap(Real worldX, Real worldY, Int *mx, Int *my);	///< world coords -> minimap cell.
+	// The coordinate mapping shared by every minimap path (terrain resample, blips,
+	// roads, view box, drag-to-center). Depends on m_fullExtent: full-extent maps the
+	// whole heightmap (playable + border), playable-only maps just the interior.
+	//   span        = number of heightmap cells the minimap spans (per axis)
+	//   originCell  = heightmap cell index at minimap pixel 0 (0 full, border playable)
+	// A heightmap cell c maps to minimap pixel (c - originCell) / span * res. Returns
+	// FALSE if there is no map.
+	Bool mapSpans(Real *xSpan, Real *ySpan, Real *originCell);
 	Bool isInViewFrustum(Real worldX, Real worldY);	///< point (world units) inside the 3D view's ground footprint?
 	inline UnsignedInt &pixel(Int x, Int y) { return m_pixelBuffer[y * m_resolution + x]; }
 
@@ -126,6 +137,7 @@ private:
 	Bool m_showObjects;				///< draw unit/structure dots over the terrain.
 	Bool m_showRoads;				///< draw road/bridge segments over the terrain.
 	Bool m_showBorder;				///< draw an orange outline at the playable-area boundary.
+	Bool m_fullExtent;				///< map the full heightmap (playable + border) vs. playable area only.
 	Bool m_cullObjects;				///< only draw object blips inside the 3D view frustum.
 	Int  m_refreshDelayMs;			///< throttle delay; 0 = manual.
 };

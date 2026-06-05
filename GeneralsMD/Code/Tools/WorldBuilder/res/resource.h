@@ -872,6 +872,7 @@
 #define ID_TEXT_RENDERER_OLD            33384
 #define ID_TEXT_RENDERER_NEW            33385
 #define ID_MINIMAP_SHOWBORDER           33387
+#define ID_MINIMAP_FULLEXTENT           33388
 #define IDD_MINIMAP                     243
 #define IDS_NEW                         61446
 #define IDS_RESIZE                      61447
@@ -945,7 +946,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_3D_CONTROLS                     1
 #define _APS_NEXT_RESOURCE_VALUE        244
-#define _APS_NEXT_COMMAND_VALUE         33388
+#define _APS_NEXT_COMMAND_VALUE         33389
 #define _APS_NEXT_CONTROL_VALUE         1373
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
