@@ -4044,15 +4044,16 @@ void WbView3d::drawLabels(HDC hdc)
 		// Main text color (white)
 		const DWORD mainColor = 0xFFFFFFFF;
 
-		// Offsets for outline (8 directions)
-		const int outlineOffsets[8][2] = {
-			{-1, -1}, { 1, -1}, {-1,  1}, { 1,  1},
+		// Offsets for outline (4 directions: N/E/S/W). The 4 diagonals were dropped
+		// to halve the per-label outline draw count (8 DrawText calls -> 4); the text
+		// stays outlined on all sides, only the diagonal corners are slightly thinner.
+		const int outlineOffsets[4][2] = {
 			{-1,  0}, { 1,  0}, { 0, -1}, { 0,  1}
 		};
 
 		if (m_labelRenderer == 0 && m3DFont && !hdc) {
 			// Draw outline
-			for (int i = 0; i < 8; ++i) {
+			for (int i = 0; i < 4; ++i) {
 				RECT outlineRect = baseRect;
 				OffsetRect(&outlineRect, outlineOffsets[i][0], outlineOffsets[i][1]);
 				m3DFont->DrawText(
@@ -4075,7 +4076,7 @@ void WbView3d::drawLabels(HDC hdc)
 		} else if (m_labelRenderer == 1 && hdc) {
 			::SetBkMode(hdc, TRANSPARENT);
 			::SetTextColor(hdc, RGB(0, 0, 0));
-			for (int i = 0; i < 8; ++i) {
+			for (int i = 0; i < 4; ++i) {
 				::TextOut(hdc, baseRect.left + outlineOffsets[i][0], baseRect.top + outlineOffsets[i][1],
 					text, text.GetLength());
 			}
