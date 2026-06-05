@@ -462,11 +462,16 @@ Bool MinimapDialog::minimapToWorld(Int mx, Int my, Real *worldX, Real *worldY)
 	if (!pMap)
 		return FALSE;
 
-	Real xSample = INT_TO_REAL(pMap->getXExtent() - (2 * pMap->getBorderSize())) / (Real)m_resolution;
-	Real ySample = INT_TO_REAL(pMap->getYExtent() - (2 * pMap->getBorderSize())) / (Real)m_resolution;
+	// The minimap covers the FULL heightmap extent (playable area + non-playable
+	// border), so pixel i maps to full-grid cell i * extent/res, with the origin at
+	// the heightmap corner (NO border offset). minimapToWorld returns a cell index
+	// (border included) for setCenterInView, so a click anywhere -- including the
+	// border margin -- centers the camera there.
+	Real xSample = INT_TO_REAL(pMap->getXExtent()) / (Real)m_resolution;
+	Real ySample = INT_TO_REAL(pMap->getYExtent()) / (Real)m_resolution;
 
-	*worldX = mx * xSample + pMap->getBorderSize();
-	*worldY = my * ySample + pMap->getBorderSize();
+	*worldX = mx * xSample;
+	*worldY = my * ySample;
 	return TRUE;
 }
 
@@ -576,21 +581,26 @@ void MinimapDialog::rebuildTerrain()
 	// viewport's paint for the duration. The dialog client is only ~256px, so sampling
 	// above the cap is invisible anyway.
 	const Int   sampleRes = (res < MINIMAP_RESAMPLE_CAP) ? res : MINIMAP_RESAMPLE_CAP;
-	const Real  xSample = INT_TO_REAL(pMap->getXExtent() - (2 * border)) / (Real)sampleRes;
-	const Real  ySample = INT_TO_REAL(pMap->getYExtent() - (2 * border)) / (Real)sampleRes;
+	// Sample the FULL heightmap extent (playable area + non-playable border) so objects
+	// and terrain in the border margin show up, not just the playable interior. Pixel i
+	// maps to full-grid cell i * extent/res, origin at the heightmap corner.
+	const Real  xSample = INT_TO_REAL(pMap->getXExtent()) / (Real)sampleRes;
+	const Real  ySample = INT_TO_REAL(pMap->getYExtent()) / (Real)sampleRes;
 
-	// Precompute the per-index heightmap coords (world cell) and terrain-sample coords
-	// (MAP_XY_FACTOR-scaled, border removed) once per row/column.
+	// Precompute the per-index heightmap coords (world cell, border included) and
+	// terrain-sample coords once per row/column. getTerrainColorAt / localIsUnderwater
+	// take BORDER-RELATIVE world units (MAP_XY_FACTOR * (cell - border)), so subtract
+	// the border there even though the cell index itself includes it.
 	Real *cellX = new Real[sampleRes];	// heightmap index along X (for getHeight)
 	Real *cellY = new Real[sampleRes];	// heightmap index along Y
 	Real *mapX  = new Real[sampleRes];	// scaled sample coord along X (for getTerrainColorAt / water)
 	Real *mapY  = new Real[sampleRes];	// scaled sample coord along Y
 	for (Int i = 0; i < sampleRes; ++i)
 	{
-		cellX[i] = i * xSample + border;
-		cellY[i] = i * ySample + border;
-		mapX[i]  = MAP_XY_FACTOR * (i * xSample);	// == MAP_XY_FACTOR * (cell - border)
-		mapY[i]  = MAP_XY_FACTOR * (i * ySample);
+		cellX[i] = i * xSample;
+		cellY[i] = i * ySample;
+		mapX[i]  = MAP_XY_FACTOR * (cellX[i] - border);	// border-relative for terrain color
+		mapY[i]  = MAP_XY_FACTOR * (cellY[i] - border);
 	}
 
 	// Height stats prepass (reuse precomputed cell coords).
@@ -874,20 +884,20 @@ Bool MinimapDialog::worldToMinimap(Real worldX, Real worldY, Int *mx, Int *my)
 	if (!pMap) return FALSE;
 
 	Int border = pMap->getBorderSize();
-	Real xSpan = INT_TO_REAL(pMap->getXExtent() - 2 * border);
-	Real ySpan = INT_TO_REAL(pMap->getYExtent() - 2 * border);
+	Real xSpan = INT_TO_REAL(pMap->getXExtent());
+	Real ySpan = INT_TO_REAL(pMap->getYExtent());
 	if (xSpan <= 0.0f || ySpan <= 0.0f) return FALSE;
 
 	// MapObject::getLocation() (and the road points) are in BORDER-RELATIVE world
 	// units: getCoordFromCellIndex defines worldX = (cell - border) * MAP_XY_FACTOR,
-	// so worldX / MAP_XY_FACTOR already equals (cell - border) -- the border is
-	// removed. This must match the terrain resample mapping, which places minimap
-	// pixel i at world coord MAP_XY_FACTOR * (i * span/res), i.e. NO extra border
-	// term. (Do NOT subtract border again here -- that double-counts it and shifts
-	// every object/road by one border width. The view box uses this SAME border-relative
-	// transform: getViewFrustumGroundCorners now returns border-relative corners.)
-	Real cellX = worldX / MAP_XY_FACTOR;
-	Real cellY = worldY / MAP_XY_FACTOR;
+	// so worldX / MAP_XY_FACTOR equals (cell - border). The minimap now covers the
+	// FULL heightmap extent (pixel i = full-grid cell i * extent/res, origin at the
+	// heightmap corner), so add the border back to get the full-grid cell index --
+	// otherwise objects in the non-playable border margin map negative and get culled.
+	// The view box uses this SAME transform (getViewFrustumGroundCorners returns
+	// border-relative corners).
+	Real cellX = worldX / MAP_XY_FACTOR + border;
+	Real cellY = worldY / MAP_XY_FACTOR + border;
 	Int x = REAL_TO_INT((cellX / xSpan) * m_resolution);
 	Int y = REAL_TO_INT((cellY / ySpan) * m_resolution);
 	Bool inRange = (x >= 0 && x < m_resolution && y >= 0 && y < m_resolution);
@@ -952,21 +962,21 @@ void MinimapDialog::drawViewBoxOverlay(HDC hdc, Int clientW, Int clientH)
 		return;
 
 	Int border = pMap->getBorderSize();
-	Real xSpan = INT_TO_REAL(pMap->getXExtent() - 2 * border);
-	Real ySpan = INT_TO_REAL(pMap->getYExtent() - 2 * border);
+	Real xSpan = INT_TO_REAL(pMap->getXExtent());
+	Real ySpan = INT_TO_REAL(pMap->getYExtent());
 	if (xSpan <= 0.0f || ySpan <= 0.0f) return;
 
-	// Map each world corner to client pixels (fraction of map span * client size),
-	// clamped to the client so off-map corners still bound the box. Y is flipped
-	// (world +y is up, client +y is down). The corners are already BORDER-RELATIVE
-	// (getViewFrustumGroundCorners subtracts the border), the same space as object
-	// dots, so this uses the exact same mapping as worldToMinimap -- do NOT subtract
-	// the border again here or the box shifts off the camera.
+	// Map each world corner to client pixels (fraction of full map extent * client
+	// size), clamped to the client so off-map corners still bound the box. Y is flipped
+	// (world +y is up, client +y is down). The corners are BORDER-RELATIVE
+	// (getViewFrustumGroundCorners subtracts the border), so add the border back to get
+	// the full-grid cell index -- the exact same mapping as worldToMinimap, now that the
+	// minimap covers the full heightmap extent.
 	POINT pts[5];
 	for (int i = 0; i < 4; ++i)
 	{
-		Real fx = (corners[i].x / MAP_XY_FACTOR) / xSpan;
-		Real fy = (corners[i].y / MAP_XY_FACTOR) / ySpan;
+		Real fx = (corners[i].x / MAP_XY_FACTOR + border) / xSpan;
+		Real fy = (corners[i].y / MAP_XY_FACTOR + border) / ySpan;
 		if (fx < 0.0f) fx = 0.0f;  if (fx > 1.0f) fx = 1.0f;
 		if (fy < 0.0f) fy = 0.0f;  if (fy > 1.0f) fy = 1.0f;
 		pts[i].x = (LONG)(fx * clientW);
@@ -1239,9 +1249,8 @@ void MinimapDialog::drawRoads()
 	WorldHeightMapEdit *pMap = pDoc->GetHeightMap();
 	if (!pMap) return;
 
-	Int border = pMap->getBorderSize();
-	Real xSpan = INT_TO_REAL(pMap->getXExtent() - 2 * border);
-	Real ySpan = INT_TO_REAL(pMap->getYExtent() - 2 * border);
+	Real xSpan = INT_TO_REAL(pMap->getXExtent());		// full extent (border included)
+	Real ySpan = INT_TO_REAL(pMap->getYExtent());
 	if (xSpan <= 0.0f || ySpan <= 0.0f) return;
 
 	// Scale factor: world units -> buffer pixels (use the smaller axis to be conservative).
