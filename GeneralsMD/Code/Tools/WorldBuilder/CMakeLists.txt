@@ -16,6 +16,7 @@ set(WORLDBUILDER_SRC
     "src/CFixTeamOwnerDialog.cpp"
     "src/ContourOptions.cpp"
     "src/CUndoable.cpp"
+    "src/DialogFont.cpp"
     "src/DrawObject.cpp"
     "src/EditAction.cpp"
     "src/EditCondition.cpp"
@@ -117,6 +118,7 @@ set(WORLDBUILDER_SRC
     "include/CFixTeamOwnerDialog.h"
     "include/ContourOptions.h"
     "include/CUndoable.h"
+    "include/DialogFont.h"
     "include/DrawObject.h"
     "include/EditAction.h"
     "include/EditCondition.h"
@@ -230,7 +232,9 @@ target_link_libraries(z_worldbuilder PRIVATE
 )
 
 if(WIN32 OR "${CMAKE_SYSTEM}" MATCHES "Windows")
-    target_link_options(z_worldbuilder PRIVATE /NODEFAULTLIB:libci.lib /NODEFAULTLIB:libc.lib)
+    # /LARGEADDRESSAWARE lets this 32-bit exe use up to 4GB of address space on
+    # 64-bit Windows (instead of the default 2GB), giving big maps more RAM headroom.
+    target_link_options(z_worldbuilder PRIVATE /LARGEADDRESSAWARE /NODEFAULTLIB:libci.lib /NODEFAULTLIB:libc.lib)
     target_compile_definitions(z_worldbuilder PRIVATE _AFXDLL)
     target_sources(z_worldbuilder PRIVATE res/WorldBuilder.rc)
     set_target_properties(z_worldbuilder PROPERTIES OUTPUT_NAME WorldBuilderZH)

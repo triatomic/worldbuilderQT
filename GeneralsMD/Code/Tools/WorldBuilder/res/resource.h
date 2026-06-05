@@ -834,6 +834,8 @@
 #define IDC_Grove_SaveSet               33349
 #define IDC_LAUNCH_ONSTARTUP            33350
 #define IDC_Grove_Settings              33350
+#define IDC_DIALOG_FONT                 1371
+#define IDC_DIALOG_FONT_LABEL           1372
 #define ID_VIEW_SHOWTRACINGOVERLAY      33351
 #define ID_LOD_MODE_1                   33352
 #define ID_LOD_MODE_2                   33353
@@ -943,7 +945,7 @@
 #define _APS_3D_CONTROLS                     1
 #define _APS_NEXT_RESOURCE_VALUE        244
 #define _APS_NEXT_COMMAND_VALUE         33387
-#define _APS_NEXT_CONTROL_VALUE         1371
+#define _APS_NEXT_CONTROL_VALUE         1373
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

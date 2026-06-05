@@ -23,6 +23,7 @@
 #include <eh.h>
 #include "WorldBuilder.h"
 #include "MainFrm.h"
+#include "DialogFont.h"
 #include "OpenMap.h"
 #include "SplashScreen.h"
 #include "textureloader.h"
@@ -540,6 +541,11 @@ BOOL CWorldBuilderApp::InitInstance()
 	CString openDir = this->GetProfileString(APP_SECTION, OPEN_FILE_DIR);
 	m_currentDirectory = openDir;
 
+	// Apply the user's saved dialog-font choice app-wide. Installed before the startup
+	// About dialog so it gets the chosen font too. Read once here -> changing the combo
+	// takes effect on the next launch.
+	InstallDialogFontHook();
+
 	m_bLaunchOnStartUp=::AfxGetApp()->GetProfileInt(ABOUT_SECTION, "LaunchOnStartUp", 1);
 	if(m_bLaunchOnStartUp){
 		OnAppAbout();
@@ -682,6 +688,7 @@ protected:
 	afx_msg void OnRefreshQueryObject();
 	afx_msg void OnOpenLinkDiscord();
 	afx_msg void OnRefreshQueryWaypoint();
+	afx_msg void OnDialogFontChanged();
 	afx_msg void OnWindowPosChanging(WINDOWPOS* lpwndpos);
 
 	void DoShrink();
@@ -711,7 +718,8 @@ BEGIN_MESSAGE_MAP(CAboutDlg, CDialog)
 	ON_BN_CLICKED(IDC_REFRESH_WP_BUTTON, OnRefreshQueryWaypoint)
 
 	ON_BN_CLICKED(IDC_LAUNCH_ONSTARTUP, OnLaunchOnStartup)
-	ON_WM_WINDOWPOSCHANGING() 
+	ON_CBN_SELCHANGE(IDC_DIALOG_FONT, OnDialogFontChanged)
+	ON_WM_WINDOWPOSCHANGING()
 	//{{AFX_MSG_MAP(CAboutDlg)
 		// No message handlers
 	//}}AFX_MSG_MAP
@@ -879,6 +887,22 @@ BOOL CAboutDlg::OnInitDialog()
 	CButton *pButton = (CButton*)GetDlgItem(IDC_LAUNCH_ONSTARTUP);
 	pButton->SetCheck(m_bLaunchOnStartUpAbout ? 1:0);
 
+	// Populate the dialog-font combo from the single source of truth and select the
+	// saved choice. Fonts that can clip the layouts get a "(may clip)" suffix as a
+	// warning; the change applies on the next launch (see DialogFont.cpp).
+	CComboBox *pFontCombo = (CComboBox*)GetDlgItem(IDC_DIALOG_FONT);
+	if (pFontCombo) {
+		pFontCombo->ResetContent();
+		for (int i = 0; i < GetDialogFontChoiceCount(); ++i) {
+			const DialogFontChoice &fc = GetDialogFontChoice(i);
+			CString label = fc.displayName;
+			if (fc.mayClip)
+				label += " (may clip)";
+			pFontCombo->AddString(label);
+		}
+		pFontCombo->SetCurSel(LoadDialogFontChoice());
+	}
+
     // Load the icon for the app about
     HWND hWnd = GetSafeHwnd();
     HICON hIcon = LoadIcon(AfxGetInstanceHandle(), MAKEINTRESOURCE(IDR_MAINFRAME));
@@ -903,6 +927,19 @@ void CAboutDlg::OnLaunchOnStartup()
 	CButton *pButton = (CButton*)GetDlgItem(IDC_LAUNCH_ONSTARTUP);
 	m_bLaunchOnStartUpAbout = (pButton->GetCheck() == 1);
 	::AfxGetApp()->WriteProfileInt(ABOUT_SECTION, "LaunchOnStartUp", m_bLaunchOnStartUpAbout ? 1 : 0);
+}
+
+void CAboutDlg::OnDialogFontChanged()
+{
+	CComboBox *pFontCombo = (CComboBox*)GetDlgItem(IDC_DIALOG_FONT);
+	if (!pFontCombo)
+		return;
+	int sel = pFontCombo->GetCurSel();
+	if (sel == CB_ERR)
+		return;
+	// Persist the choice; it takes effect on the next launch (the font hook reads
+	// the INI once at startup). The static "(applies on restart)" label tells the user.
+	SaveDialogFontChoice(sel);
 }
 
 void CAboutDlg::OnWindowPosChanging(WINDOWPOS* lpwndpos)
@@ -1206,6 +1243,7 @@ void CWorldBuilderApp::OnAppAbout()
 
 int CWorldBuilderApp::ExitInstance()
 {
+	RemoveDialogFontHook();
 
 	// Join and destroy the parallel worker pool before tearing down subsystems,
 	// so no worker outlives the data it reads.
