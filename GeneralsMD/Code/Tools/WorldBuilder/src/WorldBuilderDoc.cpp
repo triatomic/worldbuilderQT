@@ -1568,8 +1568,18 @@ void CWorldBuilderDoc::OnUpdateEditRedo(CCmdUI* pCmdUI)
 	pCmdUI->Enable(m_undoList!=NULL && m_curRedo>0);
 }
 
-void CWorldBuilderDoc::OnEditUndo() 
+void CWorldBuilderDoc::OnEditUndo()
 {
+	// If the Wave Editor has a pending wave edit, Ctrl+Z (and the Edit ▸ Undo menu)
+	// undo that wave action instead of the map undo.  We key off hasUndo() rather
+	// than the active tool: holding Ctrl can transiently flip the current tool to the
+	// pointer, which would otherwise make the check miss.
+	if (WaveEditorTool::hasUndo())
+	{
+		WaveEditorTool::undoLast();
+		return;
+	}
+
 	Undoable *pUndo = m_undoList;
 	m_needAutosave = true;
 	// DEBUG_LOG(("NEED AUTOSAVE OnEditUndo ...\n"));

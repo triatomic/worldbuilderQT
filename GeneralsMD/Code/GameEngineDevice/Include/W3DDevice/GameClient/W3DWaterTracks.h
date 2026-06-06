@@ -125,7 +125,32 @@ public:
 	void unbindTrack( WaterTracksObj *mod );	///<releases control of track object
 	void saveTracks(void);									///<save all used tracks to disk
 	void loadTracks(void);									///<load tracks from disk
+	void saveTracksTo(const char *wakPath);	///<save all used tracks to an explicit .wak path
+	Int loadTracksFrom(const char *wakPath);	///<load tracks from an explicit .wak path; returns track count, or -1 if the file could not be opened
 	WaterTracksObj *findTrack(Vector2 &start, Vector2 &end, waveType type);
+
+	// Editor edit-API (int-based; no enum waveType / TheTerrainLogic needed by callers).
+	Int getEditableWaveTypeCount(void) const;					///<number of placeable wave types
+	const char *getWaveTypeName(Int typeIndex) const;	///<display name of a placeable wave type
+	void addWaveSegmentByPoints(const Vector2 &start, const Vector2 &end, Int typeIndex);	///<place a wave from start->end (legacy: line is the crest, wave travels perpendicular)
+	void addWaveByDirection(const Vector2 &center, const Vector2 &travelDir, Int typeIndex);	///<place a wave centered at 'center' that travels along 'travelDir' (length ignored)
+	void removeLastWaveSegment(void);					///<undo the last placed wave segment
+	Int getWaveCount(void) const;						///<number of primary wave fronts (editor overlay)
+	Bool getWaveSegment(Int index, Vector2 &start, Vector2 &end) const;	///<start/end of the Nth primary wave; false if out of range
+	Bool getWaveInfo(Int index, Vector2 &start, Vector2 &end, Int &typeIndex) const;	///<start/end + 0-based type index of the Nth wave
+	Bool getWaveFrontLine(Int index, Vector2 &lineP0, Vector2 &lineP1, Vector2 &arrowTip) const;	///<visible wave-front line (perp to motion, m_finalWidth long) + arrow tip in motion dir
+	void getWaveFrontLineForType(const Vector2 &center, const Vector2 &travelDir, Int typeIndex,
+															 Vector2 &lineP0, Vector2 &lineP1, Vector2 &arrowTip) const;	///<same as getWaveFrontLine but for a hypothetical wave (ghost preview)
+	void removeWaveAt(Int index);						///<remove the Nth primary wave (and its trailing second wave)
+	Int  pickWave(const Vector2 &worldPt, Bool &hitArrow) const;	///<editor index of the wave under worldPt (-1 = none); hitArrow=true if the arrow/tip was hit (rotate) vs body (move)
+	Bool setWaveTransform(Int index, const Vector2 &center, const Vector2 &travelDir);	///<move/re-aim an existing wave (re-inits primary + trailing wave); false if out of range
+
+	// Live animated PREVIEW wave (editor hover/drag).  A single throwaway track that
+	// animates like a real wave but is excluded from the editor count, list, save and
+	// undo, so it never becomes a real wave.
+	void setPreviewWave(const Vector2 &center, const Vector2 &travelDir, Int typeIndex);	///<create/reposition the preview wave
+	void clearPreviewWave(void);	///<remove the preview wave (if any)
+	Bool hasPreviewWave(void) const { return m_previewTrack != NULL; }	///<true while a live preview wave exists (keep repainting for its animation)
 
 protected:
 	DX8VertexBufferClass		*m_vertexBuffer;	///<vertex buffer used to draw all tracks
@@ -141,6 +166,26 @@ protected:
 	Int		m_batchStart;			///< start of unused vertices in vertex buffer
 	Real	m_level;				///< water level
 	void releaseTrack( WaterTracksObj *mod );	///<returns track object to free store.
+
+	// Editor edit-API state (undo stack for interactively placed wave segments).
+	enum { EDIT_MAX_UNDOS = 64 };
+	struct EditUndoEntry { WaterTracksObj *track; WaterTracksObj *track2; };
+	EditUndoEntry	m_editUndoStack[EDIT_MAX_UNDOS];
+	Int				m_editUndoCount;	///< number of placed segments available to undo
+	Int				m_editFlipU;		///< alternating u-flip for placed waves
+	WaterTracksObj *m_previewTrack;		///< live editor preview wave; excluded from count/list/save
+	waveType		clampEditableType(Int typeIndex) const;	///< 0-based index -> valid placeable type
+	WaterTracksObj *addWaveInternal(const Vector2 &midPoint, const Vector2 &dirMidPoint,
+																	waveType type, Int flipU, WaterTracksObj **outSecond);
+	// Map an editor wave index (0 = oldest placed) to its primary track.  bindTrack()
+	// prepends to m_usedModules, so list-head order is newest-first; the editor wants
+	// stable oldest-first numbering, so we count primaries from the tail.
+	WaterTracksObj *getPrimaryByEditorIndex(Int index) const;
+	// Find the trailing "second wave" that shares a primary's init segment+type
+	// (non-zero time offset).  Returns NULL if the type has no trailing wave.
+	WaterTracksObj *findSecondWaveFor(const WaterTracksObj *primary) const;
 };  // end class WaterTracksRenderObjClassSystem
+
+extern WaterTracksRenderSystem *TheWaterTracksRenderSystem;	///< singleton for track drawing system.
 
 #endif  //__W3DWaterTracks_H_

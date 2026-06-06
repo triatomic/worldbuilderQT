@@ -259,6 +259,7 @@ CWorldBuilderApp::CWorldBuilderApp() :
 	m_tools[22] = &m_scorchTool;
 	m_tools[23] = &m_borderTool;
 	m_tools[24] = &m_rulerTool;
+	m_tools[25] = &m_waveEditorTool;
 
 	// set up initial values.
 	m_brushTool.setHeight(16);
@@ -639,8 +640,10 @@ void CWorldBuilderApp::updateCurTool(Bool forceHand)
 		} else if (0x8000 & ::GetAsyncKeyState(VK_MENU)) {
 			// Alt key gives eyedropper.
 			m_curTool = &m_eyedropperTool;
-		} else if (0x8000 & ::GetAsyncKeyState(VK_CONTROL) && m_curTool != &m_fenceTool) {
-			// Control key gives pointer.
+		} else if (0x8000 & ::GetAsyncKeyState(VK_CONTROL) && m_curTool != &m_fenceTool
+							 && m_curTool != &m_waveEditorTool) {
+			// Control key gives pointer.  The fence and wave-editor tools use Ctrl
+			// themselves (wave editor: Ctrl+drag rotates a wave), so don't hijack them.
 			m_curTool = &m_pointerTool;
 		} else {
 			// Else the tool selected in the tool palette.

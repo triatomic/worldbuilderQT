@@ -189,6 +189,8 @@ protected:
 	afx_msg void OnUpdateViewGarrisoned(CCmdUI* pCmdUI);
 	afx_msg void OnViewShowMapBoundaries();
 	afx_msg void OnUpdateViewShowMapBoundaries(CCmdUI* pCmdUI);
+	afx_msg void OnViewShowWaveLines();
+	afx_msg void OnUpdateViewShowWaveLines(CCmdUI* pCmdUI);
 	afx_msg void OnViewShowRulerGrid();
 	afx_msg void OnUpdateViewShowRulerGrid(CCmdUI* pCmdUI);
 	afx_msg void OnViewShowTracingOverlay();
@@ -294,6 +296,7 @@ private:
 	Bool										m_firstPaint;  ///< True if we haven't painted yet.
 	Bool										m_showLayersList;	///< Flag whether the layers list is visible or not.
 	Bool										m_showMapBoundaries;	///< Flag whether to show all the map boundaries or not
+	Bool										m_showWaveLines;	///< Flag whether to draw wave start->end overlay lines
 	Bool										m_showAmbientSounds;	///< Flag whether to show all the ambient sounds or not
   Bool										m_showSoundCircles;	///< Flag whether to show the minimum and maximum radii of the ambient sounds attached to the selected object
 	Bool										m_showBoundingBoxes;
@@ -472,6 +475,11 @@ public:
 
 	Bool getShowTerrain();
 	Bool getShowWireframe();
+
+	// Wave-line overlay toggle, shared by the View menu and the Wave Editor panel
+	// checkbox so the two stay in sync (flag + registry + DrawObject + redraw).
+	Bool getShowWaveLines(void) { return m_showWaveLines; }
+	void setShowWaveLines(Bool show);
 
 	// void setShowBuildZoneFeedBack(Bool toggle) {m_showBuildZoneFeedback = toggle;}
 	Bool getShowBuildZoneFeedBack(void) { return ::AfxGetApp()->GetProfileInt(OBJECT_OPTION_PANEL, "PreviewBuildZone", 1);}

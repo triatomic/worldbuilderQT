@@ -63,6 +63,8 @@
 #include "shattersystem.h"
 #include "light.h"
 #include "texproject.h"
+#include "rinfo.h"
+#include "W3DDevice/GameClient/W3DWaterTracks.h"
 #include "MapSettings.h"
 #include "predlod.h"
 #include "SelectMacrotexture.h"
@@ -755,6 +757,13 @@ void WbView3d::shutdownWW3D(void)
 #ifdef SAMPLE_DYNAMIC_LIGHT
 		REF_PTR_RELEASE(theDynamicLight);
 #endif
+		// Wave editor: free the water-track system (and its DX8 buffers) while the
+		// device is still alive.
+		if (TheWaterTracksRenderSystem) {
+			delete TheWaterTracksRenderSystem;
+			TheWaterTracksRenderSystem = NULL;
+		}
+
 		WW3D::Shutdown();
 
 		WWMath::Shutdown();
@@ -779,6 +788,9 @@ void WbView3d::ReleaseResources(void)
 	if (m_drawObject) {
 		m_drawObject->freeMapResources();
 	}
+	if (TheWaterTracksRenderSystem) {
+		TheWaterTracksRenderSystem->ReleaseResources();
+	}
 }
 
 //=============================================================================
@@ -796,6 +808,9 @@ void WbView3d::ReAcquireResources(void)
 	m_drawObject->initData();
 	createLabelFont();
 
+	if (TheWaterTracksRenderSystem) {
+		TheWaterTracksRenderSystem->ReAcquireResources();
+	}
 }
 
 // ----------------------------------------------------------------------------
@@ -2949,6 +2964,13 @@ void WbView3d::render()
 			m_transparentObjectsScene->Remove_Render_Object(m_objectToolTrackingObj);
 		}
 		
+		// Wave editor: draw any placed water-track waves on top of the terrain.
+		// flush() internally calls update(), so no separate animation tick is needed.
+		if (TheWaterTracksRenderSystem) {
+			RenderInfoClass rinfo(*m_camera);
+			TheWaterTracksRenderSystem->flush(rinfo);
+		}
+
 		// Draw the 3d obj icons on top of the rest of the data.
 		WW3D::Render(m_overlayScene,m_camera);
 
@@ -3060,6 +3082,8 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_UPDATE_COMMAND_UI(ID_MINIMAP_RES_2048, OnUpdateMinimapRes2048)
 	ON_COMMAND(ID_VIEW_SHOWMAPBOUNDARIES, OnViewShowMapBoundaries)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_SHOWMAPBOUNDARIES, OnUpdateViewShowMapBoundaries)
+	ON_COMMAND(ID_VIEW_SHOWWAVELINES, OnViewShowWaveLines)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_SHOWWAVELINES, OnUpdateViewShowWaveLines)
 	ON_COMMAND(ID_VIEW_RULERGRID, OnViewShowRulerGrid)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_RULERGRID, OnUpdateViewShowRulerGrid)
 	ON_COMMAND(ID_VIEW_SHOWTRACINGOVERLAY, OnViewShowTracingOverlay)
@@ -3200,6 +3224,13 @@ void WbView3d::initWW3D()
 #endif
 		updateLights();
 		resetRenderObjects();
+
+		// Wave editor: create the water-track system so the Wave Editor tool can
+		// place/render/save waves directly in WorldBuilder (no game launch).
+		if (!TheWaterTracksRenderSystem) {
+			TheWaterTracksRenderSystem = new WaterTracksRenderSystem;
+			TheWaterTracksRenderSystem->init();
+		}
 	}
 }
 
@@ -3225,6 +3256,7 @@ int WbView3d::OnCreate(LPCREATESTRUCT lpCreateStruct)
 
 	m_showLayersList = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowLayersList", 0);
 	m_showMapBoundaries = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowMapBoundaries", 0);
+	m_showWaveLines = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowWaveLines", 1);	// default ON
 	m_showAmbientSounds = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowAmbientSounds", 0);
 	m_showBaseRadius = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowBaseRadius", 1);
 	m_showSubDraw = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowSubDraw", 1);
@@ -3266,6 +3298,7 @@ int WbView3d::OnCreate(LPCREATESTRUCT lpCreateStruct)
 
 
 	DrawObject::setDoBoundaryFeedback(m_showMapBoundaries);
+	DrawObject::setDoWaveFeedback(m_showWaveLines);
 	DrawObject::setDoGridFeedback(m_showRulerGrid);
 	DrawObject::setDoAmbientSoundFeedback(m_showAmbientSounds);
 	DrawObject::setDoTracingOverlayFeedback(m_showTracingOverlay);
@@ -4205,7 +4238,7 @@ void WbView3d::drawLabels(HDC hdc)
 			DeleteObject(pen);
 		} else if (m_doRulerFeedback == RULER_CIRCLE) {
       		drawCircle( hdc, m_rulerPoints[0], m_rulerLength, RGB( 0, 255, 0 ) );
-		}  
+		}
 	}
 
 	if (hdc && m_doLightFeedback)
@@ -4482,7 +4515,14 @@ void WbView3d::OnTimer(UINT nIDEvent)
 		Bool changed = !m_haveGdiPaintKey || !(key == m_lastGdiPaintKey);
 		Bool fallbackDue = (getLastDrawTime() + GDI_IDLE_FALLBACK_MS) < ::GetTickCount();
 
-		if (!interacting && !changed && !fallbackDue)
+		// Water-track waves animate every frame and their overlay lines live in
+		// OnPaint, so the view is not actually "static" while any wave exists -
+		// keep repainting so the animation and the cyan wave lines stay live.
+		Bool wavesActive = (TheWaterTracksRenderSystem &&
+												(TheWaterTracksRenderSystem->getWaveCount() > 0 ||
+												 TheWaterTracksRenderSystem->hasPreviewWave()));
+
+		if (!interacting && !changed && !fallbackDue && !wavesActive)
 			return;		// static view: leave the last frame + its GDI text on screen
 	}
 
@@ -5102,6 +5142,24 @@ void WbView3d::OnViewShowMapBoundaries()
 void WbView3d::OnUpdateViewShowMapBoundaries(CCmdUI* pCmdUI)
 {
 	pCmdUI->SetCheck(m_showMapBoundaries ? 1 : 0);
+}
+
+void WbView3d::OnViewShowWaveLines()
+{
+	setShowWaveLines(!m_showWaveLines);
+}
+
+void WbView3d::setShowWaveLines(Bool show)
+{
+	m_showWaveLines = show;
+	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "ShowWaveLines", m_showWaveLines ? 1 : 0);
+	DrawObject::setDoWaveFeedback(m_showWaveLines);
+	Invalidate(false);
+}
+
+void WbView3d::OnUpdateViewShowWaveLines(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(m_showWaveLines ? 1 : 0);
 }
 
 void WbView3d::OnViewShowRulerGrid()

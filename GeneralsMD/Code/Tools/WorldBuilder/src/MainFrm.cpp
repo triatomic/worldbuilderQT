@@ -230,6 +230,12 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	if (m_optionsPanelWidth < frameRect.Width()) m_optionsPanelWidth = frameRect.Width();
 	if (m_optionsPanelHeight < frameRect.Height()) m_optionsPanelHeight = frameRect.Height();
 
+	m_waveEditorOptions.Create(IDD_WAVE_EDITOR_OPTIONS, this);
+	m_waveEditorOptions.SetWindowPos(NULL, frameRect.left, frameRect.top, 0, 0, SWP_NOZORDER|SWP_NOSIZE);
+	m_waveEditorOptions.GetWindowRect(&frameRect);
+	if (m_optionsPanelWidth < frameRect.Width()) m_optionsPanelWidth = frameRect.Width();
+	if (m_optionsPanelHeight < frameRect.Height()) m_optionsPanelHeight = frameRect.Height();
+
 	m_objectOptions.Create(IDD_OBJECT_OPTIONS, this);
 	m_objectOptions.SetWindowPos(NULL, frameRect.left, frameRect.top, 0, 0, SWP_NOZORDER|SWP_NOSIZE);
 	m_objectOptions.GetWindowRect(&frameRect);
@@ -568,6 +574,7 @@ void CMainFrame::showOptionsDialog(Int dialogID)
 		case IDD_ROAD_OPTIONS:newOptions  = &m_roadOptions; break;
 		case IDD_MOUND_OPTIONS:newOptions  = &m_moundOptions; break;
 		case IDD_RULER_OPTIONS:newOptions  = &m_rulerOptions; break;
+		case IDD_WAVE_EDITOR_OPTIONS:newOptions  = &m_waveEditorOptions; break;
 		case IDD_FEATHER_OPTIONS:newOptions  = &m_featherOptions; break;
 		case IDD_MESHMOLD_OPTIONS:newOptions  = &m_meshMoldOptions; break;
 		case IDD_WAYPOINT_OPTIONS:newOptions  = &m_waypointOptions; break;

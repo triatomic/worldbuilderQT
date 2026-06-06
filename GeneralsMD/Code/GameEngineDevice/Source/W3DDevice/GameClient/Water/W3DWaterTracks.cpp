@@ -435,7 +435,12 @@ Int WaterTracksObj::render(DX8VertexBufferClass	*vertexBuffer, Int batchStart)
 
 	//First insert tail of wave:
 	Vector2 testPoint(waveTailOrigin);
-	TheTerrainLogic->isUnderwater(testPoint.X,testPoint.Y,&waterHeight);
+	// TheTerrainLogic is not present in WorldBuilder; fall back to the flat water level
+	// the system cached at init (m_waterPositionZ) so the wave editor can render there too.
+	if (TheTerrainLogic)
+		TheTerrainLogic->isUnderwater(testPoint.X,testPoint.Y,&waterHeight);
+	else
+		waterHeight = TheGlobalData->m_waterPositionZ;
 	vb->x=	testPoint.X;
 	vb->y=	testPoint.Y;
 	vb->z=waterHeight+1.5f;
@@ -619,6 +624,9 @@ WaterTracksRenderSystem::WaterTracksRenderSystem()
 	m_stripSizeX=WATER_STRIP_X;
 	m_stripSizeY=WATER_STRIP_Y;
 	m_batchStart=0;
+	m_editUndoCount=0;
+	m_editFlipU=0;
+	m_previewTrack=NULL;
 	TheWaterTracksRenderSystem = this;	//only allow one instance of this object.
 }
 
@@ -777,6 +785,10 @@ void WaterTracksRenderSystem::reset(void)
 
 	// free all attached things and used modules
 	assert( m_usedModules == NULL );
+
+	//editor undo entries now point at freed tracks - drop them.
+	m_editUndoCount = 0;
+	m_previewTrack = NULL;	//preview track was freed with everything else
 }
 
 //=============================================================================
@@ -980,17 +992,30 @@ void WaterTracksRenderSystem::saveTracks(void)
 
 	strcpy(path+len-4,".wak");
 
+	saveTracksTo(path);
+}
+
+//=============================================================================
+// WaterTracksRenderSystem::saveTracksTo
+//=============================================================================
+/** Write all active primary wave fronts to the given .wak path.  Path-based
+	variant so callers (e.g. WorldBuilder) that don't have TheTerrainLogic can
+	derive the path themselves.  The on-disk format matches saveTracks(). */
+//=============================================================================
+void WaterTracksRenderSystem::saveTracksTo(const char *wakPath)
+{
 	WaterTracksObj *umod;
 	Int trackCount=0;
 
-	FILE *fp=fopen(path,"wb");
+	FILE *fp=fopen(wakPath,"wb");
 
 	if (fp)
 	{
 		umod=m_usedModules;
 		while(umod)
-		{	if (umod->m_initTimeOffset == 0)
+		{	if (umod->m_initTimeOffset == 0 && umod != m_previewTrack)
 			{	//only save the primary wave front, second layer is added automatically.
+				//(the editor preview wave is excluded - it is never a real wave.)
 				fwrite(&umod->m_initStartPos,sizeof(umod->m_startPos),1,fp);
 				fwrite(&umod->m_initEndPos,sizeof(umod->m_perpDir),1,fp);
 				fwrite(&umod->m_type,sizeof(umod->m_type),1,fp);
@@ -1018,14 +1043,28 @@ void WaterTracksRenderSystem::loadTracks(void)
 
 	strcpy(path+len-4,".wak");
 
-	File *file = TheFileSystem->openFile(path, File::READ | File::BINARY);
+	loadTracksFrom(path);
+}
+
+//=============================================================================
+// WaterTracksRenderSystem::loadTracksFrom
+//=============================================================================
+/** Load wave fronts from the given .wak path.  Path-based variant so callers
+	(e.g. WorldBuilder) that don't have TheTerrainLogic can derive the path
+	themselves.  Mirrors the on-disk format written by saveTracksTo(). */
+//=============================================================================
+Int WaterTracksRenderSystem::loadTracksFrom(const char *wakPath)
+{
+	File *file = TheFileSystem->openFile(wakPath, File::READ | File::BINARY);
 	WaterTracksObj *umod;
 	Int trackCount=0;
 	Int flipU=0;
 	Vector2 startPos,endPos;
 	waveType wtype;
 
-	if (file)
+	if (!file)
+		return -1;	//file does not exist / could not be opened.
+
 	{
 		file->seek(-4,File::END);
 		file->read(&trackCount,sizeof(trackCount));
@@ -1091,6 +1130,526 @@ void WaterTracksRenderSystem::loadTracks(void)
 		}
 	}
 #endif
+
+	return trackCount;	//number of primary wave fronts recorded in the file.
+}
+
+//=============================================================================
+// Editor edit-API (int-based, no game globals required)
+//=============================================================================
+/** These methods let an external editor (WorldBuilder) drive the wave system
+	without seeing the cpp-local 'enum waveType' / waveTypeInfo[] table, and
+	without depending on TheTerrainLogic.  They share the same wave-creation
+	math used by the in-game editor and the .wak loader. */
+
+//=============================================================================
+// WaterTracksRenderSystem::clampEditableType
+//=============================================================================
+/** Map a 0-based editor index onto a valid placeable wave type. */
+//=============================================================================
+waveType WaterTracksRenderSystem::clampEditableType(Int typeIndex) const
+{
+	Int t = WaveTypeFirst + typeIndex;
+	if (t < WaveTypeFirst) t = WaveTypeFirst;
+	if (t > WaveTypeLast)  t = WaveTypeLast;
+	return (waveType)t;
+}
+
+//=============================================================================
+// WaterTracksRenderSystem::getEditableWaveTypeCount
+//=============================================================================
+Int WaterTracksRenderSystem::getEditableWaveTypeCount(void) const
+{
+	return (Int)WaveTypeLast - (Int)WaveTypeFirst + 1;
+}
+
+//=============================================================================
+// WaterTracksRenderSystem::getWaveTypeName
+//=============================================================================
+const char *WaterTracksRenderSystem::getWaveTypeName(Int typeIndex) const
+{
+	return waveTypeInfo[clampEditableType(typeIndex)].m_waveTypeName;
+}
+
+//=============================================================================
+// WaterTracksRenderSystem::addWaveInternal
+//=============================================================================
+/** Shared wave-creation core.  Binds a primary track (and an optional second
+	wave that trails it) for the given pre-computed wave-front midpoint/dir.
+	Returns the primary track; outSecond (if non-NULL) receives the trailing
+	track or NULL.  Mirrors the in-game editor and the .wak loader. */
+//=============================================================================
+WaterTracksObj *WaterTracksRenderSystem::addWaveInternal(const Vector2 &midPoint, const Vector2 &dirMidPoint,
+																									waveType type, Int flipU, WaterTracksObj **outSecond)
+{
+	if (outSecond)
+		*outSecond = NULL;
+
+	WaterTracksObj *track = bindTrack(type);
+	if (!track)
+		return NULL;
+
+	track->init(waveTypeInfo[type].m_finalHeight, waveTypeInfo[type].m_finalWidth,
+							midPoint, dirMidPoint, waveTypeInfo[type].m_textureName, 0);
+	track->m_flipU = flipU;
+
+	if (waveTypeInfo[type].m_secondWaveTimeOffset)
+	{	//Add a second track slightly behind this one.
+		WaterTracksObj *track2 = bindTrack(type);
+		if (track2)
+		{
+			track2->init(waveTypeInfo[type].m_finalHeight, waveTypeInfo[type].m_finalWidth,
+									 midPoint, dirMidPoint, waveTypeInfo[type].m_textureName,
+									 waveTypeInfo[type].m_secondWaveTimeOffset);
+			track2->m_flipU = !flipU;
+			if (outSecond)
+				*outSecond = track2;
+		}
+	}
+
+	return track;
+}
+
+//=============================================================================
+// WaterTracksRenderSystem::addWaveSegmentByPoints
+//=============================================================================
+/** Place a wave from 'start' to 'end' (world XY).  Computes the same midpoint
+	and perpendicular direction the in-game editor uses, then binds the track(s)
+	and records them so removeLastWaveSegment() can undo. */
+//=============================================================================
+void WaterTracksRenderSystem::addWaveSegmentByPoints(const Vector2 &start, const Vector2 &end, Int typeIndex)
+{
+	waveType type = clampEditableType(typeIndex);
+
+	//Generate valid input for the 2 points (same math as TestWaterUpdate).
+	Vector2 midPoint = end - start;
+	Vector2 perpDir = midPoint;
+	perpDir.Rotate(1.57079632679f);	//get vector perpendicular to wave motion.
+	perpDir.Normalize();
+	midPoint = start + midPoint*0.5f;
+	Vector2 dirMidPoint = midPoint + perpDir;
+
+	WaterTracksObj *second = NULL;
+	WaterTracksObj *track = addWaveInternal(midPoint, dirMidPoint, type, m_editFlipU, &second);
+	m_editFlipU ^= 1;	//alternate flip like the loader, for visual variety.
+
+	if (track && m_editUndoCount < EDIT_MAX_UNDOS)
+	{
+		m_editUndoStack[m_editUndoCount].track  = track;
+		m_editUndoStack[m_editUndoCount].track2 = second;
+		m_editUndoCount++;
+	}
+}
+
+//=============================================================================
+// WaterTracksRenderSystem::addWaveByDirection
+//=============================================================================
+/** Place a wave centered at 'center' that travels along 'travelDir'.  This is
+	the simple editor gesture: click to drop the wave, drag to aim the direction
+	it rolls in.  The drag LENGTH is ignored - the crest width comes from the wave
+	type (waveTypeInfo[].m_finalWidth), which is what the .wak persists, so a placed
+	wave and a reloaded wave look identical.
+
+	The .wak stores (m_initStartPos, m_initEndPos) = (center, center+unitTravelDir),
+	so m_initEndPos - m_initStartPos is exactly the travel direction - the same thing
+	getWaveFrontLine() reads back to draw the perpendicular crest bar + arrow. */
+//=============================================================================
+void WaterTracksRenderSystem::addWaveByDirection(const Vector2 &center, const Vector2 &travelDir, Int typeIndex)
+{
+	waveType type = clampEditableType(typeIndex);
+
+	Vector2 dir = travelDir;
+	Real len = dir.Length();
+	if (len < 0.0001f)
+		dir.Set(0.0f, 1.0f);	//degenerate drag; pick a default travel direction
+	else
+		dir *= (1.0f / len);	//length is ignored; we only keep the direction
+
+	Vector2 dirMidPoint = center + dir;	//center + unit travel dir (what init() stores)
+
+	WaterTracksObj *second = NULL;
+	WaterTracksObj *track = addWaveInternal(center, dirMidPoint, type, m_editFlipU, &second);
+	m_editFlipU ^= 1;	//alternate flip like the loader, for visual variety.
+
+	if (track && m_editUndoCount < EDIT_MAX_UNDOS)
+	{
+		m_editUndoStack[m_editUndoCount].track  = track;
+		m_editUndoStack[m_editUndoCount].track2 = second;
+		m_editUndoCount++;
+	}
+}
+
+//=============================================================================
+// WaterTracksRenderSystem::setPreviewWave
+//=============================================================================
+/** Create or reposition the live editor PREVIEW wave: a single animating track at
+	'center' travelling along 'travelDir'.  It animates like a real wave (flush()
+	updates it every frame) but is held in m_previewTrack and skipped by the editor
+	count/list/save/undo, so it never becomes a real wave.  Re-initing each call
+	restarts its animation, so the preview keeps breaking as the user hovers. */
+//=============================================================================
+void WaterTracksRenderSystem::setPreviewWave(const Vector2 &center, const Vector2 &travelDir, Int typeIndex)
+{
+	waveType type = clampEditableType(typeIndex);
+
+	Vector2 dir = travelDir;
+	Real len = dir.Length();
+	if (len < 0.0001f)
+		dir.Set(0.0f, 1.0f);
+	else
+		dir *= (1.0f / len);
+
+	Vector2 dirMidPoint = center + dir;
+
+	// If the existing preview is a different wave type, rebind so it uses the right
+	// texture/strip; otherwise reuse the same track and just re-init its position.
+	if (m_previewTrack && m_previewTrack->m_type != type)
+		clearPreviewWave();
+
+	if (!m_previewTrack)
+		m_previewTrack = bindTrack(type);
+
+	if (m_previewTrack)
+		m_previewTrack->init(waveTypeInfo[type].m_finalHeight, waveTypeInfo[type].m_finalWidth,
+												 center, dirMidPoint, waveTypeInfo[type].m_textureName, 0);
+}
+
+//=============================================================================
+// WaterTracksRenderSystem::clearPreviewWave
+//=============================================================================
+/** Remove the live preview wave, if any. */
+//=============================================================================
+void WaterTracksRenderSystem::clearPreviewWave(void)
+{
+	if (m_previewTrack)
+	{
+		unbindTrack(m_previewTrack);
+		m_previewTrack = NULL;
+	}
+}
+
+//=============================================================================
+// WaterTracksRenderSystem::removeLastWaveSegment
+//=============================================================================
+/** Undo the most recently placed wave segment (primary + optional trailer). */
+//=============================================================================
+void WaterTracksRenderSystem::removeLastWaveSegment(void)
+{
+	if (m_editUndoCount <= 0)
+		return;
+
+	m_editUndoCount--;
+	if (m_editUndoStack[m_editUndoCount].track)
+		unbindTrack(m_editUndoStack[m_editUndoCount].track);
+	if (m_editUndoStack[m_editUndoCount].track2)
+		unbindTrack(m_editUndoStack[m_editUndoCount].track2);
+
+	m_editUndoStack[m_editUndoCount].track  = NULL;
+	m_editUndoStack[m_editUndoCount].track2 = NULL;
+}
+
+//=============================================================================
+// WaterTracksRenderSystem::getPrimaryByEditorIndex
+//=============================================================================
+/** Return the primary (m_initTimeOffset==0) wave at editor index 'index', where
+	0 = the oldest wave placed.  bindTrack() inserts new tracks at the HEAD of
+	m_usedModules, so iterating head->tail is newest-first; the editor wants stable
+	oldest-first numbering (so a newly placed wave appends to the bottom of the
+	list, not the top).  We therefore count primaries and map index -> (count-1-index)
+	in head order.  Returns NULL if out of range. */
+//=============================================================================
+WaterTracksObj *WaterTracksRenderSystem::getPrimaryByEditorIndex(Int index) const
+{
+	if (index < 0)
+		return NULL;
+
+	Int total = getWaveCount();
+	if (index >= total)
+		return NULL;
+
+	// Head-order position of the oldest-first index.
+	Int headPos = total - 1 - index;
+
+	Int count = 0;
+	for (WaterTracksObj *mod = m_usedModules; mod; mod = mod->m_nextSystem)
+	{
+		if (mod->m_initTimeOffset != 0)
+			continue;	//skip trailing second waves
+		if (mod == m_previewTrack)
+			continue;	//skip the throwaway editor preview wave
+		if (count == headPos)
+			return mod;
+		count++;
+	}
+	return NULL;
+}
+
+//=============================================================================
+// WaterTracksRenderSystem::getWaveCount
+//=============================================================================
+/** Number of primary wave fronts currently in the system.  Secondary (trailing)
+	waves share a primary's segment and are skipped, matching saveTracks(). */
+//=============================================================================
+Int WaterTracksRenderSystem::getWaveCount(void) const
+{
+	Int count = 0;
+	for (WaterTracksObj *mod = m_usedModules; mod; mod = mod->m_nextSystem)
+		if (mod->m_initTimeOffset == 0 && mod != m_previewTrack)
+			count++;
+	return count;
+}
+
+//=============================================================================
+// WaterTracksRenderSystem::getWaveSegment
+//=============================================================================
+/** Return the original start/end (world XY) of the Nth primary wave front, so an
+	editor can draw a static segment overlay.  Returns false if out of range. */
+//=============================================================================
+Bool WaterTracksRenderSystem::getWaveSegment(Int index, Vector2 &start, Vector2 &end) const
+{
+	WaterTracksObj *mod = getPrimaryByEditorIndex(index);
+	if (!mod)
+		return false;
+	start = mod->m_initStartPos;
+	end   = mod->m_initEndPos;
+	return true;
+}
+
+//=============================================================================
+// WaterTracksRenderSystem::getWaveInfo
+//=============================================================================
+/** Like getWaveSegment, but also returns the 0-based editable type index so an
+	editor can list the wave's type. */
+//=============================================================================
+Bool WaterTracksRenderSystem::getWaveInfo(Int index, Vector2 &start, Vector2 &end, Int &typeIndex) const
+{
+	WaterTracksObj *mod = getPrimaryByEditorIndex(index);
+	if (!mod)
+		return false;
+	start = mod->m_initStartPos;
+	end   = mod->m_initEndPos;
+	typeIndex = (Int)mod->m_type - (Int)WaveTypeFirst;
+	if (typeIndex < 0) typeIndex = 0;
+	return true;
+}
+
+//=============================================================================
+// WaterTracksRenderSystem::getWaveFrontLine
+//=============================================================================
+/** Reconstruct the VISIBLE wave front for the Nth wave so an editor can draw it.
+	The .wak stores (midpoint, midpoint+motionDir); the actual breaking-wave bar
+	runs PERPENDICULAR to the motion direction, centered on the midpoint, and is
+	waveTypeInfo[type].m_finalWidth wide.  lineP0/lineP1 are the bar endpoints;
+	arrowTip is a point off the midpoint along the motion direction. */
+//=============================================================================
+Bool WaterTracksRenderSystem::getWaveFrontLine(Int index, Vector2 &lineP0, Vector2 &lineP1, Vector2 &arrowTip) const
+{
+	WaterTracksObj *mod = getPrimaryByEditorIndex(index);
+	if (!mod)
+		return false;
+	getWaveFrontLineForType(mod->m_initStartPos,
+													mod->m_initEndPos - mod->m_initStartPos,
+													(Int)mod->m_type - (Int)WaveTypeFirst,
+													lineP0, lineP1, arrowTip);
+	return true;
+}
+
+//=============================================================================
+// WaterTracksRenderSystem::getWaveFrontLineForType
+//=============================================================================
+/** Compute the visible wave-front glyph (crest bar perpendicular to 'travelDir',
+	waveTypeInfo[type].m_finalWidth wide, centered at 'center'; plus an arrow tip in
+	the travel direction) for a HYPOTHETICAL wave.  Used by the editor to draw a live
+	ghost preview while the user drags - identical math to getWaveFrontLine() so the
+	preview matches the committed wave exactly. */
+//=============================================================================
+void WaterTracksRenderSystem::getWaveFrontLineForType(const Vector2 &center, const Vector2 &travelDir,
+																											Int typeIndex,
+																											Vector2 &lineP0, Vector2 &lineP1, Vector2 &arrowTip) const
+{
+	Vector2 motion = travelDir;
+	Real mlen = motion.Length();
+	if (mlen < 0.0001f)
+		motion.Set(0.0f, 1.0f);	//degenerate; pick something
+	else
+		motion *= (1.0f / mlen);
+
+	Vector2 perp(motion);
+	perp.Rotate(-1.57079632679f);	//perpendicular to motion = front-line direction
+
+	Real halfWidth = waveTypeInfo[clampEditableType(typeIndex)].m_finalWidth * 0.5f;
+	lineP0 = center + perp * halfWidth;
+	lineP1 = center - perp * halfWidth;
+
+	// Arrow points the way the wave moves, scaled to a readable length.
+	arrowTip = center + motion * (halfWidth * 0.6f);
+}
+
+//=============================================================================
+// WaterTracksRenderSystem::removeWaveAt
+//=============================================================================
+/** Remove the Nth primary wave front and its trailing second wave (if any).
+	The second wave shares the same init start/end/type but has a non-zero
+	m_initTimeOffset, so it is matched by value. */
+//=============================================================================
+void WaterTracksRenderSystem::removeWaveAt(Int index)
+{
+	// Locate the primary front at the editor index (oldest-first), matching the
+	// numbering the list/overlay use.
+	WaterTracksObj *primary = getPrimaryByEditorIndex(index);
+	if (!primary)
+		return;
+
+	// Find its trailing second wave before we unbind the primary, since unbindTrack
+	// may relink the list.
+	WaterTracksObj *second = findSecondWaveFor(primary);
+
+	unbindTrack(primary);
+	if (second)
+		unbindTrack(second);
+
+	// The editor undo stack may reference freed tracks now; clear it to be safe.
+	m_editUndoCount = 0;
+}
+
+//=============================================================================
+// WaterTracksRenderSystem::findSecondWaveFor
+//=============================================================================
+/** Locate the trailing "second wave" that a primary spawned: same init segment
+	and type, but a non-zero m_initTimeOffset.  NULL if the type has no trailer. */
+//=============================================================================
+WaterTracksObj *WaterTracksRenderSystem::findSecondWaveFor(const WaterTracksObj *primary) const
+{
+	if (!primary)
+		return NULL;
+
+	for (WaterTracksObj *mod = m_usedModules; mod; mod = mod->m_nextSystem)
+	{
+		if (mod == primary)
+			continue;
+		if (mod->m_initTimeOffset != 0 &&
+				mod->m_type == primary->m_type &&
+				mod->m_initStartPos.X == primary->m_initStartPos.X &&
+				mod->m_initStartPos.Y == primary->m_initStartPos.Y &&
+				mod->m_initEndPos.X == primary->m_initEndPos.X &&
+				mod->m_initEndPos.Y == primary->m_initEndPos.Y)
+			return mod;
+	}
+	return NULL;
+}
+
+//=============================================================================
+// WaterTracksRenderSystem::pickWave
+//=============================================================================
+/** Hit-test the editor waves against a world point.  Returns the editor index of
+	the closest wave the point lands on (its crest bar or arrow), or -1 if none.
+	hitArrow is set true when the point is nearer the arrow tip than the crest bar,
+	so the editor can rotate (arrow) vs move (body). */
+//=============================================================================
+Int WaterTracksRenderSystem::pickWave(const Vector2 &worldPt, Bool &hitArrow) const
+{
+	hitArrow = false;
+
+	Int count = getWaveCount();
+	Int best = -1;
+	Real bestDistSq = 0.0f;
+	Bool bestArrow = false;
+
+	for (Int i = 0; i < count; ++i)
+	{
+		Vector2 p0, p1, tip;
+		if (!getWaveFrontLine(i, p0, p1, tip))
+			continue;
+
+		Vector2 center((p0.X + p1.X) * 0.5f, (p0.Y + p1.Y) * 0.5f);
+
+		// Pick tolerance scales with the wave's crest width so big waves are easy to
+		// grab and small ones don't over-claim.  Use half the crest length as a base.
+		Vector2 half = p1 - center;
+		Real crestHalf = half.Length();
+		Real tol = crestHalf * 0.5f;
+		if (tol < 8.0f) tol = 8.0f;	//minimum grab radius in world units
+		Real tolSq = tol * tol;
+
+		// Distance to the arrow tip (rotate handle).
+		Vector2 dTip = worldPt - tip;
+		Real distTipSq = dTip.Length2();
+
+		// Distance to the crest bar segment p0..p1 (move handle).
+		Vector2 ab = p1 - p0;
+		Real abLen2 = ab.Length2();
+		Real t = 0.0f;
+		if (abLen2 > 0.0001f)
+		{
+			t = ((worldPt - p0) * ab) / abLen2;	//dot / |ab|^2
+			if (t < 0.0f) t = 0.0f; else if (t > 1.0f) t = 1.0f;
+		}
+		Vector2 closest = p0 + ab * t;
+		Vector2 dBar = worldPt - closest;
+		Real distBarSq = dBar.Length2();
+
+		// Nearest of the two handles for this wave.
+		Bool thisArrow = (distTipSq < distBarSq);
+		Real distSq = thisArrow ? distTipSq : distBarSq;
+
+		if (distSq > tolSq)
+			continue;	//point not on this wave
+
+		if (best < 0 || distSq < bestDistSq)
+		{
+			best = i;
+			bestDistSq = distSq;
+			bestArrow = thisArrow;
+		}
+	}
+
+	hitArrow = bestArrow;
+	return best;
+}
+
+//=============================================================================
+// WaterTracksRenderSystem::setWaveTransform
+//=============================================================================
+/** Move/re-aim an existing wave: re-init its primary track (and trailing second
+	wave, if any) at 'center' travelling along 'travelDir'.  This is the edit-time
+	equivalent of addWaveByDirection, applied in place so the wave keeps its slot in
+	the editor list.  Returns false if the index is out of range. */
+//=============================================================================
+Bool WaterTracksRenderSystem::setWaveTransform(Int index, const Vector2 &center, const Vector2 &travelDir)
+{
+	WaterTracksObj *primary = getPrimaryByEditorIndex(index);
+	if (!primary)
+		return false;
+
+	waveType type = primary->m_type;
+
+	Vector2 dir = travelDir;
+	Real len = dir.Length();
+	if (len < 0.0001f)
+		dir.Set(0.0f, 1.0f);
+	else
+		dir *= (1.0f / len);
+
+	Vector2 dirMidPoint = center + dir;
+
+	// Grab the trailer (matched by the OLD segment) before we change the primary.
+	WaterTracksObj *second = findSecondWaveFor(primary);
+
+	Int primaryFlip = primary->m_flipU;
+	primary->init(waveTypeInfo[type].m_finalHeight, waveTypeInfo[type].m_finalWidth,
+								center, dirMidPoint, waveTypeInfo[type].m_textureName, 0);
+	primary->m_flipU = primaryFlip;
+
+	if (second)
+	{
+		Int secondFlip = second->m_flipU;
+		second->init(waveTypeInfo[type].m_finalHeight, waveTypeInfo[type].m_finalWidth,
+								 center, dirMidPoint, waveTypeInfo[type].m_textureName,
+								 waveTypeInfo[type].m_secondWaveTimeOffset);
+		second->m_flipU = secondFlip;
+	}
+
+	return true;
 }
 
 /**@todo: this is a quick hack for adding/removing/testing breaking waves inside the client.

@@ -1,23 +1,5 @@
-/*
-**	Command & Conquer Generals Zero Hour(tm)
-**	Copyright 2025 Electronic Arts Inc.
-**
-**	This program is free software: you can redistribute it and/or modify
-**	it under the terms of the GNU General Public License as published by
-**	the Free Software Foundation, either version 3 of the License, or
-**	(at your option) any later version.
-**
-**	This program is distributed in the hope that it will be useful,
-**	but WITHOUT ANY WARRANTY; without even the implied warranty of
-**	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-**	GNU General Public License for more details.
-**
-**	You should have received a copy of the GNU General Public License
-**	along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
-
 //{{NO_DEPENDENCIES}}
-// Microsoft Developer Studio generated include file.
+// Microsoft Visual C++ generated include file.
 // Used by WorldBuilder.rc
 //
 #define IDPREVIEWSOUND                  3
@@ -146,6 +128,8 @@
 #define IDC_FIND_NEXT                   242
 #define IDD_TOAST                       242
 #define IDC_OBJECT_SEARCH_EDIT          243
+#define IDD_MINIMAP                     243
+#define IDD_WAVE_EDITOR_OPTIONS         244
 #define IDC_OBJECT_SEARCH_BUTTON        244
 #define IDC_OBJECT_SEARCH_RESET_BTN     245
 #define IDC_OBJECT_EDIT                 246
@@ -642,7 +626,6 @@
 #define IDC_MAP_SEARCH_EDIT             1355
 #define IDC_MAP_FIND_BUTTON             1356
 #define IDC_MAP_SEARCH_RESET_BTN        1357
-#define IDC_PACKED_MAPS                 1369
 #define IDC_AIWP_LBL1                   1358
 #define IDC_AIWP_LBL2                   1359
 #define IDC_AIWP_LBL3                   1360
@@ -654,16 +637,29 @@
 #define IDC_TRAINSWP_LBLH1              1366
 #define IDC_TRAINSWP_LBLH0              1367
 #define IDC_AIWP_LBLH0                  1368
+#define IDC_PACKED_MAPS                 1369
 #define IDC_TOGGLE_MIRRORX              1370
 #define IDC_TOGGLE_MIRRORXY             1371
+#define IDC_DIALOG_FONT                 1371
 #define IDC_TOGGLE_MIRRORY              1372
+#define IDC_DIALOG_FONT_LABEL           1372
+#define IDC_WAVE_TYPE_LABEL             1373
 #define IDC_TOGGLE_MIRROR               1373
+#define IDC_WAVE_CYCLE_TYPE             1374
 #define IDC_PAINT_MODE_COMBO            1374
+#define IDC_WAVE_UNDO                   1375
+#define IDC_WAVE_SAVE                   1376
+#define IDC_WAVE_RELOAD                 1377
 #define IDC_TOGGLE_PAINTMODE            1377
+#define IDC_WAVE_LIST                   1378
 #define IDC_TOGGLE_NOMIX                1378
+#define IDC_WAVE_DELETE                 1379
 #define IDC_STATIC_MAPOBJECT_GENERAL    1379
+#define IDC_WAVE_MODE_CREATE            1380
 #define IDC_STATIC_MAPOBJECT_LOGICAL    1380
+#define IDC_WAVE_MODE_MANIPULATE        1381
 #define IDC_STATIC_MAPOBJECT_SOUND      1381
+#define IDC_WAVE_SHOW_LINES             1382
 #define IDC_STATIC_MAPOBJECT_VISUAL     1382
 #define IDC_MAPOBJECT_DISTANCE          1383
 #define IDC_HELP_CAPTION                1384
@@ -834,8 +830,6 @@
 #define IDC_Grove_SaveSet               33349
 #define IDC_LAUNCH_ONSTARTUP            33350
 #define IDC_Grove_Settings              33350
-#define IDC_DIALOG_FONT                 1371
-#define IDC_DIALOG_FONT_LABEL           1372
 #define ID_VIEW_SHOWTRACINGOVERLAY      33351
 #define ID_LOD_MODE_1                   33352
 #define ID_LOD_MODE_2                   33353
@@ -873,7 +867,8 @@
 #define ID_TEXT_RENDERER_NEW            33385
 #define ID_MINIMAP_SHOWBORDER           33387
 #define ID_MINIMAP_FULLEXTENT           33388
-#define IDD_MINIMAP                     243
+#define ID_WAVE_EDITOR_TOOL             33389
+#define ID_VIEW_SHOWWAVELINES           33390
 #define IDS_NEW                         61446
 #define IDS_RESIZE                      61447
 #define IDS_REMOVING_INUSE_TEAM         61448
@@ -945,9 +940,9 @@
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_3D_CONTROLS                     1
-#define _APS_NEXT_RESOURCE_VALUE        244
-#define _APS_NEXT_COMMAND_VALUE         33389
-#define _APS_NEXT_CONTROL_VALUE         1373
+#define _APS_NEXT_RESOURCE_VALUE        246
+#define _APS_NEXT_COMMAND_VALUE         33391
+#define _APS_NEXT_CONTROL_VALUE         1383
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

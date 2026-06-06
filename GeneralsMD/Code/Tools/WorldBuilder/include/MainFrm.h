@@ -51,6 +51,7 @@
 #include "ScorchOptions.h"
 #include "BuildList.h"
 #include "RulerOptions.h"
+#include "WaveEditorOptions.h"
 
 #define TWO_D_WINDOW_SECTION "TwoDWindow"
 #define MAIN_FRAME_SECTION "MainFrame"
@@ -135,6 +136,7 @@ protected:  // control bar embedded members
 	MinimapDialog*			m_minimapDialog;
 	ScriptDialog*				m_scriptDialog;
 	RulerOptions				m_rulerOptions;
+	WaveEditorOptions			m_waveEditorOptions;
 	
 	Int								m_curOptionsX;
 	Int								m_curOptionsY;

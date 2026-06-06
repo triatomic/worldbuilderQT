@@ -102,6 +102,8 @@ public:
 	static void setDoMeshFeedback(Bool val) { m_meshFeedback = val; }	
 	static void setDoRampFeedback(Bool val) { m_rampFeedback = val; }
 	static void setDoBoundaryFeedback(Bool val) { m_boundaryFeedback = val; }
+	static void setDoWaveFeedback(Bool val) { m_waveFeedback = val; }
+	static Bool getDoWaveFeedback(void) { return m_waveFeedback; }
 	static void setDoGridFeedback(Bool val) { m_rulerGridFeedback = val; }
 	static void setDoTracingOverlayFeedback(Bool val) { m_showTracingOverlay = val; }
 
@@ -187,6 +189,7 @@ protected: // static state vars.
 	static Bool								m_meshFeedback;
 	static Bool								m_rampFeedback;	///< should we be showing feedback for the ramp tool?
 	static Bool								m_boundaryFeedback;
+	static Bool								m_waveFeedback;		///< draw wave start->end overlay lines
 	static Bool								m_rulerGridFeedback;
 	static Bool								m_showTracingOverlay; ///< True to show tracing overlay.
 	static Bool								m_ambientSoundFeedback;
@@ -217,6 +220,7 @@ protected:
 	void updateWaypointVB(RenderInfoClass & rinfo);
 	void updateForWater(void);
 	void updateBoundaryVB(void);
+	void updateWaveVB(void);
 	void updateTerrainPasteVB(void);
 	void updateGridVB(void);
 	void updateAmbientSoundVB(void);

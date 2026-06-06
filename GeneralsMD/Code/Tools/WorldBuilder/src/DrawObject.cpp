@@ -39,6 +39,8 @@
 #include "W3DDevice/GameClient/HeightMap.h"
 #include "W3DDevice/GameClient/W3DAssetManager.h"
 #include "W3DDevice/GameClient/W3DWater.h"
+#include "W3DDevice/GameClient/W3DWaterTracks.h"
+#include "WaveEditorTool.h"
 #include "WW3D2/dx8wrapper.h"
 #include "WW3D2/mesh.h"
 #include "WW3D2/meshmdl.h"
@@ -115,6 +117,7 @@ Bool	DrawObject::m_disableFeedback = false;
 Bool	DrawObject::m_meshFeedback = false;
 Bool	DrawObject::m_rampFeedback = false;
 Bool	DrawObject::m_boundaryFeedback = false;
+Bool	DrawObject::m_waveFeedback = true;	///< wave overlay lines on by default
 Bool	DrawObject::m_rulerGridFeedback = true;
 Bool	DrawObject::m_showTracingOverlay = false;
 Bool	DrawObject::m_ambientSoundFeedback = false;
@@ -729,6 +732,145 @@ void DrawObject::updateBoundaryVB(void)
 		// but now the edges follow terrain better.
 
 	}
+}
+
+//-----------------------------------------------------------------------------
+// DrawObject::updateWaveVB
+//-----------------------------------------------------------------------------
+/** Build terrain-following overlay lines for every wave in the water-track
+	system: a start->end segment plus an arrowhead at the end showing travel
+	direction.  Same VB/IB + per-segment height sampling as updateBoundaryVB so
+	the lines hug the terrain/water and render inside the D3D frame. */
+//-----------------------------------------------------------------------------
+void DrawObject::updateWaveVB(void)
+{
+	m_feedbackVertexCount = 0;
+	m_feedbackIndexCount = 0;
+
+	if (!TheWaterTracksRenderSystem || !TheTerrainRenderObject)
+		return;
+
+	const DWORD WAVE_COLOR     = 0xFF00C8FF;	// ARGB cyan (normal)
+	const DWORD WAVE_COLOR_SEL = 0xFFFFFF00;	// ARGB yellow (selected)
+	const DWORD WAVE_COLOR_GHOST = 0xFFA0F0FF;	// ARGB light cyan (drag preview)
+	const Int selectedWave = WaveEditorTool::getSelectedWave();
+	const float stepSize = 10.0f * MAP_XY_FACTOR;
+
+	// Append a ghost-preview wave (the one being dragged out) after the committed
+	// waves so it draws with the same crest-bar + arrow glyph in light cyan.
+	float ghCx, ghCy, ghDx, ghDy; Int ghType;
+	const Bool haveGhost = WaveEditorTool::getGhostWave(ghCx, ghCy, ghDx, ghDy, ghType);
+
+	DX8IndexBufferClass::WriteLockClass lockIdxBuffer(m_indexFeedback, D3DLOCK_DISCARD);
+	UnsignedShort *curIb = lockIdxBuffer.Get_Index_Array();
+
+	DX8VertexBufferClass::WriteLockClass lockVtxBuffer(m_vertexFeedback, D3DLOCK_DISCARD);
+	VertexFormatXYZDUV1 *curVb = (VertexFormatXYZDUV1*)lockVtxBuffer.Get_Vertex_Array();
+
+	// Emit a terrain-following thick line from a->b as two triangles per segment.
+	#define WAVE_SAMPLE_Z(PT) \
+		PT.z = TheTerrainRenderObject->getHeightMapHeight(PT.x, PT.y, NULL); \
+		if (m_showWater) { Real wh = getWaterHeightIfUnderwater(PT.x, PT.y); if (wh != -FLT_MAX) PT.z = wh + 4.5f; }
+
+	DWORD waveColor = WAVE_COLOR;	// set per wave below
+
+	#define WAVE_ADD_VERT(px, py, pz) \
+		curVb->x = px; curVb->y = py; curVb->z = pz; \
+		curVb->u1 = 0; curVb->v1 = 0; curVb->diffuse = waveColor; ++curVb; ++m_feedbackVertexCount;
+
+	Int waveCount = TheWaterTracksRenderSystem->getWaveCount();
+	Int totalGlyphs = waveCount + (haveGhost ? 1 : 0);
+	for (Int w = 0; w < totalGlyphs; ++w)
+	{
+		// p0->p1 is the visible wave front (perpendicular to motion, m_finalWidth
+		// wide); 'tip' is a point off the front's center in the travel direction.
+		Vector2 p0, p1, tip;
+		const Bool isGhost = (w >= waveCount);
+		if (isGhost)
+		{
+			// Same front-line math as a committed wave, for the dragged direction.
+			TheWaterTracksRenderSystem->getWaveFrontLineForType(
+				Vector2(ghCx, ghCy), Vector2(ghDx, ghDy), ghType, p0, p1, tip);
+		}
+		else if (!TheWaterTracksRenderSystem->getWaveFrontLine(w, p0, p1, tip))
+			continue;
+
+		waveColor = isGhost ? WAVE_COLOR_GHOST
+											: ((w == selectedWave) ? WAVE_COLOR_SEL : WAVE_COLOR);
+
+		Vector2 center((p0.X + p1.X) * 0.5f, (p0.Y + p1.Y) * 0.5f);
+
+		// Pieces to draw: the front bar (p0->p1), a stem (center->tip) showing the
+		// travel direction, and two arrowhead barbs at the tip.
+		Coord3D pieces[4][2];
+		Int numPieces = 2;
+		pieces[0][0].x = p0.X;     pieces[0][0].y = p0.Y;
+		pieces[0][1].x = p1.X;     pieces[0][1].y = p1.Y;
+		pieces[1][0].x = center.X; pieces[1][0].y = center.Y;
+		pieces[1][1].x = tip.X;    pieces[1][1].y = tip.Y;
+
+		Vector2 dirv = tip - center;
+		Real dlen = dirv.Length();
+		if (dlen > 1.0f)
+		{
+			dirv *= (1.0f / dlen);
+			Vector2 perp(-dirv.Y, dirv.X);
+			Real ah = 6.0f * MAP_XY_FACTOR;	// arrowhead length
+			Real aw = 3.0f * MAP_XY_FACTOR;	// arrowhead half-width
+			Vector2 base = tip - dirv * ah;
+			Vector2 b1 = base + perp * aw;
+			Vector2 b2 = base - perp * aw;
+			pieces[2][0].x = tip.X; pieces[2][0].y = tip.Y;
+			pieces[2][1].x = b1.X;  pieces[2][1].y = b1.Y;
+			pieces[3][0].x = tip.X; pieces[3][0].y = tip.Y;
+			pieces[3][1].x = b2.X;  pieces[3][1].y = b2.Y;
+			numPieces = 4;
+		}
+
+		for (Int pc = 0; pc < numPieces; ++pc)
+		{
+			Coord3D a = pieces[pc][0];
+			Coord3D b = pieces[pc][1];
+			Vector3 edgeVec(b.x - a.x, b.y - a.y, 0);
+			Real edgeLength = sqrtf(edgeVec.X*edgeVec.X + edgeVec.Y*edgeVec.Y);
+			Int segments = max(1, (int)(edgeLength / stepSize));
+
+			for (Int s = 0; s < segments; ++s)
+			{
+				Real t1 = (Real)s / segments;
+				Real t2 = (Real)(s + 1) / segments;
+				Coord3D p1, p2;
+				p1.x = a.x + (b.x - a.x) * t1; p1.y = a.y + (b.y - a.y) * t1;
+				p2.x = a.x + (b.x - a.x) * t2; p2.y = a.y + (b.y - a.y) * t2;
+				WAVE_SAMPLE_Z(p1);
+				WAVE_SAMPLE_Z(p2);
+
+				Vector3 dir(p2.x - p1.x, p2.y - p1.y, p2.z - p1.z);
+				dir.Normalize();
+				dir *= 1.0f;	// half-width: total wave line width = 2 world units (thin)
+				dir.Rotate_Z(PI / 2);
+
+				if (m_feedbackVertexCount + 4 > NUM_FEEDBACK_VERTEX || m_feedbackIndexCount + 6 > NUM_FEEDBACK_INDEX)
+					return;
+
+				WAVE_ADD_VERT(p1.x + dir.X, p1.y + dir.Y, p1.z);
+				WAVE_ADD_VERT(p1.x - dir.X, p1.y - dir.Y, p1.z);
+				WAVE_ADD_VERT(p2.x + dir.X, p2.y + dir.Y, p2.z);
+				WAVE_ADD_VERT(p2.x - dir.X, p2.y - dir.Y, p2.z);
+
+				*curIb++ = m_feedbackVertexCount - 4;
+				*curIb++ = m_feedbackVertexCount - 2;
+				*curIb++ = m_feedbackVertexCount - 3;
+				*curIb++ = m_feedbackVertexCount - 4;
+				*curIb++ = m_feedbackVertexCount - 1;
+				*curIb++ = m_feedbackVertexCount - 2;
+				m_feedbackIndexCount += 6;
+			}
+		}
+	}
+
+	#undef WAVE_SAMPLE_Z
+	#undef WAVE_ADD_VERT
 }
 
 void DrawObject::updateGridVB(void)
@@ -3117,6 +3259,35 @@ if (_skip_drawobject_render) {
 			DX8Wrapper::Set_DX8_Render_State(D3DRS_LIGHTING, FALSE);				// disable lighting
 			DX8Wrapper::Draw_Triangles(	0, m_feedbackIndexCount/3, 0,	m_feedbackVertexCount);
 		}
+	}
+
+	// Draw the wave overlay when the View toggle is on, OR while a wave is being
+	// dragged out (so the ghost preview always shows, even if the toggle is off).
+	{
+		float gx, gy, gdx, gdy; Int gt;
+		Bool ghostNow = WaveEditorTool::getGhostWave(gx, gy, gdx, gdy, gt);
+	if (m_waveFeedback || ghostNow) {
+		updateWaveVB();
+		if (m_feedbackIndexCount > 0) {
+			// Wave overlay should always be visible, so disable depth test/write -
+			// the lines draw on top of terrain, trees, objects, etc. (editor aid).
+			DX8Wrapper::Set_DX8_Render_State(D3DRS_ZENABLE, FALSE);
+			DX8Wrapper::Set_DX8_Render_State(D3DRS_ZWRITEENABLE, FALSE);
+			DX8Wrapper::Set_DX8_Render_State(D3DRS_ALPHABLENDENABLE, FALSE);
+
+			DX8Wrapper::Set_Vertex_Buffer(m_vertexFeedback);
+			DX8Wrapper::Set_Index_Buffer(m_indexFeedback,0);
+			DX8Wrapper::Set_Shader(m_shaderClass);
+			DX8Wrapper::Set_DX8_Render_State(D3DRS_CULLMODE, D3DCULL_NONE);
+			DX8Wrapper::Set_DX8_Render_State(D3DRS_FILLMODE,D3DFILL_SOLID);
+			DX8Wrapper::Set_DX8_Render_State(D3DRS_LIGHTING, FALSE);
+			DX8Wrapper::Draw_Triangles(	0, m_feedbackIndexCount/3, 0,	m_feedbackVertexCount);
+
+			// restore depth testing for anything drawn after us.
+			DX8Wrapper::Set_DX8_Render_State(D3DRS_ZENABLE, TRUE);
+			DX8Wrapper::Set_DX8_Render_State(D3DRS_ZWRITEENABLE, TRUE);
+		}
+	}
 	}
 
 #if 1
