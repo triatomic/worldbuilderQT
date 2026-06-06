@@ -36,7 +36,25 @@ VC6 allowed redundant class qualification inside the class body. Modern MSVC rej
 
 VC6 allowed unqualified `exception` and catch-by-value. Modern MSVC requires `std::` and catch-by-reference is correct practice.
 
-## Build Command (VS2022)
+## Build Command
+
+### Primary: Ninja preset (matches `CMakePresets.json`)
+
+The project's intended build uses the CMake presets (Ninja Multi-Config). Use the `win32-internal`
+preset. Ninja must be on PATH and the **x86** MSVC environment loaded, so run it through
+`vcvarsall.bat x86` (Ninja ships with VS):
+
+```
+cmake --preset win32-internal
+cmd /c "\"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat\" x86 && cmake --build --preset win32-internal --target z_worldbuilder"
+```
+
+Output: `build/win32-internal/GeneralsMD/Release/WorldBuilderZH.exe`
+
+Prefer this — Ninja's dependency tracking is reliable. The VS generator below has produced silent
+no-op "up to date" builds (exe not relinked); if you use it, verify the exe mtime/CRC actually changed.
+
+### Alternative: VS2022 generator
 
 ```
 cmake -S . -B build -G "Visual Studio 17 2022" -A Win32 -DRTS_BUILD_ZEROHOUR=ON -DRTS_BUILD_GENERALS=OFF -DRTS_BUILD_ZEROHOUR_TOOLS=ON -DRTS_BUILD_GENERALS_TOOLS=OFF -DRTS_BUILD_OPTION_INTERNAL=ON
