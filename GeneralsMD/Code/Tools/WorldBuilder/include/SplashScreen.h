@@ -37,6 +37,7 @@ class SplashScreen : public CDialog
 		void outputText(UINT nIDString);
 
 	protected:
+		virtual BOOL OnInitDialog();
 		afx_msg void OnPaint();
 
 		DECLARE_MESSAGE_MAP()

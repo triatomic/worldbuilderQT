@@ -19,6 +19,7 @@
 
 #include "StdAfx.h"
 #include "SplashScreen.h"
+#include "resource.h"
 
 //-------------------------------------------------------------------------------------------------
 SplashScreen::SplashScreen()
@@ -48,6 +49,46 @@ SplashScreen::SplashScreen()
 	strcpy(lf.lfFaceName, "Arial");
 	
 	m_font.CreateFontIndirect(&lf);
+}
+
+//-------------------------------------------------------------------------------------------------
+// Size the dialog (and the bitmap static inside it) to the splash bitmap's exact
+// PIXEL dimensions.  The .rc lays the dialog out in dialog units (168 x 217), which
+// don't convert to the bitmap's 250 x 350 px at every DPI / font - so a strip of gray
+// dialog background "leaks" around the centered image.  Snapping to the real bitmap
+// size removes that gap regardless of DPI.
+BOOL SplashScreen::OnInitDialog()
+{
+	CDialog::OnInitDialog();
+
+	// Get the splash bitmap's true pixel size.
+	HBITMAP hBmp = (HBITMAP)::LoadImage(AfxGetResourceHandle(),
+		MAKEINTRESOURCE(IDB_WORLDBUILDERSPLASH), IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION);
+	if (hBmp)
+	{
+		BITMAP bm;
+		if (::GetObject(hBmp, sizeof(bm), &bm))
+		{
+			int w = bm.bmWidth;
+			int h = bm.bmHeight;
+
+			// Resize the static to cover the whole image, anchored at the top-left.
+			CWnd *pPic = GetDlgItem(IDC_STATIC);
+			if (pPic)
+				pPic->SetWindowPos(NULL, 0, 0, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
+
+			// Resize the dialog so its CLIENT area is exactly the bitmap size (no border
+			// to account for - this is a WS_POPUP dialog with no frame/caption).
+			SetWindowPos(NULL, 0, 0, w, h,
+				SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+
+			// Re-center on the screen now that the size changed.
+			CenterWindow();
+		}
+		::DeleteObject(hBmp);
+	}
+
+	return TRUE;
 }
 
 //-------------------------------------------------------------------------------------------------
