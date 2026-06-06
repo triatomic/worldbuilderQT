@@ -3362,10 +3362,17 @@ void W3DVolumetricShadowManager::renderStencilShadows( void )
 	width=TheTacticalView->getWidth();
 	height=TheTacticalView->getHeight();
 
-    v[0].p = D3DXVECTOR4( xpos+width, ypos+height, 0.0f, 1.0f );
-    v[1].p = D3DXVECTOR4( xpos+width, 0, 0.0f, 1.0f );
-    v[2].p = D3DXVECTOR4(  xpos, ypos+height, 0.0f, 1.0f );
-    v[3].p = D3DXVECTOR4(  xpos,  0, 0.0f, 1.0f );
+    // The darkening quad is placed at the far depth (z=1.0) and combined with a
+    // "greater" depth test below so it only covers pixels that already hold real
+    // scene geometry (terrain/water/objects, depth < 1.0) and skips the cleared
+    // background ("void") which sits exactly at the far plane.  Without this, a
+    // shadow volume whose stencil leaks past the map edge would darken the empty
+    // void - never seen in-game (the camera can't look past the map) but very
+    // visible in WorldBuilder.
+    v[0].p = D3DXVECTOR4( xpos+width, ypos+height, 1.0f, 1.0f );
+    v[1].p = D3DXVECTOR4( xpos+width, 0, 1.0f, 1.0f );
+    v[2].p = D3DXVECTOR4(  xpos, ypos+height, 1.0f, 1.0f );
+    v[3].p = D3DXVECTOR4(  xpos,  0, 1.0f, 1.0f );
     v[0].color = TheW3DShadowManager->getShadowColor();
     v[1].color = TheW3DShadowManager->getShadowColor();
     v[2].color = TheW3DShadowManager->getShadowColor();
@@ -3385,7 +3392,11 @@ void W3DVolumetricShadowManager::renderStencilShadows( void )
 
 	// Set stencil states
     m_pDev->SetRenderState( D3DRS_ZENABLE,          TRUE );
-		m_pDev->SetRenderState(D3DRS_ZFUNC, D3DCMP_ALWAYS);
+		// Quad sits at z=1.0; GREATER passes only where stored depth < 1.0 (real geometry),
+		// rejecting the cleared void at the far plane so shadows don't bleed off the map.
+		// Keep depth writes off - this is a screen-space darkening overlay, not geometry.
+		m_pDev->SetRenderState(D3DRS_ZFUNC, D3DCMP_GREATER);
+		m_pDev->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
 
 	// Only write where stencil val >= 1 (count indicates # of shadows that
 	// overlap that pixel)
