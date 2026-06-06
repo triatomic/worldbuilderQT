@@ -376,6 +376,8 @@ WaterRenderObjClass::WaterRenderObjClass(void)
 	m_waterSparklesTexture=0;
 	m_riverXOffset=0;
 	m_riverYOffset=0;
+	m_iBumpFrameAccum=0;
+	m_lastPhaseUpdateTime=0;	//0 = first update() seeds the clock without advancing
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -992,6 +994,8 @@ Int WaterRenderObjClass::init(Real waterLevel, Real dx, Real dy, SceneClass *par
 {
 
 	m_iBumpFrame=0;
+	m_iBumpFrameAccum=0;
+	m_lastPhaseUpdateTime=0;	//re-seed the wall-clock phase clock on (re)init
 	m_fBumpScale=SEA_BUMP_SCALE;
 
 	m_dx=dx;
@@ -1222,16 +1226,46 @@ void WaterRenderObjClass::update( void )
 	if( TheGameLogic )
 		currLogicFrame = TheGameLogic->getFrame();
 
-	m_riverVOrigin += 0.002f;
-	m_riverXOffset += (Real)(0.0125*33/5000);
-	m_riverYOffset += (Real)(2*0.0125*33/5000);
+	// The water-surface phase advances used to add a fixed amount per call, i.e. per
+	// rendered frame.  In the game the caller runs at a steady client frame rate so this
+	// looked constant, but WorldBuilder repaints on demand: moving the cursor injects
+	// extra repaints, which made the water animate faster the more the cursor moved.
+	// Pace the advance by real wall-clock time instead so it runs at a constant rate
+	// regardless of how often/why we render.  The legacy constants assumed ~33ms/frame
+	// (see the "*33" below and the wave system's 1/30s step), so 33.333ms is the
+	// reference frame at which the original speed is reproduced exactly.
+	const Real NOMINAL_FRAME_MS = 1000.0f / 30.0f;	//33.333ms: rate the old fixed steps assumed
+	Int now = timeGetTime();
+	Real frames;	//how many nominal frames of phase to advance this call
+	if (m_lastPhaseUpdateTime == 0)
+	{	//first call: seed the clock, advance a single nominal frame (no startup jump)
+		frames = 1.0f;
+	}
+	else
+	{
+		Int elapsedMs = now - m_lastPhaseUpdateTime;
+		if (elapsedMs < 0) elapsedMs = 0;			//guard against timer wrap
+		if (elapsedMs > 250) elapsedMs = 250;		//cap stalls so we don't lurch after a pause
+		frames = (Real)elapsedMs / NOMINAL_FRAME_MS;
+	}
+	m_lastPhaseUpdateTime = now;
+
+	m_riverVOrigin += 0.002f * frames;
+	m_riverXOffset += (Real)(0.0125*33/5000) * frames;
+	m_riverYOffset += (Real)(2*0.0125*33/5000) * frames;
 	if (m_riverXOffset > 1) m_riverXOffset -= 1;
 	if (m_riverYOffset > 1) m_riverYOffset -= 1;
 	if (m_riverXOffset < -1) m_riverXOffset += 1;
 	if (m_riverYOffset < -1) m_riverYOffset += 1;
- 	m_iBumpFrame++;
-	if (m_iBumpFrame >= NUM_BUMP_FRAMES) {
-		m_iBumpFrame = 0;
+	// Bump frame is an integer index; accumulate fractional frames and step when we
+	// cross whole-frame boundaries so the bump animation is also wall-clock paced.
+	m_iBumpFrameAccum += frames;
+	while (m_iBumpFrameAccum >= 1.0f) {
+		m_iBumpFrameAccum -= 1.0f;
+		m_iBumpFrame++;
+		if (m_iBumpFrame >= NUM_BUMP_FRAMES) {
+			m_iBumpFrame = 0;
+		}
 	}
 
 

@@ -142,6 +142,11 @@ protected:  // control bar embedded members
 	Int								m_curOptionsY;
 	Int								m_optionsPanelWidth;
 	Int								m_optionsPanelHeight;
+	// The Wave Editor panel is wider than the other option panels; track its own size so
+	// it isn't folded into the shared m_optionsPanelWidth (which would widen every other
+	// panel, e.g. Object Properties).  See showOptionsDialog().
+	Int								m_waveEditorPanelWidth;
+	Int								m_waveEditorPanelHeight;
 	Int								m_globalLightOptionsWidth;
 	Int								m_globalLightOptionsHeight;
 

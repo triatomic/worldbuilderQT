@@ -233,8 +233,12 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	m_waveEditorOptions.Create(IDD_WAVE_EDITOR_OPTIONS, this);
 	m_waveEditorOptions.SetWindowPos(NULL, frameRect.left, frameRect.top, 0, 0, SWP_NOZORDER|SWP_NOSIZE);
 	m_waveEditorOptions.GetWindowRect(&frameRect);
-	if (m_optionsPanelWidth < frameRect.Width()) m_optionsPanelWidth = frameRect.Width();
-	if (m_optionsPanelHeight < frameRect.Height()) m_optionsPanelHeight = frameRect.Height();
+	// The Wave Editor panel is intentionally wider than the rest; keep its own size and do
+	// NOT roll it into the shared m_optionsPanelWidth, or every other panel (Object
+	// Properties, etc.) would be stretched to match it.  showOptionsDialog() sizes this
+	// panel to its own dimensions.
+	m_waveEditorPanelWidth = frameRect.Width();
+	m_waveEditorPanelHeight = frameRect.Height();
 
 	m_objectOptions.Create(IDD_OBJECT_OPTIONS, this);
 	m_objectOptions.SetWindowPos(NULL, frameRect.left, frameRect.top, 0, 0, SWP_NOZORDER|SWP_NOSIZE);
@@ -600,8 +604,16 @@ void CMainFrame::showOptionsDialog(Int dialogID)
 		 */
 		int top = ::AfxGetApp()->GetProfileInt(OPTIONS_PANEL_SECTION, "Top", 10);
 		int left = ::AfxGetApp()->GetProfileInt(OPTIONS_PANEL_SECTION, "Left", 10);
-		newOptions->SetWindowPos(m_curOptions, left, top, 
-			m_optionsPanelWidth, m_optionsPanelHeight, 
+		// The Wave Editor panel keeps its own (wider) size; all other panels use the shared
+		// width/height so adding the Wave Editor didn't stretch them (e.g. Object Properties).
+		int panelW = m_optionsPanelWidth;
+		int panelH = m_optionsPanelHeight;
+		if (dialogID == IDD_WAVE_EDITOR_OPTIONS) {
+			panelW = m_waveEditorPanelWidth;
+			panelH = m_waveEditorPanelHeight;
+		}
+		newOptions->SetWindowPos(m_curOptions, left, top,
+			panelW, panelH,
 			SWP_NOZORDER | SWP_NOACTIVATE );
 		newOptions->ShowWindow(SW_SHOWNA);
 		if (m_curOptions) {

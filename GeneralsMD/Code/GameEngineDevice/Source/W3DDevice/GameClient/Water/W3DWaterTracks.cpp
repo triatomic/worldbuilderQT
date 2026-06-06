@@ -844,11 +844,16 @@ void WaterTracksRenderSystem::update()
 	static  Int iLastTime=timeGetTime();
 	WaterTracksObj *mod=m_usedModules,*nextMod;
 
+	// Advance the waves by the real wall-clock time since the last update.  This used to
+	// be locked to a fixed 1/30s step PER CALL - i.e. per rendered frame.  In the game the
+	// caller runs at a steady frame rate so that looked constant, but WorldBuilder repaints
+	// on demand: moving the cursor injects extra repaints, which made the waves advance
+	// faster the more the cursor moved.  Using the elapsed ms keeps wave motion at a
+	// constant real-time rate regardless of how often/why we render.
 	Int timeDiff = timeGetTime()-iLastTime;
 	iLastTime += timeDiff;
-
-	//Lock framerate to 30 fps
-	timeDiff = 1.0f/30.0f*1000.0f;
+	if (timeDiff < 0) timeDiff = 0;			//guard against timer wrap
+	if (timeDiff > 250) timeDiff = 250;		//cap stalls so waves don't lurch after a pause
 
 	//first update all the tracks
 	while( mod )
