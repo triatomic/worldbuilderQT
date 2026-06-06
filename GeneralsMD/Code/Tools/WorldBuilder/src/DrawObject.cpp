@@ -64,6 +64,7 @@
 #include "render2d.h"
 #include "GameLogic/Weapon.h"
 #include "Common/AudioEventInfo.h"
+#include <d3dx8tex.h>		// D3DXCreateTextureFromFileExA, for PNG tracing overlays
 
 #ifdef _DEBUG
 #define NO_INTENSE_DEBUG 1
@@ -120,6 +121,8 @@ Bool	DrawObject::m_boundaryFeedback = false;
 Bool	DrawObject::m_waveFeedback = true;	///< wave overlay lines on by default
 Bool	DrawObject::m_rulerGridFeedback = true;
 Bool	DrawObject::m_showTracingOverlay = false;
+Int		DrawObject::m_tracingOverlayOpacity = 255;	///< fully opaque by default
+Int		DrawObject::m_tracingOverlayFilter = 0;			///< 0 = default (linear)
 Bool	DrawObject::m_ambientSoundFeedback = false;
 Bool	DrawObject::m_baseRadiusFeedback = false;
 Bool	DrawObject::m_forceDrawArrow = false;
@@ -157,6 +160,81 @@ void DrawObject::stopWaypointDragFeedback()
 	m_dragWaypointFeedback = false;
 }
 
+// The tracing overlay is per-map. Its base name (no extension) is
+// "data\editor\<mapname>", where <mapname> is the loaded map's filename with
+// its directory and .map extension stripped. When no map is loaded/saved yet
+// (no path available) we fall back to the legacy "trace_overlay" name so the
+// feature still works on unsaved maps.
+AsciiString DrawObject::getTracingOverlayBaseName(void)
+{
+	const char *mapName = "trace_overlay";
+
+	CWorldBuilderDoc *pDoc = CWorldBuilderDoc::GetActiveDoc();
+	CString mapPath = pDoc ? pDoc->getMapPath() : CString("");
+
+	// Pull just the filename out of the full path, then drop the extension.
+	char fname[_MAX_FNAME] = "";
+	if (!mapPath.IsEmpty()) {
+		_splitpath((const char *)mapPath, NULL, NULL, fname, NULL);
+	}
+	if (fname[0] != '\0') {
+		mapName = fname;
+	}
+
+	AsciiString base = "data\\editor\\";
+	base.concat(mapName);
+	return base;
+}
+
+// Round an integer up to the next power of two (1 stays 1, 192 -> 256, etc).
+static Int roundUpToPow2(Int v)
+{
+	if (v < 1) return 1;
+	Int p = 1;
+	while (p < v) p <<= 1;
+	return p;
+}
+
+// Recommended overlay texture size for the current map. PNG accepts any size so
+// it gets the exact cell extents; DDS requires power-of-two so it gets those
+// extents rounded up. Returns false when no map is loaded.
+Bool DrawObject::getTracingOverlayRecommendedSize(Int &outPngW, Int &outPngH,
+																									Int &outDdsW, Int &outDdsH)
+{
+	CWorldBuilderDoc *pDoc = CWorldBuilderDoc::GetActiveDoc();
+	WorldHeightMapEdit *pMap = pDoc ? pDoc->GetHeightMap() : NULL;
+	if (pMap == NULL) {
+		return false;
+	}
+	outPngW = pMap->getXExtent();
+	outPngH = pMap->getYExtent();
+	outDdsW = roundUpToPow2(outPngW);
+	outDdsH = roundUpToPow2(outPngH);
+	return true;
+}
+
+// Returns the path to the overlay file that actually exists on disk, preferring
+// the .png over the .dds. Returns an empty string if neither is present.
+AsciiString DrawObject::resolveTracingOverlayPath(void)
+{
+	AsciiString base = getTracingOverlayBaseName();
+
+	AsciiString pngPath = base;
+	pngPath.concat(".png");
+	CFileFind finder;
+	if (finder.FindFile(pngPath.str())) {
+		return pngPath;
+	}
+
+	AsciiString ddsPath = base;
+	ddsPath.concat(".dds");
+	if (finder.FindFile(ddsPath.str())) {
+		return ddsPath;
+	}
+
+	return AsciiString::TheEmptyString;
+}
+
 
 
 DrawObject::~DrawObject(void)
@@ -179,6 +257,8 @@ DrawObject::DrawObject(void) :
 	m_indexWater(NULL),
 	m_moldMesh(NULL),
 	m_lineRenderer(NULL),
+	m_tracingOverlayTexture(NULL),
+	m_tracingOverlayLoadedFilter(-1),
   m_drawSoundRanges(false)
 {
 	// m_roadIconColor     = 0xFFFF00; // yellow
@@ -259,8 +339,10 @@ Int DrawObject::freeMapResources(void)
 	REF_PTR_RELEASE(m_vertexMaterialClass);
 	REF_PTR_RELEASE(m_vertexFeedback);
 	REF_PTR_RELEASE(m_indexFeedback);	
-	REF_PTR_RELEASE(m_indexWater);	
+	REF_PTR_RELEASE(m_indexWater);
 	REF_PTR_RELEASE(m_moldMesh);
+	REF_PTR_RELEASE(m_tracingOverlayTexture);
+	m_tracingOverlayLoadedPath.clear();
 	if (m_lineRenderer) {
 		delete m_lineRenderer;
 		m_lineRenderer = NULL;
@@ -3367,6 +3449,20 @@ if (_skip_drawobject_render) {
 		float dx = (right - left) / (gridX - 1);
 		float dy = (bottom - top) / (gridY - 1);
 
+		// Resolve the per-map overlay file up front (prefers .png over .dds) so we
+		// know the format before baking UVs. PNG decoded by D3DX uses the opposite
+		// vertical convention from the DDS path, so the V coordinate is flipped for
+		// PNG to keep both orientations the same on screen.
+		AsciiString overlayPath = resolveTracingOverlayPath();
+		const char *ext = overlayPath.isEmpty() ? NULL : overlayPath.reverseFind('.');
+		Bool isPng = (ext != NULL && stricmp(ext, ".png") == 0);
+
+		// Per-vertex diffuse drives overlay opacity: the alpha byte modulates the
+		// texture under the alpha-blend shader. White RGB so the texture isn't tinted.
+		Int alpha = m_tracingOverlayOpacity;
+		if (alpha < 0) alpha = 0; else if (alpha > 255) alpha = 255;
+		UnsignedInt diffuse = ((UnsignedInt)alpha << 24) | 0x00FFFFFF;
+
 		DX8VertexBufferClass::WriteLockClass lockVtxBuffer(m_vertexFeedback, D3DLOCK_DISCARD);
 		VertexFormatXYZDUV1* vb = (VertexFormatXYZDUV1*)lockVtxBuffer.Get_Vertex_Array();
 
@@ -3374,6 +3470,7 @@ if (_skip_drawobject_render) {
 		for (int y = 0; y < gridY; ++y) {
 			float fy = top + y * dy;
 			float v = (float)y / (gridY - 1);
+			if (isPng) v = 1.0f - v;	// flip V for PNG so it isn't upside-down
 			for (int x = 0; x < gridX; ++x) {
 				float fx = left + x * dx;
 				float u = (float)x / (gridX - 1);
@@ -3384,7 +3481,7 @@ if (_skip_drawobject_render) {
 				vb[vtxCount].z = fz;
 				vb[vtxCount].u1 = u;
 				vb[vtxCount].v1 = v;
-				vb[vtxCount].diffuse = 0xFFFFFFFF;
+				vb[vtxCount].diffuse = diffuse;
 				vtxCount++;
 			}
 		}
@@ -3417,9 +3514,90 @@ if (_skip_drawobject_render) {
 		DX8Wrapper::Set_Index_Buffer(m_indexFeedback, 0);
 		DX8Wrapper::Set_Shader(ShaderClass::_PresetAlpha2DShader);
 		DX8Wrapper::Set_Material(m_vertexMaterialClass);
-		DX8Wrapper::Set_Texture(0, W3DAssetManager::Get_Instance()->Get_Texture("data\\editor\\trace_overlay.dds"));
-		DX8Wrapper::Draw_Triangles(0, idxCount / 3, 0, vtxCount);
-		DX8Wrapper::Set_Texture(0, NULL);
+
+		// Bind the overlay texture resolved above. DDS goes through the asset
+		// manager as before; PNG is decoded with D3DX (the WW3D2 loader can't read
+		// PNG) and cached until the resolved path changes.
+		TextureClass *overlayTex = NULL;
+
+		if (!overlayPath.isEmpty()) {
+			if (isPng) {
+				// The resize interpolation is baked in at decode time, so picking
+				// the D3DX filter from the current setting (1=nearest -> POINT,
+				// else LINEAR for both the resize and the mip chain).
+				DWORD d3dxFilter = (m_tracingOverlayFilter == 1)
+					? D3DX_FILTER_POINT : D3DX_FILTER_LINEAR;
+
+				// (Re)load the PNG when the resolved path OR the filter changes.
+				if (m_tracingOverlayTexture == NULL ||
+						m_tracingOverlayLoadedPath != overlayPath ||
+						m_tracingOverlayLoadedFilter != m_tracingOverlayFilter) {
+					REF_PTR_RELEASE(m_tracingOverlayTexture);
+					m_tracingOverlayLoadedPath.clear();
+					m_tracingOverlayLoadedFilter = -1;
+
+					IDirect3DTexture8 *d3dTex = NULL;
+					HRESULT hr = D3DXCreateTextureFromFileExA(
+						DX8Wrapper::_Get_D3D_Device8(),
+						overlayPath.str(),
+						D3DX_DEFAULT, D3DX_DEFAULT,
+						D3DX_DEFAULT,					// full mip chain
+						0,
+						D3DFMT_A8R8G8B8,			// force a format that carries alpha
+						D3DPOOL_MANAGED,
+						d3dxFilter, d3dxFilter,
+						0, NULL, NULL,
+						&d3dTex);
+					if (SUCCEEDED(hr) && d3dTex != NULL) {
+						m_tracingOverlayTexture = new TextureClass(d3dTex);
+						m_tracingOverlayLoadedPath = overlayPath;
+						m_tracingOverlayLoadedFilter = m_tracingOverlayFilter;
+						// TextureClass AddRefs the D3D texture; drop our extra ref.
+						d3dTex->Release();
+					}
+				}
+				overlayTex = m_tracingOverlayTexture;
+			} else {
+				// DDS (or any format the asset manager understands).
+				overlayTex = W3DAssetManager::Get_Instance()->Get_Texture(overlayPath.str());
+			}
+		}
+
+		if (overlayTex != NULL) {
+			DX8Wrapper::Set_Texture(0, overlayTex);
+
+			// Flush the shader/texture changes to the device FIRST, then override the
+			// stage-0 state below. _PresetAlpha2DShader uses GRADIENT_DISABLE, which
+			// means the vertex diffuse never reaches the blender -- so on its own the
+			// per-vertex opacity alpha is ignored. We force stage 0 to modulate the
+			// texture alpha by the diffuse alpha (ALPHAOP=MODULATE, ARG1=TEXTURE,
+			// ARG2=DIFFUSE); since the PNG is loaded as A8R8G8B8 (texAlpha=255), the
+			// blend source alpha becomes exactly our opacity byte. Done after the
+			// flush so the shader's own apply doesn't clobber these.
+			DX8Wrapper::Apply_Render_State_Changes();
+
+			DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_ALPHAOP, D3DTOP_MODULATE);
+			DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+			DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_ALPHAARG2, D3DTA_DIFFUSE);
+
+			// Apply the resize interpolation to the runtime sampler too (nearest ->
+			// POINT, default -> LINEAR). This makes DDS honor the setting and keeps
+			// PNG magnification crisp/smooth to match its decode. Restore to LINEAR
+			// (the engine default) afterwards so nothing else is affected.
+			DWORD texFilter = (m_tracingOverlayFilter == 1) ? D3DTEXF_POINT : D3DTEXF_LINEAR;
+			DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MAGFILTER, texFilter);
+			DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MINFILTER, texFilter);
+
+			DX8Wrapper::Draw_Triangles(0, idxCount / 3, 0, vtxCount);
+			DX8Wrapper::Set_Texture(0, NULL);
+
+			// Restore stage-0 alpha to a benign pass-through and the engine-default
+			// LINEAR filtering so nothing drawn afterwards inherits our overrides.
+			DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
+			DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+			DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MAGFILTER, D3DTEXF_LINEAR);
+			DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MINFILTER, D3DTEXF_LINEAR);
+		}
 	}
 #endif
 

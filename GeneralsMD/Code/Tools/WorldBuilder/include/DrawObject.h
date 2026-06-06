@@ -38,6 +38,7 @@ class PolygonTrigger;
 class WaterRenderObjClass;
 class MapObject;
 class Render2DClass;
+class TextureClass;
 //
 // DrawObject: Draws 3d feedback for tools & objects.
 //
@@ -106,6 +107,26 @@ public:
 	static Bool getDoWaveFeedback(void) { return m_waveFeedback; }
 	static void setDoGridFeedback(Bool val) { m_rulerGridFeedback = val; }
 	static void setDoTracingOverlayFeedback(Bool val) { m_showTracingOverlay = val; }
+	// Tracing overlay appearance (set from the TracingOverlayOptions dialog).
+	// Opacity is 0..255 alpha; filter is TracingOverlayOptions::FILTER_* (0=default,
+	// 1=nearest). Changing the filter invalidates the cached PNG so it re-decodes.
+	static void setTracingOverlayOpacity(Int alpha) { m_tracingOverlayOpacity = alpha; }
+	static void setTracingOverlayFilter(Int filter) { m_tracingOverlayFilter = filter; }
+
+	// Tracing overlay file resolution. The overlay is per-map: it lives in
+	// data\editor named after the current map, and may be a .png (decoded via
+	// D3DX) or a .dds (loaded via the asset manager). Falls back to the legacy
+	// "trace_overlay" base name when no map is loaded/saved yet.
+	//   getTracingOverlayBaseName -> e.g. "data\editor\MyMap" (no extension)
+	//   resolveTracingOverlayPath -> the existing .png/.dds file, or empty string
+	static AsciiString getTracingOverlayBaseName(void);
+	static AsciiString resolveTracingOverlayPath(void);
+	// Recommended overlay texture size for the active map. PNG can be any size, so
+	// it gets the exact map cell extents (outPngW/outPngH); DDS wants power-of-two,
+	// so it gets those extents rounded up (outDdsW/outDdsH). Returns false if no
+	// map is available; the out params are then left untouched.
+	static Bool getTracingOverlayRecommendedSize(Int &outPngW, Int &outPngH,
+																							 Int &outDdsW, Int &outDdsH);
 
 	static void setDoAmbientSoundFeedback(Bool val) { m_ambientSoundFeedback = val; }
 	static void setDoBaseRadiusFeedback(Bool val) { m_baseRadiusFeedback = val; }
@@ -170,6 +191,14 @@ protected:
 	Int												m_feedbackIndexCount;
 	Int												m_feedbackVertexCount;
 
+	// Cache for the PNG tracing overlay texture (decoded via D3DX). DDS overlays
+	// go through the asset manager and are not cached here. We hold onto the
+	// TextureClass and the path it was loaded from so we only reload when the
+	// resolved overlay path changes (e.g. a different map is opened).
+	TextureClass						*m_tracingOverlayTexture;	///< PNG overlay texture, or NULL.
+	AsciiString							m_tracingOverlayLoadedPath;	///< Path m_tracingOverlayTexture was loaded from.
+	Int												m_tracingOverlayLoadedFilter;	///< Filter the cached PNG was decoded with.
+
 	AsciiString								m_curMeshModelName;  ///< Model name of m_moldMesh.
 
 	MeshClass									*m_moldMesh;		///< W3D mesh model for the mold.
@@ -192,6 +221,8 @@ protected: // static state vars.
 	static Bool								m_waveFeedback;		///< draw wave start->end overlay lines
 	static Bool								m_rulerGridFeedback;
 	static Bool								m_showTracingOverlay; ///< True to show tracing overlay.
+	static Int								m_tracingOverlayOpacity;	///< 0..255 alpha for the overlay.
+	static Int								m_tracingOverlayFilter;		///< 0=default(linear), 1=nearest(point).
 	static Bool								m_ambientSoundFeedback;
 	static Bool								m_baseRadiusFeedback;
 	static Bool								m_forceDrawArrow;	///< True to force drawing arrow on roads/waypoints.

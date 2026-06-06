@@ -27,6 +27,7 @@
 #define IDD_OBJECT_OPTIONS              145
 #define IDC_EYEDROPPER                  146
 #define IDD_CONTOUR_OPTIONS             146
+#define IDD_TRACING_OVERLAY_OPTIONS     246
 #define IDC_PLACE_OBJECT                147
 #define IDD_TERRAIN_MODAL               147
 #define IDC_POINTER                     148
@@ -196,6 +197,9 @@
 #define IDC_SIZE_POPUP2                 1024
 #define IDC_SLIDER1                     1025
 #define IDC_SHOW_CONTOURS               1026
+#define IDC_TRACE_OPACITY_SLIDER        1383
+#define IDC_TRACE_OPACITY_LABEL         1384
+#define IDC_TRACE_FILTER_COMBO          1385
 #define IDC_OBJECT_HEIGHT_EDIT          1027
 #define IDC_ROAD_NAME                   1028
 #define IDC_ROAD_TREEVIEW               1029
@@ -942,9 +946,9 @@
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_3D_CONTROLS                     1
-#define _APS_NEXT_RESOURCE_VALUE        246
+#define _APS_NEXT_RESOURCE_VALUE        247
 #define _APS_NEXT_COMMAND_VALUE         33393
-#define _APS_NEXT_CONTROL_VALUE         1383
+#define _APS_NEXT_CONTROL_VALUE         1386
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

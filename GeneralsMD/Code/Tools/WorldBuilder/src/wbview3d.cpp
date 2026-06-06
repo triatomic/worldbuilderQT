@@ -80,6 +80,7 @@
 #include "W3DDevice/Common/W3DConvert.h"
 #include "W3DDevice/GameClient/W3DShadow.h"
 #include "DrawObject.h"
+#include "TracingOverlayOptions.h"
 #include "GameLogic/PolygonTrigger.h"
 #include "Common/MapObject.h"
 #include "Common/GlobalData.h"
@@ -3335,20 +3336,40 @@ int WbView3d::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	m_showRulerGrid = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowRulerGrid", 1);
 	m_showTracingOverlay = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowTracingOverlay", 0);
 
+	// Load persisted tracing-overlay appearance (opacity + interpolation) from the
+	// [Appearance] section and push it into DrawObject so the overlay is correct
+	// before the settings dialog is ever opened.
+	TracingOverlayOptions::loadAndApplySettings();
 
-	CFileFind finder;
-	BOOL fileExists = finder.FindFile("data\\editor\\trace_overlay.dds");
-	if (!fileExists)
+
+	// The tracing overlay is per-map (data\editor\<mapname>.png or .dds). If the
+	// setting was left on but no overlay file exists for this map, warn and clear
+	// it so we don't draw nothing.
+	if (DrawObject::resolveTracingOverlayPath().isEmpty())
 	{
 		if(m_showTracingOverlay){
+			AsciiString base = DrawObject::getTracingOverlayBaseName();
+
+			// PNG can be any size, so it gets this map's exact extents; DDS wants
+			// power-of-two, so it gets those extents rounded up.
+			AsciiString pngSuffix;
+			AsciiString ddsSuffix;
+			Int pngW, pngH, ddsW, ddsH;
+			if (DrawObject::getTracingOverlayRecommendedSize(pngW, pngH, ddsW, ddsH)) {
+				pngSuffix.format("   (recommended %d x %d)", pngW, pngH);
+				ddsSuffix.format("   (recommended %d x %d, power of two)", ddsW, ddsH);
+			}
+
+			AsciiString msg;
+			msg.format(
+				"Missing tracing overlay texture:\n\n"
+				"    %s.png%s\n"
+				"    %s.dds%s\n\n"
+				"The tracing overlay will not be displayed until a PNG or DDS file "
+				"with one of these names is present.",
+				base.str(), pngSuffix.str(), base.str(), ddsSuffix.str());
 			::MessageBeep(MB_ICONERROR);
-			AfxMessageBox(
-				"Missing texture:\n"
-				"data\\editor\\trace_overlay.dds\n\n"
-				"The tracing overlay will not be displayed until this texture is restored.\n\n"
-				"You little shit, did you not install the worldbuilder properly? the texture file was supposed to be on the zip file - did you delete it?.",
-				MB_ICONERROR | MB_OK
-			);
+			AfxMessageBox(msg.str(), MB_ICONERROR | MB_OK);
 		}
 		m_showTracingOverlay = 0;
 		::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "ShowTracingOverlay", m_showTracingOverlay ? 1 : 0);
@@ -5279,29 +5300,78 @@ void WbView3d::OnViewShowTracingOverlay()
 
 	if (m_showTracingOverlay)
 	{
+		// The overlay file is per-map: data\editor\<mapname>.png (or .dds), where
+		// <mapname> is the current map's name (falls back to "trace_overlay" if
+		// the map hasn't been saved yet).
+		AsciiString base = DrawObject::getTracingOverlayBaseName();
+
 		if(!g_alreadyHintedTraceOverlay){
-			AfxMessageBox(
-				"This feature is used to overlay a texture on the map -- it needs to be a dds file under your game directory\\data\\editor\\trace_overlay.dds",
-				MB_ICONINFORMATION | MB_OK
-			);
+			// Tell the user where to put the file and what proportions to author
+			// it at, using the current map's cell extents.
+			AsciiString hint;
+			hint.format(
+				"This feature overlays a texture on the map.\n\n"
+				"Place a PNG or DDS image at one of:\n"
+				"    %s.png\n"
+				"    %s.dds\n"
+				"(relative to your game directory; PNG is preferred if both exist).\n\n",
+				base.str(), base.str());
+
+			CWorldBuilderDoc *pDoc = CWorldBuilderDoc::GetActiveDoc();
+			WorldHeightMapEdit *pMap = pDoc ? pDoc->GetHeightMap() : NULL;
+			if (pMap) {
+				AsciiString dims;
+				dims.format(
+					"For correct proportions, author the image to your map's extents:\n"
+					"    %d x %d cells.",
+					pMap->getXExtent(), pMap->getYExtent());
+				hint.concat(dims);
+			}
+
+			AfxMessageBox(hint.str(), MB_ICONINFORMATION | MB_OK);
 			g_alreadyHintedTraceOverlay = true;
 		}
-		
-		CFileFind finder;
-		BOOL fileExists = finder.FindFile("data\\editor\\trace_overlay.dds");
-		if (!fileExists)
+
+		AsciiString overlayPath = DrawObject::resolveTracingOverlayPath();
+		if (overlayPath.isEmpty())
 		{
-			AfxMessageBox(
+			// PNG can be any size, so it gets this map's exact extents; DDS wants
+			// power-of-two, so it gets those extents rounded up.
+			AsciiString pngSuffix;
+			AsciiString ddsSuffix;
+			Int pngW, pngH, ddsW, ddsH;
+			if (DrawObject::getTracingOverlayRecommendedSize(pngW, pngH, ddsW, ddsH)) {
+				pngSuffix.format("   (recommended %d x %d)", pngW, pngH);
+				ddsSuffix.format("   (recommended %d x %d, power of two)", ddsW, ddsH);
+			}
+
+			AsciiString msg;
+			msg.format(
 				"Missing texture:\n\n"
-				"data\\editor\\trace_overlay.dds\n\n"
-				"The tracing overlay will not be displayed until this texture is restored.\n\n"
-				"You little shit, did you not install the worldbuilder properly? the texture file was supposed to be on the zip file - did you delete it?.",
-				MB_ICONERROR | MB_OK
-			);
+				"    %s.png%s\n"
+				"    %s.dds%s\n\n"
+				"The tracing overlay will not be displayed until a PNG or DDS file "
+				"with one of these names is present.",
+				base.str(), pngSuffix.str(), base.str(), ddsSuffix.str());
+
+			AfxMessageBox(msg.str(), MB_ICONERROR | MB_OK);
 
 			m_showTracingOverlay = 0;
 
 		}
+
+		// A texture exists and the overlay is on -- open the modeless settings
+		// dialog. It stays up and applies opacity / interpolation live (on the
+		// fly) as the user drags the slider or changes the combo.
+		if (m_showTracingOverlay)
+		{
+			TracingOverlayOptions::showDialog(this);
+		}
+	}
+	else
+	{
+		// Overlay turned off -- close the settings dialog if it is open.
+		TracingOverlayOptions::closeDialog();
 	}
 
 	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "ShowTracingOverlay", m_showTracingOverlay ? 1 : 0);
