@@ -547,7 +547,15 @@ void PointerTool::mouseDown(TTrackingMode m, CPoint viewPt, WbView* pView, CWorl
 	}
 
 	m_isMouseDown = true;
-	
+
+	// A click can change the selection set; if the selection overlay is on, refresh the
+	// minimap so its cyan halos track the new selection immediately (otherwise they'd
+	// only update on the next timer/camera refresh).  The recomposite is cheap and only
+	// runs while the minimap is open; requestRebuild itself no-ops when hidden.
+	if (TheMinimapDialog &&
+			::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowSelectionOverlay", 0))
+		TheMinimapDialog->requestRebuild(false);
+
 }
 
 bool m_groupRotationInit = false;

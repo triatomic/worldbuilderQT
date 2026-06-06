@@ -629,6 +629,7 @@ WbView3d::WbView3d() :
 	m_partialMapSize(129),
 	m_showWireframe(false),
 	m_showFullWireframe(false),
+	m_showSelectionOverlay(false),
 	m_projection(false),
 	m_showShadows(false),
 	m_firstPaint(true),
@@ -679,6 +680,7 @@ WbView3d::WbView3d() :
 
 	m_showWireframe = (::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowWireframe", 0) != 0);
 	m_showFullWireframe = (::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowFullWireframe", 0) != 0);
+	m_showSelectionOverlay = (::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowSelectionOverlay", 0) != 0);
 	m_showEntireMap = (::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowEntireMap", 1) != 0);
 	m_projection = (::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowTopDownView", 0) != 0);
 	m_showShadows = (::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowShadows", 1) != 0);
@@ -2982,7 +2984,53 @@ void WbView3d::render()
 			DX8TextureCategoryClass::SetForceMultiply(false);
 			m_transparentObjectsScene->Remove_Render_Object(m_objectToolTrackingObj);
 		}
-		
+
+		// Selection overlay: tint every selected object's render obj with a highlight
+		// color.  Reuses the same force-multiply / colored-ambient pass as the object
+		// tool tracking object above.  Cyan reads clearly as "selected" and contrasts
+		// with the existing red (invalid terrain) and green (range circle) feedback.
+		//
+		// The selected objects normally live in m_scene; we temporarily add them to the
+		// transparent scene for this extra tinted pass, then restore their scene
+		// membership.  Because Add/Remove_Render_Object clobbers the object's Scene
+		// back-pointer, we collect exactly the objects we added and re-point them at
+		// m_scene afterwards (they were never removed from m_scene's render list).
+		if (m_showSelectionOverlay) {
+			Int numSelected = 0;
+			for (MapObject *pObj = MapObject::getFirstMapObject(); pObj; pObj = pObj->getNext()) {
+				if (pObj->isSelected()) {
+					RenderObjClass *robj = pObj->getRenderObj();
+					if (robj && !robj->Is_Hidden() && robj->Get_Scene() == m_scene) {
+						m_transparentObjectsScene->Add_Render_Object(robj);
+						++numSelected;
+					}
+				}
+			}
+			if (numSelected > 0) {
+				Vector3 savedAmbient = m_transparentObjectsScene->Get_Ambient_Light();
+				DX8TextureCategoryClass::SetForceMultiply(true);
+				TheDX8MeshRenderer.Enable_Lighting(false);
+				m_transparentObjectsScene->Set_Ambient_Light(Vector3(0.2f, 1.0f, 1.0f)); // cyan highlight
+				WW3D::Render(m_transparentObjectsScene, m_camera);
+				TheDX8MeshRenderer.Enable_Lighting(true);
+				DX8TextureCategoryClass::SetForceMultiply(false);
+				m_transparentObjectsScene->Set_Ambient_Light(savedAmbient);
+
+				// Remove from the transparent scene and restore the m_scene back-pointer.
+				// The objects were never removed from m_scene's render list; Add/Remove
+				// only clobbered their Scene pointer, which we re-point at m_scene here.
+				for (MapObject *pObj = MapObject::getFirstMapObject(); pObj; pObj = pObj->getNext()) {
+					if (pObj->isSelected()) {
+						RenderObjClass *robj = pObj->getRenderObj();
+						if (robj && robj->Get_Scene() == m_transparentObjectsScene) {
+							m_transparentObjectsScene->Remove_Render_Object(robj);
+							robj->Notify_Added(m_scene);
+						}
+					}
+				}
+			}
+		}
+
 		// Wave editor: draw any placed water-track waves on top of the terrain.
 		// flush() internally calls update(), so no separate animation tick is needed.
 		if (TheWaterTracksRenderSystem) {
@@ -3021,6 +3069,8 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_SHOWWIREFRAME, OnUpdateViewShowwireframe)
 	ON_COMMAND(ID_VIEW_SHOWFULLWIREFRAME, OnViewShowfullwireframe)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_SHOWFULLWIREFRAME, OnUpdateViewShowfullwireframe)
+	ON_COMMAND(ID_VIEW_SHOWSELECTIONOVERLAY, OnViewShowselectionoverlay)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_SHOWSELECTIONOVERLAY, OnUpdateViewShowselectionoverlay)
 	ON_WM_ERASEBKGND()
 	ON_COMMAND(ID_VIEW_SHOWENTIRE3DMAP, OnViewShowentire3dmap)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_SHOWENTIRE3DMAP, OnUpdateViewShowentire3dmap)
@@ -4604,6 +4654,20 @@ void WbView3d::OnViewShowfullwireframe()
 void WbView3d::OnUpdateViewShowfullwireframe(CCmdUI* pCmdUI)
 {
 	pCmdUI->SetCheck(m_showFullWireframe?1:0);
+}
+
+void WbView3d::OnViewShowselectionoverlay()
+{
+	m_showSelectionOverlay = !m_showSelectionOverlay;
+	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "ShowSelectionOverlay", m_showSelectionOverlay?1:0);
+	// Repaint the minimap so its selection halos appear/disappear with the toggle.
+	if (TheMinimapDialog)
+		TheMinimapDialog->requestRebuild(false);
+}
+
+void WbView3d::OnUpdateViewShowselectionoverlay(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(m_showSelectionOverlay?1:0);
 }
 
 BOOL WbView3d::OnEraseBkgnd(CDC* pDC) 

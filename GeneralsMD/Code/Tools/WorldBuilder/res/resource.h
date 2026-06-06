@@ -870,6 +870,7 @@
 #define ID_WAVE_EDITOR_TOOL             33389
 #define ID_VIEW_SHOWWAVELINES           33390
 #define ID_VIEW_SHOWFULLWIREFRAME       33391
+#define ID_VIEW_SHOWSELECTIONOVERLAY    33392
 #define IDS_NEW                         61446
 #define IDS_RESIZE                      61447
 #define IDS_REMOVING_INUSE_TEAM         61448
@@ -942,7 +943,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_3D_CONTROLS                     1
 #define _APS_NEXT_RESOURCE_VALUE        246
-#define _APS_NEXT_COMMAND_VALUE         33392
+#define _APS_NEXT_COMMAND_VALUE         33393
 #define _APS_NEXT_CONTROL_VALUE         1383
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

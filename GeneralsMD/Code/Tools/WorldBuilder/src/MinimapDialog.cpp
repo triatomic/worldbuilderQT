@@ -1491,6 +1491,14 @@ void MinimapDialog::drawObjects()
 	const UnsignedInt black    = packBGRA(0x000000);
 	const UnsignedInt gold     = packBGRA(0xFFD700);	// resource checkerboard accent
 	const UnsignedInt darkGray = packBGRA(0x404040);	// resource-marker outline
+	const UnsignedInt cyan     = packBGRA(0x33FFFF);	// selection halo (matches 3D view)
+
+	// Selection overlay shares the 3D view's toggle (View > Show Object Selection
+	// Overlay). When on, selected objects get a cyan halo drawn behind their blip.
+	Bool showSelection = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowSelectionOverlay", 0) ? true : false;
+	// Halo is ~2 display px larger on each side than the blip; floor so it stays visible.
+	Int haloPad = unitSize / 3;
+	if (haloPad < 1) haloPad = 1;
 
 	for (MapObject *pObj = MapObject::getFirstMapObject(); pObj; pObj = pObj->getNext())
 	{
@@ -1517,12 +1525,21 @@ void MinimapDialog::drawObjects()
 		if (!worldToMinimap(loc->x, loc->y, &mx, &cy))
 			continue;
 
+		// Selection halo: a larger cyan shape drawn first; the normal blip overpaints
+		// the center, leaving a cyan rim so the object's house color stays readable.
+		Bool selected = showSelection && pObj->isSelected();
+
 		if (isUnit)
 		{
 			// Units/infantry render as diamonds to distinguish them from buildings.
+			if (selected)
+				fillDiamond(mx, cy, unitSize + haloPad * 2, cyan);
 			fillDiamond(mx, cy, unitSize, packBGRA(getMapObjectHouseColor(pObj)));
 			continue;
 		}
+
+		if (selected)
+			fillRect(mx, cy, structSize + haloPad * 2, structSize + haloPad * 2, cyan);
 
 		// Structure.
 		if (isResourceStructure(t))

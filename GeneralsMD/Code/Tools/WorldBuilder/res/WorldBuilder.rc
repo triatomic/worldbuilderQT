@@ -303,6 +303,7 @@ BEGIN
         MENUITEM SEPARATOR
         MENUITEM "Show Wireframe 3D View\tCtrl+W", ID_VIEW_SHOWWIREFRAME
         MENUITEM "Show Full Wireframe",         ID_VIEW_SHOWFULLWIREFRAME
+        MENUITEM "Show Object Selection Overlay", ID_VIEW_SHOWSELECTIONOVERLAY
         MENUITEM "Show From Top Down View\tCtrl+F", ID_VIEW_SHOWTOPDOWNVIEW
         MENUITEM "Show 3-Way Blends in White",  ID_VIEW_SHOWEXTRABLENDS
         MENUITEM "Show Clouds\tCtrl+U",         ID_VIEW_SHOWCLOUDS
