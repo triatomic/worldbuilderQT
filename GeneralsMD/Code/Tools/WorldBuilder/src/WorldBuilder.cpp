@@ -337,10 +337,10 @@ BOOL CWorldBuilderApp::InitInstance()
 	loadWindow.SetWindowText("Loading Worldbuilder");
 	loadWindow.ShowWindow(SW_SHOW);
 	loadWindow.UpdateWindow();
-	
-	CRect rect(15, 315, 230, 333);
-	loadWindow.setTextOutputLocation(rect);
-	loadWindow.outputText(IDS_SPLASH_LOADING);
+
+	// The bottom-center loading label is auto-positioned in SplashScreen::OnInitDialog;
+	// just report progress at coarse milestones as init proceeds.
+	loadWindow.setProgress("Starting up...");
 
 	// not part of the subsystem list, because it should normally never be reset!
 	TheNameKeyGenerator = new NameKeyGenerator;
@@ -365,6 +365,7 @@ BOOL CWorldBuilderApp::InitInstance()
 	}
 	::SetCurrentDirectory(buf);
 
+	loadWindow.setProgress("Initializing file system...");
 	TheFileSystem = new FileSystem;
 
 	initSubsystem(TheLocalFileSystem, (LocalFileSystem*)new Win32LocalFileSystem);
@@ -411,6 +412,7 @@ BOOL CWorldBuilderApp::InitInstance()
 	ini.load( AsciiString( "Data\\INI\\Default\\Water.ini" ), INI_LOAD_OVERWRITE, NULL );
 	ini.load( AsciiString( "Data\\INI\\Water.ini" ), INI_LOAD_OVERWRITE, NULL );
 
+	loadWindow.setProgress("Loading game data...");
 	initSubsystem(TheGameText, CreateGameTextInterface());
 	initSubsystem(TheScienceStore, new ScienceStore(), "Data\\INI\\Default\\Science.ini", "Data\\INI\\Science.ini");
 	initSubsystem(TheMultiplayerSettings, new MultiplayerSettings(), "Data\\INI\\Default\\Multiplayer.ini", "Data\\INI\\Multiplayer.ini");
@@ -446,11 +448,13 @@ BOOL CWorldBuilderApp::InitInstance()
 	initSubsystem(TheLocomotorStore, new LocomotorStore(), NULL, "Data\\INI\\Locomotor.ini");
 	initSubsystem(TheDamageFXStore, new DamageFXStore(), NULL, "Data\\INI\\DamageFX.ini");
 	initSubsystem(TheArmorStore, new ArmorStore(), NULL, "Data\\INI\\Armor.ini");
+	loadWindow.setProgress("Loading objects...");
 	initSubsystem(TheThingFactory, new ThingFactory(), "Data\\INI\\Default\\Object.ini", NULL, "Data\\INI\\Object");
 	initSubsystem(TheCrateSystem, new CrateSystem(), "Data\\INI\\Default\\Crate.ini", "Data\\INI\\Crate.ini");
 	initSubsystem(TheUpgradeCenter, new UpgradeCenter, "Data\\INI\\Default\\Upgrade.ini", "Data\\INI\\Upgrade.ini");
 	initSubsystem(TheAnim2DCollection, new Anim2DCollection ); //Init's itself.
 
+	loadWindow.setProgress("Finalizing...");
 	TheSubsystemListRecord.postProcessLoadAll();
 
 	TheW3DFileSystem = new WB_W3DFileSystem;
@@ -498,6 +502,8 @@ BOOL CWorldBuilderApp::InitInstance()
 	// Dispatch commands specified on the command line
 	if (!ProcessShellCommand(cmdInfo))
 		return FALSE;
+
+	loadWindow.setProgress("Starting WorldBuilder...");
 
 	// The one and only window has been initialized, so show and update it.
 	m_pMainWnd->ShowWindow(SW_SHOW);

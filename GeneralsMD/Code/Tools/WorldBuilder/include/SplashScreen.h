@@ -35,8 +35,11 @@ class SplashScreen : public CDialog
 	public:
 		void setTextOutputLocation(const CRect& rect);
 		void outputText(UINT nIDString);
+		void setProgress(LPCTSTR text);	///< set the bottom-center loading label + repaint now
 
 	protected:
+		void drawProgressText(void);	///< paint m_loadString onto the bitmap static, on top of the image
+
 		virtual BOOL OnInitDialog();
 		afx_msg void OnPaint();
 
