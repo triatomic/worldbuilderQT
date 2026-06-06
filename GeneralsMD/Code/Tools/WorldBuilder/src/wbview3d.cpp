@@ -4355,24 +4355,27 @@ BOOL WbView3d::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt)
 {
 	if (m_trackingMode == TRACK_NONE) {
 
+		// Holding Shift zooms faster (coarse zoom for quickly covering distance).
+		const Int wheelBoost = (nFlags & MK_SHIFT) ? 4 : 1;
+
 		//WST 11/21/02 New Triple speed camera zoom request by designers
 		if (getCurrentZoom() > 2.0f)
 		{
-			m_mouseWheelOffset += zDelta;
+			m_mouseWheelOffset += zDelta * wheelBoost;
 		}
 		else if (getCurrentZoom() > 1.0f)
 		{
-			m_mouseWheelOffset += zDelta/2;
+			m_mouseWheelOffset += zDelta * wheelBoost / 2;
 		}
 		else
 		{
-			m_mouseWheelOffset += zDelta/8;
+			m_mouseWheelOffset += zDelta * wheelBoost / 8;
 		}
 
 		MSG msg;
 		while (::PeekMessage(&msg, m_hWnd, WM_MOUSEWHEEL, WM_MOUSEWHEEL, PM_REMOVE)) {
 			zDelta = (short) HIWORD(msg.wParam);    // wheel rotation
-			m_mouseWheelOffset += zDelta;
+			m_mouseWheelOffset += zDelta * wheelBoost;
 		}
 		redraw();
 		updateHysteresis();
