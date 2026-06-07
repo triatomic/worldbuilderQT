@@ -46,6 +46,7 @@ public:
 	void rebuildTerrain();			///< Resample the terrain (expensive); then composite objects.
 	void refreshObjects();			///< Cheap: re-composite cached terrain + objects (no resample).
 	void requestRebuild(Bool terrainChanged = true);	///< Object/camera changes refresh instantly; terrain edits are throttled.
+	void requestSelectionRefresh();	///< Selection-only change: recomposite objects, keep the roads cache (roads didn't move).
 	void requestViewBoxRefresh();	///< Camera moved (only the view box moves): cheap repaint, no recomposite (unless culling).
 
 	// Suppress all minimap rebuilds while a map load/teardown is in progress. A modal

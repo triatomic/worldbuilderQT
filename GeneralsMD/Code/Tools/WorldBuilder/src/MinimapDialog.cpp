@@ -366,6 +366,22 @@ void MinimapDialog::requestRebuild(Bool terrainChanged)
 	SetTimer(MINIMAP_REBUILD_TIMER, (UINT)m_refreshDelayMs, NULL);
 }
 
+// A pure SELECTION change (the selection overlay's cyan halos must track the new
+// selection). Unlike requestRebuild(false), this does NOT invalidate the roads cache:
+// changing which objects are selected never moves a road, so the cached terrain+roads
+// composite stays valid and only the (cheaper) object pass needs redoing.
+void MinimapDialog::requestSelectionRefresh()
+{
+	if (s_loading)					// a map load/teardown is in progress -- don't fight it
+		return;
+	if (!::IsWindow(m_hWnd) || !IsWindowVisible())
+		return;
+	if (!m_terrainValid)			// no cached terrain yet -- let the normal path resample
+		return;
+
+	refreshObjects();
+}
+
 // A pure CAMERA move (panning, zoom, and especially dragging the minimap itself).
 // The composited buffer -- terrain, roads, object blips -- is all world space and
 // does NOT move; only the yellow view box (a cheap GDI overlay in OnPaint) follows.
