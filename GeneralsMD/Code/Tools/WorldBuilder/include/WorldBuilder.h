@@ -172,6 +172,10 @@ public:
 
 	AsciiString getCurrentGameDirectory() { return m_gameDirectory; }
 	Tool *getCurTool() { return m_curTool; }
+	/// The tool chosen in the palette (ignores transient Space/Alt/Ctrl swaps that retarget m_curTool).
+	Tool *getSelTool() { return m_selTool; }
+	/// The persistent wave-editor tool instance, so the render path can tell if it's the selected tool.
+	WaveEditorTool *getWaveEditorTool() { return &m_waveEditorTool; }
 
 	/// Check to see if any keyboard overrides are changing the current tool.
 	void updateCurTool(Bool forceHand);

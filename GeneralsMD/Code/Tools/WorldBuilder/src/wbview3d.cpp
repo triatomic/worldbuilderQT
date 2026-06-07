@@ -86,6 +86,7 @@
 #include "Common/GlobalData.h"
 #include "ShadowOptions.h"
 #include "WorldBuilder.h"
+#include "WaveEditorTool.h"	// WaveEditorTool::isEditorActive() gates the wave-track flush()
 #include "wbview3d.h"
 #include "Common/Debug.h"
 #include "Common/ThingFactory.h"
@@ -3041,11 +3042,24 @@ void WbView3d::render()
 			}
 		}
 
-		// Wave editor: draw any placed water-track waves on top of the terrain.
-		// flush() internally calls update(), so no separate animation tick is needed.
-		if (TheWaterTracksRenderSystem) {
+		// Wave editor: draw any placed water-track waves on top of the terrain, but ONLY
+		// while the wave editor is the selected palette tool. We check getSelTool() (not
+		// getCurTool()) so transient Space/Alt/Ctrl tool swaps don't turn the waves off
+		// mid-edit. When the wave tool isn't selected we never call flush(), so the wave
+		// renderer's per-frame cost (update() + a D3D camera apply) is gone entirely --
+		// that lingering cost was felt as a small select/deselect delay.
+		//
+		// flush() gates on m_showSoftWaterEdge (the user's View > Show Soft Water setting),
+		// so we force it on just for this call and restore it immediately -- this lets the
+		// editor's waves draw even with soft water off, without persisting the change or
+		// clobbering the user's setting. flush() internally calls update(), so no separate
+		// animation tick is needed.
+		if (TheWaterTracksRenderSystem && WaveEditorTool::isEditorActive()) {
+			Bool savedSoftWater = TheGlobalData->m_showSoftWaterEdge;
+			TheWritableGlobalData->m_showSoftWaterEdge = true;
 			RenderInfoClass rinfo(*m_camera);
 			TheWaterTracksRenderSystem->flush(rinfo);
+			TheWritableGlobalData->m_showSoftWaterEdge = savedSoftWater;
 		}
 
 		// Draw the 3d obj icons on top of the rest of the data.

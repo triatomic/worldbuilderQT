@@ -27,6 +27,7 @@
 
 #include "WaveEditorTool.h"
 #include "WaveEditorOptions.h"
+#include "WorldBuilder.h"	// WbApp(), getSelTool()/getWaveEditorTool() for isEditorActive()
 #include "MainFrm.h"
 #include "WorldBuilderDoc.h"
 #include "WorldBuilderView.h"
@@ -40,8 +41,6 @@
 
 // Saved off so that static functions (panel handlers) can reach instance state.
 WaveEditorTool*	WaveEditorTool::m_staticThis = NULL;
-Bool			WaveEditorTool::m_savedShowSoftWaterEdge = false;
-Bool			WaveEditorTool::m_softWaterEdgeSaved = false;
 Int				WaveEditorTool::m_selectedWave = -1;
 WaveEditorTool::EditorMode	WaveEditorTool::m_editorMode = WaveEditorTool::MODE_CREATE;
 
@@ -85,19 +84,16 @@ WaveEditorTool::~WaveEditorTool(void)
 /// Make sure the wave system exists and the globals that gate its rendering are on.
 void WaveEditorTool::ensureSystem(void)
 {
-	// flush() draws nothing unless soft water edges are enabled and the water has
-	// a non-zero transparent depth; turn them on for the editor.
+	// Never let the legacy in-game GetAsyncKeyState editor run inside WB.
 	if (TheWritableGlobalData) {
-		// Snapshot the prior soft-water-edge state once, so deactivate() can put it back
-		// (and the wave render system stops doing per-frame work when the editor closes).
-		if (!m_softWaterEdgeSaved) {
-			m_savedShowSoftWaterEdge = TheWritableGlobalData->m_showSoftWaterEdge;
-			m_softWaterEdgeSaved = true;
-		}
-		TheWritableGlobalData->m_showSoftWaterEdge = true;
-		// Never let the legacy in-game GetAsyncKeyState editor run inside WB.
 		TheWritableGlobalData->m_usingWaterTrackEditor = false;
 	}
+	// NOTE: we intentionally do NOT force m_showSoftWaterEdge here. That global is the
+	// user's View > Show Soft Water setting and also drives shoreline rendering; forcing
+	// it on left it stuck on for the whole session (deactivate() isn't reliably called),
+	// so the wave renderer ran every frame even when the wave tool wasn't selected. The
+	// render path now calls flush() only while the wave editor is the selected tool, so
+	// the soft-water gate inside flush() is bypassed for waves and no longer needed here.
 
 	if (!TheWaterTracksRenderSystem) {
 		TheWaterTracksRenderSystem = NEW WaterTracksRenderSystem;
@@ -119,6 +115,14 @@ Bool WaveEditorTool::getWakPath(CWorldBuilderDoc *pDoc, char *buffer, Int bufLen
 	Int len = strlen(buffer);
 	strcpy(buffer + len - 4, ".wak");	// replace the .map extension
 	return true;
+}
+
+// True when the wave editor is the selected palette tool. We check getSelTool() (not
+// getCurTool()) so transient Space/Alt/Ctrl tool swaps don't make the editor's overlay/
+// tracks flicker off mid-edit.
+Bool WaveEditorTool::isEditorActive(void)
+{
+	return WbApp() && WbApp()->getSelTool() == (Tool *)WbApp()->getWaveEditorTool();
 }
 
 // Activate.
@@ -144,15 +148,6 @@ void WaveEditorTool::deactivate()
 	clearPreviewWave();	// also clears m_ghostActive
 	if (m_View != NULL) {
 		m_View->doRulerFeedback(RULER_NONE);
-	}
-
-	// Restore the soft-water-edge state we forced on in ensureSystem(). Once it's back to
-	// its prior value, flush() short-circuits and the wave render system stops doing
-	// per-frame work (update() + a D3D camera apply) on every repaint -- which otherwise
-	// lingered for the rest of the session and showed up as a select/deselect hitch.
-	if (m_softWaterEdgeSaved && TheWritableGlobalData) {
-		TheWritableGlobalData->m_showSoftWaterEdge = m_savedShowSoftWaterEdge;
-		m_softWaterEdgeSaved = false;
 	}
 }
 

@@ -3343,12 +3343,15 @@ if (_skip_drawobject_render) {
 		}
 	}
 
-	// Draw the wave overlay when the View toggle is on, OR while a wave is being
-	// dragged out (so the ghost preview always shows, even if the toggle is off).
+	// Draw the wave overlay only while the wave editor is the active tool -- this gate
+	// takes priority over the View toggle, so the cyan/yellow glyphs don't linger over
+	// the map when you're working with another tool. Within an active editor, the View
+	// toggle (m_waveFeedback) still hides/shows them, and a drag-out always shows the
+	// ghost preview. When the editor isn't active we also skip the updateWaveVB() cost.
 	{
 		float gx, gy, gdx, gdy; Int gt;
 		Bool ghostNow = WaveEditorTool::getGhostWave(gx, gy, gdx, gdy, gt);
-	if (m_waveFeedback || ghostNow) {
+	if (WaveEditorTool::isEditorActive() && (m_waveFeedback || ghostNow)) {
 		updateWaveVB();
 		if (m_feedbackIndexCount > 0) {
 			// Wave overlay should always be visible, so disable depth test/write -
