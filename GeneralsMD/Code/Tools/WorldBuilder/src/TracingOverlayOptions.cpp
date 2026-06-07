@@ -107,11 +107,18 @@ void TracingOverlayOptions::OnHScroll(UINT nSBCode, UINT nPos, CScrollBar* pScro
 {
 	if (pScrollBar && pScrollBar->m_hWnd == m_opacitySlider.m_hWnd) {
 		// Live: update the readout AND push the new opacity into the overlay so it
-		// changes as the user drags, without waiting for OK.
+		// changes as the user drags, without waiting for OK -- but DON'T write the INI
+		// here. OnHScroll fires on every drag tick (mouse held down); persisting each
+		// tick hammers the registry. Save only when the drag ends.
 		Int pct = m_opacitySlider.GetPos();
 		updateOpacityLabel(pct);
 		readControlsToStatics();
 		applyToDrawObject();
+
+		// SB_THUMBPOSITION / SB_ENDSCROLL mark the end of the drag (mouse released or
+		// keyboard nudge settled). Persist the final value once, then.
+		if (nSBCode == SB_THUMBPOSITION || nSBCode == SB_ENDSCROLL)
+			persistToProfile();
 	}
 	CDialog::OnHScroll(nSBCode, nPos, pScrollBar);
 }
@@ -123,6 +130,7 @@ void TracingOverlayOptions::OnSelchangeFilter()
 {
 	readControlsToStatics();
 	applyToDrawObject();
+	persistToProfile();		// discrete event (not drag spam) -- safe to write the INI now.
 }
 
 // Pull the current control values into the persisted statics.
@@ -142,6 +150,7 @@ void TracingOverlayOptions::OnOK()
 {
 	readControlsToStatics();
 	applyToDrawObject();
+	persistToProfile();
 	DestroyWindow();
 }
 
@@ -156,6 +165,7 @@ void TracingOverlayOptions::OnDestroy()
 	// Persist the final values when the dialog goes away.
 	readControlsToStatics();
 	applyToDrawObject();
+	persistToProfile();
 	CDialog::OnDestroy();
 }
 
@@ -167,14 +177,23 @@ void TracingOverlayOptions::PostNcDestroy()
 	delete this;
 }
 
-// Push the current settings into DrawObject and persist them to the INI.
+// Push the current settings into DrawObject for live preview. Does NOT touch the INI:
+// this is called continuously while the opacity slider is dragged, and writing the
+// profile on every WM_HSCROLL tick hammers the registry. Persistence is separate --
+// see persistToProfile(), called only when the drag ends / the dialog closes.
 void TracingOverlayOptions::applyToDrawObject(void)
 {
 	// Opacity is 0..100 in the ui; DrawObject wants 0..255 alpha.
 	Int alpha = (m_opacityPct * 255) / 100;
 	DrawObject::setTracingOverlayOpacity(alpha);
 	DrawObject::setTracingOverlayFilter(m_filter);
+}
 
+// Write the current settings to the [Appearance] INI keys. Call this only on discrete
+// commit points (slider release, combo change, OK, dialog close) -- never on every
+// slider-drag tick.
+void TracingOverlayOptions::persistToProfile(void)
+{
 	::AfxGetApp()->WriteProfileInt(APPEARANCE_SECTION, KEY_TRACE_OPACITY, m_opacityPct);
 	::AfxGetApp()->WriteProfileInt(APPEARANCE_SECTION, KEY_TRACE_FILTER, m_filter);
 }

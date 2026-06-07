@@ -75,7 +75,8 @@ protected:
 	CSliderCtrl	m_opacitySlider;		///< 0..100 opacity slider.
 
 	void updateOpacityLabel(Int pct);
-	void applyToDrawObject(void);		///< push current ui values into DrawObject + INI.
+	void applyToDrawObject(void);		///< push current ui values into DrawObject (live preview, no INI).
+	void persistToProfile(void);		///< write the current statics to the [Appearance] INI keys.
 	void readControlsToStatics(void);	///< pull live ui values into the statics.
 
 	static TracingOverlayOptions *m_theDialog;	///< the single modeless instance (NULL when closed).

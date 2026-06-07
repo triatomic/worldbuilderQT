@@ -44,6 +44,9 @@ CString PointerTool::m_lastPointerInfo = _T("");
 Bool PointerTool::m_isMouseDown = false;
 Bool PointerTool::m_dragSelect = false;
 Bool PointerTool::m_pointerIsActive = false;
+Bool PointerTool::m_rotateObjectsWithGroup = true;
+Bool PointerTool::m_useFarthestObjectPivot = true;
+Bool PointerTool::m_groupRotateOptionsLoaded = false;
 
 static Bool g_PointerToolTip = false;
 
@@ -188,9 +191,7 @@ PointerTool::PointerTool(void) :
 	m_modifyUndoable(NULL),
 	m_curObject(NULL),
 	m_rotateCursor(NULL),
-	m_moveCursor(NULL),
-	m_rotateObjectsWithGroup(true),
-	m_useFarthestObjectPivot(true)
+	m_moveCursor(NULL)
 {
 	m_toolID = ID_POINTER_TOOL;
 	m_cursorID = IDC_POINTER; 
@@ -384,6 +385,14 @@ Bool PointerTool::allowPick(MapObject* pMapObj, WbView* pView)
 	return true;
 }
 
+/** True if the View > Show Object Selection Overlay toggle is on. Reads the 3D view's
+ * cached member rather than GetProfileInt so the click path never hits the registry. */
+static Bool selectionOverlayOn(void)
+{
+	WbView3d *p3View = CWorldBuilderDoc::GetActive3DView();
+	return p3View ? p3View->getShowSelectionOverlay() : false;
+}
+
 /** Execute the tool on mouse down - Pick an object. */
 void PointerTool::mouseDown(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBuilderDoc *pDoc) 
 {
@@ -552,8 +561,9 @@ void PointerTool::mouseDown(TTrackingMode m, CPoint viewPt, WbView* pView, CWorl
 	// minimap so its cyan halos track the new selection immediately (otherwise they'd
 	// only update on the next timer/camera refresh).  The recomposite is cheap and only
 	// runs while the minimap is open; requestRebuild itself no-ops when hidden.
-	if (TheMinimapDialog &&
-			::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowSelectionOverlay", 0))
+	// Read the overlay state from the 3D view's cached member, not GetProfileInt -- MFC's
+	// profile read hits the registry uncached on every call, and this is the click path.
+	if (TheMinimapDialog && selectionOverlayOn())
 		TheMinimapDialog->requestRebuild(false);
 
 }
@@ -568,8 +578,13 @@ void PointerTool::mouseMoved(TTrackingMode m, CPoint viewPt, WbView* pView, CWor
     Coord3D cpt;
     pView->viewToDocCoords(viewPt, &cpt, false);
     Bool ctrlKey = (0x8000 & ::GetAsyncKeyState(VK_CONTROL)) != 0;
-	m_rotateObjectsWithGroup = ::AfxGetApp()->GetProfileInt("MainFrame", "ToggleObjectRotationWithGroup", 1);
-	m_useFarthestObjectPivot = ::AfxGetApp()->GetProfileInt("MainFrame", "TogglePivotFarthest", 1);
+	// Group-rotate options are cached statics; load them once (the menu handlers keep them
+	// current via setGroupRotateOptions()). This used to re-read the registry every move.
+	if (!m_groupRotateOptionsLoaded) {
+		m_rotateObjectsWithGroup = ::AfxGetApp()->GetProfileInt("MainFrame", "ToggleObjectRotationWithGroup", 1) != 0;
+		m_useFarthestObjectPivot = ::AfxGetApp()->GetProfileInt("MainFrame", "TogglePivotFarthest", 1) != 0;
+		m_groupRotateOptionsLoaded = true;
+	}
 
 	// ::MessageBeep(MB_OK); // BEEP BOOP
     if (m == TRACK_NONE) {
@@ -876,12 +891,21 @@ void PointerTool::mouseUp(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldB
 
 	} 
 
+	Bool objectsMoved = (m_curObject && m_moving);
+
 	m_isMouseDown = false;
 
 	// The minimap object-overlay refresh is suppressed during the drag (wbview3d's edit
 	// funnel skips it while isMouseDown(), to keep the framerate up while moving objects
-	// with the minimap open). Now that the drag is done, do the single deferred refresh.
-	if (TheMinimapDialog && TheMinimapDialog->IsWindowVisible())
+	// with the minimap open). Now that the drag is done, do the single deferred refresh --
+	// but only when it would actually change the minimap image:
+	//   - objectsMoved: blips must move to their new positions.
+	//   - selection overlay on: the cyan selection halos must track the new selection.
+	// A pure selection change with the overlay off leaves the minimap pixel-identical, so
+	// skip the recomposite (it's the per-click cost behind the "selecting feels slow"
+	// regression). The halo is the only minimap element that reads isSelected().
+	if (TheMinimapDialog && TheMinimapDialog->IsWindowVisible() &&
+			(objectsMoved || selectionOverlayOn()))
 		TheMinimapDialog->requestRebuild(false);
 
 	checkForPropertiesPanel();

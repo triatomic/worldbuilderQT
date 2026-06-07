@@ -35,6 +35,7 @@
 #include "playerlistdlg.h"
 #include "teamsdialog.h"
 #include "LayersList.h"
+#include "PointerTool.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -710,6 +711,8 @@ void WbView::OnTogglePivotFarthest()
 		pView->Invalidate(!m_togglePivotFarthest);
 	}
 	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "TogglePivotFarthest", m_togglePivotFarthest?1:0);
+	// Keep PointerTool's cached copy current so it needn't re-read the registry per mouse-move.
+	PointerTool::setGroupRotateOptions(m_toggleObjectRotationWithGroup, m_togglePivotFarthest);
 }
 
 /** Sets the check in the menu to match the show objects flag. */
@@ -728,6 +731,8 @@ void WbView::OnToggleObjectRotationWithGroup()
 		pView->Invalidate(!m_toggleObjectRotationWithGroup);
 	}
 	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "ToggleObjectRotationWithGroup", m_toggleObjectRotationWithGroup?1:0);
+	// Keep PointerTool's cached copy current so it needn't re-read the registry per mouse-move.
+	PointerTool::setGroupRotateOptions(m_toggleObjectRotationWithGroup, m_togglePivotFarthest);
 }
 
 void WbView::OnUpdateEditPaste(CCmdUI* pCmdUI) 

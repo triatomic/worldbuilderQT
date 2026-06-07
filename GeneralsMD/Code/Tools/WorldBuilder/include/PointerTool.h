@@ -43,8 +43,12 @@ protected:
 	Coord3D m_downPt3d;
 	MapObject *m_curObject;
 
-	Bool m_rotateObjectsWithGroup; 
-	Bool m_useFarthestObjectPivot;
+	// Group-rotate options (Pointer Rotation Options menu). Cached statics: these used to
+	// be re-read from the registry on every mouseMoved (thousands of reads/session). Loaded
+	// once on first use and refreshed by the menu handlers via setGroupRotateOptions().
+	static Bool m_rotateObjectsWithGroup;
+	static Bool m_useFarthestObjectPivot;
+	static Bool m_groupRotateOptionsLoaded;
 	Coord3D m_groupPivot;
 	Bool m_moving; ///< True if we are drag moving an object.
 	Bool m_rotating; ///< True if we are rotating an object.
@@ -87,6 +91,15 @@ public:
 	static Bool isMouseDown(void) { return m_isMouseDown; }
 	static Bool isDragSelecting(void) { return m_dragSelect; }
 	static Bool isActive(void) {return m_pointerIsActive; }
+
+	/// Update the cached group-rotate options when the menu toggles change, so mouseMoved
+	/// doesn't have to re-read them from the registry on every move.
+	static void setGroupRotateOptions(Bool rotateWithGroup, Bool pivotFarthest)
+	{
+		m_rotateObjectsWithGroup = rotateWithGroup;
+		m_useFarthestObjectPivot = pivotFarthest;
+		m_groupRotateOptionsLoaded = true;
+	}
 };
 
 

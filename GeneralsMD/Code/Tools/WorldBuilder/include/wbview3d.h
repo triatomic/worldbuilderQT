@@ -391,11 +391,20 @@ protected:
 	void updateScorches();
 	void updateTrees();
 	int parseHexColorFromProfile(const char* section, const char* key, const char* defaultHex);
+	// Read the 5 EntityIconColor profile values once and push them into DrawObject's
+	// (static) icon-color slots. Call once at init, and again whenever those keys change
+	// -- NOT every redraw (each parse is a registry/INI hit). See redraw().
+	void reloadIconColors();
 	// void addMapObjectIfVisible(MapObject *pMapObj);
 	// void updateVisibleMapObjects();
 	
 
 public:
+
+	/// In-memory copy of the View > Show Object Selection Overlay toggle (authoritative;
+	/// the menu handler keeps it and the registry in sync). Lets the click path test the
+	/// overlay state without an uncached GetProfileInt registry read per click.
+	Bool getShowSelectionOverlay() const { return m_showSelectionOverlay; }
 
 	void startEditTimer();
 	void pauseEditTimer();

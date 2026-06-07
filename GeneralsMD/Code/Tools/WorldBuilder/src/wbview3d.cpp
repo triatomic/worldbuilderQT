@@ -2691,6 +2691,24 @@ Int WbView3d::parseHexColorFromProfile(const char* section, const char* key, con
 }
 
 
+// ----------------------------------------------------------------------------
+// Load the 5 customizable entity-icon colors from the profile into DrawObject's
+// static color slots. This used to run inside redraw() -- 5 GetProfileString
+// (registry/INI) reads on every paint, thousands per session. The values only
+// change when the user edits them, so read them once at init and re-call this
+// from the icon-color settings handler if/when one is added.
+void WbView3d::reloadIconColors()
+{
+	if (!m_drawObject)
+		return;
+	m_drawObject->setRoadIconColor(     parseHexColorFromProfile(ICON_COLOR_SECTION, "Roads",     "FFFF00"));
+	m_drawObject->setWaypointIconColor( parseHexColorFromProfile(ICON_COLOR_SECTION, "Waypoints", "00FF00"));
+	m_drawObject->setUnitIconColor(     parseHexColorFromProfile(ICON_COLOR_SECTION, "Units",     "FF00FF"));
+	m_drawObject->setTreeIconColor(     parseHexColorFromProfile(ICON_COLOR_SECTION, "Trees",     "00FF00"));
+	m_drawObject->setDefaultIconColor(  parseHexColorFromProfile(ICON_COLOR_SECTION, "Default",   "00FFFF"));
+}
+
+
 // void WbView3d::addMapObjectIfVisible(MapObject *pMapObj)
 // {
 //     if (!pMapObj) return;
@@ -2789,18 +2807,9 @@ void WbView3d::redraw(void)
 	// AfxGetApp()->GetProfileString(APP_SECTION, "Color16", "0");
 
 	if (m_drawObject) {
-		Int roadIconColor = parseHexColorFromProfile(ICON_COLOR_SECTION, "Roads", "FFFF00"); 
-		m_drawObject->setRoadIconColor(roadIconColor);
-		Int waypointIconColor  = parseHexColorFromProfile(ICON_COLOR_SECTION, "Waypoints", "00FF00");
-		m_drawObject->setWaypointIconColor(waypointIconColor);
-		Int unitIconColor  = parseHexColorFromProfile(ICON_COLOR_SECTION, "Units", "FF00FF");
-		m_drawObject->setUnitIconColor(unitIconColor);
-		Int treeIconColor  = parseHexColorFromProfile(ICON_COLOR_SECTION, "Trees", "00FF00");
-		m_drawObject->setTreeIconColor(treeIconColor);
-
-		Int defaultIconColor  = parseHexColorFromProfile(ICON_COLOR_SECTION, "Default", "00FFFF");
-		m_drawObject->setDefaultIconColor(defaultIconColor);
-
+		// Icon colors are cached in DrawObject's static slots; they are loaded once in
+		// initWW3D() via reloadIconColors() (not re-read here -- each parse is a registry
+		// hit, and this runs every paint). Call reloadIconColors() if the keys change.
 		m_drawObject->setDrawObjects(
 			m_showObjects, 
 			m_showWaypoints || WaypointTool::isActive(),
@@ -3282,6 +3291,7 @@ void WbView3d::initWW3D()
 		m_intersector = new IntersectionClass();
 		m_drawObject = new DrawObject();
 		m_overlayScene->Add_Render_Object(m_drawObject);
+		reloadIconColors();		// load EntityIconColor profile values once (not per redraw)
 
 #if 1
 		TheWritableGlobalData->m_useShadowVolumes = true;
