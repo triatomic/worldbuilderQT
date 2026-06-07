@@ -647,6 +647,8 @@
 #define IDC_DIALOG_FONT                 1371
 #define IDC_TOGGLE_MIRRORY              1372
 #define IDC_DIALOG_FONT_LABEL           1372
+#define IDC_VIEWPORT_RESOLUTION         1386
+#define IDC_VIEWPORT_RESOLUTION_LABEL   1387
 #define IDC_WAVE_TYPE_LABEL             1373
 #define IDC_TOGGLE_MIRROR               1373
 #define IDC_WAVE_CYCLE_TYPE             1374
@@ -948,7 +950,7 @@
 #define _APS_3D_CONTROLS                     1
 #define _APS_NEXT_RESOURCE_VALUE        247
 #define _APS_NEXT_COMMAND_VALUE         33393
-#define _APS_NEXT_CONTROL_VALUE         1386
+#define _APS_NEXT_CONTROL_VALUE         1388
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

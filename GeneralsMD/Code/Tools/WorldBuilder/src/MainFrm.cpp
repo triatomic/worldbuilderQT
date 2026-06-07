@@ -50,7 +50,7 @@ IMPLEMENT_DYNAMIC(CMainFrame, CFrameWnd)
 BEGIN_MESSAGE_MAP(CMainFrame, CFrameWnd)
 	//{{AFX_MSG_MAP(CMainFrame)
 	ON_WM_CREATE()
-	ON_WM_MOVE()
+	ON_WM_EXITSIZEMOVE()
 	ON_COMMAND(ID_VIEW_BRUSHFEEDBACK, OnViewBrushfeedback)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_BRUSHFEEDBACK, OnUpdateViewBrushfeedback)
 	ON_WM_DESTROY()
@@ -355,24 +355,13 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	m_minimapDialog = new MinimapDialog(this);
 	m_minimapDialog->Create(MinimapDialog::IDD, this);
 	m_minimapDialog->ShowWindow(::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowMinimap", 0) ? SW_SHOW : SW_HIDE);
-	// Default to the bottom-right of the work area (like the in-game radar). A -1
-	// sentinel means "never positioned yet", so we compute bottom-right; once the
-	// user moves it, OnMove persists the real coords and they take precedence.
-	int mmTop  = ::AfxGetApp()->GetProfileInt(MINIMAP_SECTION, "Top", -1);
-	int mmLeft = ::AfxGetApp()->GetProfileInt(MINIMAP_SECTION, "Left", -1);
-	if (mmTop < 0 || mmLeft < 0)
-	{
-		CRect work;
-		::SystemParametersInfo(SPI_GETWORKAREA, 0, &work, 0);
-		CRect mmWin;
-		m_minimapDialog->GetWindowRect(&mmWin);
-		const int margin = 8;
-		mmLeft = work.right  - mmWin.Width()  - margin;
-		mmTop  = work.bottom - mmWin.Height() - margin;
-		if (mmLeft < 0) mmLeft = 0;
-		if (mmTop  < 0) mmTop  = 0;
-	}
-	m_minimapDialog->SetWindowPos(NULL, mmLeft, mmTop, 0, 0, SWP_NOZORDER | SWP_NOSIZE);
+	// Restore the saved window position. OnExitSizeMove persists Top/Left when the user
+	// finishes moving the dialog; just read them back here. The -32000 sentinel means
+	// "never saved" -- leave the dialog at its default spawn position in that case.
+	int mmTop  = ::AfxGetApp()->GetProfileInt(MINIMAP_SECTION, "Top", -32000);
+	int mmLeft = ::AfxGetApp()->GetProfileInt(MINIMAP_SECTION, "Left", -32000);
+	if (mmTop != -32000 && mmLeft != -32000)
+		m_minimapDialog->SetWindowPos(NULL, mmLeft, mmTop, 0, 0, SWP_NOZORDER | SWP_NOSIZE);
 
 	Int sbf = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowBrushFeedback", 1);
 	if (sbf != 0) {
@@ -695,9 +684,11 @@ void CMainFrame::Dump(CDumpContext& dc) const
 	}
 #endif
 
-void CMainFrame::OnMove(int x, int y) 
+// Persist the main window position once the user finishes moving it. WM_MOVE fires on
+// every pixel of the drag (hundreds of INI writes); WM_EXITSIZEMOVE fires once, on release.
+void CMainFrame::OnExitSizeMove()
 {
-	CFrameWnd::OnMove(x, y);
+	CFrameWnd::OnExitSizeMove();
 	if (this->IsWindowVisible() && !this->IsIconic()) {
 		CRect frameRect;
 		GetWindowRect(&frameRect);

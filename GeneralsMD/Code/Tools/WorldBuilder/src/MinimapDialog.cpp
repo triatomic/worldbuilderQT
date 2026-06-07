@@ -67,7 +67,7 @@ Bool MinimapDialog::s_loading = false;
 
 BEGIN_MESSAGE_MAP(MinimapDialog, CDialog)
 	ON_WM_PAINT()
-	ON_WM_MOVE()
+	ON_WM_EXITSIZEMOVE()
 	ON_WM_LBUTTONDOWN()
 	ON_WM_MOUSEMOVE()
 	ON_WM_LBUTTONUP()
@@ -152,6 +152,9 @@ BOOL MinimapDialog::OnInitDialog()
 		SetWindowPos(NULL, 0, 0, MINIMAP_DISPLAY_SIZE + borderW, MINIMAP_DISPLAY_SIZE + borderH,
 			SWP_NOMOVE | SWP_NOZORDER);
 	}
+
+	// Note: the saved window position is restored by the owner (CMainFrame) right after
+	// Create() returns -- not here -- so there is a single place that reads Top/Left.
 
 	return TRUE;
 }
@@ -284,9 +287,12 @@ void MinimapDialog::OnOK()
 {
 }
 
-void MinimapDialog::OnMove(int x, int y)
+// Persist the window position once the user finishes moving the dialog. WM_MOVE fires
+// on every pixel of the drag (hundreds of INI writes); WM_EXITSIZEMOVE fires once, when
+// the mouse is released, so we write Top/Left a single time per reposition.
+void MinimapDialog::OnExitSizeMove()
 {
-	CDialog::OnMove(x, y);
+	CDialog::OnExitSizeMove();
 	CRect rect;
 	GetWindowRect(&rect);
 	::AfxGetApp()->WriteProfileInt(MINIMAP_SECTION, "Top", rect.top);

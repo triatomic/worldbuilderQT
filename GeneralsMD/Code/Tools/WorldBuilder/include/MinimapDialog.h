@@ -84,7 +84,7 @@ protected:
 	virtual void OnOK();
 
 	afx_msg void OnPaint();
-	afx_msg void OnMove(int x, int y);
+	afx_msg void OnExitSizeMove();		///< Persist the window position once, when the user finishes dragging.
 	afx_msg void OnLButtonDown(UINT nFlags, CPoint point);
 	afx_msg void OnMouseMove(UINT nFlags, CPoint point);
 	afx_msg void OnLButtonUp(UINT nFlags, CPoint point);

@@ -119,6 +119,14 @@ void initSubsystem(SUBSYSTEM*& sysref, SUBSYSTEM* sys, const char* path1 = NULL,
 #define GAME_DIR "GameDirectory"
 #define ABOUT_SECTION "AboutWindow"
 
+// The viewport resolution is [MainFrame] Width/Height -- the keys CMainFrame::
+// adjustWindowSize reads to size the view + render target (reset3dEngineDisplaySize), the
+// same keys the existing resolution menu writes. Render size and window size are coupled
+// (Yves' model): the window is sized to match and the back buffer is stretched to fill it.
+#define VIEWPORT_SECTION   "MainFrame"
+#define KEY_VIEW_WIDTH     "Width"
+#define KEY_VIEW_HEIGHT    "Height"
+
 #define NEWLINE "\r\n"
 
 
@@ -691,14 +699,24 @@ protected:
 	afx_msg void OnCenterOnSelectedButtonWP();
 	afx_msg void OnCenterOnSelectedButtonObject();
 	afx_msg void OnFindButtonClicked();
-	afx_msg void OnMove(int x, int y);
+	afx_msg void OnExitSizeMove();
 	afx_msg void OnLaunchOnStartup();
 	void OnCenterOnSelected(Bool findObject); 
 	afx_msg void OnRefreshQueryObject();
 	afx_msg void OnOpenLinkDiscord();
 	afx_msg void OnRefreshQueryWaypoint();
 	afx_msg void OnDialogFontChanged();
+	afx_msg void OnViewportResolutionChanged();
 	afx_msg void OnWindowPosChanging(WINDOWPOS* lpwndpos);
+
+	// Distinct width/height pairs the OS reports for the primary display, sorted; index
+	// matches the IDC_VIEWPORT_RESOLUTION combo. Populated in OnInitDialog.
+	void populateResolutionCombo();
+	void saveViewportResolution();	///< Write the combo's current pick to ScreenCX/ScreenCY.
+	enum { MAX_RESOLUTIONS = 128 };
+	int m_resW[MAX_RESOLUTIONS];
+	int m_resH[MAX_RESOLUTIONS];
+	int m_numResolutions;
 
 	void DoShrink();
 	afx_msg void OnShrink();
@@ -712,7 +730,7 @@ protected:
 static CAboutDlg* g_pAboutDlg = NULL;
 
 BEGIN_MESSAGE_MAP(CAboutDlg, CDialog)
-	ON_WM_MOVE()
+	ON_WM_EXITSIZEMOVE()
 	ON_WM_CLOSE()
 	ON_BN_CLICKED(IDC_FIND_HKEY_BUTTON, OnFindButtonClicked)
 	ON_BN_CLICKED(IDC_EXPAND, OnExpand)
@@ -728,6 +746,7 @@ BEGIN_MESSAGE_MAP(CAboutDlg, CDialog)
 
 	ON_BN_CLICKED(IDC_LAUNCH_ONSTARTUP, OnLaunchOnStartup)
 	ON_CBN_SELCHANGE(IDC_DIALOG_FONT, OnDialogFontChanged)
+	ON_CBN_SELCHANGE(IDC_VIEWPORT_RESOLUTION, OnViewportResolutionChanged)
 	ON_WM_WINDOWPOSCHANGING()
 	//{{AFX_MSG_MAP(CAboutDlg)
 		// No message handlers
@@ -777,6 +796,7 @@ void CAboutDlg::OnShrink()
 CAboutDlg::CAboutDlg() : CDialog(CAboutDlg::IDD)
 {
 	m_bLaunchOnStartUpAbout = true;
+	m_numResolutions = 0;
 	//{{AFX_DATA_INIT(CAboutDlg)
 	//}}AFX_DATA_INIT
 }
@@ -912,6 +932,10 @@ BOOL CAboutDlg::OnInitDialog()
 		pFontCombo->SetCurSel(LoadDialogFontChoice());
 	}
 
+	// Populate the viewport-resolution combo from the OS-reported display modes and
+	// preselect the saved ScreenCX/ScreenCY.
+	populateResolutionCombo();
+
     // Load the icon for the app about
     HWND hWnd = GetSafeHwnd();
     HICON hIcon = LoadIcon(AfxGetInstanceHandle(), MAKEINTRESOURCE(IDR_MAINFRAME));
@@ -936,6 +960,105 @@ void CAboutDlg::OnLaunchOnStartup()
 	CButton *pButton = (CButton*)GetDlgItem(IDC_LAUNCH_ONSTARTUP);
 	m_bLaunchOnStartUpAbout = (pButton->GetCheck() == 1);
 	::AfxGetApp()->WriteProfileInt(ABOUT_SECTION, "LaunchOnStartUp", m_bLaunchOnStartUpAbout ? 1 : 0);
+}
+
+// Enumerate the distinct resolutions the OS reports for the primary display (via
+// EnumDisplaySettings), fill the combo, and preselect the saved ScreenCX/ScreenCY. If
+// the saved size isn't one the monitor advertises (e.g. a hand-edited INI), it's added
+// so the user still sees their current value rather than a blank/wrong selection.
+void CAboutDlg::populateResolutionCombo()
+{
+	CComboBox *pCombo = (CComboBox*)GetDlgItem(IDC_VIEWPORT_RESOLUTION);
+	if (!pCombo)
+		return;
+
+	m_numResolutions = 0;
+
+	// Walk all display modes for the current adapter; keep each distinct WxH once. Modes
+	// come sorted-ish but we insert in ascending (W,H) order and dedup explicitly.
+	DEVMODE dm;
+	memset(&dm, 0, sizeof(dm));
+	dm.dmSize = sizeof(dm);
+	for (int iMode = 0; ::EnumDisplaySettings(NULL, iMode, &dm); ++iMode)
+	{
+		int w = (int)dm.dmPelsWidth;
+		int h = (int)dm.dmPelsHeight;
+		if (w <= 0 || h <= 0)
+			continue;
+
+		// Find the sorted insert position; skip if already present.
+		int pos = 0;
+		Bool dup = false;
+		while (pos < m_numResolutions)
+		{
+			if (m_resW[pos] == w && m_resH[pos] == h) { dup = true; break; }
+			if (m_resW[pos] > w || (m_resW[pos] == w && m_resH[pos] > h)) break;
+			++pos;
+		}
+		if (dup || m_numResolutions >= MAX_RESOLUTIONS)
+			continue;
+
+		for (int k = m_numResolutions; k > pos; --k) { m_resW[k] = m_resW[k-1]; m_resH[k] = m_resH[k-1]; }
+		m_resW[pos] = w;
+		m_resH[pos] = h;
+		++m_numResolutions;
+	}
+
+	// Read the currently-saved viewport resolution. 0 = unset.
+	int savedCX = ::AfxGetApp()->GetProfileInt(VIEWPORT_SECTION, KEY_VIEW_WIDTH, 0);
+	int savedCY = ::AfxGetApp()->GetProfileInt(VIEWPORT_SECTION, KEY_VIEW_HEIGHT, 0);
+
+	// If the saved size isn't among the enumerated modes, insert it so it's selectable.
+	if (savedCX > 0 && savedCY > 0)
+	{
+		Bool found = false;
+		for (int i = 0; i < m_numResolutions; ++i)
+			if (m_resW[i] == savedCX && m_resH[i] == savedCY) { found = true; break; }
+		if (!found && m_numResolutions < MAX_RESOLUTIONS)
+		{
+			m_resW[m_numResolutions] = savedCX;
+			m_resH[m_numResolutions] = savedCY;
+			++m_numResolutions;
+		}
+	}
+
+	pCombo->ResetContent();
+	int selIndex = -1;
+	for (int i = 0; i < m_numResolutions; ++i)
+	{
+		CString label;
+		label.Format("%d x %d", m_resW[i], m_resH[i]);
+		pCombo->AddString(label);
+		if (m_resW[i] == savedCX && m_resH[i] == savedCY)
+			selIndex = i;
+	}
+	if (selIndex >= 0)
+		pCombo->SetCurSel(selIndex);
+}
+
+// Write the combo's current pick to [MainFrame] Width/Height and apply it live the same way
+// the View > resolution menu does: adjustWindowSize(forcedResolution=true) resizes the
+// frame window and the 3D render target together (Yves' coupled model -- the back buffer is
+// stretched to fill the window, no aspect distortion since they share the same size).
+void CAboutDlg::saveViewportResolution()
+{
+	CComboBox *pCombo = (CComboBox*)GetDlgItem(IDC_VIEWPORT_RESOLUTION);
+	if (!pCombo)
+		return;
+	int sel = pCombo->GetCurSel();
+	if (sel == CB_ERR || sel < 0 || sel >= m_numResolutions)
+		return;
+	::AfxGetApp()->WriteProfileInt(VIEWPORT_SECTION, KEY_VIEW_WIDTH,  m_resW[sel]);
+	::AfxGetApp()->WriteProfileInt(VIEWPORT_SECTION, KEY_VIEW_HEIGHT, m_resH[sel]);
+
+	// Apply live (forcedResolution=true uses the values we just wrote).
+	if (CMainFrame::GetMainFrame())
+		CMainFrame::GetMainFrame()->adjustWindowSize(true, false);
+}
+
+void CAboutDlg::OnViewportResolutionChanged()
+{
+	saveViewportResolution();
 }
 
 void CAboutDlg::OnDialogFontChanged()
@@ -963,17 +1086,18 @@ void CAboutDlg::OnWindowPosChanging(WINDOWPOS* lpwndpos)
 }
 
 
-void CAboutDlg::OnMove(int x, int y) 
+// Persist the dialog position once the user finishes moving it. WM_MOVE fires on every
+// pixel of the drag (hundreds of INI writes); WM_EXITSIZEMOVE fires once, on release.
+void CAboutDlg::OnExitSizeMove()
 {
-	CDialog::OnMove(x, y);
-	
+	CDialog::OnExitSizeMove();
+
 	if (this->IsWindowVisible() && !this->IsIconic()) {
 		CRect frameRect;
 		GetWindowRect(&frameRect);
 		::AfxGetApp()->WriteProfileInt(ABOUT_SECTION, "Top", frameRect.top);
 		::AfxGetApp()->WriteProfileInt(ABOUT_SECTION, "Left", frameRect.left);
 	}
-	
 }
 
 void CAboutDlg::OnOK() 
@@ -989,7 +1113,7 @@ void CAboutDlg::OnOK()
     // }
 }
 
-void CAboutDlg::OnClose() 
+void CAboutDlg::OnClose()
 {
 	g_aboutPageOn = false;
 	CDialog::OnClose();
