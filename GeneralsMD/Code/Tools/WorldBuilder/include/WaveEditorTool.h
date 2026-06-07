@@ -71,6 +71,13 @@ protected:
 
 	static WaveEditorTool*	m_staticThis;
 
+	// The editor force-enables m_showSoftWaterEdge so flush() will draw waves; we snapshot
+	// its prior value on activate() and restore it on deactivate() so the wave render
+	// system stops doing per-frame work (update() + a D3D camera apply) once the editor is
+	// closed. Leaving it on was a per-repaint tax felt as a select/deselect hitch.
+	static Bool	m_savedShowSoftWaterEdge;
+	static Bool	m_softWaterEdgeSaved;	///< guards the snapshot so re-activation doesn't clobber it
+
 	/// Ensure TheWaterTracksRenderSystem exists and the editor globals are set.
 	static void ensureSystem(void);
 	/// Push the current ghost transform into the engine's live animated preview wave.

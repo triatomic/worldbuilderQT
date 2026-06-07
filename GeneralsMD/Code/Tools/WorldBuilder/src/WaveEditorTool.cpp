@@ -40,6 +40,8 @@
 
 // Saved off so that static functions (panel handlers) can reach instance state.
 WaveEditorTool*	WaveEditorTool::m_staticThis = NULL;
+Bool			WaveEditorTool::m_savedShowSoftWaterEdge = false;
+Bool			WaveEditorTool::m_softWaterEdgeSaved = false;
 Int				WaveEditorTool::m_selectedWave = -1;
 WaveEditorTool::EditorMode	WaveEditorTool::m_editorMode = WaveEditorTool::MODE_CREATE;
 
@@ -86,6 +88,12 @@ void WaveEditorTool::ensureSystem(void)
 	// flush() draws nothing unless soft water edges are enabled and the water has
 	// a non-zero transparent depth; turn them on for the editor.
 	if (TheWritableGlobalData) {
+		// Snapshot the prior soft-water-edge state once, so deactivate() can put it back
+		// (and the wave render system stops doing per-frame work when the editor closes).
+		if (!m_softWaterEdgeSaved) {
+			m_savedShowSoftWaterEdge = TheWritableGlobalData->m_showSoftWaterEdge;
+			m_softWaterEdgeSaved = true;
+		}
 		TheWritableGlobalData->m_showSoftWaterEdge = true;
 		// Never let the legacy in-game GetAsyncKeyState editor run inside WB.
 		TheWritableGlobalData->m_usingWaterTrackEditor = false;
@@ -136,6 +144,15 @@ void WaveEditorTool::deactivate()
 	clearPreviewWave();	// also clears m_ghostActive
 	if (m_View != NULL) {
 		m_View->doRulerFeedback(RULER_NONE);
+	}
+
+	// Restore the soft-water-edge state we forced on in ensureSystem(). Once it's back to
+	// its prior value, flush() short-circuits and the wave render system stops doing
+	// per-frame work (update() + a D3D camera apply) on every repaint -- which otherwise
+	// lingered for the rest of the session and showed up as a select/deselect hitch.
+	if (m_softWaterEdgeSaved && TheWritableGlobalData) {
+		TheWritableGlobalData->m_showSoftWaterEdge = m_savedShowSoftWaterEdge;
+		m_softWaterEdgeSaved = false;
 	}
 }
 

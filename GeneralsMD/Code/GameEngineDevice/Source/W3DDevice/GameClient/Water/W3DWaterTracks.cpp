@@ -892,11 +892,18 @@ Try improving the fit to vertical surfaces like cliffs.
 	if (TheGlobalData->m_usingWaterTrackEditor)
 		TestWaterUpdate();
 
+	// Nothing to draw: bail before update() and the D3D camera apply. With no active
+	// tracks there is nothing to advance or expire, so skipping update() is safe -- and
+	// it keeps a track-free frame (the common case in WorldBuilder) from paying the
+	// per-repaint cost of update() + Camera.Apply().
+	if (!m_usedModules)
+		return;
+
 	update();	//update positions of all the tracks
 
 	rinfo.Camera.Apply();
 
-	if (!m_usedModules || ShaderClass::Is_Backface_Culling_Inverted())
+	if (ShaderClass::Is_Backface_Culling_Inverted())
 		return;	//don't render track marks in reflections.
 
  	//According to Nvidia there's a D3D bug that happens if you don't start with a
