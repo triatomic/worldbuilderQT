@@ -49,6 +49,13 @@ public:
 	void requestSelectionRefresh();	///< Selection-only change: recomposite objects, keep the roads cache (roads didn't move).
 	void requestViewBoxRefresh();	///< Camera moved (only the view box moves): cheap repaint, no recomposite (unless culling).
 
+	// Called from the pointer tool after a click that may have changed the selection.
+	// Does nothing unless the minimap is actually VISIBLE, the selection-overlay is on,
+	// AND the selected set really changed since the last refresh -- so a hidden minimap,
+	// the overlay-off case, and no-op clicks never touch the 3D viewport's redraw path.
+	// Cheap-first: the O(1) visible/overlay checks gate the O(n) selection signature.
+	static void notifySelectionChanged();
+
 	// Suppress all minimap rebuilds while a map load/teardown is in progress. A modal
 	// MessageBox during OnOpenDocument pumps messages, which can fire the pending
 	// rebuild timer and run rebuildTerrain() against a half-swapped document -> hang.
@@ -141,6 +148,9 @@ private:
 	Bool m_fullExtent;				///< map the full heightmap (playable + border) vs. playable area only.
 	Bool m_cullObjects;				///< only draw object blips inside the 3D view frustum.
 	Int  m_refreshDelayMs;			///< throttle delay; 0 = manual.
+
+	UnsignedInt m_lastSelectionSig;	///< signature of the selection set at the last halo refresh,
+									///< so notifySelectionChanged() can skip no-op clicks.
 };
 
 extern MinimapDialog *TheMinimapDialog;

@@ -37,7 +37,7 @@
 #include "ObjectTool.h"
 #include "ToastDialog.h"
 #include "DrawObject.h"
-#include "MinimapDialog.h"
+#include "MinimapDialog.h"	// notifySelectionChanged() updates the selection halos (self-gated)
 
 
 CString PointerTool::m_lastPointerInfo = _T("");
@@ -385,41 +385,10 @@ Bool PointerTool::allowPick(MapObject* pMapObj, WbView* pView)
 	return true;
 }
 
-/** True if the View > Show Object Selection Overlay toggle is on. Reads the 3D view's
- * cached member rather than GetProfileInt so the click path never hits the registry. */
-static Bool selectionOverlayOn(void)
-{
-	WbView3d *p3View = CWorldBuilderDoc::GetActive3DView();
-	return p3View ? p3View->getShowSelectionOverlay() : false;
-}
-
-/** A cheap order-sensitive signature of the current selection set: it folds in each
- * selected object's pointer and a running count. Two calls return the same value iff
- * the same objects are selected in the same list order -- which is all we need to tell
- * whether a click actually changed the selection (so we can skip the minimap overlay
- * recomposite on clicks that don't, e.g. empty-space clicks, drag-rotate, re-clicking
- * an already-selected object). It walks the object list once; no allocation. */
-static UnsignedInt selectionSignature(void)
-{
-	UnsignedInt sig = 2166136261u;	// FNV-1a offset basis
-	for (MapObject *pObj = MapObject::getFirstMapObject(); pObj; pObj = pObj->getNext()) {
-		if (pObj->isSelected()) {
-			// Win32 target: a MapObject* fits exactly in UnsignedInt (32-bit).
-			sig = (sig ^ (UnsignedInt)pObj) * 16777619u;
-		}
-	}
-	return sig;
-}
-
 /** Execute the tool on mouse down - Pick an object. */
 void PointerTool::mouseDown(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBuilderDoc *pDoc)
 {
 	if (m != TRACK_L) return;
-
-	// Snapshot the selection only when the overlay's minimap halos are live -- otherwise
-	// we never recomposite on a selection change and the signature would be wasted work.
-	Bool overlayOn = TheMinimapDialog && selectionOverlayOn();
-	UnsignedInt selSigBefore = overlayOn ? selectionSignature() : 0;
 
 	Coord3D cpt;
 	pView->viewToDocCoords(viewPt, &cpt);
@@ -579,15 +548,6 @@ void PointerTool::mouseDown(TTrackingMode m, CPoint viewPt, WbView* pView, CWorl
 	}
 
 	m_isMouseDown = true;
-
-	// A click can change the selection set; if the selection overlay is on, refresh the
-	// minimap so its cyan halos track the new selection immediately (otherwise they'd
-	// only update on the next timer/camera refresh). Skip the recomposite when the
-	// selection is unchanged (empty-space click, drag-rotate, re-clicking an already-
-	// selected object) -- that was the per-click hitch. requestSelectionRefresh keeps the
-	// roads cache (selection never moves a road) so it's cheaper than requestRebuild.
-	if (overlayOn && selectionSignature() != selSigBefore)
-		TheMinimapDialog->requestSelectionRefresh();
 
 }
 
@@ -912,30 +872,15 @@ void PointerTool::mouseUp(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldB
 			}
 		}
 
-	} 
-
-	Bool objectsMoved = (m_curObject && m_moving);
+	}
 
 	m_isMouseDown = false;
 
-	// The minimap object-overlay refresh is suppressed during the drag (wbview3d's edit
-	// funnel skips it while isMouseDown(), to keep the framerate up while moving objects
-	// with the minimap open). Now that the drag is done, do the single deferred refresh --
-	// but only when it would actually change the minimap image:
-	//   - objectsMoved: blips (and possibly road geometry) must move -> full requestRebuild
-	//     so the terrain+roads cache is rebuilt.
-	//   - selection overlay on, nothing moved: only the cyan halos need updating -> the
-	//     cheaper requestSelectionRefresh, which keeps the roads cache (selection never
-	//     moves a road).
-	// A pure selection change with the overlay off leaves the minimap pixel-identical, so
-	// skip the recomposite entirely (it's the per-click cost behind the "selecting feels
-	// slow" regression). The halo is the only minimap element that reads isSelected().
-	if (TheMinimapDialog && TheMinimapDialog->IsWindowVisible()) {
-		if (objectsMoved)
-			TheMinimapDialog->requestRebuild(false);
-		else if (selectionOverlayOn())
-			TheMinimapDialog->requestSelectionRefresh();
-	}
+	// A click may have changed the selection set; update the minimap's selection halos.
+	// This is fully self-gating: it does nothing unless the minimap is VISIBLE, the
+	// selection overlay is on, and the selection actually changed -- so when the minimap
+	// is hidden (or the overlay off) this is an O(1) no-op and never touches the 3D redraw.
+	MinimapDialog::notifySelectionChanged();
 
 	checkForPropertiesPanel();
 }

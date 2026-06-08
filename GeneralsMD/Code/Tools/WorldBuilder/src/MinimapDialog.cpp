@@ -90,7 +90,8 @@ MinimapDialog::MinimapDialog(CWnd *pParent)
 	  m_showRoads(true),
 	  m_showBorder(true),
 	  m_fullExtent(false),
-	  m_refreshDelayMs(250)
+	  m_refreshDelayMs(250),
+	  m_lastSelectionSig(0)
 {
 	// Load persisted config (clamp to valid ranges).
 	m_resolution     = ::AfxGetApp()->GetProfileInt(MINIMAP_SECTION, "Resolution", MINIMAP_RES_DEFAULT);
@@ -380,6 +381,45 @@ void MinimapDialog::requestSelectionRefresh()
 		return;
 
 	refreshObjects();
+}
+
+// Cheap order-sensitive signature of the current selection set (FNV-1a over the selected
+// MapObject pointers). Equal iff the same objects are selected -- lets us skip refreshing
+// the halos when a click didn't actually change the selection. O(n), no allocation.
+static UnsignedInt computeSelectionSignature()
+{
+	UnsignedInt sig = 2166136261u;	// FNV-1a offset basis
+	for (MapObject *pObj = MapObject::getFirstMapObject(); pObj; pObj = pObj->getNext())
+		if (pObj->isSelected())
+			sig = (sig ^ (UnsignedInt)pObj) * 16777619u;	// Win32: MapObject* fits in 32-bit
+	return sig;
+}
+
+void MinimapDialog::notifySelectionChanged()
+{
+	// Gate cheap-first so a hidden minimap / overlay-off never reaches the redraw path:
+	//   1. minimap object must exist and its window be VISIBLE (this is the guard whose
+	//      absence let a *hidden* minimap stall the 3D viewport on every select/deselect),
+	//   2. the selection-overlay toggle must be on (nothing on the minimap reads the
+	//      selection otherwise, so a refresh would be pixel-identical wasted work),
+	//   3. only THEN walk the object list for the signature, and refresh only if the
+	//      selection actually changed since the last halo update.
+	if (!TheMinimapDialog)
+		return;
+	if (!::IsWindow(TheMinimapDialog->m_hWnd) || !TheMinimapDialog->IsWindowVisible())
+		return;
+
+	// Read the overlay toggle from the 3D view's cached member (no registry hit per click).
+	WbView3d *p3View = CWorldBuilderDoc::GetActive3DView();
+	if (!p3View || !p3View->getShowSelectionOverlay())
+		return;
+
+	UnsignedInt sig = computeSelectionSignature();
+	if (sig == TheMinimapDialog->m_lastSelectionSig)
+		return;						// selection unchanged -- halos already correct
+	TheMinimapDialog->m_lastSelectionSig = sig;
+
+	TheMinimapDialog->requestSelectionRefresh();	// recomposite objects only; keep roads cache
 }
 
 // A pure CAMERA move (panning, zoom, and especially dragging the minimap itself).
@@ -1517,7 +1557,10 @@ void MinimapDialog::drawObjects()
 
 	// Selection overlay shares the 3D view's toggle (View > Show Object Selection
 	// Overlay). When on, selected objects get a cyan halo drawn behind their blip.
-	Bool showSelection = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowSelectionOverlay", 0) ? true : false;
+	// Read the 3D view's cached member instead of GetProfileInt so a recomposite never
+	// hits the registry (drawObjects runs on every object/selection refresh).
+	WbView3d *p3ViewSel = CWorldBuilderDoc::GetActive3DView();
+	Bool showSelection = p3ViewSel ? p3ViewSel->getShowSelectionOverlay() : false;
 	// Halo is ~2 display px larger on each side than the blip; floor so it stays visible.
 	Int haloPad = unitSize / 3;
 	if (haloPad < 1) haloPad = 1;

@@ -2121,13 +2121,7 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 	// invalObject path and direct p3View->invalObjectInView(NULL) callers), so this
 	// is the single place to refresh the minimap's object overlay. Pass terrainChanged
 	// = false so it re-composites the cached terrain instead of resampling (cheap).
-	//
-	// But while the mouse is held down we are in an active drag (moving/rotating an
-	// object), and this fires on every mouse-move -- re-compositing the whole minimap
-	// buffer per move tanks the framerate when the minimap is open. Skip the refresh
-	// during the drag; the mouse-up funnels through here once more with the button
-	// released, giving a single refresh when the move finishes.
-	if (TheMinimapDialog && TheMinimapDialog->IsWindowVisible() && !PointerTool::isMouseDown())
+	if (TheMinimapDialog && TheMinimapDialog->IsWindowVisible())
 		TheMinimapDialog->requestRebuild(false);
 
 	--m_updateCount;
