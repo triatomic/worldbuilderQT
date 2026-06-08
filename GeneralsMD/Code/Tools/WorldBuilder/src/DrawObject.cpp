@@ -120,6 +120,10 @@ Bool	DrawObject::m_rampFeedback = false;
 Bool	DrawObject::m_boundaryFeedback = false;
 Bool	DrawObject::m_waveFeedback = true;	///< wave overlay lines on by default
 Bool	DrawObject::m_showShoreline = true;	///< red water/land boundary on by default (wave editor aid)
+Bool	DrawObject::m_shorelineDirty = true;	///< force a rebuild of the cached shoreline on first draw
+Int		DrawObject::m_shorelineSegCount = 0;
+float	*DrawObject::m_shorelineSeg = NULL;
+UnsignedInt	DrawObject::m_shorelineLastBuildMs = 0;	///< timeGetTime() of the last cache rebuild (throttle)
 Bool	DrawObject::m_rulerGridFeedback = true;
 Bool	DrawObject::m_showTracingOverlay = false;
 Int		DrawObject::m_tracingOverlayOpacity = 255;	///< fully opaque by default
@@ -965,10 +969,22 @@ void DrawObject::updateWaveVB(void)
 	"marching squares": a segment per crossed pair of cell edges).  The verts sit at the
 	water surface height so the line hugs the shoreline. */
 //-----------------------------------------------------------------------------
-void DrawObject::updateShorelineVB(void)
+// Z_LIFT and HALF_W are shared by the cache scan and the per-frame expand.
+static const float SHORE_Z_LIFT = 4.5f;		// sit just above the water surface
+static const float SHORE_HALF_W = 1.0f;		// half line thickness (total 2 world units)
+
+//-----------------------------------------------------------------------------
+// DrawObject::rebuildShorelineCache
+//-----------------------------------------------------------------------------
+/** Run the (expensive) marching-squares scan over the whole heightmap once and store
+	the resulting boundary segments in m_shorelineSeg.  Called only when the cache is
+	dirty (toggle on / explicit invalidate); updateShorelineVB() then just re-expands
+	these cached segments into the shared VB each frame, which is cheap. */
+//-----------------------------------------------------------------------------
+void DrawObject::rebuildShorelineCache(void)
 {
-	m_feedbackVertexCount = 0;
-	m_feedbackIndexCount = 0;
+	m_shorelineDirty = false;
+	m_shorelineSegCount = 0;
 
 	if (!TheTerrainRenderObject)
 		return;
@@ -980,15 +996,12 @@ void DrawObject::updateShorelineVB(void)
 	if (!pMap)
 		return;
 
-	DX8IndexBufferClass::WriteLockClass lockIdxBuffer(m_indexFeedback, D3DLOCK_DISCARD);
-	UnsignedShort *curIb = lockIdxBuffer.Get_Index_Array();
-
-	DX8VertexBufferClass::WriteLockClass lockVtxBuffer(m_vertexFeedback, D3DLOCK_DISCARD);
-	VertexFormatXYZDUV1 *curVb = (VertexFormatXYZDUV1*)lockVtxBuffer.Get_Vertex_Array();
-
-	const DWORD SHORE_COLOR = 0xFFFF0000;	// ARGB red
-	const float Z_LIFT      = 4.5f;			// sit just above the water surface
-	const float HALF_W      = 1.0f;			// half line thickness (total 2 world units)
+	if (!m_shorelineSeg)
+	{
+		m_shorelineSeg = new float[SHORELINE_SEG_MAX * 5];
+		if (!m_shorelineSeg)
+			return;
+	}
 
 	// One sample per heightmap cell.  MAP_XY_FACTOR world units per cell.
 	const float worldX0 = ADJUST_FROM_INDEX_TO_REAL(1);
@@ -1000,19 +1013,13 @@ void DrawObject::updateShorelineVB(void)
 	// underwater test at a world point: true if the cell is under a water area.
 	#define SHORE_WET(X, Y) (getWaterHeightIfUnderwater((X), (Y)) != -FLT_MAX)
 
-	// Emit one red quad (thick segment) from a->b at water height, clipped to capacity.
-	#define SHORE_ADD_SEG(ax, ay, bx, by, wz) \
+	// Store one boundary segment a->b at water height, clipped to capacity.
+	#define SHORE_STORE_SEG(ax, ay, bx, by, wz) \
 	{ \
-		Vector3 _d((bx) - (ax), (by) - (ay), 0.0f); \
-		_d.Normalize(); _d *= HALF_W; _d.Rotate_Z(PI / 2); \
-		if (m_feedbackVertexCount + 4 <= NUM_FEEDBACK_VERTEX && m_feedbackIndexCount + 6 <= NUM_FEEDBACK_INDEX) { \
-			curVb->x=(ax)+_d.X; curVb->y=(ay)+_d.Y; curVb->z=(wz); curVb->u1=0; curVb->v1=0; curVb->diffuse=SHORE_COLOR; ++curVb; \
-			curVb->x=(ax)-_d.X; curVb->y=(ay)-_d.Y; curVb->z=(wz); curVb->u1=0; curVb->v1=0; curVb->diffuse=SHORE_COLOR; ++curVb; \
-			curVb->x=(bx)+_d.X; curVb->y=(by)+_d.Y; curVb->z=(wz); curVb->u1=0; curVb->v1=0; curVb->diffuse=SHORE_COLOR; ++curVb; \
-			curVb->x=(bx)-_d.X; curVb->y=(by)-_d.Y; curVb->z=(wz); curVb->u1=0; curVb->v1=0; curVb->diffuse=SHORE_COLOR; ++curVb; \
-			*curIb++ = m_feedbackVertexCount + 0; *curIb++ = m_feedbackVertexCount + 1; *curIb++ = m_feedbackVertexCount + 2; \
-			*curIb++ = m_feedbackVertexCount + 2; *curIb++ = m_feedbackVertexCount + 1; *curIb++ = m_feedbackVertexCount + 3; \
-			m_feedbackVertexCount += 4; m_feedbackIndexCount += 6; \
+		if (m_shorelineSegCount < SHORELINE_SEG_MAX) { \
+			float *_s = &m_shorelineSeg[m_shorelineSegCount * 5]; \
+			_s[0]=(ax); _s[1]=(ay); _s[2]=(bx); _s[3]=(by); _s[4]=(wz); \
+			++m_shorelineSegCount; \
 		} \
 	}
 
@@ -1057,17 +1064,67 @@ void DrawObject::updateShorelineVB(void)
 			}
 			if (wz == -FLT_MAX)
 				continue;	// shouldn't happen given wet>0, but be safe
-			wz += Z_LIFT;
+			wz += SHORE_Z_LIFT;
 
 			if (nC >= 2)
-				SHORE_ADD_SEG(cpx[0], cpy[0], cpx[1], cpy[1], wz);
+				SHORE_STORE_SEG(cpx[0], cpy[0], cpx[1], cpy[1], wz);
 			if (nC >= 4)	// saddle: two separate crossings
-				SHORE_ADD_SEG(cpx[2], cpy[2], cpx[3], cpy[3], wz);
+				SHORE_STORE_SEG(cpx[2], cpy[2], cpx[3], cpy[3], wz);
 		}
 	}
 
 	#undef SHORE_WET
-	#undef SHORE_ADD_SEG
+	#undef SHORE_STORE_SEG
+}
+
+void DrawObject::updateShorelineVB(void)
+{
+	m_feedbackVertexCount = 0;
+	m_feedbackIndexCount = 0;
+
+	// Only rescan the heightmap when the cache is explicitly dirty, or at most a couple
+	// times a second otherwise (so live terrain/water edits are picked up without having
+	// to hook every edit path, but we never pay the full-map scan on every frame).
+	const UnsignedInt SHORE_REBUILD_INTERVAL_MS = 400;
+	UnsignedInt nowMs = timeGetTime();
+	if (m_shorelineDirty || (nowMs - m_shorelineLastBuildMs) >= SHORE_REBUILD_INTERVAL_MS)
+	{
+		rebuildShorelineCache();
+		m_shorelineLastBuildMs = nowMs;
+	}
+
+	if (m_shorelineSegCount <= 0 || !m_shorelineSeg)
+		return;
+
+	DX8IndexBufferClass::WriteLockClass lockIdxBuffer(m_indexFeedback, D3DLOCK_DISCARD);
+	UnsignedShort *curIb = lockIdxBuffer.Get_Index_Array();
+
+	DX8VertexBufferClass::WriteLockClass lockVtxBuffer(m_vertexFeedback, D3DLOCK_DISCARD);
+	VertexFormatXYZDUV1 *curVb = (VertexFormatXYZDUV1*)lockVtxBuffer.Get_Vertex_Array();
+
+	const DWORD SHORE_COLOR = 0xFFFF0000;	// ARGB red
+
+	// Expand each cached segment into a thick red quad.  No heightmap sampling here.
+	for (Int i = 0; i < m_shorelineSegCount; ++i)
+	{
+		if (m_feedbackVertexCount + 4 > NUM_FEEDBACK_VERTEX || m_feedbackIndexCount + 6 > NUM_FEEDBACK_INDEX)
+			break;
+
+		const float *s = &m_shorelineSeg[i * 5];
+		float ax = s[0], ay = s[1], bx = s[2], by = s[3], wz = s[4];
+
+		Vector3 d(bx - ax, by - ay, 0.0f);
+		d.Normalize(); d *= SHORE_HALF_W; d.Rotate_Z(PI / 2);
+
+		curVb->x=ax+d.X; curVb->y=ay+d.Y; curVb->z=wz; curVb->u1=0; curVb->v1=0; curVb->diffuse=SHORE_COLOR; ++curVb;
+		curVb->x=ax-d.X; curVb->y=ay-d.Y; curVb->z=wz; curVb->u1=0; curVb->v1=0; curVb->diffuse=SHORE_COLOR; ++curVb;
+		curVb->x=bx+d.X; curVb->y=by+d.Y; curVb->z=wz; curVb->u1=0; curVb->v1=0; curVb->diffuse=SHORE_COLOR; ++curVb;
+		curVb->x=bx-d.X; curVb->y=by-d.Y; curVb->z=wz; curVb->u1=0; curVb->v1=0; curVb->diffuse=SHORE_COLOR; ++curVb;
+
+		*curIb++ = m_feedbackVertexCount + 0; *curIb++ = m_feedbackVertexCount + 1; *curIb++ = m_feedbackVertexCount + 2;
+		*curIb++ = m_feedbackVertexCount + 2; *curIb++ = m_feedbackVertexCount + 1; *curIb++ = m_feedbackVertexCount + 3;
+		m_feedbackVertexCount += 4; m_feedbackIndexCount += 6;
+	}
 }
 
 void DrawObject::updateGridVB(void)

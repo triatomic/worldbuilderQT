@@ -105,8 +105,10 @@ public:
 	static void setDoBoundaryFeedback(Bool val) { m_boundaryFeedback = val; }
 	static void setDoWaveFeedback(Bool val) { m_waveFeedback = val; }
 	static Bool getDoWaveFeedback(void) { return m_waveFeedback; }
-	static void setShowShoreline(Bool val) { m_showShoreline = val; }
+	static void setShowShoreline(Bool val) { m_showShoreline = val; m_shorelineDirty = true; }
 	static Bool getShowShoreline(void) { return m_showShoreline; }
+	/// Force the cached shoreline geometry to be rebuilt on the next draw (call after terrain/water edits).
+	static void invalidateShoreline(void) { m_shorelineDirty = true; }
 	static void setDoGridFeedback(Bool val) { m_rulerGridFeedback = val; }
 	static void setDoTracingOverlayFeedback(Bool val) { m_showTracingOverlay = val; }
 	// Tracing overlay appearance (set from the TracingOverlayOptions dialog).
@@ -222,6 +224,14 @@ protected: // static state vars.
 	static Bool								m_boundaryFeedback;
 	static Bool								m_waveFeedback;		///< draw wave start->end overlay lines
 	static Bool								m_showShoreline;	///< draw the red water/land boundary line (wave editor aid)
+	// Cached shoreline geometry. The marching-squares scan over the whole heightmap is
+	// expensive, so we only run it when m_shorelineDirty is set (toggle on / explicit
+	// invalidate) and otherwise just re-expand these cached segments into the shared VB.
+	static Bool								m_shorelineDirty;	///< rebuild the cached shoreline segments on next draw
+	static Int								m_shorelineSegCount;	///< number of cached segments
+	static float							*m_shorelineSeg;	///< [count*5]: ax, ay, bx, by, wz per segment
+	static UnsignedInt						m_shorelineLastBuildMs;	///< last rebuild time (throttle the rescan)
+	enum { SHORELINE_SEG_MAX = NUM_FEEDBACK_VERTEX / 4 };	///< 4 verts per segment quad
 	static Bool								m_rulerGridFeedback;
 	static Bool								m_showTracingOverlay; ///< True to show tracing overlay.
 	static Int								m_tracingOverlayOpacity;	///< 0..255 alpha for the overlay.
@@ -256,7 +266,8 @@ protected:
 	void updateForWater(void);
 	void updateBoundaryVB(void);
 	void updateWaveVB(void);
-	void updateShorelineVB(void);	///< build red boundary lines where water meets land
+	void rebuildShorelineCache(void);	///< (expensive) rescan the heightmap into m_shorelineSeg; only when dirty
+	void updateShorelineVB(void);	///< expand cached shoreline segments into the shared feedback VB
 	void updateTerrainPasteVB(void);
 	void updateGridVB(void);
 	void updateAmbientSoundVB(void);
