@@ -40,6 +40,10 @@
 #include "Lib/BaseType.h"
 #include "vector2.h"
 
+// Forward decl: shore-facing direction sampler (defined below; used by the Paint hover
+// preview before its definition).
+static Bool computeShoreDirection(float cx, float cy, float &outDirX, float &outDirY);
+
 // Saved off so that static functions (panel handlers) can reach instance state.
 WaveEditorTool*	WaveEditorTool::m_staticThis = NULL;
 Int				WaveEditorTool::m_selectedWave = -1;
@@ -351,23 +355,36 @@ void WaveEditorTool::mouseMoved(TTrackingMode m, CPoint viewPt, WbView* pView, C
 		m_View = pView;
 	}
 
-	// HOVER (no button held) in Create mode: show a follow-the-cursor ghost + a live
-	// animated preview wave, so you can see exactly what you'll place before clicking.
+	// HOVER (no button held): show a follow-the-cursor ghost + a live animated preview
+	// wave, so you can see exactly what you'll place before clicking. Shown in both
+	// Create and Paint modes (Manipulate has nothing to preview - it edits existing waves).
 	if (m_dragMode == DRAG_NONE)
 	{
-		if (m_editorMode == MODE_CREATE && m == TRACK_NONE)
+		if ((m_editorMode == MODE_CREATE || m_editorMode == MODE_PAINT) && m == TRACK_NONE)
 		{
 			Coord3D hp;
 			pView->viewToDocCoords(viewPt, &hp, false);
 			pView->snapPoint(&hp);
 
-			// No drag yet, so aim the preview "up" (+Y) by default; the user sets the
-			// real direction by dragging.
 			m_ghostActive  = true;
 			m_ghostCenterX = hp.x;
 			m_ghostCenterY = hp.y;
-			m_ghostDirX    = 0.0f;
-			m_ghostDirY    = 1.0f;
+
+			// Paint aims each wave toward shore, so the hover ghost previews that same
+			// shore-facing direction (falling back to "up" on flat water where there's no
+			// slope). Create has no fixed direction yet, so it aims "up" (+Y) until the
+			// user drags to set the real direction.
+			float sdx, sdy;
+			if (m_editorMode == MODE_PAINT && computeShoreDirection(hp.x, hp.y, sdx, sdy))
+			{
+				m_ghostDirX = sdx;
+				m_ghostDirY = sdy;
+			}
+			else
+			{
+				m_ghostDirX = 0.0f;
+				m_ghostDirY = 1.0f;
+			}
 
 			updatePreviewWave();
 			pView->Invalidate();
