@@ -62,6 +62,8 @@
 #include "assetmgr.h"
 #include "WW3D2/dx8wrapper.h"
 
+#include <float.h>	// FLT_MAX sentinel returned by the editor water-height lookup
+
 //#pragma optimize("", off)
 
 //#define ALLOW_WATER_TRACK_EDIT
@@ -435,10 +437,18 @@ Int WaterTracksObj::render(DX8VertexBufferClass	*vertexBuffer, Int batchStart)
 
 	//First insert tail of wave:
 	Vector2 testPoint(waveTailOrigin);
-	// TheTerrainLogic is not present in WorldBuilder; fall back to the flat water level
-	// the system cached at init (m_waterPositionZ) so the wave editor can render there too.
+	// TheTerrainLogic is not present in WorldBuilder; prefer the editor's water-area lookup
+	// (the real per-polygon surface height) when one is installed, and only fall back to the
+	// flat global m_waterPositionZ when no lookup is set or the point isn't over water.  This
+	// seats WB waves just above the actual water surface; without it they sit on the global
+	// level and sink below a map's higher water area, where the water mesh clips them.
 	if (TheTerrainLogic)
 		TheTerrainLogic->isUnderwater(testPoint.X,testPoint.Y,&waterHeight);
+	else if (TheWaterTracksRenderSystem && TheWaterTracksRenderSystem->m_editorWaterHeightFunc)
+	{
+		Real wh = TheWaterTracksRenderSystem->m_editorWaterHeightFunc(testPoint.X, testPoint.Y);
+		waterHeight = (wh != -FLT_MAX) ? wh : TheGlobalData->m_waterPositionZ;
+	}
 	else
 		waterHeight = TheGlobalData->m_waterPositionZ;
 	vb->x=	testPoint.X;
@@ -627,6 +637,7 @@ WaterTracksRenderSystem::WaterTracksRenderSystem()
 	m_editUndoCount=0;
 	m_editFlipU=0;
 	m_previewTrack=NULL;
+	m_editorWaterHeightFunc=NULL;	//in-game: render() uses TheTerrainLogic instead
 	TheWaterTracksRenderSystem = this;	//only allow one instance of this object.
 }
 
@@ -860,7 +871,11 @@ void WaterTracksRenderSystem::update()
 	{
 		nextMod = mod->m_nextSystem;
 
-		if (!mod->m_bound || (!mod->update(timeDiff) && !mod->m_bound))
+		// The editor preview wave runs at 2x so its break cycle reads quickly while the
+		// user hovers; real/placed waves keep their real-time pacing.
+		Int step = (mod == m_previewTrack) ? timeDiff * 2 : timeDiff;
+
+		if (!mod->m_bound || (!mod->update(step) && !mod->m_bound))
 		{ //object is not longer updating and is unbound so ok to release it.
 			releaseTrack(mod);
 		}

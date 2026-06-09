@@ -152,6 +152,15 @@ public:
 	void clearPreviewWave(void);	///<remove the preview wave (if any)
 	Bool hasPreviewWave(void) const { return m_previewTrack != NULL; }	///<true while a live preview wave exists (keep repainting for its animation)
 
+	// Editor water-surface height hook.  In-game the wave renderer asks TheTerrainLogic
+	// where the water surface is; WorldBuilder has no TheTerrainLogic and otherwise falls
+	// back to the single flat global m_waterPositionZ, which leaves waves sitting below
+	// (and clipped by) a map's real per-area water surface.  WB installs this callback to
+	// report the actual water-area height at (x,y), returning -FLT_MAX when the point is
+	// not over water; render() then seats the wave just above that surface.  NULL in-game.
+	typedef Real (*WaterHeightLookupFunc)(Real x, Real y);
+	void setEditorWaterHeightFunc(WaterHeightLookupFunc fn) { m_editorWaterHeightFunc = fn; }
+
 protected:
 	DX8VertexBufferClass		*m_vertexBuffer;	///<vertex buffer used to draw all tracks
 	DX8IndexBufferClass			*m_indexBuffer;	///<indices defining triangles in maximum length track
@@ -174,6 +183,7 @@ protected:
 	Int				m_editUndoCount;	///< number of placed segments available to undo
 	Int				m_editFlipU;		///< alternating u-flip for placed waves
 	WaterTracksObj *m_previewTrack;		///< live editor preview wave; excluded from count/list/save
+	WaterHeightLookupFunc m_editorWaterHeightFunc;	///< editor-only water-surface height lookup (NULL in-game)
 	waveType		clampEditableType(Int typeIndex) const;	///< 0-based index -> valid placeable type
 	WaterTracksObj *addWaveInternal(const Vector2 &midPoint, const Vector2 &dirMidPoint,
 																	waveType type, Int flipU, WaterTracksObj **outSecond);

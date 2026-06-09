@@ -156,6 +156,14 @@ protected:
 	static Int	m_selectedWave;	///< ANCHOR wave (last clicked) - drives camera + list focus, or -1
 	static EditorMode	m_editorMode;	///< create vs. manipulate (panel toggle)
 
+	// Auto-load guard: the .wak is loaded ONCE per map, not on every activate().  A
+	// right-click pan transiently swaps to the hand-scroll tool and swaps back, which
+	// re-runs activate(); reloading there would reset() the wave system and discard any
+	// waves placed but not yet saved.  Keyed on the map path so opening a different map
+	// still reloads, while tool swaps/pans keep the in-memory waves (like a paint tool).
+	static Bool		m_tracksLoaded;		///< true once we've loaded waves for m_loadedMapPath
+	static CString	m_loadedMapPath;	///< map path the current in-memory waves belong to
+
 	// Multi-selection set (Manipulate mode).  Stored as a flat index list to avoid pulling
 	// STL into this MFC tool; the wave count per map is small so linear scans are fine.
 	enum { WAVE_SEL_MAX = 256 };

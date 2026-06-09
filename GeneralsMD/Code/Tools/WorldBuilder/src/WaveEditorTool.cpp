@@ -44,10 +44,19 @@
 // preview before its definition).
 static Bool computeShoreDirection(float cx, float cy, float &outDirX, float &outDirY);
 
+// WB's water-area surface lookup (DrawObject.cpp): returns the height of the water-area
+// polygon covering (x,y), or -FLT_MAX when the point isn't over water.  We hand this to
+// the wave render system so waves seat on the map's real per-area water surface instead
+// of the flat global water level (see ensureSystem()).
+extern Real getWaterHeightIfUnderwater(Real x, Real y);
+
 // Saved off so that static functions (panel handlers) can reach instance state.
 WaveEditorTool*	WaveEditorTool::m_staticThis = NULL;
 Int				WaveEditorTool::m_selectedWave = -1;
 WaveEditorTool::EditorMode	WaveEditorTool::m_editorMode = WaveEditorTool::MODE_CREATE;
+
+Bool	WaveEditorTool::m_tracksLoaded = false;
+CString	WaveEditorTool::m_loadedMapPath;
 
 Bool	WaveEditorTool::m_ghostActive  = false;
 float	WaveEditorTool::m_ghostCenterX = 0.0f;
@@ -116,6 +125,13 @@ void WaveEditorTool::ensureSystem(void)
 		TheWaterTracksRenderSystem = NEW WaterTracksRenderSystem;
 		TheWaterTracksRenderSystem->init();
 	}
+
+	// WB water surfaces are polygon-trigger water areas, each at its own Z.  With no
+	// TheTerrainLogic the renderer would seat waves on the flat global water level and
+	// they'd sink below (and get clipped by) a higher water area.  Feed it WB's real
+	// per-area lookup so waves sit just above the actual surface.  Idempotent - safe to
+	// set every call (the system may already exist, created by the 3D view).
+	TheWaterTracksRenderSystem->setEditorWaterHeightFunc(getWaterHeightIfUnderwater);
 }
 
 /// Derive "<map>.wak" from the document's map path.  Returns false if unsaved.
@@ -151,8 +167,20 @@ void WaveEditorTool::activate()
 	ensureSystem();
 	m_dragMode = DRAG_NONE;
 
-	// Auto-load any existing waves for this map so they are visible and editable.
-	loadTracks(CWorldBuilderDoc::GetActiveDoc());
+	// Auto-load the map's saved waves ONCE per map, not on every (re)activation.  A
+	// right-click pan transiently swaps to the hand-scroll tool and swaps back, which
+	// re-runs activate(); reloading here would reset() the wave system and silently
+	// discard waves the user placed but hasn't saved to the .wak yet.  We only (re)load
+	// when the active map differs from the one we last loaded for, so in-memory waves
+	// persist across tool swaps/pans (like a paint tool's edits) until the user saves,
+	// reloads, or switches maps.
+	CWorldBuilderDoc *pDoc = CWorldBuilderDoc::GetActiveDoc();
+	CString curPath = pDoc ? pDoc->getMapPath() : CString();
+	if (!m_tracksLoaded || curPath != m_loadedMapPath) {
+		loadTracks(pDoc);
+		m_tracksLoaded  = true;
+		m_loadedMapPath = curPath;
+	}
 }
 
 // Deactivate.
@@ -731,6 +759,19 @@ void WaveEditorTool::cycleWaveType(void)
 	Int count = TheWaterTracksRenderSystem ? TheWaterTracksRenderSystem->getEditableWaveTypeCount() : 1;
 	if (count < 1) count = 1;
 	m_staticThis->m_currentType = (m_staticThis->m_currentType + 1) % count;
+
+	// Re-push the live preview so its breaking-wave animation switches to the new type
+	// right away, instead of waiting for the next mouse move to call updatePreviewWave().
+	// Only do this while hovering a brand-new wave (Create/Paint); when editing an
+	// existing wave the ghost mirrors that wave's own type, not the Cycle-Type pick.
+	if (m_ghostActive && m_staticThis->m_editWave < 0 &&
+			(m_editorMode == MODE_CREATE || m_editorMode == MODE_PAINT))
+	{
+		updatePreviewWave();
+		WbView3d *p3View = CWorldBuilderDoc::GetActive3DView();
+		if (p3View)
+			p3View->Invalidate();
+	}
 }
 
 Int WaveEditorTool::getWaveType(void)
