@@ -109,6 +109,10 @@ public:
 	static Bool getShowShoreline(void) { return m_showShoreline; }
 	/// Force the cached shoreline geometry to be rebuilt on the next draw (call after terrain/water edits).
 	static void invalidateShoreline(void) { m_shorelineDirty = true; }
+	/// Ensure the water/land boundary cache is current and hand it back for the wave
+	/// bucket-fill: returns the segment count and points *outSegs at the [count*5]
+	/// {ax,ay,bx,by,wz} array (NULL-safe).  Rebuilds the cache if it is dirty/empty.
+	static Int getShorelineForFill(const float **outSegs);
 	static void setDoGridFeedback(Bool val) { m_rulerGridFeedback = val; }
 	static void setDoTracingOverlayFeedback(Bool val) { m_showTracingOverlay = val; }
 	// Tracing overlay appearance (set from the TracingOverlayOptions dialog).
@@ -257,6 +261,7 @@ protected: // static state vars.
 protected:
   void addCircleToLineRenderer( const Coord3D & center, Real radius, Real width, unsigned long color, CameraClass* camera );
 	Bool drawRulerFeedback(CameraClass* camera);
+	Bool drawBucketBrushFeedback(CameraClass* camera);	///< cyan brush circle at the cursor while the wave editor's Bucket mode is active
 	Int updateVB(DX8VertexBufferClass	*vertexBufferTile, Int color, Bool doArrow, Bool doDiamond, Bool disableColoring = true);
 	void updatePolygonVB(PolygonTrigger *pTrig, Bool selected, Bool isOpen);
 	void updateFeedbackVB(void);
@@ -266,7 +271,7 @@ protected:
 	void updateForWater(void);
 	void updateBoundaryVB(void);
 	void updateWaveVB(void);
-	void rebuildShorelineCache(void);	///< (expensive) rescan the heightmap into m_shorelineSeg; only when dirty
+	static void rebuildShorelineCache(void);	///< (expensive) rescan the heightmap into m_shorelineSeg; only when dirty (static: touches only static cache + globals)
 	void updateShorelineVB(void);	///< expand cached shoreline segments into the shared feedback VB
 	void updateTerrainPasteVB(void);
 	void updateGridVB(void);

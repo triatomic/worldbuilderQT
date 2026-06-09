@@ -1199,6 +1199,17 @@ const char *WaterTracksRenderSystem::getWaveTypeName(Int typeIndex) const
 }
 
 //=============================================================================
+// WaterTracksRenderSystem::getWaveCrestWidth
+//=============================================================================
+/** Crest width (the visible front-line length) of a placeable wave type, used by the
+	editor's bucket-fill to space waves along the shore by their own width. */
+//=============================================================================
+Real WaterTracksRenderSystem::getWaveCrestWidth(Int typeIndex) const
+{
+	return waveTypeInfo[clampEditableType(typeIndex)].m_finalWidth;
+}
+
+//=============================================================================
 // WaterTracksRenderSystem::addWaveInternal
 //=============================================================================
 /** Shared wave-creation core.  Binds a primary track (and an optional second

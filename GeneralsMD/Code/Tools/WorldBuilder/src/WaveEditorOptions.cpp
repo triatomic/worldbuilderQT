@@ -30,6 +30,10 @@
 
 WaveEditorOptions*	WaveEditorOptions::m_staticThis = NULL;
 
+// Bucket brush-size slider range (world units).
+#define WAVE_BRUSH_MIN  30
+#define WAVE_BRUSH_MAX  5000
+
 /////////////////////////////////////////////////////////////////////////////
 WaveEditorOptions::WaveEditorOptions(CWnd* pParent /*=NULL*/)
 {
@@ -132,8 +136,19 @@ BOOL WaveEditorOptions::OnInitDialog()
 	updateTypeLabel();
 	populateList();
 
-	// Reflect the tool's current Create/Manipulate/Paint mode in the toggle buttons.
+	// Reflect the tool's current Create/Manipulate/Paint/Bucket mode in the toggle buttons.
 	syncModeButtons(WaveEditorTool::getEditorMode());
+
+	// Bucket brush-size slider: set range + the tool's current value, and the readout.
+	if (CSliderCtrl *pSlider = (CSliderCtrl*)GetDlgItem(IDC_WAVE_BRUSH_SIZE)) {
+		pSlider->SetRange(WAVE_BRUSH_MIN, WAVE_BRUSH_MAX, TRUE);
+		Int sz = WaveEditorTool::getBucketBrushSize();
+		if (sz < WAVE_BRUSH_MIN) sz = WAVE_BRUSH_MIN;
+		if (sz > WAVE_BRUSH_MAX) sz = WAVE_BRUSH_MAX;
+		pSlider->SetPos(sz);
+		WaveEditorTool::setBucketBrushSize(sz);	// clamp the tool to the slider's range
+	}
+	updateBrushSizeLabel();
 
 	// Reflect the current wave-line overlay state in the checkbox.
 	CButton *pChk = (CButton*)GetDlgItem(IDC_WAVE_SHOW_LINES);
@@ -188,6 +203,16 @@ void WaveEditorOptions::syncModeButtons(WaveEditorTool::EditorMode mode)
 		p->SetCheck(mode == WaveEditorTool::MODE_MANIPULATE ? BST_CHECKED : BST_UNCHECKED);
 	if (CButton *p = (CButton*)GetDlgItem(IDC_WAVE_MODE_PAINT))
 		p->SetCheck(mode == WaveEditorTool::MODE_PAINT ? BST_CHECKED : BST_UNCHECKED);
+	if (CButton *p = (CButton*)GetDlgItem(IDC_WAVE_MODE_BUCKET))
+		p->SetCheck(mode == WaveEditorTool::MODE_BUCKET ? BST_CHECKED : BST_UNCHECKED);
+
+	// The brush-size slider only applies to Bucket mode; hide it elsewhere so the
+	// panel doesn't advertise a control that does nothing.
+	Int showBrush = (mode == WaveEditorTool::MODE_BUCKET) ? SW_SHOW : SW_HIDE;
+	if (CWnd *p = GetDlgItem(IDC_WAVE_BRUSH_SIZE))
+		p->ShowWindow(showBrush);
+	if (CWnd *p = GetDlgItem(IDC_WAVE_BRUSH_SIZE_LABEL))
+		p->ShowWindow(showBrush);
 }
 
 void WaveEditorOptions::OnModeCreate()
@@ -206,6 +231,37 @@ void WaveEditorOptions::OnModePaint()
 {
 	WaveEditorTool::setEditorMode(WaveEditorTool::MODE_PAINT);
 	syncModeButtons(WaveEditorTool::MODE_PAINT);
+}
+
+void WaveEditorOptions::OnModeBucket()
+{
+	WaveEditorTool::setEditorMode(WaveEditorTool::MODE_BUCKET);
+	syncModeButtons(WaveEditorTool::MODE_BUCKET);
+}
+
+/// Show the current bucket brush radius next to its slider.
+void WaveEditorOptions::updateBrushSizeLabel(void)
+{
+	CWnd *pLabel = GetDlgItem(IDC_WAVE_BRUSH_SIZE_LABEL);
+	if (pLabel) {
+		CString buf;
+		buf.Format("Bucket brush: %d", WaveEditorTool::getBucketBrushSize());
+		pLabel->SetWindowText(buf);
+	}
+}
+
+/// The bucket brush-size slider moved: push the new radius into the tool and update the
+/// readout.  (Trackbars report via WM_HSCROLL; this fires for any horizontal slider on
+/// the panel, but the brush slider is the only one.)
+void WaveEditorOptions::OnHScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar)
+{
+	CSliderCtrl *pSlider = (CSliderCtrl*)GetDlgItem(IDC_WAVE_BRUSH_SIZE);
+	if (pSlider && pScrollBar == (CScrollBar*)pSlider)
+	{
+		WaveEditorTool::setBucketBrushSize(pSlider->GetPos());
+		updateBrushSizeLabel();
+	}
+	COptionsPanel::OnHScroll(nSBCode, nPos, pScrollBar);
 }
 
 void WaveEditorOptions::OnShowWaveLines()
@@ -359,6 +415,8 @@ BEGIN_MESSAGE_MAP(WaveEditorOptions, COptionsPanel)
 	ON_BN_CLICKED(IDC_WAVE_MODE_CREATE, OnModeCreate)
 	ON_BN_CLICKED(IDC_WAVE_MODE_MANIPULATE, OnModeManipulate)
 	ON_BN_CLICKED(IDC_WAVE_MODE_PAINT, OnModePaint)
+	ON_BN_CLICKED(IDC_WAVE_MODE_BUCKET, OnModeBucket)
+	ON_WM_HSCROLL()
 	ON_BN_CLICKED(IDC_WAVE_SHOW_LINES, OnShowWaveLines)
 	ON_BN_CLICKED(IDC_WAVE_SHOW_SHORELINE, OnShowShoreline)
 	ON_NOTIFY(LVN_ITEMCHANGED, IDC_WAVE_LIST, OnWaveListItemChanged)

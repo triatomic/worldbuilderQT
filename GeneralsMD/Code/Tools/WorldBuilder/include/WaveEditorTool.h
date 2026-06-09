@@ -39,14 +39,16 @@ public:
 		DRAG_CREATE,	///< empty water: dragging out a new wave's direction
 		DRAG_MOVE,		///< on a wave body: sliding it around
 		DRAG_ROTATE,	///< on a wave arrow: re-aiming its travel direction
-		DRAG_PAINT		///< hold + drag: drop waves along the stroke as the cursor moves
+		DRAG_PAINT,		///< hold + drag: drop waves along the stroke as the cursor moves
+		DRAG_BUCKET		///< hold + drag: auto-fill the shoreline under the brush with waves
 	};
 
 	/// Toggle that gates what a press does: place new waves vs. edit existing ones.
 	enum EditorMode {
 		MODE_CREATE,		///< every press drags out a new wave
 		MODE_MANIPULATE,	///< presses only select/move/rotate existing waves
-		MODE_PAINT			///< hold left button + drag to lay a trail of waves
+		MODE_PAINT,			///< hold left button + drag to lay a trail of waves
+		MODE_BUCKET			///< hold left button + drag to auto-fill the shoreline with waves
 	};
 
 protected:
@@ -87,6 +89,9 @@ protected:
 	static void updatePreviewWave(void);
 	/// Drop one wave (paint stroke), aimed along dir, and record it for Undo.
 	void paintWaveAt(float cx, float cy, float dirX, float dirY);
+	/// Bucket fill: drop waves along every shoreline point within the brush radius of
+	/// (cx,cy), centered slightly offshore, aimed toward land, auto-spaced by crest width.
+	void bucketApplyAt(float cx, float cy);
 	/// Remove the live animated preview wave.
 	static void clearPreviewWave(void);
 	/// Derive the map's .wak path into buffer; returns false if the map is unsaved.
@@ -124,6 +129,15 @@ public:
 	// Create/Manipulate mode (driven by the options-panel toggle buttons).
 	static void setEditorMode(EditorMode mode);	///< choose place-new vs. edit-existing
 	static EditorMode getEditorMode(void);			///< current mode (default MODE_CREATE)
+
+	// Bucket-fill brush size (world units), driven by the panel's size slider.
+	static void setBucketBrushSize(Int worldUnits);	///< brush radius for MODE_BUCKET shoreline fill
+	static Int  getBucketBrushSize(void);			///< current bucket brush radius (world units)
+
+	/// Bucket brush overlay (read by DrawObject): true only while the wave editor is the
+	/// selected tool, the mode is MODE_BUCKET and the cursor is over the view; returns the
+	/// cursor's world position and the brush radius so a circle can be drawn there.
+	static Bool getBucketBrush(float &centerX, float &centerY, Int &radius);
 	static void undoLast(void);
 	static Bool hasUndo(void);			///< true if there's a wave action to undo (for Ctrl+Z routing)
 	static void saveTracks(CWorldBuilderDoc *pDoc);
@@ -161,6 +175,13 @@ public:
 protected:
 	static Int	m_selectedWave;	///< ANCHOR wave (last clicked) - drives camera + list focus, or -1
 	static EditorMode	m_editorMode;	///< create vs. manipulate (panel toggle)
+	static Int	m_bucketBrushSize;	///< MODE_BUCKET brush radius in world units (panel size slider)
+
+	// Bucket brush cursor (world XY), tracked on hover/drag so DrawObject can render the
+	// brush circle at the cursor like the terrain brush does.
+	static Bool		m_bucketCursorValid;	///< true while the cursor is over the view in MODE_BUCKET
+	static float	m_bucketCursorX;
+	static float	m_bucketCursorY;
 
 	// Auto-load guard: the .wak is loaded ONCE per map, not on every activate().  A
 	// right-click pan transiently swaps to the hand-scroll tool and swaps back, which

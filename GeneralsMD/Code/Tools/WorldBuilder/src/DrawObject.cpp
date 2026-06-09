@@ -1077,6 +1077,22 @@ void DrawObject::rebuildShorelineCache(void)
 	#undef SHORE_STORE_SEG
 }
 
+//-----------------------------------------------------------------------------
+// DrawObject::getShorelineForFill
+//-----------------------------------------------------------------------------
+/** Hand the cached water/land boundary to the wave bucket-fill.  Rebuilds the cache
+	if it is dirty or has never been built, so the caller always gets current data
+	(the user may have edited terrain/water since the red guide was last drawn). */
+//-----------------------------------------------------------------------------
+Int DrawObject::getShorelineForFill(const float **outSegs)
+{
+	if (m_shorelineDirty || m_shorelineSegCount == 0)
+		rebuildShorelineCache();
+	if (outSegs)
+		*outSegs = m_shorelineSeg;
+	return m_shorelineSegCount;
+}
+
 void DrawObject::updateShorelineVB(void)
 {
 	m_feedbackVertexCount = 0;
@@ -2769,6 +2785,33 @@ Bool DrawObject::drawRulerFeedback(CameraClass* camera)
 	return added;
 }
 
+#define BUCKET_BRUSH_LINE_WIDTH 2.0f
+/** Draw the wave bucket-fill brush circle at the cursor (terrain/water-following, via
+	the line renderer like the ruler).  Drawn only while the wave editor is the selected
+	tool and Bucket is the active mode; the tool clears its cursor flag on mode/tool
+	switches so the circle never lingers.  Returns true if anything was added. */
+Bool DrawObject::drawBucketBrushFeedback(CameraClass* camera)
+{
+	if (!m_lineRenderer || !camera) {
+		return false;
+	}
+
+	float cx, cy;
+	Int radius;
+	if (!WaveEditorTool::getBucketBrush(cx, cy, radius)) {
+		return false;
+	}
+
+	Coord3D center;
+	center.x = cx;
+	center.y = cy;
+	center.z = 0.0f;	// addCircleToLineRenderer samples terrain/water height per segment
+
+	const unsigned long color = 0xFF00FFFF;	// cyan, matching the wave overlay glyphs
+	addCircleToLineRenderer(center, (Real)radius, BUCKET_BRUSH_LINE_WIDTH, color, camera);
+	return true;
+}
+
 #define SIGHT_RANGE_LINE_WIDTH 2.0f
 /** Draw an object's sight range into the vertex buffer. **/
 // MLL C&C3
@@ -3909,6 +3952,11 @@ if (_skip_drawobject_render) {
 	// Ruler feedback: drawn here (inside the D3D frame, via the line renderer) so it
 	// no longer strobes the way the old GDI HDC overlay did on a flipping back buffer.
 	if (drawRulerFeedback(&rinfo.Camera)) {
+		linesToRender = true;
+	}
+
+	// Wave bucket-fill brush circle (terrain-following, like the ruler circle).
+	if (drawBucketBrushFeedback(&rinfo.Camera)) {
 		linesToRender = true;
 	}
 

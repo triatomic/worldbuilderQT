@@ -62,6 +62,8 @@ protected:
 	afx_msg void OnModeCreate();
 	afx_msg void OnModeManipulate();
 	afx_msg void OnModePaint();
+	afx_msg void OnModeBucket();
+	afx_msg void OnHScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar);	///< bucket brush-size slider
 	afx_msg void OnShowWaveLines();
 	afx_msg void OnShowShoreline();
 	afx_msg void OnWaveListItemChanged(NMHDR* pNMHDR, LRESULT* pResult);
@@ -75,6 +77,7 @@ protected:
 	Bool m_updatingList;	///< guard so programmatic list changes don't re-fire selection
 
 	void updateTypeLabel(void);
+	void updateBrushSizeLabel(void);	///< refresh the "Bucket brush: N" readout from the tool
 	void setupColumns(void);
 	void populateList(void);
 	void syncModeButtons(WaveEditorTool::EditorMode mode);	///< set the three mode radios so exactly one is pressed

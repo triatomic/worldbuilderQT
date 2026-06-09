@@ -39,10 +39,15 @@
 #include "W3DDevice/GameClient/BaseHeightMap.h"	// TheTerrainRenderObject for shore-aware paint
 #include "Lib/BaseType.h"
 #include "vector2.h"
+#include <float.h>	// FLT_MAX sentinel from getWaterHeightIfUnderwater / shoreline cache
 
 // Forward decl: shore-facing direction sampler (defined below; used by the Paint hover
 // preview before its definition).
 static Bool computeShoreDirection(float cx, float cy, float &outDirX, float &outDirY);
+
+// Forward decl: toward-land direction for a shoreline segment (used by bucket fill).
+static Bool shoreDirForSeg(float mx, float my, float ax, float ay, float bx, float by,
+													 float &outDirX, float &outDirY);
 
 // WB's water-area surface lookup (DrawObject.cpp): returns the height of the water-area
 // polygon covering (x,y), or -FLT_MAX when the point isn't over water.  We hand this to
@@ -54,6 +59,11 @@ extern Real getWaterHeightIfUnderwater(Real x, Real y);
 WaveEditorTool*	WaveEditorTool::m_staticThis = NULL;
 Int				WaveEditorTool::m_selectedWave = -1;
 WaveEditorTool::EditorMode	WaveEditorTool::m_editorMode = WaveEditorTool::MODE_CREATE;
+Int				WaveEditorTool::m_bucketBrushSize = 120;	// world-unit brush radius for bucket fill
+
+Bool	WaveEditorTool::m_bucketCursorValid = false;
+float	WaveEditorTool::m_bucketCursorX = 0.0f;
+float	WaveEditorTool::m_bucketCursorY = 0.0f;
 
 Bool	WaveEditorTool::m_tracksLoaded = false;
 CString	WaveEditorTool::m_loadedMapPath;
@@ -191,6 +201,7 @@ void WaveEditorTool::deactivate()
 	m_dragMode  = DRAG_NONE;
 	m_dragArmed = false;
 	m_paintHasLast = false;
+	m_bucketCursorValid = false;	// no brush circle while another tool is up
 	clearPreviewWave();	// also clears m_ghostActive
 	if (m_View != NULL) {
 		m_View->doRulerFeedback(RULER_NONE);
@@ -233,6 +244,32 @@ void WaveEditorTool::mouseDown(TTrackingMode m, CPoint viewPt, WbView* pView, CW
 		clearPreviewWave();
 
 		paintWaveAt(cpt.x, cpt.y, 0.0f, 1.0f);
+
+		pView->Invalidate();
+		pDoc->updateAllViews();
+		WaveEditorOptions::refresh();
+		return;
+	}
+
+	// Bucket mode: a press starts a stroke and fills the shoreline under the brush right
+	// away; the rest fill as the cursor sweeps (mouseMoved). No preview, no dead-zone.
+	// Force one fresh shoreline scan for the stroke; subsequent dabs reuse the cache.
+	if (m_editorMode == MODE_BUCKET)
+	{
+		m_dragMode    = DRAG_BUCKET;
+		m_dragArmed   = false;
+		m_ghostActive = false;
+		m_paintHasLast = false;
+		m_paintCount   = 0;
+		clearPreviewWave();
+		DrawObject::invalidateShoreline();
+
+		m_bucketCursorValid = true;
+		m_bucketCursorX = cpt.x;
+		m_bucketCursorY = cpt.y;
+
+		bucketApplyAt(cpt.x, cpt.y);
+		m_paintLastX = cpt.x; m_paintLastY = cpt.y; m_paintHasLast = true;
 
 		pView->Invalidate();
 		pDoc->updateAllViews();
@@ -388,6 +425,21 @@ void WaveEditorTool::mouseMoved(TTrackingMode m, CPoint viewPt, WbView* pView, C
 	// Create and Paint modes (Manipulate has nothing to preview - it edits existing waves).
 	if (m_dragMode == DRAG_NONE)
 	{
+		// Bucket hover: no ghost/preview wave, just track the cursor so DrawObject can
+		// render the brush circle there (like the terrain brush outline).
+		if (m_editorMode == MODE_BUCKET && m == TRACK_NONE)
+		{
+			Coord3D hp;
+			pView->viewToDocCoords(viewPt, &hp, false);
+			pView->snapPoint(&hp);
+			m_bucketCursorValid = true;
+			m_bucketCursorX = hp.x;
+			m_bucketCursorY = hp.y;
+			pView->Invalidate();
+			pDoc->updateAllViews();
+			return;
+		}
+
 		if ((m_editorMode == MODE_CREATE || m_editorMode == MODE_PAINT) && m == TRACK_NONE)
 		{
 			Coord3D hp;
@@ -453,6 +505,35 @@ void WaveEditorTool::mouseMoved(TTrackingMode m, CPoint viewPt, WbView* pView, C
 				WaveEditorOptions::refresh();
 			}
 		}
+		return;
+	}
+
+	// Bucket stroke: re-fill the shoreline under the brush as the cursor sweeps. Throttle
+	// to roughly half the brush radius of travel so we don't rescan every pixel (dedupe
+	// against existing waves keeps repeats from stacking anyway).
+	if (m_dragMode == DRAG_BUCKET)
+	{
+		Coord3D pp;
+		pView->viewToDocCoords(viewPt, &pp, false);
+		pView->snapPoint(&pp);
+
+		// Keep the brush circle glued to the cursor even between fill dabs.
+		m_bucketCursorValid = true;
+		m_bucketCursorX = pp.x;
+		m_bucketCursorY = pp.y;
+
+		float thresh = 0.5f * (float)m_bucketBrushSize;
+		if (thresh < 8.0f) thresh = 8.0f;
+		float dx = pp.x - m_paintLastX;
+		float dy = pp.y - m_paintLastY;
+		if (!m_paintHasLast || (dx*dx + dy*dy) >= (thresh * thresh))
+		{
+			bucketApplyAt(pp.x, pp.y);
+			m_paintLastX = pp.x; m_paintLastY = pp.y; m_paintHasLast = true;
+			WaveEditorOptions::refresh();
+		}
+		pView->Invalidate();
+		pDoc->updateAllViews();
 		return;
 	}
 
@@ -593,6 +674,35 @@ static Bool computeShoreDirection(float cx, float cy, float &outDirX, float &out
 	return true;
 }
 
+/** Toward-land direction at a shoreline segment's midpoint, for the bucket fill.  Prefer
+	the terrain-gradient direction (same as Paint).  On flat ground where the gradient is
+	ambiguous, fall back to the segment's normal, pointing it at whichever side is dry
+	(land) per the water-area test.  Returns false only if the segment is degenerate. */
+static Bool shoreDirForSeg(float mx, float my, float ax, float ay, float bx, float by,
+													 float &outDirX, float &outDirY)
+{
+	if (computeShoreDirection(mx, my, outDirX, outDirY))
+		return true;
+
+	// Fallback: perpendicular to the boundary segment, aimed toward the dry side.
+	float ex = bx - ax, ey = by - ay;
+	float elen = sqrtf(ex*ex + ey*ey);
+	if (elen < 0.0001f)
+		return false;
+	float nx = -ey / elen, ny = ex / elen;	// unit normal to the segment
+
+	const float probe = MAP_XY_FACTOR;	// step one cell out along the normal to classify
+	if (getWaterHeightIfUnderwater(mx + nx*probe, my + ny*probe) == -FLT_MAX)
+	{	// +normal side is dry -> that's land
+		outDirX = nx; outDirY = ny;
+	}
+	else
+	{	// -normal side is land (or both wet/ambiguous; this is the better guess)
+		outDirX = -nx; outDirY = -ny;
+	}
+	return true;
+}
+
 /** Drop one wave at (cx,cy) aimed along (dirX,dirY) as part of a paint stroke, using
 	the current Cycle-Type selection.  Records it on the undo stack (UNDO_CREATE) so
 	each painted wave can be undone individually, just like a single placement, and
@@ -630,6 +740,72 @@ void WaveEditorTool::paintWaveAt(float cx, float cy, float dirX, float dirY)
 	m_paintCount++;
 }
 
+/** Bucket fill: drop waves along every cached shoreline point within the brush radius of
+	(cx,cy).  Each wave is centered slightly OFFSHORE of the boundary (so its crest breaks
+	onto the beach), aimed toward land, and auto-spaced by the wave's crest width so they
+	tile instead of stacking.  We dedupe against existing waves (including ones placed
+	earlier in this same stroke), which is what produces the even spacing. */
+void WaveEditorTool::bucketApplyAt(float cx, float cy)
+{
+	ensureSystem();
+	if (!TheWaterTracksRenderSystem)
+		return;
+
+	const float *segs = NULL;
+	Int segCount = DrawObject::getShorelineForFill(&segs);
+	if (segCount <= 0 || !segs)
+		return;
+
+	Real crest = TheWaterTracksRenderSystem->getWaveCrestWidth(m_currentType);
+	if (crest < 1.0f) crest = 1.0f;
+	const float spacing  = crest * 0.9f;	// crests tile along the shore without big overlaps
+	const float offshore = crest * 0.20f;	// nudge center into the water so the crest breaks ashore
+	const float R = (float)(m_bucketBrushSize > 0 ? m_bucketBrushSize : 1);
+	const float Rsq = R * R;
+	const float spacingSq = spacing * spacing;
+
+	for (Int i = 0; i < segCount; ++i)
+	{
+		const float *s = &segs[i * 5];	// ax, ay, bx, by, wz
+		float mx = (s[0] + s[2]) * 0.5f;
+		float my = (s[1] + s[3]) * 0.5f;
+
+		// Only the shoreline under the brush.
+		float bx = mx - cx, by = my - cy;
+		if (bx*bx + by*by > Rsq)
+			continue;
+
+		// Toward-land direction (height gradient, or segment normal as a fallback).
+		float dx, dy;
+		if (!shoreDirForSeg(mx, my, s[0], s[1], s[2], s[3], dx, dy))
+			continue;
+
+		// Center the wave a little offshore (offshore = away from land = -dir).
+		float centerX = mx - dx * offshore;
+		float centerY = my - dy * offshore;
+
+		// Auto-spacing: skip if a wave already sits within 'spacing' of this center.
+		// Includes waves placed earlier in THIS stroke, so the fill self-spaces.
+		Bool tooClose = false;
+		Int waveCount = TheWaterTracksRenderSystem->getWaveCount();
+		for (Int w = 0; w < waveCount; ++w)
+		{
+			Vector2 ws, we;
+			if (!TheWaterTracksRenderSystem->getWaveSegment(w, ws, we))
+				continue;
+			float wx = ws.X - centerX, wy = ws.Y - centerY;
+			if (wx*wx + wy*wy < spacingSq) { tooClose = true; break; }
+		}
+		if (tooClose)
+			continue;
+
+		Int newIndex = TheWaterTracksRenderSystem->getWaveCount();
+		TheWaterTracksRenderSystem->addWaveByDirection(Vector2(centerX, centerY), Vector2(dx, dy), m_currentType);
+		pushUndo(UNDO_CREATE, newIndex, 0.0f, 0.0f, 0.0f, 0.0f);
+		m_paintCount++;
+	}
+}
+
 /** Remove the live preview wave (when leaving Create mode, deactivating, or after a
 	wave is actually placed). */
 void WaveEditorTool::clearPreviewWave(void)
@@ -653,6 +829,21 @@ void WaveEditorTool::mouseUp(TTrackingMode m, CPoint viewPt, WbView* pView, CWor
 		m_paintHasLast = false;
 		CString msg;
 		msg.Format("Painted %d wave%s.", m_paintCount, (m_paintCount == 1 ? "" : "s"));
+		CMainFrame::GetMainFrame()->SetMessageText(msg);
+		pView->Invalidate();
+		pDoc->updateAllViews();
+		WaveEditorOptions::refresh();
+		return;
+	}
+
+	// Bucket stroke: the waves were committed as the cursor swept. End the stroke and
+	// report how many shoreline waves were laid.
+	if (m_dragMode == DRAG_BUCKET)
+	{
+		m_dragMode     = DRAG_NONE;
+		m_paintHasLast = false;
+		CString msg;
+		msg.Format("Bucket: placed %d wave%s along the shore.", m_paintCount, (m_paintCount == 1 ? "" : "s"));
 		CMainFrame::GetMainFrame()->SetMessageText(msg);
 		pView->Invalidate();
 		pDoc->updateAllViews();
@@ -727,6 +918,10 @@ void WaveEditorTool::setEditorMode(EditorMode mode)
 	if (m_staticThis)
 		m_staticThis->m_dragMode = DRAG_NONE;
 
+	// The brush circle belongs to Bucket mode only; it re-arms on the next hover.
+	if (mode != MODE_BUCKET)
+		m_bucketCursorValid = false;
+
 	// The animated preview belongs to Create-mode hover; drop it when switching modes
 	// (it resumes on the next hover if we're back in Create).
 	clearPreviewWave();
@@ -739,6 +934,9 @@ void WaveEditorTool::setEditorMode(EditorMode mode)
 		case MODE_PAINT:
 			msg = "Paint mode: hold the left button and drag to lay a trail of waves.";
 			break;
+		case MODE_BUCKET:
+			msg = "Bucket mode: hold the left button and drag along the coast to auto-fill the shoreline with waves.";
+			break;
 		default:
 			msg = "Manipulate mode: drag a wave to move it, Ctrl+drag to rotate, Shift+click to multi-select.";
 			break;
@@ -749,6 +947,30 @@ void WaveEditorTool::setEditorMode(EditorMode mode)
 WaveEditorTool::EditorMode WaveEditorTool::getEditorMode(void)
 {
 	return m_editorMode;
+}
+
+void WaveEditorTool::setBucketBrushSize(Int worldUnits)
+{
+	if (worldUnits < 1) worldUnits = 1;
+	m_bucketBrushSize = worldUnits;
+}
+
+Int WaveEditorTool::getBucketBrushSize(void)
+{
+	return m_bucketBrushSize;
+}
+
+Bool WaveEditorTool::getBucketBrush(float &centerX, float &centerY, Int &radius)
+{
+	// Only while the wave editor is the selected tool AND Bucket is the active mode --
+	// the circle must never linger when another mode or tool takes over.
+	if (!m_bucketCursorValid || m_editorMode != MODE_BUCKET || !isEditorActive())
+		return false;
+
+	centerX = m_bucketCursorX;
+	centerY = m_bucketCursorY;
+	radius  = m_bucketBrushSize;
+	return true;
 }
 
 void WaveEditorTool::cycleWaveType(void)

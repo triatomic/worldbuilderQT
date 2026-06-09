@@ -132,6 +132,7 @@ public:
 	// Editor edit-API (int-based; no enum waveType / TheTerrainLogic needed by callers).
 	Int getEditableWaveTypeCount(void) const;					///<number of placeable wave types
 	const char *getWaveTypeName(Int typeIndex) const;	///<display name of a placeable wave type
+	Real getWaveCrestWidth(Int typeIndex) const;		///<crest (front-line) width of a placeable wave type, world units
 	void addWaveSegmentByPoints(const Vector2 &start, const Vector2 &end, Int typeIndex);	///<place a wave from start->end (legacy: line is the crest, wave travels perpendicular)
 	void addWaveByDirection(const Vector2 &center, const Vector2 &travelDir, Int typeIndex);	///<place a wave centered at 'center' that travels along 'travelDir' (length ignored)
 	void removeLastWaveSegment(void);					///<undo the last placed wave segment
