@@ -123,7 +123,6 @@ Bool	DrawObject::m_showShoreline = true;	///< red water/land boundary on by defa
 Bool	DrawObject::m_shorelineDirty = true;	///< force a rebuild of the cached shoreline on first draw
 Int		DrawObject::m_shorelineSegCount = 0;
 float	*DrawObject::m_shorelineSeg = NULL;
-UnsignedInt	DrawObject::m_shorelineLastBuildMs = 0;	///< timeGetTime() of the last cache rebuild (throttle)
 Bool	DrawObject::m_rulerGridFeedback = true;
 Bool	DrawObject::m_showTracingOverlay = false;
 Int		DrawObject::m_tracingOverlayOpacity = 255;	///< fully opaque by default
@@ -1023,18 +1022,43 @@ void DrawObject::rebuildShorelineCache(void)
 		} \
 	}
 
+	// Count the x sample points (cell corners at x and x+step for every cell).
+	Int nPts = 1;
+	for (float cx = worldX0; cx < worldX1; cx += step)
+		++nPts;
+
+	// Each grid point is shared by up to 4 cells; classify every point ONCE per row
+	// pair instead of 4 times per cell -- the wet test (a point-in-water-polygon
+	// lookup) dominates the scan, so this cuts the rebuild cost ~4x.
+	unsigned char *rowLo = new unsigned char[nPts];	// wetness of row y
+	unsigned char *rowHi = new unsigned char[nPts];	// wetness of row y+step
+	if (!rowLo || !rowHi)
+	{
+		delete [] rowLo;
+		delete [] rowHi;
+		return;
+	}
+
+	Int i;
+	for (i = 0; i < nPts; ++i)
+		rowLo[i] = SHORE_WET(worldX0 + i * step, worldY0) ? 1 : 0;
+
 	for (float y = worldY0; y < worldY1; y += step)
 	{
 		float yn = y + step;
-		for (float x = worldX0; x < worldX1; x += step)
+		for (i = 0; i < nPts; ++i)
+			rowHi[i] = SHORE_WET(worldX0 + i * step, yn) ? 1 : 0;
+
+		Int ix = 0;
+		for (float x = worldX0; x < worldX1; x += step, ++ix)
 		{
 			float xn = x + step;
 
-			// Classify the cell's four corners (water = 1, land = 0).
-			Bool w00 = SHORE_WET(x,  y );	// bottom-left
-			Bool w10 = SHORE_WET(xn, y );	// bottom-right
-			Bool w01 = SHORE_WET(x,  yn);	// top-left
-			Bool w11 = SHORE_WET(xn, yn);	// top-right
+			// The cell's four corners (water = 1, land = 0), from the cached rows.
+			Bool w00 = rowLo[ix]     != 0;	// bottom-left
+			Bool w10 = rowLo[ix + 1] != 0;	// bottom-right
+			Bool w01 = rowHi[ix]     != 0;	// top-left
+			Bool w11 = rowHi[ix + 1] != 0;	// top-right
 
 			// Fully wet or fully dry -> no boundary in this cell.
 			Int wet = (w00?1:0) + (w10?1:0) + (w01?1:0) + (w11?1:0);
@@ -1071,7 +1095,13 @@ void DrawObject::rebuildShorelineCache(void)
 			if (nC >= 4)	// saddle: two separate crossings
 				SHORE_STORE_SEG(cpx[2], cpy[2], cpx[3], cpy[3], wz);
 		}
+
+		// This row's top edge is the next row's bottom edge.
+		unsigned char *tmpRow = rowLo; rowLo = rowHi; rowHi = tmpRow;
 	}
+
+	delete [] rowLo;
+	delete [] rowHi;
 
 	#undef SHORE_WET
 	#undef SHORE_STORE_SEG
@@ -1098,16 +1128,15 @@ void DrawObject::updateShorelineVB(void)
 	m_feedbackVertexCount = 0;
 	m_feedbackIndexCount = 0;
 
-	// Only rescan the heightmap when the cache is explicitly dirty, or at most a couple
-	// times a second otherwise (so live terrain/water edits are picked up without having
-	// to hook every edit path, but we never pay the full-map scan on every frame).
-	const UnsignedInt SHORE_REBUILD_INTERVAL_MS = 400;
-	UnsignedInt nowMs = timeGetTime();
-	if (m_shorelineDirty || (nowMs - m_shorelineLastBuildMs) >= SHORE_REBUILD_INTERVAL_MS)
-	{
+	// Rescan the heightmap only when the cache is explicitly dirty. Terrain and water
+	// can't change while the wave editor is the selected tool (tools are exclusive), so
+	// the rescan triggers are all event-driven: tool activate, the Show-shoreline toggle,
+	// a bucket stroke, and heightmap reloads (updateHeightMapInView) all invalidate.
+	// (This used to also rescan on a 400ms timer "just in case" -- that full-map scan,
+	// with a point-in-water-polygon test per sample, ran 2.5x/sec on the render path and
+	// dropped the framerate while panning with the shoreline visible.)
+	if (m_shorelineDirty)
 		rebuildShorelineCache();
-		m_shorelineLastBuildMs = nowMs;
-	}
 
 	if (m_shorelineSegCount <= 0 || !m_shorelineSeg)
 		return;

@@ -2135,6 +2135,7 @@ void WbView3d::updateHeightMapInView(WorldHeightMap *htMap, Bool partial, const 
 		return;
 	++m_updateCount;
 	m_haveLabelCache = false;	// new/changed terrain or map -> don't reuse a stale label batch
+	DrawObject::invalidateShoreline();	// terrain/map changed -> wave editor's shoreline guide must rescan
 
 	if (m_heightMapRenderObj == NULL) {
 		m_heightMapRenderObj = NEW_REF(WBHeightMap,());

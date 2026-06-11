@@ -177,6 +177,13 @@ void WaveEditorTool::activate()
 	ensureSystem();
 	m_dragMode = DRAG_NONE;
 
+	// Terrain/water may have been edited with other tools since the last time the wave
+	// editor was active; rescan the shoreline guide once on activation. While this tool
+	// IS active those can't change, so the guide doesn't rescan again until the next
+	// activate / bucket stroke / heightmap reload (no periodic rescan -- see
+	// updateShorelineVB).
+	DrawObject::invalidateShoreline();
+
 	// Auto-load the map's saved waves ONCE per map, not on every (re)activation.  A
 	// right-click pan transiently swaps to the hand-scroll tool and swaps back, which
 	// re-runs activate(); reloading here would reset() the wave system and silently

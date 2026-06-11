@@ -234,7 +234,6 @@ protected: // static state vars.
 	static Bool								m_shorelineDirty;	///< rebuild the cached shoreline segments on next draw
 	static Int								m_shorelineSegCount;	///< number of cached segments
 	static float							*m_shorelineSeg;	///< [count*5]: ax, ay, bx, by, wz per segment
-	static UnsignedInt						m_shorelineLastBuildMs;	///< last rebuild time (throttle the rescan)
 	enum { SHORELINE_SEG_MAX = NUM_FEEDBACK_VERTEX / 4 };	///< 4 verts per segment quad
 	static Bool								m_rulerGridFeedback;
 	static Bool								m_showTracingOverlay; ///< True to show tracing overlay.
