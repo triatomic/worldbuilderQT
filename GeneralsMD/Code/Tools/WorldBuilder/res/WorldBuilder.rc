@@ -383,6 +383,7 @@ BEGIN
         MENUITEM SEPARATOR
         MENUITEM "Label Renderer: Old (D3DX)",  ID_TEXT_RENDERER_OLD
         MENUITEM "Label Renderer: New (GDI)",   ID_TEXT_RENDERER_NEW
+        MENUITEM "Label Renderer: Atlas (Batched, Fast)", ID_TEXT_RENDERER_ATLAS
     END
     POPUP "&Window"
     BEGIN

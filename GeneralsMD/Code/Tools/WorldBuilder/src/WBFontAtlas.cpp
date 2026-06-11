@@ -82,7 +82,11 @@ Bool WBFontAtlas::build(const char *faceName, Int heightPx, Bool bold, Bool anti
 	lf.lfCharSet        = DEFAULT_CHARSET;
 	lf.lfOutPrecision   = OUT_DEFAULT_PRECIS;
 	lf.lfClipPrecision  = CLIP_DEFAULT_PRECIS;
-	lf.lfQuality        = antialias ? CLEARTYPE_QUALITY : NONANTIALIASED_QUALITY;
+	// Same quality mapping as the D3DX label font (createLabelFont): the Grayscale
+	// toggle ON means grayscale AA; OFF means DEFAULT_QUALITY, which on modern
+	// Windows still renders ClearType-smoothed -- NOT NONANTIALIASED_QUALITY, which
+	// would make Atlas mode jaggy while the other modes stay smooth.
+	lf.lfQuality        = antialias ? ANTIALIASED_QUALITY : DEFAULT_QUALITY;
 	lf.lfPitchAndFamily = DEFAULT_PITCH | FF_DONTCARE;
 	::lstrcpyn(lf.lfFaceName, faceName ? faceName : "Arial", LF_FACESIZE);
 

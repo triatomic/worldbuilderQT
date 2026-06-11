@@ -733,6 +733,7 @@ void WbView3d::shutdownWW3D(void)
 		m3DFont->Release();
 		m3DFont = NULL;
 	}
+	m_fontAtlas.releaseTexture();	// drop the GPU atlas with the device; CPU bits stay
 	if (m_ww3dInited) {
 		m_lightList.Reset_List();
 
@@ -3061,7 +3062,20 @@ void WbView3d::render()
 		// Viewport labels, Old (D3DX) mode: draw directly with m3DFont inside the
 		// frame (flicker-free). drawLabels(NULL) takes the m3DFont->DrawText path.
 		// In New (GDI) mode the labels are drawn instead in OnPaint() via ::TextOut.
-		if (m3DFont && m_labelRenderer == 0) {
+		// In Atlas mode the object/status/trigger labels are queued as glyph quads
+		// during drawLabels(NULL) and flushed in ONE DrawPrimitiveUP at end() --
+		// vs ~11ms/frame of per-string ID3DXFont::DrawText with names on (measured;
+		// see wbbench). HUD text (cash/timer/tooltip) still draws via m3DFont so it
+		// can never go stale.
+		if (m_labelRenderer == 2 && m_fontAtlas.isValid()) {
+			IDirect3DDevice8 *dev = DX8Wrapper::_Get_D3D_Device8();
+			// Use the back-buffer dimensions (m_actualWinSize), not the client rect;
+			// label projection uses m_actualWinSize too, and mixing the two stretches
+			// the XYZRHW text quads.
+			m_fontAtlas.begin(dev, m_actualWinSize.x, m_actualWinSize.y);
+			drawLabels(NULL);
+			m_fontAtlas.end();
+		} else if (m3DFont && m_labelRenderer == 0) {
 			drawLabels(NULL);
 		}
 
@@ -3248,6 +3262,8 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_UPDATE_COMMAND_UI(ID_TEXT_RENDERER_OLD, OnUpdateTextRendererOld)
 	ON_COMMAND(ID_TEXT_RENDERER_NEW, OnTextRendererNew)
 	ON_UPDATE_COMMAND_UI(ID_TEXT_RENDERER_NEW, OnUpdateTextRendererNew)
+	ON_COMMAND(ID_TEXT_RENDERER_ATLAS, OnTextRendererAtlas)
+	ON_UPDATE_COMMAND_UI(ID_TEXT_RENDERER_ATLAS, OnUpdateTextRendererAtlas)
 
 	ON_COMMAND(ID_REVALIDATE_RENDER, OnRefreshSceneObjects)
 	//}}AFX_MSG_MAP
@@ -3689,8 +3705,13 @@ void WbView3d::drawStatusLabels(CPoint basePt, int offset, const char* text, voi
 	AsciiString label = text;
 
 	// Route by the label-renderer mode (member m_labelRenderer), not by m3DFont
-	// nullness: Old (0) uses the in-frame D3DX font, New (1) uses raw GDI ::TextOut.
-	if (m_labelRenderer == 0 && m3DFont && !hdc) {
+	// nullness: Old (0) uses the in-frame D3DX font, New (1) uses raw GDI ::TextOut,
+	// Atlas (2) queues glyph quads into the m_fontAtlas batch.
+	if (m_labelRenderer == 2 && !hdc) {
+		UnsignedInt argb = 0xFF000000 | (red << 16) | (green << 8) | blue;
+		m_fontAtlas.drawText(labelPt.x + 1, labelPt.y, label.str(), label.getLength(),
+			argb, m_textShadow);
+	} else if (m_labelRenderer == 0 && m3DFont && !hdc) {
 		if (m_textShadow) {
 			RECT shadowRct = { labelPt.x + 2, labelPt.y + 1, labelPt.x + 2, labelPt.y + 1 };
 			((ID3DXFont*)m3DFont)->DrawText(label.str(), label.getLength(), &shadowRct,
@@ -4077,7 +4098,10 @@ void WbView3d::drawLabels(HDC hdc)
 				int green = (argb >>  8) & 0xFF;
 				int blue  =  argb        & 0xFF;
 
-				if (m_labelRenderer == 0 && m3DFont && !hdc) {
+				if (m_labelRenderer == 2 && !hdc) {
+					m_fontAtlas.drawText(labelPt.x + 1, labelPt.y, label.str(),
+						label.getLength(), argb, m_textShadow);
+				} else if (m_labelRenderer == 0 && m3DFont && !hdc) {
 					if (m_textShadow) {
 						RECT shadowRct = { labelPt.x + 2, labelPt.y + 1, labelPt.x + 2, labelPt.y + 1 };
 						m3DFont->DrawText(label.str(), label.getLength(), &shadowRct,
@@ -4141,7 +4165,10 @@ void WbView3d::drawLabels(HDC hdc)
 					pt.y = projOriginY + sy;
 
 					// Draw the label for each point
-					if (m_labelRenderer == 0 && m3DFont && !hdc) {
+					if (m_labelRenderer == 2 && !hdc) {
+						m_fontAtlas.drawText(pt.x, pt.y, triggerName.str(),
+							triggerName.getLength(), 0xAFFF8800, m_textShadow);
+					} else if (m_labelRenderer == 0 && m3DFont && !hdc) {
 						if (m_textShadow) {
 							RECT shadowRct;
 							shadowRct.top = shadowRct.bottom = pt.y + 1;
@@ -4187,7 +4214,7 @@ void WbView3d::drawLabels(HDC hdc)
 		) {
 		const CString text = _T(PointerTool::getLastPointerInfoString());
 		// DEBUG_LOG(("PointerTool::getLastPointerInfoString() returned: \"%s\"\n", (LPCTSTR)text));
-		if (text.IsEmpty() || (m_labelRenderer == 0 && !m3DFont))
+		if (text.IsEmpty() || ((m_labelRenderer == 0 || m_labelRenderer == 2) && !m3DFont))
 			return;
 
 		// Get mouse position
@@ -4220,7 +4247,10 @@ void WbView3d::drawLabels(HDC hdc)
 			{-1,  0}, { 1,  0}, { 0, -1}, { 0,  1}
 		};
 
-		if (m_labelRenderer == 0 && m3DFont && !hdc) {
+		// HUD text below stays on m3DFont in Atlas mode (2) too: it changes without
+		// the labels changing (tooltip follows the mouse, timer ticks), and a handful
+		// of DrawText calls cost ~0.1ms -- only the O(N) object labels need batching.
+		if ((m_labelRenderer == 0 || m_labelRenderer == 2) && m3DFont && !hdc) {
 			// Draw outline
 			for (int i = 0; i < 4; ++i) {
 				RECT outlineRect = baseRect;
@@ -4260,7 +4290,7 @@ void WbView3d::drawLabels(HDC hdc)
 	const int offsetX = 10;
 	const int offsetY = 10;
 
-	if (m_labelRenderer == 0 && m3DFont && !hdc) {
+	if ((m_labelRenderer == 0 || m_labelRenderer == 2) && m3DFont && !hdc) {
 		RECT rct = { offsetX, offsetY, offsetX + 400, offsetY + 30 };
 		m3DFont->DrawText(
 			text,
@@ -4284,7 +4314,7 @@ void WbView3d::drawLabels(HDC hdc)
 		const int offsetX = 10;
 		const int offsetY = rClient.bottom + 70;
 
-		if (m_labelRenderer == 0 && m3DFont && !hdc) {
+		if ((m_labelRenderer == 0 || m_labelRenderer == 2) && m3DFont && !hdc) {
 			RECT rct = { offsetX, offsetY, offsetX + 400, offsetY + 30 };
 			m3DFont->DrawText(
 				editTimeStr.str(),
@@ -4303,7 +4333,7 @@ void WbView3d::drawLabels(HDC hdc)
 	if (CMainFrame::GetMainFrame()->showAutoSaveMessage()){
 		CString autoSaveText = _T("Auto-saving in 10 seconds...");
 
-		if (m_labelRenderer == 0 && m3DFont && !hdc) {
+		if ((m_labelRenderer == 0 || m_labelRenderer == 2) && m3DFont && !hdc) {
 			RECT rct = { offsetX, offsetY + 20, offsetX + 400, offsetY + 50 };
 			m3DFont->DrawText(
 				autoSaveText,
@@ -5607,6 +5637,11 @@ void WbView3d::createLabelFont()
 		D3DXCreateFont(pDev, hFont, &m3DFont);
 		DeleteObject(hFont);
 	}
+
+	// Also (re)build the glyph atlas for the Atlas renderer mode, matching the
+	// D3DX font above (Arial 20, regular) so the modes look comparable. Honors
+	// the same antialias toggle.
+	m_fontAtlas.build("Arial", 20, false, m_textAntialias ? true : false);
 }
 
 void WbView3d::OnTextAntialias()
@@ -5650,7 +5685,9 @@ void WbView3d::OnUpdateTextAnchorNew(CCmdUI* pCmdUI)
 
 // Label renderer: Old (D3DX m3DFont, drawn inside the D3D frame -> no flicker) vs
 // New (raw GDI ::TextOut on the window HDC -> sharper but strobes, because D3D8 has no
-// way to draw GDI into the presented frame). Presented as a radio pair under Text
+// way to draw GDI into the presented frame) vs Atlas (WBFontAtlas glyph quads, also
+// in-frame: the object/status/trigger labels are batched into ONE DrawPrimitiveUP --
+// ~11ms/frame cheaper than Old with names on, see wbbench). Radio trio under Text
 // Rendering.
 void WbView3d::OnTextRendererOld()
 {
@@ -5674,6 +5711,18 @@ void WbView3d::OnTextRendererNew()
 void WbView3d::OnUpdateTextRendererNew(CCmdUI* pCmdUI)
 {
 	pCmdUI->SetCheck(m_labelRenderer == 1);
+}
+
+void WbView3d::OnTextRendererAtlas()
+{
+	m_labelRenderer = 2;
+	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "LabelRenderer", 2);
+	Invalidate();
+}
+
+void WbView3d::OnUpdateTextRendererAtlas(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(m_labelRenderer == 2);
 }
 
 void WbView3d::OnKillFocus(CWnd* pNewWnd)

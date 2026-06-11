@@ -880,6 +880,7 @@
 #define ID_MINIMAP_SNAP45               33383
 #define ID_TEXT_RENDERER_OLD            33384
 #define ID_TEXT_RENDERER_NEW            33385
+#define ID_TEXT_RENDERER_ATLAS          33386
 #define ID_MINIMAP_SHOWBORDER           33387
 #define ID_MINIMAP_FULLEXTENT           33388
 #define ID_WAVE_EDITOR_TOOL             33389

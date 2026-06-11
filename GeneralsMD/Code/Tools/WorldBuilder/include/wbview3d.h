@@ -233,6 +233,8 @@ protected:
 	afx_msg void OnUpdateTextRendererOld(CCmdUI* pCmdUI);
 	afx_msg void OnTextRendererNew();
 	afx_msg void OnUpdateTextRendererNew(CCmdUI* pCmdUI);
+	afx_msg void OnTextRendererAtlas();
+	afx_msg void OnUpdateTextRendererAtlas(CCmdUI* pCmdUI);
 	afx_msg void OnViewShowSubDraw();
 	afx_msg void OnUpdateViewShowSubDraw(CCmdUI* pCmdUI);
 	afx_msg void OnViewShowBaseRadius();
@@ -320,7 +322,7 @@ private:
 	Bool m_textShadow;
 	Bool m_textAntialias;					///< grayscale antialiasing for viewport labels
 	Int  m_labelAnchorMode;					///< 0 = Default (ground), 1 = New (object center-height)
-	Int  m_labelRenderer;					///< 0 = Old (D3DX m3DFont, in-frame, no flicker), 1 = New (raw GDI TextOut, strobes)
+	Int  m_labelRenderer;					///< 0 = Old (D3DX m3DFont, in-frame), 1 = New (raw GDI TextOut, strobes), 2 = Atlas (batched glyph quads, in-frame)
 	void setMSAA(D3DMULTISAMPLE_TYPE type);
 	void setTextureFilter(int mode);
 	void createLabelFont();					///< (re)create m3DFont honoring m_textAntialias
