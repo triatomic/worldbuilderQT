@@ -22,14 +22,19 @@
 
 #include "StdAfx.h"
 
-// Pull in ComCtl32 v6 (visual styles) so the MFC dialogs/toolbars render with
-// modern themed Windows controls instead of the flat ComCtl32 v5 look. This emits
-// an embedded manifest dependency at link time -- no external .manifest file needed.
-// MFC's _AFXDLL runtime already initializes the common controls, so theming engages
-// without an explicit InitCommonControlsEx call here.
+// Build toggle for modern Windows controls.
+// 1: pull in ComCtl32 v6 (visual styles) so the MFC dialogs/toolbars render with
+//    modern themed controls (emits an embedded manifest dependency at link time;
+//    MFC's _AFXDLL runtime initializes the common controls, so theming engages
+//    without an explicit InitCommonControlsEx call).
+// 0: keep the classic flat ComCtl32 v5 look.
+#define WB_MODERN_CONTROLS 0
+
+#if WB_MODERN_CONTROLS
 #pragma comment(linker, "\"/manifestdependency:type='win32' \
 name='Microsoft.Windows.Common-Controls' version='6.0.0.0' \
 processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
+#endif
 
 
 
