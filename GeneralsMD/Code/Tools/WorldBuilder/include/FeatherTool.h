@@ -51,6 +51,7 @@ public:
 	FeatherTool(void);
 	~FeatherTool(void);
 
+	static Int getFeather(void) {return m_feather;}; ///<Returns feather (the brush size).
 	static void setFeather(Int feather);
 	static void setRate(Int rate);
 	static void setRadius(Int Radius);

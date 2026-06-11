@@ -89,6 +89,10 @@ protected:
 public:
 	/// Refresh the "Type:" label and the wave list from the current wave system.
 	static void refresh(void);
+
+	/// Step the bucket brush radius by delta (keyboard '['/']'), clamped to the
+	/// slider's range; keeps the slider and readout in sync if the panel exists.
+	static void adjustBucketBrushSize(Int delta);
 };
 
 //{{AFX_INSERT_LOCATION}}

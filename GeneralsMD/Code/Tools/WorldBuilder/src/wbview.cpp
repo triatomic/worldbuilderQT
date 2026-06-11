@@ -37,6 +37,11 @@
 #include "teamsdialog.h"
 #include "LayersList.h"
 #include "PointerTool.h"
+#include "brushoptions.h"
+#include "MoundOptions.h"
+#include "FeatherOptions.h"
+#include "TerrainMaterial.h"
+#include "WaveEditorOptions.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -533,12 +538,74 @@ void WbView::OnEditDelete()
 	REF_PTR_RELEASE(pUndo); // belongs to pDoc now.
 }
 
-/** Handles the key down event.  Currently, handles delete keys, and checks
-for updates to the current tool. */
-void WbView::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags) 
+static Int clampBrushVal(Int val, Int lo, Int hi)
 {
-	if (nChar == VK_DELETE || nChar == VK_BACK) {	
+	if (val < lo) return lo;
+	if (val > hi) return hi;
+	return val;
+}
+
+/** ']' / '[' step the active brush tool's size up/down by 5; with Shift held they step
+the feather width instead.  (Shift, not Ctrl: Ctrl transiently swaps the current tool,
+so the brush would no longer be active when the key arrived.)
+Each tool's static setter already pushes the new value into
+its options panel and the on-terrain brush feedback circle, so this only has to compute
+the clamped value.  Tools without a brush are simply ignored. */
+static void adjustBrushKeyStep(Bool larger, Bool feather)
+{
+	Tool *pTool = WbApp()->getCurTool();
+	if (pTool == NULL) return;
+	const Int delta = larger ? 5 : -5;
+	switch (pTool->getToolID()) {
+		case ID_BRUSH_TOOL:
+			if (feather) {
+				BrushTool::setFeather(clampBrushVal(BrushTool::getFeather() + delta, BrushOptions::MIN_FEATHER, BrushOptions::MAX_FEATHER));
+			} else {
+				BrushTool::setWidth(clampBrushVal(BrushTool::getWidth() + delta, BrushOptions::MIN_BRUSH_SIZE, BrushOptions::MAX_BRUSH_SIZE));
+			}
+			break;
+		case ID_BRUSH_ADD_TOOL:
+		case ID_BRUSH_SUBTRACT_TOOL:
+			if (feather) {
+				MoundTool::setFeather(clampBrushVal(MoundTool::getFeather() + delta, MoundOptions::MIN_FEATHER, MoundOptions::MAX_FEATHER));
+			} else {
+				MoundTool::setWidth(clampBrushVal(MoundTool::getWidth() + delta, MoundOptions::MIN_BRUSH_SIZE, MoundOptions::MAX_BRUSH_SIZE));
+			}
+			break;
+		case ID_FEATHERTOOL:
+			// The feather tool's single "Feather" value IS its brush size, so plain and
+			// Shift-modified keys both step it.
+			FeatherTool::setFeather(clampBrushVal(FeatherTool::getFeather() + delta, FeatherOptions::MIN_FEATHER_SIZE, FeatherOptions::MAX_FEATHER_SIZE));
+			break;
+		case ID_BIG_TILE_TOOL:
+			if (!feather) {
+				// 2..100 mirrors TerrainMaterial's (protected) MIN_TILE_SIZE/MAX_TILE_SIZE.
+				Int width = clampBrushVal(BigTileTool::getCurrentWidth() + delta, 2, 100);
+				BigTileTool::setWidth(width);
+				TerrainMaterial::setWidth(width);	// keep the panel's size edit in sync
+			}
+			break;
+		case ID_WAVE_EDITOR_TOOL:
+			if (!feather && WaveEditorTool::getEditorMode() == WaveEditorTool::MODE_BUCKET) {
+				WaveEditorOptions::adjustBucketBrushSize(delta);
+			}
+			break;
+		default:
+			break;
+	}
+}
+
+/** Handles the key down event.  Currently, handles delete keys, brush-size keys, and
+checks for updates to the current tool. */
+void WbView::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
+{
+	if (nChar == VK_DELETE || nChar == VK_BACK) {
 		OnEditDelete();
+	}
+	// ']' grows / '[' shrinks the active brush; with Shift they adjust its feather.
+	// WM_KEYDOWN auto-repeats, so holding the key keeps stepping the value.
+	if (nChar == VK_OEM_4 || nChar == VK_OEM_6) {
+		adjustBrushKeyStep(nChar == VK_OEM_6, (::GetKeyState(VK_SHIFT) & 0x8000) != 0);
 	}
 	WbApp()->updateCurTool(false);
 	OnSetCursor(this,HTCLIENT,0);

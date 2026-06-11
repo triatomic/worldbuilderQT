@@ -136,6 +136,7 @@ public:
 	static void toggleNoMixing() { m_enableNoMixing = !m_enableNoMixing; }
 
 	// Used by TerrainMaterial dialog to get/set current width.
+	static Int getCurrentWidth(void) {return m_currentWidth;};
 	static Int getCurrentHeight(void) {return m_currentHeight;};
 
 	static Int getCopyModeWidth(void) {

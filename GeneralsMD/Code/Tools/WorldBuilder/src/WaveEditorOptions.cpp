@@ -272,6 +272,22 @@ void WaveEditorOptions::updateBrushSizeLabel(void)
 	}
 }
 
+/// Step the bucket brush radius by delta (keyboard '['/']' in the view), clamped to the
+/// slider's range.  Works even before the panel window exists; when it does, the slider
+/// and the readout are kept in sync (SetPos doesn't re-fire OnHScroll, so no feedback loop).
+void WaveEditorOptions::adjustBucketBrushSize(Int delta)
+{
+	Int sz = WaveEditorTool::getBucketBrushSize() + delta;
+	if (sz < WAVE_BRUSH_MIN) sz = WAVE_BRUSH_MIN;
+	if (sz > WAVE_BRUSH_MAX) sz = WAVE_BRUSH_MAX;
+	WaveEditorTool::setBucketBrushSize(sz);
+	if (m_staticThis) {
+		CSliderCtrl *pSlider = (CSliderCtrl*)m_staticThis->GetDlgItem(IDC_WAVE_BRUSH_SIZE);
+		if (pSlider) pSlider->SetPos(sz);
+		m_staticThis->updateBrushSizeLabel();
+	}
+}
+
 /// The bucket brush-size slider moved: push the new radius into the tool and update the
 /// readout.  (Trackbars report via WM_HSCROLL; this fires for any horizontal slider on
 /// the panel, but the brush slider is the only one.)
