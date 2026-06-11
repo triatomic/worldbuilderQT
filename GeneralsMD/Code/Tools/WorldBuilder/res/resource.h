@@ -627,6 +627,7 @@
 #define IDC_CUSTOMIZE_CHECKBOX          1335
 #define IDC_MAPOBJECT_Scale             1336
 #define IDC_SOUND_COMBO                 1346
+#define IDC_PLAY_SOUND_BUTTON           1392
 #define IDC_LOOPCOUNT_EDIT              1347
 #define IDC_MIN_VOLUME_EDIT             1348
 #define IDC_PRIORITY_COMBO              1349
@@ -958,7 +959,7 @@
 #define _APS_3D_CONTROLS                     1
 #define _APS_NEXT_RESOURCE_VALUE        247
 #define _APS_NEXT_COMMAND_VALUE         33393
-#define _APS_NEXT_CONTROL_VALUE         1392
+#define _APS_NEXT_CONTROL_VALUE         1393
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif
