@@ -46,4 +46,9 @@ extern "C"
 #endif
 void WBQt_OnViewportHostResized(int width, int height);
 
+// Theme control driving WBQtTheme (0 = System/follow-Windows, 1 = Dark, 2 = Light).
+// Set persists the choice and applies it live; Get returns the current mode.
+void WBQt_SetThemeMode(int mode);
+int  WBQt_GetThemeMode(void);
+
 #endif // WB_QT_BRIDGE_H

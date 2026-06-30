@@ -114,6 +114,10 @@ public:
 	// the view used to occupy (client minus the docked toolbar/status bar).
 	HWND m_qtViewportHost;
 	void positionQtViewportHost(void);
+	// Phase 3: a runtime "Theme" menu (System/Dark/Light) driving WBQtTheme.
+	void addQtThemeMenu(void);
+	afx_msg void OnQtTheme(UINT nID);
+	afx_msg void OnUpdateQtTheme(CCmdUI *pCmdUI);
 #endif
 
 protected:  // control bar embedded members

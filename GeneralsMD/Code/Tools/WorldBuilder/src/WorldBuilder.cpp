@@ -538,6 +538,7 @@ BOOL CWorldBuilderApp::InitInstance()
 		{
 			pFrame->m_qtViewportHost = (HWND)WBQt_HostViewport(pFrame->GetSafeHwnd(), p3d->GetSafeHwnd());
 			pFrame->positionQtViewportHost();
+			pFrame->addQtThemeMenu();
 		}
 	}
 #endif

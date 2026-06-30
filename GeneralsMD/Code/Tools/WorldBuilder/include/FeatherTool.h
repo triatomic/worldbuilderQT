@@ -52,6 +52,12 @@ public:
 	~FeatherTool(void);
 
 	static Int getFeather(void) {return m_feather;}; ///<Returns feather (the brush size).
+	static Int getRadius(void) {return m_radius;};
+	static Int getRate(void) {return m_rate;};
+	static Bool getEnableMirror(void) {return m_enableMirror;};
+	static Bool getMirrorX(void) {return m_mirrorX;};
+	static Bool getMirrorY(void) {return m_mirrorY;};
+	static Bool getMirrorXY(void) {return m_mirrorDiag;};
 	static void setFeather(Int feather);
 	static void setRate(Int rate);
 	static void setRadius(Int Radius);

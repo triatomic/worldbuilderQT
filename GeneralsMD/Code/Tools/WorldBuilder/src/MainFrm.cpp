@@ -38,6 +38,7 @@
 #include "ScriptDialog.h"
 #ifdef RTS_HAS_QT
 #include "qt/WBQtBridge.h"
+#include "qt/WBQtPanelBridge.h"
 #endif
 #define ADJUST_VIEW_TIMER 6969
 #define COUNTDOWN_TIMER 6910
@@ -62,6 +63,10 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWnd)
 	ON_COMMAND(ID_EDIT_CAMERAOPTIONS, OnEditCameraoptions)
 	ON_WM_DROPFILES()  
 	//}}AFX_MSG_MAP
+#ifdef RTS_HAS_QT
+	ON_COMMAND_RANGE(ID_QTTHEME_SYSTEM, ID_QTTHEME_LIGHT, OnQtTheme)
+	ON_UPDATE_COMMAND_UI_RANGE(ID_QTTHEME_SYSTEM, ID_QTTHEME_LIGHT, OnUpdateQtTheme)
+#endif
 END_MESSAGE_MAP()
 
 static UINT indicators[] =
@@ -565,6 +570,9 @@ void CMainFrame::showOptionsDialog(Int dialogID)
 	 * just hide that damn thing ..
 	 */
 	if (dialogID == IDD_NO_OPTIONS) {
+#ifdef RTS_HAS_QT
+		WBQt_HideOptionsPanel();
+#endif
 		// DEBUG_LOG(("Hiding current options dialog (IDD_NO_OPTIONS triggered).\n"));
 		if (m_curOptions) {
 			m_curOptions->ShowWindow(SW_HIDE);
@@ -572,6 +580,23 @@ void CMainFrame::showOptionsDialog(Int dialogID)
 		}
 		return;
 	}
+
+#ifdef RTS_HAS_QT
+	{
+		int qtTop  = ::AfxGetApp()->GetProfileInt(OPTIONS_PANEL_SECTION, "Top", 10);
+		int qtLeft = ::AfxGetApp()->GetProfileInt(OPTIONS_PANEL_SECTION, "Left", 10);
+		if (WBQt_ShowOptionsPanel(GetSafeHwnd(), dialogID, qtLeft, qtTop,
+				m_optionsPanelWidth, m_optionsPanelHeight)) {
+			if (m_curOptions) {
+				m_curOptions->ShowWindow(SW_HIDE);
+				m_curOptions = NULL;
+			}
+			m_curDialogID = dialogID;
+			return;
+		}
+		WBQt_HideOptionsPanel();
+	}
+#endif
 
 	CWnd *newOptions = NULL;
 	switch(dialogID) {
@@ -775,6 +800,33 @@ void CMainFrame::positionQtViewportHost(void)
 	// viewport to fill (a Win32 SetWindowPos left Qt's geometry stale, pinning the view
 	// at Qt's ~100x30 default).
 	WBQt_SetViewportHostGeometry(pane.left, pane.top, pane.Width(), pane.Height());
+}
+
+// Phase 3: a runtime "Theme" menu (System/Dark/Light) flipping WBQtTheme live.
+void CMainFrame::addQtThemeMenu(void)
+{
+	CMenu *pBar = GetMenu();
+	if (pBar == NULL)
+	{
+		return;
+	}
+	CMenu theme;
+	theme.CreatePopupMenu();
+	theme.AppendMenu(MF_STRING, ID_QTTHEME_SYSTEM, "&System (follow Windows)");
+	theme.AppendMenu(MF_STRING, ID_QTTHEME_DARK, "&Dark");
+	theme.AppendMenu(MF_STRING, ID_QTTHEME_LIGHT, "&Light");
+	pBar->AppendMenu(MF_POPUP, (UINT_PTR)theme.Detach(), "&Theme");
+	DrawMenuBar();
+}
+
+void CMainFrame::OnQtTheme(UINT nID)
+{
+	WBQt_SetThemeMode((int)(nID - ID_QTTHEME_SYSTEM));
+}
+
+void CMainFrame::OnUpdateQtTheme(CCmdUI *pCmdUI)
+{
+	pCmdUI->SetCheck(WBQt_GetThemeMode() == (int)(pCmdUI->m_nID - ID_QTTHEME_SYSTEM) ? 1 : 0);
 }
 #endif
 

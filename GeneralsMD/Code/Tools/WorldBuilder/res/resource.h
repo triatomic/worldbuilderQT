@@ -956,6 +956,9 @@
 #define IDC_TERRAIN_ROTATE3             61502
 #define IDC_TERRAIN_ROTATE4             61503
 #define ID_VIEW_SHOWROADS               61504
+#define ID_QTTHEME_SYSTEM               61600
+#define ID_QTTHEME_DARK                 61601
+#define ID_QTTHEME_LIGHT                61602
 
 // Next default values for new objects
 // 

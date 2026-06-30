@@ -67,6 +67,25 @@ void WBQt_Shutdown(void)
 	delete qApp;
 }
 
+void WBQt_SetThemeMode(int mode)
+{
+	WBQtTheme::Mode m = WBQtTheme::ModeSystem;
+	if (mode == 1)
+	{
+		m = WBQtTheme::ModeDark;
+	}
+	else if (mode == 2)
+	{
+		m = WBQtTheme::ModeLight;
+	}
+	WBQtTheme::setMode(m);
+}
+
+int WBQt_GetThemeMode(void)
+{
+	return (int)WBQtTheme::mode();
+}
+
 void *WBQt_HostViewport(void *frameHwnd, void *viewHwnd)
 {
 	if (g_wbViewportHost != NULL)

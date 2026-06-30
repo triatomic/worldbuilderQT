@@ -100,6 +100,7 @@ set(WORLDBUILDER_SRC
     "src/WBHeightMap.cpp"
     "src/WBPopupSlider.cpp"
     "src/WBQtHostBridge.cpp"
+    "src/WBQtFeatherBridge.cpp"
     "src/wbview.cpp"
     "src/wbview3d.cpp"
     "src/WHeightMapEdit.cpp"
@@ -285,12 +286,18 @@ if(RTS_ENABLE_WORLDBUILDER_QT)
         "qt/WBQtTheme.cpp"
         "qt/WBQtTheme.h"
         "qt/WBQtTestWindow.cpp"
-        "qt/WBQtTestWindow.h")
+        "qt/WBQtTestWindow.h"
+        "qt/WBQtPanelBridge.h"
+        "qt/WBQtOptionsPanels.cpp"
+        "qt/panels/WBQtFeatherPanel.cpp"
+        "qt/panels/WBQtFeatherPanel.h")
 
     set_target_properties(z_worldbuilder_qt PROPERTIES AUTOMOC ON)
 
     target_include_directories(z_worldbuilder_qt PRIVATE
         qt
+        qt/panels
+        res
         qt/3rdparty/qtwinmigrate)
 
     # _AFXDLL: match the exe's shared-MFC config so afxwin.h resolves identically in

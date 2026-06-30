@@ -25,6 +25,9 @@
 #include "FeatherOptions.h"
 #include "WorldBuilderView.h"
 #include "FeatherTool.h"
+#ifdef RTS_HAS_QT
+#include "qt/WBQtPanelBridge.h"
+#endif
 
 FeatherOptions *FeatherOptions::m_staticThis = NULL;
 Int FeatherOptions::m_currentFeather = 0;
@@ -57,6 +60,9 @@ void FeatherOptions::setFeather(Int feather)
 	CString buf;
 	buf.Format("%d", feather);
 	m_currentFeather = feather;
+#ifdef RTS_HAS_QT
+	WBQtFeather_PushFeather(feather);
+#endif
 	if (m_staticThis && !m_staticThis->m_updating) {
 		CWnd *pEdit = m_staticThis->GetDlgItem(IDC_SIZE_EDIT);
 		if (pEdit) pEdit->SetWindowText(buf);
@@ -71,6 +77,9 @@ void FeatherOptions::setRate(Int rate)
 	CString buf;
 	buf.Format("%d", rate);
 	m_currentRate = rate;
+#ifdef RTS_HAS_QT
+	WBQtFeather_PushRate(rate);
+#endif
 	if (m_staticThis && !m_staticThis->m_updating) {
 		CWnd *pEdit = m_staticThis->GetDlgItem(IDC_RATE_EDIT);
 		if (pEdit) pEdit->SetWindowText(buf);
@@ -85,6 +94,9 @@ void FeatherOptions::setRadius(Int radius)
 	CString buf;
 	buf.Format("%d", radius);
 	m_currentRadius = radius;
+#ifdef RTS_HAS_QT
+	WBQtFeather_PushRadius(radius);
+#endif
 	if (m_staticThis && !m_staticThis->m_updating) {
 		CWnd *pEdit = m_staticThis->GetDlgItem(IDC_RADIUS_EDIT);
 		if (pEdit) pEdit->SetWindowText(buf);
