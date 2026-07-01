@@ -115,6 +115,7 @@ public:
 	int  qtGetSelection(void);
 	int  qtHasScript(void);	// current selection resolves to a Script (Edit/Copy/Delete)
 	int  qtHasGroup(void);	// current selection resolves to a ScriptGroup
+	Script *qtCurScript(void);	// == getCurScript() for the current selection (9b search)
 	void qtDoNewFolder(void);
 	void qtDoNewScript(void);
 	void qtDoEditScript(void);
@@ -122,6 +123,11 @@ public:
 	void qtDoDelete(void);
 	void qtCommitAndClose(void);	// == OnOK (commit m_sides via SidesListUndoable)
 	void qtCancelAndClose(void);	// == OnCancel (discard)
+	// 9b: drag-drop + search. qtDropOn resolves both nodes by ListType and reuses doDropOn
+	// (reorder / move / Ctrl auto-merge). qtFindNext walks the model in tree order and
+	// returns the next node (label + deep-content match) after fromListType, or 0 if none.
+	void qtDropOn(int dragListType, int targetListType);
+	int  qtFindNext(const char *text, int fromListType, int *outListType);
 	static ScriptDialog *qtInstance(void) { return m_staticThis; }
 #endif
 

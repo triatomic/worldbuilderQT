@@ -3679,6 +3679,11 @@ int ScriptDialog::qtHasScript(void)
 	return (getCurScript() != NULL) ? 1 : 0;
 }
 
+Script *ScriptDialog::qtCurScript(void)
+{
+	return getCurScript();
+}
+
 int ScriptDialog::qtHasGroup(void)
 {
 	return (getCurGroup() != NULL) ? 1 : 0;
@@ -3711,6 +3716,136 @@ void ScriptDialog::qtCancelAndClose(void)
 	{
 		CMainFrame::GetMainFrame()->setFocusInScripting(false);
 	}
+}
+
+void ScriptDialog::qtDropOn(int dragListType, int targetListType)
+{
+	// Resolve both nodes on the (hidden) MFC tree and reuse doDropOn unchanged -- it reads
+	// the packed ListType off each item, mutates m_sides (reorder / move / Ctrl auto-merge),
+	// and refreshes the MFC tree; the Qt window rebuilds afterwards. doDropOn reads the live
+	// Ctrl key state itself, so a Ctrl-drag in Qt still triggers the merge path.
+	ListType dragLT;
+	dragLT.IntToList(dragListType);
+	ListType targetLT;
+	targetLT.IntToList(targetListType);
+	HTREEITEM hDrag = findItem(dragLT);
+	HTREEITEM hTarget = findItem(targetLT);
+	if (hDrag != NULL && hTarget != NULL)
+	{
+		doDropOn(hDrag, hTarget);
+	}
+}
+
+// Does the script at the given selection deep-match the (lowercased) search text? Mirrors
+// the deep scan in OnFindNext: comment + uiText + every condition/action parameter string.
+static Bool qtScriptDeepMatches(Script *pScr, const AsciiString &needleLower)
+{
+	if (pScr == NULL)
+	{
+		return false;
+	}
+	AsciiString content = pScr->getComment();
+	content.concat(pScr->getUiText());
+	content.toLower();
+	if (strstr(content.str(), needleLower.str()) != NULL)
+	{
+		return true;
+	}
+	for (OrCondition *pOr = pScr->getOrCondition(); pOr; pOr = pOr->getNextOrCondition())
+	{
+		for (Condition *c = pOr->getFirstAndCondition(); c; c = c->getNext())
+		{
+			for (int p = 0; p < c->getNumParameters(); ++p)
+			{
+				AsciiString ps = c->getParameter(p)->getString();
+				ps.toLower();
+				if (strstr(ps.str(), needleLower.str()) != NULL)
+				{
+					return true;
+				}
+			}
+		}
+	}
+	for (ScriptAction *a = pScr->getAction(); a; a = a->getNext())
+	{
+		for (int p = 0; p < a->getNumParameters(); ++p)
+		{
+			AsciiString ps = a->getParameter(p)->getString();
+			ps.toLower();
+			if (strstr(ps.str(), needleLower.str()) != NULL)
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+namespace {
+	// Finds the first node (in tree pre-order) strictly AFTER a 'from' node whose label or
+	// script content matches. from==0 means start at the top.
+	struct QtFindVisitor : public QtNodeVisitor {
+		ScriptDialog *dlg; AsciiString needle; int fromInt; Bool passedFrom; Bool found; int result;
+		QtFindVisitor(ScriptDialog *d, const AsciiString &n, int f)
+			: dlg(d), needle(n), fromInt(f), passedFrom(f == 0), found(false), result(0) {}
+		virtual void visit(int, int listTypeInt, const AsciiString &label)
+		{
+			if (found)
+			{
+				return;
+			}
+			if (!passedFrom)
+			{
+				if (listTypeInt == fromInt)
+				{
+					passedFrom = true;
+				}
+				return;
+			}
+			AsciiString lower = label;
+			lower.toLower();
+			Bool match = (strstr(lower.str(), needle.str()) != NULL);
+			if (!match)
+			{
+				ListType lt;
+				lt.IntToList(listTypeInt);
+				if (lt.m_objType == ListType::SCRIPT_IN_PLAYER_TYPE ||
+					lt.m_objType == ListType::SCRIPT_IN_GROUP_TYPE)
+				{
+					int saved = dlg->qtGetSelection();
+					dlg->qtSetSelection(listTypeInt);
+					match = qtScriptDeepMatches(dlg->qtCurScript(), needle);
+					dlg->qtSetSelection(saved);
+				}
+			}
+			if (match)
+			{
+				found = true;
+				result = listTypeInt;
+			}
+		}
+	};
+}
+
+int ScriptDialog::qtFindNext(const char *text, int fromListType, int *outListType)
+{
+	if (text == NULL || text[0] == 0)
+	{
+		return 0;
+	}
+	AsciiString needle = text;
+	needle.toLower();
+	QtFindVisitor fv(this, needle, fromListType);
+	qtWalkModel(m_sides, m_bCleanScriptName, fv);
+	if (!fv.found)
+	{
+		return 0;
+	}
+	if (outListType != NULL)
+	{
+		*outListType = fv.result;
+	}
+	return 1;
 }
 #endif
 

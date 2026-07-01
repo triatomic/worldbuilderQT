@@ -27,6 +27,9 @@
 #include "WHeightMapEdit.h"
 #include "wbview3d.h"
 #include "ToastDialog.h"
+#ifdef RTS_HAS_QT
+#include "qt/WBQtPanelBridge.h"
+#endif
 /////////////////////////////////////////////////////////////////////////////
 // CWBFrameWnd
 
@@ -151,6 +154,16 @@ void CWB3dFrameWnd::OnMove(int x, int y)
 
 BOOL CWB3dFrameWnd::PreTranslateMessage(MSG* pMsg)
 {
+#ifdef RTS_HAS_QT
+	// When the Qt Script editor owns the keyboard focus, skip the frame's accelerator
+	// translation (CFrameWnd::PreTranslateMessage) -- otherwise single-key tool shortcuts
+	// swallow keystrokes meant for the script editor's search / rename fields. Route
+	// straight to CWnd so the message dispatches to the focused Qt control.
+	if (WBQtScript_OwnsFocus())
+	{
+		return CWnd::PreTranslateMessage(pMsg);
+	}
+#endif
 	// DEBUG_LOG(("Clicked\n"));
     if (pMsg->message == WM_KEYDOWN)
     {

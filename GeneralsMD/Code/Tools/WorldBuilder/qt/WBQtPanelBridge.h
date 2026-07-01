@@ -185,12 +185,22 @@ void WBQtScript_CopyScript(void);
 void WBQtScript_Delete(void);
 void WBQtScript_Commit(void);	// == OnOK  (commit the working model, save)
 void WBQtScript_Cancel(void);	// == OnCancel (discard)
+// 9b: drag-drop reorder/move (reuses doDropOn incl. Ctrl auto-merge) and search. Both listType
+// args are packed ListType ints. FindNext returns the next matching node's ListType via *out
+// (non-zero return on a hit); fromListType 0 starts from the top.
+void WBQtScript_DropOn(int dragListType, int targetListType);
+int  WBQtScript_FindNext(const char *text, int fromListType, int *outListType);
 
 // Forward (Qt-side, WBQtScriptWindow): open/close the Qt Script window. WBQtScript_Open is
 // called from CMainFrame::onEditScripts after the hidden MFC dialog is created; it builds
 // the window rooted in frameHwnd. WBQtScript_Close tears it down.
 void WBQtScript_Open(void *frameHwnd, int x, int y);
 void WBQtScript_Close(void);
+
+// Non-zero when the Qt Script window (or one of its child controls) has the Win32 keyboard
+// focus. The MFC frame's PreTranslateMessage checks this and SKIPS accelerator translation
+// so single-key tool shortcuts don't eat keystrokes meant for the script editor's fields.
+int  WBQtScript_OwnsFocus(void);
 
 #ifdef __cplusplus
 }

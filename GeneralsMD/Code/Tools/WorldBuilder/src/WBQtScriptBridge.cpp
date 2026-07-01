@@ -126,5 +126,20 @@ void WBQtScript_Cancel(void)
 	}
 }
 
+void WBQtScript_DropOn(int dragListType, int targetListType)
+{
+	ScriptDialog *dlg = ScriptDialog::qtInstance();
+	if (dlg != NULL)
+	{
+		dlg->qtDropOn(dragListType, targetListType);
+	}
+}
+
+int WBQtScript_FindNext(const char *text, int fromListType, int *outListType)
+{
+	ScriptDialog *dlg = ScriptDialog::qtInstance();
+	return (dlg != NULL) ? dlg->qtFindNext(text, fromListType, outListType) : 0;
+}
+
 }
 #endif
