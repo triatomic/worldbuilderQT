@@ -104,6 +104,42 @@ public:
 	static void update(void) {if (m_staticThis) m_staticThis->loadSides();};
 	static void setSelectedBuildList(BuildListInfo *pInfo);
 
+#ifdef RTS_HAS_QT
+	// Qt front-end support (WBQtBuildListBridge). The MFC BuildList stays created + hidden
+	// (m_staticThis, so the tool's addBuilding/setSelectedBuildList/update reach it); the Qt
+	// panel reads state + drives commands through these. Defined in BuildList.cpp.
+	static int  qtGetSideCount(void);
+	static int  qtGetSideName(int i, char *out, int cap);
+	static int  qtGetCurSide(void);
+	static void qtSetCurSide(int i);
+	static int  qtGetBuildCount(void);
+	static int  qtGetBuildName(int i, char *out, int cap);
+	static int  qtGetCurBuild(void);
+	static void qtSetCurBuild(int i);
+	// Current building's attributes.
+	static int    qtHasCurBuild(void);
+	static double qtGetAngle(void);
+	static double qtGetZ(void);
+	static int    qtGetAlreadyBuilt(void);
+	static int    qtGetRebuilds(void);	// -1 == unlimited
+	static void   qtSetAngle(double deg);
+	static void   qtSetZ(double z);
+	static void   qtSetAlreadyBuilt(int on);
+	static void   qtSetRebuilds(int nr);	// -1 == unlimited
+	// Power Used meter: 0..100 (== (1-energyUsed)*100, cached from updateCurSide).
+	static int  qtGetPowerPercent(void);
+	// Commands.
+	static void qtMoveUp(void);
+	static void qtMoveDown(void);
+	static void qtAddBuilding(void);
+	static void qtDeleteBuilding(void);
+	static void qtExport(void);
+	static void qtImport(void);
+	static void qtEditProps(void);	// == OnDblclkBuildList (BaseBuildProps)
+	static int  qtGetForcedShow(void);
+	static void qtSetForcedShow(int on);
+#endif
+
 	virtual void GetPopSliderInfo(const long sliderID, long *pMin, long *pMax, long *pLineSize, long *pInitial);
 	virtual void PopSliderChanged(const long sliderID, long theVal);
 	virtual void PopSliderFinished(const long sliderID, long theVal);

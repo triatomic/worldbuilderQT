@@ -59,6 +59,41 @@ int  WBQtBrush_GetMirrorX(void);
 int  WBQtBrush_GetMirrorY(void);
 int  WBQtBrush_GetMirrorXY(void);
 
+// --- Build List panel: front-end over the hidden MFC BuildList (WBQtBuildListBridge) -------
+// The MFC BuildList stays created + hidden (m_staticThis intact) so the tool's addBuilding /
+// setSelectedBuildList / update keep reaching it; the Qt panel reads state + fires commands
+// through the reverse funcs, and re-reads when WBQtBuildList_PushRefresh fires (from
+// BuildList's own refresh path -- tool activate, map placement, undo/redo). Strings copy into
+// caller buffers. Rebuilds: -1 == unlimited. PowerPercent = (1-energyUsed)*100.
+void WBQtBuildList_PushRefresh(void);	// forward (Qt-side): re-seed the whole Qt panel
+int  WBQtBuildList_GetSideCount(void);
+int  WBQtBuildList_GetSideName(int i, char *out, int cap);
+int  WBQtBuildList_GetCurSide(void);
+void WBQtBuildList_SetCurSide(int i);
+int  WBQtBuildList_GetBuildCount(void);
+int  WBQtBuildList_GetBuildName(int i, char *out, int cap);
+int  WBQtBuildList_GetCurBuild(void);
+void WBQtBuildList_SetCurBuild(int i);
+int    WBQtBuildList_HasCurBuild(void);
+double WBQtBuildList_GetAngle(void);
+double WBQtBuildList_GetZ(void);
+int    WBQtBuildList_GetAlreadyBuilt(void);
+int    WBQtBuildList_GetRebuilds(void);
+void   WBQtBuildList_SetAngle(double deg);
+void   WBQtBuildList_SetZ(double z);
+void   WBQtBuildList_SetAlreadyBuilt(int on);
+void   WBQtBuildList_SetRebuilds(int nr);
+int  WBQtBuildList_GetPowerPercent(void);
+void WBQtBuildList_MoveUp(void);
+void WBQtBuildList_MoveDown(void);
+void WBQtBuildList_AddBuilding(void);
+void WBQtBuildList_DeleteBuilding(void);
+void WBQtBuildList_Export(void);
+void WBQtBuildList_Import(void);
+void WBQtBuildList_EditProps(void);
+int  WBQtBuildList_GetForcedShow(void);
+void WBQtBuildList_SetForcedShow(int on);
+
 // --- Mound panel: forward push, tool -> Qt widget (implemented Qt-side) ------------------
 void WBQtMound_PushWidth(int v);
 void WBQtMound_PushFeather(int v);

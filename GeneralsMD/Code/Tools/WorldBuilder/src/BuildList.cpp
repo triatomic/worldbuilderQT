@@ -41,6 +41,11 @@ BuildList *BuildList::m_staticThis = NULL;
 Bool BuildList::m_updating = false;
 
 #define BUILDLIST_OPTION_PANEL "BuildListOptionPanel"
+#ifdef RTS_HAS_QT
+#include "qt/WBQtPanelBridge.h"
+// Last power-meter percent computed in updateCurSide, read back by qtGetPowerPercent.
+static int s_qtPowerPercent = 0;
+#endif
 /////////////////////////////////////////////////////////////////////////////
 // BuildList dialog
 
@@ -441,6 +446,9 @@ void BuildList::OnSelchangeBuildList()
 		progressWnd->EnableWindow(true);
 		progressWnd->SetPos((Int)((1.0f-energyUsed)*100));
 	}
+#ifdef RTS_HAS_QT
+	s_qtPowerPercent = (int)((1.0f - energyUsed) * 100);
+#endif
 
 	if (pBuildInfo==NULL) {
 		enableAttrs = false;
@@ -493,6 +501,9 @@ void BuildList::OnSelchangeBuildList()
 		}
 	}
 
+#ifdef RTS_HAS_QT
+	WBQtBuildList_PushRefresh();
+#endif
 
 }
 
@@ -959,3 +970,181 @@ void BuildList::OnImport()
 		AfxMessageBox(_T("Error occurred during import."));
 	}
 }
+
+#ifdef RTS_HAS_QT
+//----------------------------------------------------------------------------------------
+// Qt front-end support. The MFC BuildList stays created + hidden (m_staticThis intact), so
+// BuildListTool::addBuilding / setSelectedBuildList / BuildList::update all keep driving it.
+// The Qt panel reads state + fires commands through these statics; structural commands set
+// the hidden MFC listbox selection then call the real handler (which builds the undoable).
+//----------------------------------------------------------------------------------------
+namespace {
+	// Walk to the BuildListInfo at index within the current side (NULL if out of range).
+	BuildListInfo *qtBuildAt(int curSide, int idx)
+	{
+		if (idx < 0 || curSide < 0 || curSide >= TheSidesList->getNumSides())
+		{
+			return NULL;
+		}
+		BuildListInfo *pBuild = TheSidesList->getSideInfo(curSide)->getBuildList();
+		int count = idx;
+		while (count > 0 && pBuild != NULL)
+		{
+			pBuild = pBuild->getNext();
+			count--;
+		}
+		return pBuild;
+	}
+	void qtCopyStr(char *out, int cap, const char *src)
+	{
+		if (out == NULL || cap <= 0) { return; }
+		if (src == NULL) { out[0] = 0; return; }
+		strncpy(out, src, cap - 1);
+		out[cap - 1] = 0;
+	}
+}
+
+int BuildList::qtGetSideCount(void)
+{
+	return TheSidesList ? TheSidesList->getNumSides() : 0;
+}
+
+int BuildList::qtGetSideName(int i, char *out, int cap)
+{
+	if (i < 0 || i >= TheSidesList->getNumSides()) { return 0; }
+	Dict *dd = TheSidesList->getSideInfo(i)->getDict();
+	AsciiString name = dd->getAsciiString(TheKey_playerName);
+	if (name.isEmpty())
+	{
+		qtCopyStr(out, cap, "(neutral player, cannot be edited)");
+	}
+	else
+	{
+		qtCopyStr(out, cap, name.str());
+	}
+	return 1;
+}
+
+int  BuildList::qtGetCurSide(void) { return m_staticThis ? m_staticThis->m_curSide : 0; }
+
+void BuildList::qtSetCurSide(int i)
+{
+	if (m_staticThis == NULL) { return; }
+	if (i < 0 || i >= TheSidesList->getNumSides()) { return; }
+	m_staticThis->m_curSide = i;
+	m_staticThis->updateCurSide();
+}
+
+int BuildList::qtGetBuildCount(void)
+{
+	int side = qtGetCurSide();
+	if (side < 0 || side >= TheSidesList->getNumSides()) { return 0; }
+	int n = 0;
+	for (BuildListInfo *p = TheSidesList->getSideInfo(side)->getBuildList(); p; p = p->getNext())
+	{
+		n++;
+	}
+	return n;
+}
+
+int BuildList::qtGetBuildName(int i, char *out, int cap)
+{
+	BuildListInfo *p = qtBuildAt(qtGetCurSide(), i);
+	if (p == NULL) { return 0; }
+	qtCopyStr(out, cap, p->getTemplateName().str());
+	return 1;
+}
+
+int  BuildList::qtGetCurBuild(void) { return m_staticThis ? m_staticThis->m_curBuildList : -1; }
+
+void BuildList::qtSetCurBuild(int i)
+{
+	if (m_staticThis == NULL) { return; }
+	m_staticThis->m_curBuildList = i;
+	CListBox *pList = (CListBox *)m_staticThis->GetDlgItem(IDC_BUILD_LIST);
+	if (pList != NULL) { pList->SetCurSel(i); }
+	m_staticThis->OnSelchangeBuildList();
+}
+
+int BuildList::qtHasCurBuild(void)
+{
+	return (qtBuildAt(qtGetCurSide(), qtGetCurBuild()) != NULL) ? 1 : 0;
+}
+
+double BuildList::qtGetAngle(void)
+{
+	BuildListInfo *p = qtBuildAt(qtGetCurSide(), qtGetCurBuild());
+	return (p != NULL) ? (double)(p->getAngle() * 180 / PI) : 0.0;
+}
+
+double BuildList::qtGetZ(void)
+{
+	BuildListInfo *p = qtBuildAt(qtGetCurSide(), qtGetCurBuild());
+	return (p != NULL) ? (double)p->getLocation()->z : 0.0;
+}
+
+int BuildList::qtGetAlreadyBuilt(void)
+{
+	BuildListInfo *p = qtBuildAt(qtGetCurSide(), qtGetCurBuild());
+	return (p != NULL && p->isInitiallyBuilt()) ? 1 : 0;
+}
+
+int BuildList::qtGetRebuilds(void)
+{
+	BuildListInfo *p = qtBuildAt(qtGetCurSide(), qtGetCurBuild());
+	if (p == NULL) { return 0; }
+	UnsignedInt nr = p->getNumRebuilds();
+	return (nr == BuildListInfo::UNLIMITED_REBUILDS) ? -1 : (int)nr;
+}
+
+void BuildList::qtSetAngle(double deg)
+{
+	BuildListInfo *p = qtBuildAt(qtGetCurSide(), qtGetCurBuild());
+	if (p != NULL) { p->setAngle((Real)(deg * PI / 180)); }
+}
+
+void BuildList::qtSetZ(double z)
+{
+	BuildListInfo *p = qtBuildAt(qtGetCurSide(), qtGetCurBuild());
+	if (p != NULL)
+	{
+		Coord3D loc = *p->getLocation();
+		loc.z = (Real)z;
+		p->setLocation(loc);
+	}
+}
+
+void BuildList::qtSetAlreadyBuilt(int on)
+{
+	BuildListInfo *p = qtBuildAt(qtGetCurSide(), qtGetCurBuild());
+	if (p != NULL) { p->setInitiallyBuilt(on != 0); }
+}
+
+void BuildList::qtSetRebuilds(int nr)
+{
+	BuildListInfo *p = qtBuildAt(qtGetCurSide(), qtGetCurBuild());
+	if (p == NULL) { return; }
+	if (nr < 0) { p->setNumRebuilds(BuildListInfo::UNLIMITED_REBUILDS); }
+	else { p->setNumRebuilds((UnsignedInt)nr); }
+}
+
+int  BuildList::qtGetPowerPercent(void) { return s_qtPowerPercent; }
+
+void BuildList::qtMoveUp(void)        { if (m_staticThis) m_staticThis->OnMoveUp(); }
+void BuildList::qtMoveDown(void)      { if (m_staticThis) m_staticThis->OnMoveDown(); }
+void BuildList::qtAddBuilding(void)   { if (m_staticThis) m_staticThis->OnAddBuilding(); }
+void BuildList::qtDeleteBuilding(void){ if (m_staticThis) m_staticThis->OnDeleteBuilding(); }
+void BuildList::qtExport(void)        { if (m_staticThis) m_staticThis->OnExport(); }
+void BuildList::qtImport(void)        { if (m_staticThis) m_staticThis->OnImport(); }
+void BuildList::qtEditProps(void)     { if (m_staticThis) m_staticThis->OnDblclkBuildList(); }
+
+int BuildList::qtGetForcedShow(void)
+{
+	return ::AfxGetApp()->GetProfileInt(BUILDLIST_OPTION_PANEL, "ForceShowBuildListObjects", 0);
+}
+
+void BuildList::qtSetForcedShow(int on)
+{
+	::AfxGetApp()->WriteProfileInt(BUILDLIST_OPTION_PANEL, "ForceShowBuildListObjects", on ? 1 : 0);
+}
+#endif
