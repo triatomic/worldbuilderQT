@@ -690,7 +690,14 @@ void CMainFrame::onEditScripts()
 	m_scriptDialog->Create(IDD_ScriptDialog, this);
 	m_scriptDialog->SetWindowPos(NULL, frameRect.left, frameRect.top, 0, 0, SWP_NOZORDER|SWP_NOSIZE);
  	m_scriptDialog->GetWindowRect(&frameRect);
+#ifdef RTS_HAS_QT
+	// Qt Script editor (Phase 9a): keep the MFC dialog created (so it loads m_sides and
+	// stays the model/commit backend) but hidden, and drive it from the Qt window instead.
+	m_scriptDialog->ShowWindow(SW_HIDE);
+	WBQtScript_Open(GetSafeHwnd(), frameRect.left, frameRect.top);
+#else
 	m_scriptDialog->ShowWindow(SW_SHOWNA);
+#endif
 }
 
 void CMainFrame::setFocusInScripting(Bool focus)

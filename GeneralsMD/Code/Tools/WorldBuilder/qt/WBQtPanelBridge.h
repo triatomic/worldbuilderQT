@@ -164,6 +164,34 @@ int  WBQtObject_GetUseWaterHeight(void);
 void WBQtObject_PushFromSelection(void);
 void WBQtObject_PushSelectIndex(int listIndex);
 
+// --- Script editor (Phase 9a): Qt window is a front-end over the hidden MFC ScriptDialog ---
+// The MFC ScriptDialog is still Create()d (hidden) so its working model (m_sides), the
+// sub-editors, and OK/Cancel commit all stay MFC-side. These reverse callbacks (MFC-side,
+// WBQtScriptBridge -> ScriptDialog::qt*) let the Qt tree read the flat model, drive the
+// selection, and invoke the same command handlers. isActive is non-zero while the MFC
+// dialog exists. tree nodes: depth 0 = player, 1 = group or ungrouped script, 2 = script in
+// group; listType is the packed ListType int (opaque -- only round-tripped back via
+// SetSelection). The Qt window OWNS its lifetime; on close it calls Commit or Cancel.
+int  WBQtScript_IsActive(void);
+int  WBQtScript_GetNodeCount(void);
+int  WBQtScript_GetNode(int i, int *depthOut, int *listTypeOut, char *labelOut, int cap);
+void WBQtScript_SetSelection(int listTypeInt);
+int  WBQtScript_HasScript(void);
+int  WBQtScript_HasGroup(void);
+void WBQtScript_NewFolder(void);
+void WBQtScript_NewScript(void);
+void WBQtScript_EditScript(void);
+void WBQtScript_CopyScript(void);
+void WBQtScript_Delete(void);
+void WBQtScript_Commit(void);	// == OnOK  (commit the working model, save)
+void WBQtScript_Cancel(void);	// == OnCancel (discard)
+
+// Forward (Qt-side, WBQtScriptWindow): open/close the Qt Script window. WBQtScript_Open is
+// called from CMainFrame::onEditScripts after the hidden MFC dialog is created; it builds
+// the window rooted in frameHwnd. WBQtScript_Close tears it down.
+void WBQtScript_Open(void *frameHwnd, int x, int y);
+void WBQtScript_Close(void);
+
 #ifdef __cplusplus
 }
 #endif

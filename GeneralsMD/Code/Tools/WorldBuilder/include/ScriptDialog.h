@@ -102,6 +102,29 @@ public:
 	Script *friend_getCurScript(void);
 	ScriptGroup *friend_getCurGroup(void);
 
+#ifdef RTS_HAS_QT
+	// Qt Script-editor front-end support (WBQtScriptBridge / ScriptDialog.cpp). The Qt
+	// window drives this still-created-but-hidden MFC dialog: it reads the flat tree model
+	// below, pushes its selection into m_curSelection, and invokes the same command
+	// handlers, so m_sides / the sub-editors / OK-Cancel commit all stay MFC-side.
+	int  qtGetNodeCount(void);
+	// Fill node i (pre-order): depth (0 player / 1 group or ungrouped script / 2 script in
+	// group), its packed ListType int, and its display label. Returns 0 past the end.
+	int  qtGetNode(int i, int *depthOut, int *listTypeOut, char *labelOut, int cap);
+	void qtSetSelection(int listTypeInt);
+	int  qtGetSelection(void);
+	int  qtHasScript(void);	// current selection resolves to a Script (Edit/Copy/Delete)
+	int  qtHasGroup(void);	// current selection resolves to a ScriptGroup
+	void qtDoNewFolder(void);
+	void qtDoNewScript(void);
+	void qtDoEditScript(void);
+	void qtDoCopyScript(void);
+	void qtDoDelete(void);
+	void qtCommitAndClose(void);	// == OnOK (commit m_sides via SidesListUndoable)
+	void qtCancelAndClose(void);	// == OnCancel (discard)
+	static ScriptDialog *qtInstance(void) { return m_staticThis; }
+#endif
+
 protected:
 	Bool m_bSmartCopyEnabled;
 	Bool m_bAutoMergeScripts;

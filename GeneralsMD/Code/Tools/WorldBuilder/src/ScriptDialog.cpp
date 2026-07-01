@@ -3522,6 +3522,198 @@ void ScriptDialog::OnCancel()
 	CDialog::OnCancel();
 }
 
+#ifdef RTS_HAS_QT
+//----------------------------------------------------------------------------------------
+// Qt Script-editor front-end support. The Qt window (WBQtScriptWindow) drives this hidden
+// MFC dialog: it reads the flat tree model (qtGetNodeCount/qtGetNode, mirroring the order
+// addPlayer/addScriptList build), pushes selection into m_curSelection (qtSetSelection),
+// and invokes the same command handlers (qtDo*). m_sides / the sub-editors / commit stay
+// here. formatScriptLabel is file-static in this TU, so the label building lives here.
+//----------------------------------------------------------------------------------------
+
+// Walk the working model in the same pre-order the tree uses, invoking a callback per node.
+// depth: 0 player, 1 group or ungrouped-script, 2 script-in-group.
+namespace {
+	struct QtNodeVisitor { virtual void visit(int depth, int listTypeInt, const AsciiString &label) = 0; };
+}
+
+static void qtWalkModel(SidesList &sides, Bool cleanNames, QtNodeVisitor &v)
+{
+	for (Int p = 0; p < sides.getNumSides(); p++)
+	{
+		Dict *dd = sides.getSideInfo(p)->getDict();
+		AsciiString pname = dd->getAsciiString(TheKey_playerName);
+		AsciiString plabel;
+		if (pname.isEmpty())
+		{
+			plabel = NEUTRAL_NAME_STR;
+		}
+		else
+		{
+			plabel = pname;
+		}
+		ListType lt;
+		lt.m_objType = ListType::PLAYER_TYPE;
+		lt.m_playerIndex = p;
+		v.visit(0, lt.ListToInt(), plabel);
+
+		ScriptList *pSL = sides.getSideInfo(p)->getScriptList();
+		if (pSL == NULL)
+		{
+			continue;
+		}
+
+		// Pass A: groups (folders) and their scripts.
+		Int groupNdx = 0;
+		for (ScriptGroup *pGroup = pSL->getScriptGroup(); pGroup; pGroup = pGroup->getNext(), groupNdx++)
+		{
+			if (pGroup->getName().isEmpty())
+			{
+				continue;
+			}
+			ListType glt;
+			glt.m_objType = ListType::GROUP_TYPE;
+			glt.m_playerIndex = p;
+			glt.m_groupIndex = groupNdx;
+			v.visit(1, glt.ListToInt(), formatScriptLabel(pGroup));
+
+			Int scriptNdx = 0;
+			for (Script *pScr = pGroup->getScript(); pScr; pScr = pScr->getNext(), scriptNdx++)
+			{
+				if (pScr->getName().isEmpty())
+				{
+					continue;
+				}
+				ListType slt;
+				slt.m_objType = ListType::SCRIPT_IN_GROUP_TYPE;
+				slt.m_playerIndex = p;
+				slt.m_groupIndex = groupNdx;
+				slt.m_scriptIndex = scriptNdx;
+				v.visit(2, slt.ListToInt(), formatScriptLabel(pScr, cleanNames));
+			}
+		}
+
+		// Pass B: ungrouped scripts (direct children of the player).
+		Int scriptNdx = 0;
+		for (Script *pScr = pSL->getScript(); pScr; pScr = pScr->getNext(), scriptNdx++)
+		{
+			if (pScr->getName().isEmpty())
+			{
+				continue;
+			}
+			ListType slt;
+			slt.m_objType = ListType::SCRIPT_IN_PLAYER_TYPE;
+			slt.m_playerIndex = p;
+			slt.m_groupIndex = 0;
+			slt.m_scriptIndex = scriptNdx;
+			v.visit(1, slt.ListToInt(), formatScriptLabel(pScr, cleanNames));
+		}
+	}
+}
+
+namespace {
+	// Counts nodes.
+	struct QtCountVisitor : public QtNodeVisitor {
+		int count;
+		QtCountVisitor() : count(0) {}
+		virtual void visit(int, int, const AsciiString &) { count++; }
+	};
+	// Captures node #target into out-params.
+	struct QtPickVisitor : public QtNodeVisitor {
+		int target; int cur; int depth; int listType; AsciiString label; Bool found;
+		QtPickVisitor(int t) : target(t), cur(0), depth(0), listType(0), found(false) {}
+		virtual void visit(int d, int lt, const AsciiString &l)
+		{
+			if (cur == target)
+			{
+				depth = d; listType = lt; label = l; found = true;
+			}
+			cur++;
+		}
+	};
+}
+
+int ScriptDialog::qtGetNodeCount(void)
+{
+	QtCountVisitor cv;
+	qtWalkModel(m_sides, m_bCleanScriptName, cv);
+	return cv.count;
+}
+
+int ScriptDialog::qtGetNode(int i, int *depthOut, int *listTypeOut, char *labelOut, int cap)
+{
+	QtPickVisitor pv(i);
+	qtWalkModel(m_sides, m_bCleanScriptName, pv);
+	if (!pv.found)
+	{
+		return 0;
+	}
+	if (depthOut != NULL)
+	{
+		*depthOut = pv.depth;
+	}
+	if (listTypeOut != NULL)
+	{
+		*listTypeOut = pv.listType;
+	}
+	if (labelOut != NULL && cap > 0)
+	{
+		strncpy(labelOut, pv.label.str(), cap - 1);
+		labelOut[cap - 1] = 0;
+	}
+	return 1;
+}
+
+void ScriptDialog::qtSetSelection(int listTypeInt)
+{
+	m_curSelection.IntToList(listTypeInt);
+}
+
+int ScriptDialog::qtGetSelection(void)
+{
+	return m_curSelection.ListToInt();
+}
+
+int ScriptDialog::qtHasScript(void)
+{
+	return (getCurScript() != NULL) ? 1 : 0;
+}
+
+int ScriptDialog::qtHasGroup(void)
+{
+	return (getCurGroup() != NULL) ? 1 : 0;
+}
+
+void ScriptDialog::qtDoNewFolder(void) { OnNewFolder(); }
+void ScriptDialog::qtDoNewScript(void) { OnNewScript(); }
+void ScriptDialog::qtDoEditScript(void) { OnEditScript(); }
+void ScriptDialog::qtDoCopyScript(void) { OnCopyScript(); }
+void ScriptDialog::qtDoDelete(void) { OnDelete(); }
+
+void ScriptDialog::qtCommitAndClose(void)
+{
+	// Commit the working model (m_sides -> TheSidesList via SidesListUndoable + save), like
+	// OnOK's non-search path. We do NOT call CDialog::OnOK() (that is the visible-modeless
+	// close path) and do NOT destroy the dialog here -- the bridge tears it down AFTER this
+	// returns, so `this` stays valid for the rest of the call.
+	OnSaveActual();
+	if (CMainFrame::GetMainFrame())
+	{
+		CMainFrame::GetMainFrame()->setFocusInScripting(false);
+	}
+}
+
+void ScriptDialog::qtCancelAndClose(void)
+{
+	// Discard the working model (nothing committed). Teardown happens in the bridge after
+	// this returns (see qtCommitAndClose).
+	if (CMainFrame::GetMainFrame())
+	{
+		CMainFrame::GetMainFrame()->setFocusInScripting(false);
+	}
+}
+#endif
+
 void ScriptDialog::OnBegindragScriptTree(NMHDR* pNMHDR, LRESULT* pResult) 
 {
 	NM_TREEVIEW* pNMTreeView = (NM_TREEVIEW*)pNMHDR;
