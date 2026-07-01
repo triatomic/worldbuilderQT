@@ -13,6 +13,7 @@
 #include "panels/WBQtFeatherPanel.h"
 #include "panels/WBQtBrushPanel.h"
 #include "panels/WBQtMoundPanel.h"
+#include "panels/WBQtRulerPanel.h"
 #include "resource.h"
 
 #include <QApplication>
@@ -37,6 +38,7 @@ static QWidget *wbQtPanelFor(int dialogID, QWidget *owner)
 	static WBQtFeatherPanel *featherPanel = NULL;
 	static WBQtBrushPanel   *brushPanel = NULL;
 	static WBQtMoundPanel   *moundPanel = NULL;
+	static WBQtRulerPanel   *rulerPanel = NULL;
 
 	switch (dialogID)
 	{
@@ -60,6 +62,13 @@ static QWidget *wbQtPanelFor(int dialogID, QWidget *owner)
 				moundPanel = new WBQtMoundPanel(owner);
 			}
 			return moundPanel;
+
+		case IDD_RULER_OPTIONS:
+			if (rulerPanel == NULL)
+			{
+				rulerPanel = new WBQtRulerPanel(owner);
+			}
+			return rulerPanel;
 
 		default:
 			return NULL;

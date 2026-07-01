@@ -80,6 +80,23 @@ int  WBQtMound_GetMirrorX(void);
 int  WBQtMound_GetMirrorY(void);
 int  WBQtMound_GetMirrorXY(void);
 
+// --- Ruler panel: reverse, Qt widget -> tool (implemented MFC-side, WBQtRulerBridge) -------
+// No forward push: like the MFC RulerOptions, the panel only reads tool state at seed time
+// and when the user changes a control. Lengths cross the seam as doubles in FEET (world
+// units); the tool stores a radius, so the panel does the diameter<->radius halving/doubling
+// and the feet<->meters display conversion. GetType returns RulerTypeEnum: 0 = none,
+// 1 = line, 2 = circle (== RULER_CIRCLE) -- only 2 is a circle.
+void   WBQtRuler_SetLengthFeet(double radiusFeet);
+double WBQtRuler_GetLengthFeet(void);
+int    WBQtRuler_SwitchType(void);	// toggles line<->circle, returns non-zero if it changed
+int    WBQtRuler_GetType(void);
+void   WBQtRuler_SetUseMeters(int on);
+int    WBQtRuler_GetUseMeters(void);
+double WBQtRuler_ToDisplayUnits(double feet);
+void   WBQtRuler_SetShowGrid(int on);
+int    WBQtRuler_GetShowGrid(void);
+void   WBQtRuler_RepaintViews(void);	// == pDoc->updateAllViews() so the in-view label refreshes
+
 #ifdef __cplusplus
 }
 #endif

@@ -103,6 +103,7 @@ set(WORLDBUILDER_SRC
     "src/WBQtFeatherBridge.cpp"
     "src/WBQtBrushBridge.cpp"
     "src/WBQtMoundBridge.cpp"
+    "src/WBQtRulerBridge.cpp"
     "src/wbview.cpp"
     "src/wbview3d.cpp"
     "src/WHeightMapEdit.cpp"
@@ -296,7 +297,9 @@ if(RTS_ENABLE_WORLDBUILDER_QT)
         "qt/panels/WBQtBrushPanel.cpp"
         "qt/panels/WBQtBrushPanel.h"
         "qt/panels/WBQtMoundPanel.cpp"
-        "qt/panels/WBQtMoundPanel.h")
+        "qt/panels/WBQtMoundPanel.h"
+        "qt/panels/WBQtRulerPanel.cpp"
+        "qt/panels/WBQtRulerPanel.h")
 
     set_target_properties(z_worldbuilder_qt PROPERTIES AUTOMOC ON)
 
