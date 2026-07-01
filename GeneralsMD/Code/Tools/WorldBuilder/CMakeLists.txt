@@ -122,6 +122,7 @@ set(WORLDBUILDER_SRC
     "src/WBQtGlobalLightBridge.cpp"
     "src/WBQtCameraBridge.cpp"
     "src/WBQtLayersBridge.cpp"
+    "src/WBQtScriptEditBridge.cpp"
     "src/wbview.cpp"
     "src/wbview3d.cpp"
     "src/WHeightMapEdit.cpp"
@@ -359,7 +360,10 @@ if(RTS_ENABLE_WORLDBUILDER_QT)
         "qt/panels/WBQtLayersPanel.cpp"
         "qt/panels/WBQtLayersPanel.h"
         "qt/panels/WBQtMinimapHost.cpp"
-        "qt/panels/WBQtMinimapBridge.h")
+        "qt/panels/WBQtMinimapBridge.h"
+        "qt/panels/WBQtScriptEditDialog.cpp"
+        "qt/panels/WBQtScriptEditDialog.h"
+        "qt/panels/WBQtScriptEditBridge.h")
 
     set_target_properties(z_worldbuilder_qt PROPERTIES AUTOMOC ON)
 

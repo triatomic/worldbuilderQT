@@ -42,6 +42,9 @@
 #include "WaypointOptions.h"
 #include "Common/UnicodeString.h"
 #include "MainFrm.h"
+#ifdef RTS_HAS_QT
+#include "qt/panels/WBQtScriptEditBridge.h"
+#endif
 
 #include "Common/GlobalData.h"
 
@@ -2141,6 +2144,38 @@ void ScriptDialog::OnNewScript()
 	ScriptAction *action = newInstance( ScriptAction)(ScriptAction::NO_OP);
 	pNewScript->setAction(action);
 
+#ifdef RTS_HAS_QT
+	// Qt mode: run the native Qt tabbed editor (WBQtScriptEditDialog) instead of the MFC
+	// property sheet; same accept/reject handling as the sheet path below.
+	{
+		if (WBQtScriptEdit_Run(pNewScript, ::AfxGetMainWnd()->GetSafeHwnd()) != 0)
+		{
+			AsciiString name = pNewScript->getName();
+			name.trim();
+
+			if (name.isEmpty())
+			{
+				AfxMessageBox(
+					"Error: Script name cannot be empty.\n\n"
+					"Please enter a valid name.",
+					MB_OK | MB_ICONERROR
+				);
+
+				pNewScript->deleteInstance();
+				return;
+			}
+
+			insertScript(pNewScript);
+		}
+		else
+		{
+			pNewScript->deleteInstance();
+		}
+		updateIcons(TVI_ROOT);
+		return;
+	}
+#endif
+
 	CPropertySheet editDialog;
 	editDialog.Construct(name.str());
 	ScriptProperties sp;
@@ -2245,6 +2280,30 @@ void ScriptDialog::OnEditScript()
 	}
 
 	Script *pDup = pScript->duplicate();
+
+#ifdef RTS_HAS_QT
+	// Qt mode: edit the duplicate in the native Qt tabbed editor; on OK commit exactly
+	// like the MFC sheet path below (updateFrom + tree label + warning refresh).
+	{
+		if (WBQtScriptEdit_Run(pDup, ::AfxGetMainWnd()->GetSafeHwnd()) != 0)
+		{
+			pScript->updateFrom(pDup);
+			CTreeCtrl *pTree = (CTreeCtrl*)GetDlgItem(IDC_SCRIPT_TREE);
+			HTREEITEM item = findItem(m_curSelection);
+			if (item)
+			{
+				pTree->SetItemText(item, formatScriptLabel(pScript, m_bCleanScriptName).str());
+				pTree->SelectItem(NULL);
+				pScript->setDirty(true);
+				updateWarnings();
+				pTree->SelectItem(item); // Updates the comment field & text field.
+			}
+		}
+		updateIcons(TVI_ROOT);
+		pDup->deleteInstance();
+		return;
+	}
+#endif
 
 	CPropertySheet editDialog;
 	editDialog.Construct(pScript->getName().str());
