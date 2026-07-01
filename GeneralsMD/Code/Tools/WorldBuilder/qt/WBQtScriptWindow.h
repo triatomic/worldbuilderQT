@@ -41,6 +41,10 @@ public:
 	explicit WBQtScriptWindow(QWidget *owner);
 
 	void rebuildTree();
+	// Clear per-session UI state (search text + find cursor) before a fresh dialog session, so
+	// a stale find cursor from a previous (now-deleted) ScriptDialog can't be used against the
+	// new model.
+	void resetForNewSession();
 	// Called by WBQtScriptTree on an internal drop: move/reorder the dragged node onto target.
 	void handleDrop(int dragListType, int targetListType);
 

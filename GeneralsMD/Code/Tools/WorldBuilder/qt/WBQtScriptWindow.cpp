@@ -179,6 +179,17 @@ void WBQtScriptWindow::rebuildTree()
 	m_updating = false;
 }
 
+void WBQtScriptWindow::resetForNewSession()
+{
+	// A new ScriptDialog session means a fresh model with fresh ListType indices; a find cursor
+	// captured against the previous session's model is meaningless (and dangerous) now.
+	m_lastFoundListType = 0;
+	if (m_search != NULL)
+	{
+		m_search->clear();
+	}
+}
+
 int WBQtScriptWindow::selectedListType() const
 {
 	QList<QTreeWidgetItem*> sel = m_tree->selectedItems();
@@ -336,6 +347,9 @@ extern "C" void WBQtScript_Open(void *frameHwnd, int x, int y)
 	{
 		win->rebuildTree();
 	}
+	// Fresh session: clear any leftover search text + find cursor from a previous ScriptDialog
+	// (the model was rebuilt, so the old find cursor's ListType no longer maps to it).
+	win->resetForNewSession();
 
 	// Unlike the transient option panels (which use WA_ShowWithoutActivating so they never
 	// steal viewport focus mid-paint), the Script editor is a real interactive window: it

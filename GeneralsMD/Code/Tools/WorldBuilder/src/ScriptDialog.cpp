@@ -3666,7 +3666,16 @@ int ScriptDialog::qtGetNode(int i, int *depthOut, int *listTypeOut, char *labelO
 
 void ScriptDialog::qtSetSelection(int listTypeInt)
 {
-	m_curSelection.IntToList(listTypeInt);
+	// Guard against a stale ListType (e.g. a find cursor from a previous, now-deleted dialog
+	// session) whose player index is out of range for THIS session's m_sides -- getCurScript /
+	// getCurGroup call getSideInfo(m_playerIndex) unconditionally and would deref garbage.
+	ListType lt;
+	lt.IntToList(listTypeInt);
+	if (lt.m_playerIndex >= m_sides.getNumSides())
+	{
+		return;	// ignore an out-of-range selection rather than crash downstream
+	}
+	m_curSelection = lt;
 }
 
 int ScriptDialog::qtGetSelection(void)
