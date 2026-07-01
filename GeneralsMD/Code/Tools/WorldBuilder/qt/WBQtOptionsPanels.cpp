@@ -15,6 +15,7 @@
 #include "resource.h"
 
 #include <QApplication>
+#include <QSet>
 #include <QWidget>
 
 #include <qt_windows.h>
@@ -22,6 +23,12 @@
 static QWinWidget *g_panelOwner = NULL;	// invisible owner bridge, rooted in the MFC frame
 static QWidget    *g_currentPanel = NULL;
 static int         g_currentDialogID = 0;
+
+// Panels seeded once at the registry Top/Left. After that a panel keeps its own geometry
+// (Qt preserves it across hide/show), so re-showing it -- e.g. when Ctrl transiently swaps
+// to the pointer tool and back -- must NOT snap it back to the registry coords and discard
+// the user's drag. Only the first show of a given panel positions it.
+static QSet<QWidget*> g_positionedPanels;
 
 // Map a dialog ID to its (lazily created, cached) Qt panel, or NULL if not migrated.
 static QWidget *wbQtPanelFor(int dialogID, QWidget *owner)
@@ -87,8 +94,15 @@ extern "C" int WBQt_ShowOptionsPanel(void *frameHwnd, int dialogID, int x, int y
 	}
 
 	// Position via Qt setGeometry in SCREEN coords (this is a top-level Qt::Tool window),
-	// NOT Win32 SetWindowPos -- see the Phase 2 viewport-host lesson.
-	panel->setGeometry(x, y, w, h);
+	// NOT Win32 SetWindowPos -- see the Phase 2 viewport-host lesson. Seed the position only
+	// the FIRST time this panel is shown; later shows keep whatever the user dragged it to
+	// (a hidden Qt widget retains its geometry), so a Ctrl-driven pointer-tool swap that
+	// hides and re-shows the panel doesn't reset its position.
+	if (!g_positionedPanels.contains(panel))
+	{
+		panel->setGeometry(x, y, w, h);
+		g_positionedPanels.insert(panel);
+	}
 	panel->show();
 	panel->raise();
 
