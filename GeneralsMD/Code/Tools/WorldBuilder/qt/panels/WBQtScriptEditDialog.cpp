@@ -4,6 +4,7 @@
 // handlers verbatim and reports back the row to select after the rebuild.
 #include "WBQtScriptEditDialog.h"
 #include "WBQtScriptEditBridge.h"
+#include "WBQtScriptWindow.h"
 
 #include <QCheckBox>
 #include <QDialogButtonBox>
@@ -619,7 +620,15 @@ extern "C" int WBQtScriptEdit_Run(void *script, void *frameHwnd)
 	{
 		return 0;
 	}
-	WBQtScriptEditDialog dlg(script);
+	// Parent to the Qt Script window: the dialog becomes transient to it (always stacks above
+	// the script window and the frame, centers over it), like the MFC sheet owned by the
+	// ScriptDialog.
+	QWidget *owner = WBQtScriptWindow::instance();
+	if (owner != NULL && !owner->isVisible())
+	{
+		owner = NULL;
+	}
+	WBQtScriptEditDialog dlg(script, owner);
 	// Application-modal + a disabled MFC frame == the old CPropertySheet::DoModal discipline
 	// (Qt modality only fences Qt windows; the frame is a native window and needs the explicit
 	// EnableWindow). The Qt Script window is fenced by the modality.
