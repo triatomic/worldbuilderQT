@@ -54,6 +54,13 @@ public:
 
 	void SetThingTemplate(const ThingTemplate *tTempl);
 
+#ifdef RTS_HAS_QT
+	// Render the given template to a PREVIEW_WIDTH*PREVIEW_HEIGHT BGR image (3 bytes per
+	// pixel) and return the internal static buffer, or NULL. Lets the Qt Object panel
+	// reuse the exact same render path the MFC preview uses. See WBQtObjectBridge.
+	static const UnsignedByte *qtRenderTemplatePreview(const ThingTemplate *tTempl);
+#endif
+
 	// Generated message map functions
 protected:
 	//{{AFX_MSG(ObjectPreview)

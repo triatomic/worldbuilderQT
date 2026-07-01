@@ -271,6 +271,14 @@ static UnsignedByte * generatePreview( const ThingTemplate *tt )
 	return NULL;
 }
 
+#ifdef RTS_HAS_QT
+// Qt Object panel entry point: reuse generatePreview() (the exact MFC render path).
+const UnsignedByte *ObjectPreview::qtRenderTemplatePreview(const ThingTemplate *tTempl)
+{
+	return generatePreview(tTempl);
+}
+#endif
+
 /////////////////////////////////////////////////////////////////////////////
 // ObjectPreview message handlers
 

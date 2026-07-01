@@ -114,6 +114,56 @@ int    WBQtRamp_GetMirrorX(void);
 int    WBQtRamp_GetMirrorY(void);
 int    WBQtRamp_GetMirrorXY(void);
 
+// --- Object panel: the object browser (tree + preview + owning team + height + search) ----
+// The MFC ObjectOptions is still created as the hidden OFF fallback and owns m_objectsList
+// (the full template list) + the statics the placement tools read (m_currentObjectIndex /
+// m_currentObjectName / m_curOwnerName). The Qt panel MIRRORS that list by index and writes
+// those statics through the bridge, so ObjectTool / FenceTool / etc. keep working unchanged.
+// All strings are copied into caller-provided char buffers (no ownership crosses the seam).
+
+// Object list (MFC-side, WBQtObjectBridge): enumerate the template list to build the tree.
+int  WBQtObject_GetCount(void);
+// Fill the display path for the object at listIndex: its owning side, editor-sorting category,
+// and leaf (display) name. Buffers are cap bytes each. Returns non-zero on success.
+int  WBQtObject_GetEntry(int listIndex, char *sideOut, char *sortingOut, char *leafOut, int cap);
+// The full (unique) template name for listIndex -- used as the tree item's identity/tooltip.
+int  WBQtObject_GetFullName(int listIndex, char *nameOut, int cap);
+
+// Selection (Qt -> MFC): make listIndex the current object (drives placement).
+void WBQtObject_SelectIndex(int listIndex);
+int  WBQtObject_GetSelectedIndex(void);
+
+// Owning-team combo. GetTeamCount/GetTeamName give the list (with the "(neutral)" relabel);
+// GetDefaultTeamForCurrent returns the index to preselect for the current object; SetTeam
+// applies a choice to m_curOwnerName (mirrors OnEditchangeOwningteam).
+int  WBQtObject_GetTeamCount(void);
+int  WBQtObject_GetTeamName(int teamIndex, char *nameOut, int cap);
+int  WBQtObject_GetDefaultTeamForCurrent(void);
+void WBQtObject_SetTeam(int teamIndex);
+
+// Placement height: the panel writes it, ObjectOptions::getCurObjectHeight() reads it back.
+void WBQtObject_SetHeight(int height);
+int  WBQtObject_GetHeight(void);
+
+// Preview: render the current object to a PREVIEW_WIDTH*PREVIEW_HEIGHT BGR image (3 bytes
+// per pixel) into rgbOut (>= w*h*3). Returns non-zero if an image was produced.
+int  WBQtObject_GetPreviewSize(int *widthOut, int *heightOut);
+int  WBQtObject_RenderPreview(unsigned char *bgrOut, int cap);
+
+// Preview toggles (persisted in the registry like the MFC panel).
+void WBQtObject_SetPreviewSound(int on);
+int  WBQtObject_GetPreviewSound(void);
+void WBQtObject_SetPreviewBuildZone(int on);
+int  WBQtObject_GetPreviewBuildZone(void);
+void WBQtObject_SetUseWaterHeight(int on);
+int  WBQtObject_GetUseWaterHeight(void);
+
+// Forward (Qt-side): WB calls ObjectOptions::update()/selectObject() on selection changes;
+// a guarded WBQtObject_PushFromSelection() re-seeds the Qt panel (label/team/preview) and
+// WBQtObject_PushSelectIndex() moves the tree selection to match a programmatic selectObject.
+void WBQtObject_PushFromSelection(void);
+void WBQtObject_PushSelectIndex(int listIndex);
+
 #ifdef __cplusplus
 }
 #endif

@@ -44,6 +44,9 @@
 // This is used to allow sounds to be played via PlaySound
 #include <mmsystem.h>
 #include <list>
+#ifdef RTS_HAS_QT
+#include "qt/WBQtPanelBridge.h"
+#endif
 
 #define OBJECT_OPTION_PANEL "ObjectOptionPanel"
 
@@ -155,6 +158,9 @@ static Int findSideListEntryWithPlayerOfSide(AsciiString side)
 {
 	if (m_staticThis)
 		m_staticThis->updateLabel();
+#ifdef RTS_HAS_QT
+	WBQtObject_PushFromSelection();
+#endif
 }
 
 
@@ -1110,6 +1116,9 @@ void ObjectOptions::selectObject(const MapObject* pObj)
 		if (m_staticThis->m_objectTreeView.SelectItem(objToSel)) {
 			m_staticThis->m_currentObjectIndex = item.lParam;
 			strcpy(m_staticThis->m_currentObjectName, buffer);
+#ifdef RTS_HAS_QT
+			WBQtObject_PushSelectIndex(m_staticThis->m_currentObjectIndex);
+#endif
 		}
 	}
 }

@@ -105,6 +105,7 @@ set(WORLDBUILDER_SRC
     "src/WBQtMoundBridge.cpp"
     "src/WBQtRulerBridge.cpp"
     "src/WBQtRampBridge.cpp"
+    "src/WBQtObjectBridge.cpp"
     "src/wbview.cpp"
     "src/wbview3d.cpp"
     "src/WHeightMapEdit.cpp"
@@ -302,7 +303,9 @@ if(RTS_ENABLE_WORLDBUILDER_QT)
         "qt/panels/WBQtRulerPanel.cpp"
         "qt/panels/WBQtRulerPanel.h"
         "qt/panels/WBQtRampPanel.cpp"
-        "qt/panels/WBQtRampPanel.h")
+        "qt/panels/WBQtRampPanel.h"
+        "qt/panels/WBQtObjectPanel.cpp"
+        "qt/panels/WBQtObjectPanel.h")
 
     set_target_properties(z_worldbuilder_qt PROPERTIES AUTOMOC ON)
 

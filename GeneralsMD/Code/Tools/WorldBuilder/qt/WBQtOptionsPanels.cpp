@@ -15,6 +15,7 @@
 #include "panels/WBQtMoundPanel.h"
 #include "panels/WBQtRulerPanel.h"
 #include "panels/WBQtRampPanel.h"
+#include "panels/WBQtObjectPanel.h"
 #include "resource.h"
 
 #include <QApplication>
@@ -41,6 +42,7 @@ static QWidget *wbQtPanelFor(int dialogID, QWidget *owner)
 	static WBQtMoundPanel   *moundPanel = NULL;
 	static WBQtRulerPanel   *rulerPanel = NULL;
 	static WBQtRampPanel    *rampPanel = NULL;
+	static WBQtObjectPanel  *objectPanel = NULL;
 
 	switch (dialogID)
 	{
@@ -78,6 +80,13 @@ static QWidget *wbQtPanelFor(int dialogID, QWidget *owner)
 				rampPanel = new WBQtRampPanel(owner);
 			}
 			return rampPanel;
+
+		case IDD_OBJECT_OPTIONS:
+			if (objectPanel == NULL)
+			{
+				objectPanel = new WBQtObjectPanel(owner);
+			}
+			return objectPanel;
 
 		default:
 			return NULL;

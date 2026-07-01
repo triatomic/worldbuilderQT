@@ -118,6 +118,17 @@ public:
 	static void update();
 	static AsciiString getCurGdfName(void);
 	static void reprocessObjectList();
+#ifdef RTS_HAS_QT
+	// Qt panel support (WBQtObjectBridge): let the Qt Object panel mirror the template
+	// list and drive the same selection statics the placement tools read. Defined in
+	// src/WBQtObjectBridge.cpp; member statics so they can reach the private state.
+	static MapObject *qtGetObjectListHead(void);
+	static void qtSetCurrentSelection(int listIndex, const char *name);
+	static int qtGetCurrentIndex(void);
+	static void qtSetOwnerTeamName(const char *teamName);
+	static const char *qtGetOwnerTeamName(void);
+	static CWnd *qtGetMainWnd(void);
+#endif
 }; 
 
 //{{AFX_INSERT_LOCATION}}
