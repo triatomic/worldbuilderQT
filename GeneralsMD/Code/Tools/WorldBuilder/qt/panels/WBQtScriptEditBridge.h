@@ -6,10 +6,10 @@
 // passed through as an opaque void*. All reads/writes/list surgery run MFC-side in
 // src/WBQtScriptEditBridge.cpp (ports of the property pages' handlers, calling the same
 // Script/OrCondition/Condition/ScriptAction accessors); the Qt side only renders lists and
-// forwards row-indexed commands. The EditCondition / EditAction sub-editors are STILL the MFC
-// modals in this stage -- the bridge pops them (owned by the Qt dialog's HWND) from the
-// New/Edit ops. Commit/cancel semantics are the caller's (ScriptDialog), exactly as with the
-// old sheet: accepted -> insertScript()/updateFrom(), rejected -> deleteInstance().
+// forwards row-indexed commands. The New/Edit ops pop the Qt condition/action editor
+// (WBQtCondActBridge.h, Tier 2b). Commit/cancel semantics are the caller's (ScriptDialog),
+// exactly as with the old sheet: accepted -> insertScript()/updateFrom(), rejected ->
+// deleteInstance().
 //
 // Plain C surface (int / const char* / void* only) so no Qt header reaches the MFC side and
 // no afx reaches the Qt lib.
@@ -85,8 +85,8 @@ int  WBQtScriptEdit_ActionMoveToOther(void *script, int isFalse, int index);
 int  WBQtScriptEdit_GetSmartCopy(void);
 void WBQtScriptEdit_SetSmartCopy(int enabled);
 
-// --- sub-modal ownership: the Qt dialog registers its HWND while open so the MFC
-//     EditCondition/EditAction modals it pops are owned by (and disable) the Qt dialog ---
+// --- sub-modal ownership: the Qt dialog registers its HWND while open, for MFC sub-modals
+//     that need an explicit owner (the parameter editors resolve theirs via GetActiveWindow) ---
 void WBQtScriptEdit_SetModalOwner(void *hwnd);
 
 #ifdef __cplusplus

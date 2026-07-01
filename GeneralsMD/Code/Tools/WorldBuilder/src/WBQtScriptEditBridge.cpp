@@ -1,10 +1,11 @@
-// WBQtScriptEditBridge.cpp -- MFC side of the Qt script-edit-dialog seam (Tier 2a). Plain MFC
-// TU (no Qt include). Implements the Qt->MFC half of qt/panels/WBQtScriptEditBridge.h: reads/
-// writes the caller-owned Script* and performs the condition/action list surgery, porting the
-// property-page handlers (ScriptProperties / ScriptConditionsDlg / ScriptActionsTrue/False)
-// verbatim -- same insertion points, same selection-after-rebuild semantics, same use of the
-// MFC EditCondition / EditAction modals (owned by the Qt dialog via the registered owner HWND).
-// Whole body guarded by RTS_HAS_QT so the OFF build compiles it to an empty object.
+// WBQtScriptEditBridge.cpp -- MFC side of the Qt script-edit-dialog seam (Tier 2a/2b). Plain
+// MFC TU (no Qt include). Implements the Qt->MFC half of qt/panels/WBQtScriptEditBridge.h:
+// reads/writes the caller-owned Script* and performs the condition/action list surgery, porting
+// the property-page handlers (ScriptProperties / ScriptConditionsDlg / ScriptActionsTrue/False)
+// verbatim -- same insertion points, same selection-after-rebuild semantics. The New/Edit ops
+// pop the Qt condition/action editor (WBQtCondAct_Run, Tier 2b) where the pages popped the MFC
+// EditCondition / EditAction modals. Whole body guarded by RTS_HAS_QT so the OFF build compiles
+// it to an empty object.
 #include "StdAfx.h"
 #include "resource.h"				// IDD_ScriptDialog (used in ScriptDialog.h's IDD enum)
 #include "Lib/BaseType.h"
@@ -12,27 +13,18 @@
 #include "GameLogic/PolygonTrigger.h"	// PolygonTrigger (ditto)
 #include "GameLogic/Scripts.h"
 #include "ScriptDialog.h"			// updateScriptWarning + SCRIPT_DIALOG_SECTION
-#include "EditCondition.h"
-#include "EditAction.h"
 #include "qt/panels/WBQtScriptEditBridge.h"
+#include "qt/panels/WBQtCondActBridge.h"
 
 #ifdef RTS_HAS_QT
 
+// Registered by the Qt script-edit dialog while it runs; kept for MFC sub-modals that still
+// need an explicit owner (the parameter editors resolve theirs via GetActiveWindow).
 static HWND s_qtModalOwner = NULL;
 
 extern "C" void WBQtScriptEdit_SetModalOwner(void *hwnd)
 {
 	s_qtModalOwner = reinterpret_cast<HWND>(hwnd);
-}
-
-// Owner CWnd for the MFC sub-modals while the Qt dialog is up (NULL -> main window).
-static CWnd *qtModalOwnerWnd(void)
-{
-	if (s_qtModalOwner != NULL)
-	{
-		return CWnd::FromHandle(s_qtModalOwner);
-	}
-	return NULL;
 }
 
 static void copyOut(const AsciiString &str, char *buf, int cap)
@@ -364,9 +356,7 @@ extern "C" int WBQtScriptEdit_ConditionNew(void *script, int row)
 	qtResolveConditionRow(pScript, row, &pSelOr, &pSelCond);
 
 	Condition *pCond = newInstance( Condition)(Condition::CONDITION_TRUE);
-	EditCondition cDlg(qtModalOwnerWnd());
-	cDlg.setCondition(pCond);
-	if (IDOK == cDlg.DoModal())
+	if (WBQtCondAct_Run(pCond, 0) != 0)
 	{
 		if (pSelCond)
 		{
@@ -401,9 +391,7 @@ extern "C" int WBQtScriptEdit_ConditionEdit(void *script, int row)
 	{
 		return -1;
 	}
-	EditCondition cDlg(qtModalOwnerWnd());
-	cDlg.setCondition(pSelCond);
-	cDlg.DoModal();
+	WBQtCondAct_Run(pSelCond, 0);
 	ScriptDialog::updateScriptWarning(pScript);
 	return qtFindConditionRow(pScript, pSelOr, pSelCond);
 }
@@ -768,9 +756,7 @@ extern "C" int WBQtScriptEdit_ActionNew(void *script, int isFalse, int index)
 	ScriptAction *pSel = qtActionAt(pScript, isFalse, index);
 
 	ScriptAction *pAct = newInstance( ScriptAction)(ScriptAction::DEBUG_MESSAGE_BOX);
-	EditAction aDlg(qtModalOwnerWnd());
-	aDlg.setAction(pAct);
-	if (IDOK == aDlg.DoModal())
+	if (WBQtCondAct_Run(pAct, 1) != 0)
 	{
 		if (pSel)
 		{
@@ -797,9 +783,7 @@ extern "C" int WBQtScriptEdit_ActionEdit(void *script, int isFalse, int index)
 	{
 		return -1;
 	}
-	EditAction aDlg(qtModalOwnerWnd());
-	aDlg.setAction(pSel);
-	aDlg.DoModal();
+	WBQtCondAct_Run(pSel, 1);
 	ScriptDialog::updateScriptWarning(pScript);
 	return index;
 }
