@@ -174,7 +174,8 @@ void WBQtObject_PushSelectIndex(int listIndex);
 // SetSelection). The Qt window OWNS its lifetime; on close it calls Commit or Cancel.
 int  WBQtScript_IsActive(void);
 int  WBQtScript_GetNodeCount(void);
-int  WBQtScript_GetNode(int i, int *depthOut, int *listTypeOut, char *labelOut, int cap);
+// flagsOut bits: 1 active, 2 hasWarnings, 4 subroutine (0 for player nodes).
+int  WBQtScript_GetNode(int i, int *depthOut, int *listTypeOut, int *flagsOut, char *labelOut, int cap);
 void WBQtScript_SetSelection(int listTypeInt);
 int  WBQtScript_HasScript(void);
 int  WBQtScript_HasGroup(void);
@@ -190,6 +191,9 @@ void WBQtScript_Cancel(void);	// == OnCancel (discard)
 // (non-zero return on a hit); fromListType 0 starts from the top.
 void WBQtScript_DropOn(int dragListType, int targetListType);
 int  WBQtScript_FindNext(const char *text, int fromListType, int *outListType);
+// 9c: recompute warnings (Verify) and toggle the current selection's active flag.
+void WBQtScript_Verify(void);
+void WBQtScript_ToggleActive(void);
 
 // Forward (Qt-side, WBQtScriptWindow): open/close the Qt Script window. WBQtScript_Open is
 // called from CMainFrame::onEditScripts after the hidden MFC dialog is created; it builds

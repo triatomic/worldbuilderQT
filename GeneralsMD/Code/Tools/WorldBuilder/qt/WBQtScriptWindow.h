@@ -57,7 +57,10 @@ private slots:
 	void onEditScript();
 	void onCopyScript();
 	void onDelete();
+	void onVerify();
+	void onToggleActive();
 	void onFind();
+	void onTreeContextMenu(const QPoint &pos);
 	void onOk();
 	void onCancel();
 
@@ -75,6 +78,7 @@ private:
 	QPushButton *m_editScript;
 	QPushButton *m_copyScript;
 	QPushButton *m_delete;
+	QPushButton *m_verify;
 	QPushButton *m_ok;
 	QPushButton *m_cancel;
 

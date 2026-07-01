@@ -26,10 +26,10 @@ int WBQtScript_GetNodeCount(void)
 	return (dlg != NULL) ? dlg->qtGetNodeCount() : 0;
 }
 
-int WBQtScript_GetNode(int i, int *depthOut, int *listTypeOut, char *labelOut, int cap)
+int WBQtScript_GetNode(int i, int *depthOut, int *listTypeOut, int *flagsOut, char *labelOut, int cap)
 {
 	ScriptDialog *dlg = ScriptDialog::qtInstance();
-	return (dlg != NULL) ? dlg->qtGetNode(i, depthOut, listTypeOut, labelOut, cap) : 0;
+	return (dlg != NULL) ? dlg->qtGetNode(i, depthOut, listTypeOut, flagsOut, labelOut, cap) : 0;
 }
 
 void WBQtScript_SetSelection(int listTypeInt)
@@ -139,6 +139,24 @@ int WBQtScript_FindNext(const char *text, int fromListType, int *outListType)
 {
 	ScriptDialog *dlg = ScriptDialog::qtInstance();
 	return (dlg != NULL) ? dlg->qtFindNext(text, fromListType, outListType) : 0;
+}
+
+void WBQtScript_Verify(void)
+{
+	ScriptDialog *dlg = ScriptDialog::qtInstance();
+	if (dlg != NULL)
+	{
+		dlg->qtVerify();
+	}
+}
+
+void WBQtScript_ToggleActive(void)
+{
+	ScriptDialog *dlg = ScriptDialog::qtInstance();
+	if (dlg != NULL)
+	{
+		dlg->qtToggleActive();
+	}
 }
 
 }

@@ -3,9 +3,13 @@
 #include "WBQtPanelBridge.h"
 
 #include <QApplication>
+#include <QBrush>
+#include <QColor>
 #include <QDropEvent>
+#include <QFont>
 #include <QHBoxLayout>
 #include <QLineEdit>
+#include <QMenu>
 #include <QPushButton>
 #include <QTreeWidgetItemIterator>
 #include <QVBoxLayout>
@@ -80,6 +84,7 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	m_tree->setAcceptDrops(true);
 	m_tree->setDragDropMode(QAbstractItemView::InternalMove);
 	m_tree->setSelectionMode(QAbstractItemView::SingleSelection);
+	m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
 	root->addWidget(m_tree, 1);
 
 	// Script/folder command row.
@@ -89,11 +94,13 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	m_editScript = new QPushButton("Edit", this);
 	m_copyScript = new QPushButton("Copy", this);
 	m_delete = new QPushButton("Delete", this);
+	m_verify = new QPushButton("Verify", this);
 	cmdRow->addWidget(m_newFolder);
 	cmdRow->addWidget(m_newScript);
 	cmdRow->addWidget(m_editScript);
 	cmdRow->addWidget(m_copyScript);
 	cmdRow->addWidget(m_delete);
+	cmdRow->addWidget(m_verify);
 	root->addLayout(cmdRow);
 
 	// Commit row.
@@ -116,6 +123,9 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	connect(m_editScript, SIGNAL(clicked()), this, SLOT(onEditScript()));
 	connect(m_copyScript, SIGNAL(clicked()), this, SLOT(onCopyScript()));
 	connect(m_delete, SIGNAL(clicked()), this, SLOT(onDelete()));
+	connect(m_verify, SIGNAL(clicked()), this, SLOT(onVerify()));
+	connect(m_tree, SIGNAL(customContextMenuRequested(const QPoint &)),
+		this, SLOT(onTreeContextMenu(const QPoint &)));
 	connect(m_ok, SIGNAL(clicked()), this, SLOT(onOk()));
 	connect(m_cancel, SIGNAL(clicked()), this, SLOT(onCancel()));
 
@@ -135,8 +145,8 @@ void WBQtScriptWindow::rebuildTree()
 	int count = WBQtScript_GetNodeCount();
 	for (int i = 0; i < count; ++i)
 	{
-		int depth = 0, listType = 0;
-		if (!WBQtScript_GetNode(i, &depth, &listType, labelBuf, cap))
+		int depth = 0, listType = 0, flags = 0;
+		if (!WBQtScript_GetNode(i, &depth, &listType, &flags, labelBuf, cap))
 		{
 			continue;
 		}
@@ -168,6 +178,30 @@ void WBQtScriptWindow::rebuildTree()
 		// Players and folders can receive drops; scripts are drag sources but reordering onto
 		// a script inserts next to it, so they accept drops too. Everything is draggable.
 		item->setFlags(item->flags() | Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled);
+
+		// Visual state (script/group nodes only; player nodes report flags 0). Warnings ->
+		// red, inactive -> dimmed, subroutine -> italic. Mirrors the MFC state-icon meaning.
+		if (depth > 0)
+		{
+			const bool active = (flags & 1) != 0;
+			const bool warnings = (flags & 2) != 0;
+			const bool subroutine = (flags & 4) != 0;
+			if (warnings)
+			{
+				item->setForeground(0, QBrush(QColor(200, 60, 60)));
+			}
+			else if (!active)
+			{
+				item->setForeground(0, QBrush(QColor(140, 140, 140)));
+			}
+			if (subroutine)
+			{
+				QFont f = item->font(0);
+				f.setItalic(true);
+				item->setFont(0, f);
+			}
+		}
+
 		lastAtDepth[depth] = item;
 		for (int d = depth + 1; d < 3; ++d)
 		{
@@ -290,6 +324,64 @@ void WBQtScriptWindow::onDelete()
 	WBQtScript_Delete();
 	rebuildTree();
 	updateButtonStates();
+}
+
+void WBQtScriptWindow::onVerify()
+{
+	WBQtScript_Verify();
+	rebuildTree();	// pick up the recomputed warning flags
+	updateButtonStates();
+}
+
+void WBQtScriptWindow::onToggleActive()
+{
+	pushSelectionToDialog();
+	WBQtScript_ToggleActive();
+	rebuildTree();	// active flag changed -> restyle + relabel
+	updateButtonStates();
+}
+
+void WBQtScriptWindow::onTreeContextMenu(const QPoint &pos)
+{
+	QTreeWidgetItem *item = m_tree->itemAt(pos);
+	if (item == NULL)
+	{
+		return;
+	}
+	m_tree->setCurrentItem(item);	// so the seam acts on the right-clicked node
+	pushSelectionToDialog();
+
+	bool hasScript = (WBQtScript_HasScript() != 0);
+	bool hasGroup = (WBQtScript_HasGroup() != 0);
+
+	QMenu menu(this);
+	QAction *actActivate = menu.addAction("Activate / Deactivate");
+	actActivate->setEnabled(hasScript || hasGroup);
+	menu.addSeparator();
+	QAction *actEdit = menu.addAction("Edit");
+	actEdit->setEnabled(hasScript || hasGroup);
+	QAction *actCopy = menu.addAction("Copy");
+	actCopy->setEnabled(hasScript || hasGroup);
+	QAction *actDelete = menu.addAction("Delete");
+	actDelete->setEnabled(hasScript || hasGroup);
+
+	QAction *chosen = menu.exec(m_tree->viewport()->mapToGlobal(pos));
+	if (chosen == actActivate)
+	{
+		onToggleActive();
+	}
+	else if (chosen == actEdit)
+	{
+		onEditScript();
+	}
+	else if (chosen == actCopy)
+	{
+		onCopyScript();
+	}
+	else if (chosen == actDelete)
+	{
+		onDelete();
+	}
 }
 
 void WBQtScriptWindow::onFind()

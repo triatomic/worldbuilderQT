@@ -110,7 +110,7 @@ public:
 	int  qtGetNodeCount(void);
 	// Fill node i (pre-order): depth (0 player / 1 group or ungrouped script / 2 script in
 	// group), its packed ListType int, and its display label. Returns 0 past the end.
-	int  qtGetNode(int i, int *depthOut, int *listTypeOut, char *labelOut, int cap);
+	int  qtGetNode(int i, int *depthOut, int *listTypeOut, int *flagsOut, char *labelOut, int cap);
 	void qtSetSelection(int listTypeInt);
 	int  qtGetSelection(void);
 	int  qtHasScript(void);	// current selection resolves to a Script (Edit/Copy/Delete)
@@ -128,6 +128,10 @@ public:
 	// returns the next node (label + deep-content match) after fromListType, or 0 if none.
 	void qtDropOn(int dragListType, int targetListType);
 	int  qtFindNext(const char *text, int fromListType, int *outListType);
+	// 9c: recompute warnings (== OnVerifyAll) and toggle the current script/group active
+	// flag (== OnScriptActivate). The Qt window rebuilds after to pick up the new flags.
+	void qtVerify(void);
+	void qtToggleActive(void);
 	static ScriptDialog *qtInstance(void) { return m_staticThis; }
 #endif
 

@@ -3534,7 +3534,28 @@ void ScriptDialog::OnCancel()
 // Walk the working model in the same pre-order the tree uses, invoking a callback per node.
 // depth: 0 player, 1 group or ungrouped-script, 2 script-in-group.
 namespace {
-	struct QtNodeVisitor { virtual void visit(int depth, int listTypeInt, const AsciiString &label) = 0; };
+	// flags per node: bit0 active, bit1 hasWarnings, bit2 subroutine (0 for player nodes).
+	struct QtNodeVisitor { virtual void visit(int depth, int listTypeInt, int flags, const AsciiString &label) = 0; };
+}
+
+namespace {
+	enum { QT_NODE_ACTIVE = 1, QT_NODE_WARNINGS = 2, QT_NODE_SUBROUTINE = 4 };
+	int qtScriptFlags(Script *pScr)
+	{
+		int f = 0;
+		if (pScr->isActive()) { f |= QT_NODE_ACTIVE; }
+		if (pScr->hasWarnings()) { f |= QT_NODE_WARNINGS; }
+		if (pScr->isSubroutine()) { f |= QT_NODE_SUBROUTINE; }
+		return f;
+	}
+	int qtGroupFlags(ScriptGroup *pGroup)
+	{
+		int f = 0;
+		if (pGroup->isActive()) { f |= QT_NODE_ACTIVE; }
+		if (pGroup->hasWarnings()) { f |= QT_NODE_WARNINGS; }
+		if (pGroup->isSubroutine()) { f |= QT_NODE_SUBROUTINE; }
+		return f;
+	}
 }
 
 static void qtWalkModel(SidesList &sides, Bool cleanNames, QtNodeVisitor &v)
@@ -3555,7 +3576,7 @@ static void qtWalkModel(SidesList &sides, Bool cleanNames, QtNodeVisitor &v)
 		ListType lt;
 		lt.m_objType = ListType::PLAYER_TYPE;
 		lt.m_playerIndex = p;
-		v.visit(0, lt.ListToInt(), plabel);
+		v.visit(0, lt.ListToInt(), 0, plabel);
 
 		ScriptList *pSL = sides.getSideInfo(p)->getScriptList();
 		if (pSL == NULL)
@@ -3575,7 +3596,7 @@ static void qtWalkModel(SidesList &sides, Bool cleanNames, QtNodeVisitor &v)
 			glt.m_objType = ListType::GROUP_TYPE;
 			glt.m_playerIndex = p;
 			glt.m_groupIndex = groupNdx;
-			v.visit(1, glt.ListToInt(), formatScriptLabel(pGroup));
+			v.visit(1, glt.ListToInt(), qtGroupFlags(pGroup), formatScriptLabel(pGroup));
 
 			Int scriptNdx = 0;
 			for (Script *pScr = pGroup->getScript(); pScr; pScr = pScr->getNext(), scriptNdx++)
@@ -3589,7 +3610,7 @@ static void qtWalkModel(SidesList &sides, Bool cleanNames, QtNodeVisitor &v)
 				slt.m_playerIndex = p;
 				slt.m_groupIndex = groupNdx;
 				slt.m_scriptIndex = scriptNdx;
-				v.visit(2, slt.ListToInt(), formatScriptLabel(pScr, cleanNames));
+				v.visit(2, slt.ListToInt(), qtScriptFlags(pScr), formatScriptLabel(pScr, cleanNames));
 			}
 		}
 
@@ -3606,7 +3627,7 @@ static void qtWalkModel(SidesList &sides, Bool cleanNames, QtNodeVisitor &v)
 			slt.m_playerIndex = p;
 			slt.m_groupIndex = 0;
 			slt.m_scriptIndex = scriptNdx;
-			v.visit(1, slt.ListToInt(), formatScriptLabel(pScr, cleanNames));
+			v.visit(1, slt.ListToInt(), qtScriptFlags(pScr), formatScriptLabel(pScr, cleanNames));
 		}
 	}
 }
@@ -3616,17 +3637,17 @@ namespace {
 	struct QtCountVisitor : public QtNodeVisitor {
 		int count;
 		QtCountVisitor() : count(0) {}
-		virtual void visit(int, int, const AsciiString &) { count++; }
+		virtual void visit(int, int, int, const AsciiString &) { count++; }
 	};
 	// Captures node #target into out-params.
 	struct QtPickVisitor : public QtNodeVisitor {
-		int target; int cur; int depth; int listType; AsciiString label; Bool found;
-		QtPickVisitor(int t) : target(t), cur(0), depth(0), listType(0), found(false) {}
-		virtual void visit(int d, int lt, const AsciiString &l)
+		int target; int cur; int depth; int listType; int flags; AsciiString label; Bool found;
+		QtPickVisitor(int t) : target(t), cur(0), depth(0), listType(0), flags(0), found(false) {}
+		virtual void visit(int d, int lt, int fl, const AsciiString &l)
 		{
 			if (cur == target)
 			{
-				depth = d; listType = lt; label = l; found = true;
+				depth = d; listType = lt; flags = fl; label = l; found = true;
 			}
 			cur++;
 		}
@@ -3640,7 +3661,7 @@ int ScriptDialog::qtGetNodeCount(void)
 	return cv.count;
 }
 
-int ScriptDialog::qtGetNode(int i, int *depthOut, int *listTypeOut, char *labelOut, int cap)
+int ScriptDialog::qtGetNode(int i, int *depthOut, int *listTypeOut, int *flagsOut, char *labelOut, int cap)
 {
 	QtPickVisitor pv(i);
 	qtWalkModel(m_sides, m_bCleanScriptName, pv);
@@ -3655,6 +3676,10 @@ int ScriptDialog::qtGetNode(int i, int *depthOut, int *listTypeOut, char *labelO
 	if (listTypeOut != NULL)
 	{
 		*listTypeOut = pv.listType;
+	}
+	if (flagsOut != NULL)
+	{
+		*flagsOut = pv.flags;
 	}
 	if (labelOut != NULL && cap > 0)
 	{
@@ -3797,7 +3822,7 @@ namespace {
 		ScriptDialog *dlg; AsciiString needle; int fromInt; Bool passedFrom; Bool found; int result;
 		QtFindVisitor(ScriptDialog *d, const AsciiString &n, int f)
 			: dlg(d), needle(n), fromInt(f), passedFrom(f == 0), found(false), result(0) {}
-		virtual void visit(int, int listTypeInt, const AsciiString &label)
+		virtual void visit(int, int listTypeInt, int, const AsciiString &label)
 		{
 			if (found)
 			{
@@ -3855,6 +3880,21 @@ int ScriptDialog::qtFindNext(const char *text, int fromListType, int *outListTyp
 		*outListType = fv.result;
 	}
 	return 1;
+}
+
+void ScriptDialog::qtVerify(void)
+{
+	// == OnVerifyAll: recompute all script/group warning flags. The Qt window rebuilds after,
+	// so the fresh flags reach the tree; updateIcons keeps the (hidden) MFC tree consistent.
+	updateWarnings(true);
+	updateIcons(TVI_ROOT);
+}
+
+void ScriptDialog::qtToggleActive(void)
+{
+	// == OnScriptActivate: flip the current script/group's active flag (uses m_curSelection,
+	// which the Qt window pushed before calling this).
+	OnScriptActivate();
 }
 #endif
 
