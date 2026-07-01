@@ -45,6 +45,7 @@
 #ifdef RTS_HAS_QT
 #include "qt/panels/WBQtScriptEditBridge.h"
 #include "qt/panels/WBQtParamBridge.h"
+#include "qt/panels/WBQtMiscModalsBridge.h"
 #endif
 
 #include "Common/GlobalData.h"
@@ -2838,10 +2839,18 @@ void ScriptDialog::OnSave()
 	Bool doTeams = true;
 	Int	 i;
 
+#ifdef RTS_HAS_QT
+	if (WBQtExportScriptsOptions_Run(::AfxGetMainWnd()->GetSafeHwnd()) == 0)
+	{
+		return;
+	}
+	ExportScriptsOptions optionsDlg;
+#else
 	ExportScriptsOptions optionsDlg;
 	if (IDCANCEL == optionsDlg.DoModal()) {
 		return;
 	}
+#endif
 	doWaypoints = optionsDlg.getDoWaypoints();
 	doUnits = optionsDlg.getDoUnits();
 	doTeams = optionsDlg.getDoTeams(); // you'll implement this getter

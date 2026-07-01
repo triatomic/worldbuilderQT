@@ -64,6 +64,12 @@ public:
 	Bool getDoTriggers(void) {return m_triggers;}
 	Bool getDoAllScripts(void) {return m_allScripts;}
 	Bool getDoSides(void) {return m_sides;}
+
+#ifdef RTS_HAS_QT
+	// Qt seam (Tier 3a): write the persisted export flags from the native Qt modal. Defined
+	// in src/WBQtMiscModalsBridge.cpp so it can reach the protected statics.
+	static void qtStore(Bool units, Bool teams, Bool waypoints, Bool triggers, Bool sides, Bool allScripts);
+#endif
 	
 protected:
 

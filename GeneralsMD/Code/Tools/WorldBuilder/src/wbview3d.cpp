@@ -104,6 +104,7 @@
 #ifdef RTS_HAS_QT
 #include "qt/panels/WBQtLayersBridge.h"
 #include "qt/panels/WBQtMinimapBridge.h"
+#include "qt/panels/WBQtMiscModalsBridge.h"
 #endif
 #include "MinimapDialog.h"
 #include "ImpassableOptions.h"
@@ -4824,6 +4825,10 @@ void WbView3d::OnUpdateViewShowmacrotexture(CCmdUI* pCmdUI)
 
 void WbView3d::OnEditSelectmacrotexture() 
 {
+#ifdef RTS_HAS_QT
+	WBQtSelectMacrotexture_Run(::AfxGetMainWnd()->GetSafeHwnd());
+	return;
+#endif
 	SelectMacrotexture dlg;
 
 	// The macrotexture dialog sets the macrotexture in the 3d engine.
@@ -4901,6 +4906,14 @@ void WbView3d::OnUpdateViewShowExtraBlends(CCmdUI* pCmdUI)
 
 void WbView3d::OnEditMapSettings()
 {
+#ifdef RTS_HAS_QT
+	if (WBQtMapSettings_Run(::AfxGetMainWnd()->GetSafeHwnd()) != 0)
+	{
+		resetRenderObjects();
+		invalObjectInView(NULL);
+	}
+	return;
+#endif
 	MapSettings dlg;
 
 	if (dlg.DoModal() == IDOK) {
@@ -4933,6 +4946,10 @@ void WbView3d::OnEditShadows()
 	if (!m_showShadows) {
 		OnViewShowshadows(); // turn them on.
 	}
+#ifdef RTS_HAS_QT
+	WBQtShadowOptions_Run(::AfxGetMainWnd()->GetSafeHwnd());
+	return;
+#endif
 	ShadowOptions dlg;
 	dlg.DoModal();
 }
@@ -5062,6 +5079,16 @@ void WbView3d::OnUpdateViewShowimpassableareas(CCmdUI* pCmdUI)
 void WbView3d::OnImpassableAreaOptions()
 {
 	if (TheTerrainRenderObject) {
+#ifdef RTS_HAS_QT
+		// Qt mode: the native dialog live-applies the slope and reverts it on cancel; then
+		// refresh the height map exactly like the MFC path below.
+		WBQtImpassableOptions_Run(::AfxGetMainWnd()->GetSafeHwnd());
+		{
+			IRegion2D range = {0,0,0,0};
+			updateHeightMapInView(WbDoc()->GetHeightMap(), false, range);
+		}
+		return;
+#endif
 		{
 			ImpassableOptions opts;
 			opts.SetDefaultSlopeToShow(TheTerrainRenderObject->getViewImpassableAreaSlope());
