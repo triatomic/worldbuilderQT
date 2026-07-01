@@ -23,6 +23,9 @@
 #include "resource.h"
 #include "WorldBuilder.h"
 #include "WorldBuilderDoc.h"
+#ifdef RTS_HAS_QT
+#include "qt/panels/WBQtParamBridge.h"
+#endif
 
 // This is used to allow sounds to be played via PlaySound
 #include <mmsystem.h>
@@ -114,6 +117,12 @@ SidesList *EditParameter::m_sidesListP = NULL;
 
 Int EditParameter::edit( Parameter *pParm, Int keyPressed, AsciiString unitName ) 
 {
+#ifdef RTS_HAS_QT
+	// Qt mode: every parameter type runs in the native Qt editors (generic value dialog,
+	// coordinate editor, object picker, color picker). keyPressed (the old rich-edit
+	// type-to-edit seed) is unused there.
+	return WBQtParam_Edit(pParm, unitName.str()) ? IDOK : IDCANCEL;
+#endif
 	if (pParm->getParameterType() == Parameter::COORD3D) 
 	{
 		EditCoordParameter editCoordDlg;

@@ -44,6 +44,7 @@
 #include "MainFrm.h"
 #ifdef RTS_HAS_QT
 #include "qt/panels/WBQtScriptEditBridge.h"
+#include "qt/panels/WBQtParamBridge.h"
 #endif
 
 #include "Common/GlobalData.h"
@@ -2264,6 +2265,23 @@ void ScriptDialog::OnEditScript()
 		CTreeCtrl *pTree = (CTreeCtrl*)GetDlgItem(IDC_SCRIPT_TREE);
 		HTREEITEM item = findItem(m_curSelection);
 		if (pGroup) {
+#ifdef RTS_HAS_QT
+			// Qt mode: edit the folder in the native Qt group dialog; same tree-label /
+			// warning refresh as the MFC path below.
+			if (WBQtEditGroup_Run(pGroup, ::AfxGetMainWnd()->GetSafeHwnd()) != 0)
+			{
+				if (item)
+				{
+					pTree->SetItemText(item, pGroup->getName().str());
+					pTree->SelectItem(NULL);
+					updateWarnings();
+					pTree->SelectItem(item);
+				}
+			}
+			updateIcons(TVI_ROOT);
+			pTree->SetItemText(item, formatScriptLabel(pGroup).str());
+			return;
+#endif
 			EditGroup editDlg(pGroup);
 			if (IDOK==editDlg.DoModal()) {
 				if (item) {

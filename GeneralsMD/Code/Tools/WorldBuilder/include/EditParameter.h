@@ -63,6 +63,15 @@ public:
 	static Bool loadTransports(CComboBox *pCombo, AsciiString match = AsciiString::TheEmptyString); 
 	static Bool loadObjectTypeList(CComboBox *pCombo, std::vector<AsciiString> *strings = NULL, AsciiString match = AsciiString::TheEmptyString);
 
+#ifdef RTS_HAS_QT
+	// Qt seam (Tier 2c): model access for the Qt parameter dialogs. Defined in
+	// src/WBQtParamBridge.cpp (member statics may be defined in any TU) so the protected
+	// load* combo fillers below are reused verbatim.
+	static Int qtDescribe(Parameter *pParm, AsciiString unitName, CComboBox *pCombo, AsciiString *captionOut, Int *kindOut, Int *showAudioOut, Int *initialSelOut, AsciiString *initialTextOut);
+	static Int qtStore(Parameter *pParm, const char *text, Int selIndex);
+	static void qtPreviewAudio(Parameter *pParm, const char *eventName);
+#endif
+
 protected:
 	static Bool loadSides(CComboBox *pCombo, AsciiString match = AsciiString::TheEmptyString);
 	static Bool loadTriggerAreas(CComboBox *pCombo, AsciiString match = AsciiString::TheEmptyString);

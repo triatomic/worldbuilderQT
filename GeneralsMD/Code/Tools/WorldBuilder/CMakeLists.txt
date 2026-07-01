@@ -124,6 +124,7 @@ set(WORLDBUILDER_SRC
     "src/WBQtLayersBridge.cpp"
     "src/WBQtScriptEditBridge.cpp"
     "src/WBQtCondActBridge.cpp"
+    "src/WBQtParamBridge.cpp"
     "src/wbview.cpp"
     "src/wbview3d.cpp"
     "src/WHeightMapEdit.cpp"
@@ -367,7 +368,10 @@ if(RTS_ENABLE_WORLDBUILDER_QT)
         "qt/panels/WBQtScriptEditBridge.h"
         "qt/panels/WBQtCondActDialog.cpp"
         "qt/panels/WBQtCondActDialog.h"
-        "qt/panels/WBQtCondActBridge.h")
+        "qt/panels/WBQtCondActBridge.h"
+        "qt/panels/WBQtParamDialog.cpp"
+        "qt/panels/WBQtParamDialog.h"
+        "qt/panels/WBQtParamBridge.h")
 
     set_target_properties(z_worldbuilder_qt PROPERTIES AUTOMOC ON)
 
