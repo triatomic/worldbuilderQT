@@ -97,6 +97,23 @@ void   WBQtRuler_SetShowGrid(int on);
 int    WBQtRuler_GetShowGrid(void);
 void   WBQtRuler_RepaintViews(void);	// == pDoc->updateAllViews() so the in-view label refreshes
 
+// --- Ramp panel: reverse, Qt widget -> tool (implemented MFC-side, WBQtRampBridge) --------
+// RampTool reads width + the apply latch off the MFC RampOptions object (TheRampOptions),
+// which is still created as the hidden OFF fallback, so the Qt panel writes THAT object's
+// state via these calls; mirror state lives in RampTool statics as usual. Width is a double
+// in world units. No forward push (nothing pushes width back to the panel).
+void   WBQtRamp_SetWidth(double width);
+double WBQtRamp_GetWidth(void);
+void   WBQtRamp_Apply(void);
+void   WBQtRamp_ToggleMirror(void);
+void   WBQtRamp_ToggleMirrorX(void);
+void   WBQtRamp_ToggleMirrorY(void);
+void   WBQtRamp_ToggleMirrorXY(void);
+int    WBQtRamp_GetMirror(void);
+int    WBQtRamp_GetMirrorX(void);
+int    WBQtRamp_GetMirrorY(void);
+int    WBQtRamp_GetMirrorXY(void);
+
 #ifdef __cplusplus
 }
 #endif
