@@ -7,6 +7,7 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
 #include <QSlider>
 #include <QSpinBox>
 #include <QVBoxLayout>

@@ -24,6 +24,8 @@
 #include "FloodFillTool.h"
 #include "WHeightMapEdit.h"
 #include "WorldBuilderDoc.h"
+#include "wbview3d.h"
+#include "W3DDevice/GameClient/HeightMap.h"
 #include "Common/TerrainTypes.h"
 #include "W3DDevice/GameClient/TerrainTex.h"
 #include "W3DDevice/GameClient/TileData.h"

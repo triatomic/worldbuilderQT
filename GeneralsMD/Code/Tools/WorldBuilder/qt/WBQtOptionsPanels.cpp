@@ -17,6 +17,15 @@
 #include "panels/WBQtRampPanel.h"
 #include "panels/WBQtObjectPanel.h"
 #include "panels/WBQtBuildListPanel.h"
+#include "panels/WBQtTerrainMaterialPanel.h"
+#include "panels/WBQtBlendMaterialPanel.h"
+#include "panels/WBQtFencePanel.h"
+#include "panels/WBQtRoadPanel.h"
+#include "panels/WBQtWaterPanel.h"
+#include "panels/WBQtWaypointPanel.h"
+#include "panels/WBQtGrovePanel.h"
+#include "panels/WBQtScorchPanel.h"
+#include "panels/WBQtMeshMoldPanel.h"
 #include "resource.h"
 
 #include <QApplication>
@@ -45,6 +54,15 @@ static QWidget *wbQtPanelFor(int dialogID, QWidget *owner)
 	static WBQtRampPanel    *rampPanel = NULL;
 	static WBQtObjectPanel  *objectPanel = NULL;
 	static WBQtBuildListPanel *buildListPanel = NULL;
+	static WBQtTerrainMaterialPanel *terrainMaterialPanel = NULL;
+	static WBQtBlendMaterialPanel   *blendMaterialPanel = NULL;
+	static WBQtFencePanel           *fencePanel = NULL;
+	static WBQtRoadPanel            *roadPanel = NULL;
+	static WBQtWaterPanel           *waterPanel = NULL;
+	static WBQtWaypointPanel        *waypointPanel = NULL;
+	static WBQtGrovePanel           *grovePanel = NULL;
+	static WBQtScorchPanel          *scorchPanel = NULL;
+	static WBQtMeshMoldPanel        *meshMoldPanel = NULL;
 
 	switch (dialogID)
 	{
@@ -96,6 +114,69 @@ static QWidget *wbQtPanelFor(int dialogID, QWidget *owner)
 				buildListPanel = new WBQtBuildListPanel(owner);
 			}
 			return buildListPanel;
+
+		case IDD_TERRAIN_MATERIAL:
+			if (terrainMaterialPanel == NULL)
+			{
+				terrainMaterialPanel = new WBQtTerrainMaterialPanel(owner);
+			}
+			return terrainMaterialPanel;
+
+		case IDD_BLEND_MATERIAL:
+			if (blendMaterialPanel == NULL)
+			{
+				blendMaterialPanel = new WBQtBlendMaterialPanel(owner);
+			}
+			return blendMaterialPanel;
+
+		case IDD_FENCE_OPTIONS:
+			if (fencePanel == NULL)
+			{
+				fencePanel = new WBQtFencePanel(owner);
+			}
+			return fencePanel;
+
+		case IDD_ROAD_OPTIONS:
+			if (roadPanel == NULL)
+			{
+				roadPanel = new WBQtRoadPanel(owner);
+			}
+			return roadPanel;
+
+		case IDD_WATER_OPTIONS:
+			if (waterPanel == NULL)
+			{
+				waterPanel = new WBQtWaterPanel(owner);
+			}
+			return waterPanel;
+
+		case IDD_WAYPOINT_OPTIONS:
+			if (waypointPanel == NULL)
+			{
+				waypointPanel = new WBQtWaypointPanel(owner);
+			}
+			return waypointPanel;
+
+		case IDD_GROVE_OPTIONS:
+			if (grovePanel == NULL)
+			{
+				grovePanel = new WBQtGrovePanel(owner);
+			}
+			return grovePanel;
+
+		case IDD_SCORCH_OPTIONS:
+			if (scorchPanel == NULL)
+			{
+				scorchPanel = new WBQtScorchPanel(owner);
+			}
+			return scorchPanel;
+
+		case IDD_MESHMOLD_OPTIONS:
+			if (meshMoldPanel == NULL)
+			{
+				meshMoldPanel = new WBQtMeshMoldPanel(owner);
+			}
+			return meshMoldPanel;
 
 		default:
 			return NULL;
