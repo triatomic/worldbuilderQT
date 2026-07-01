@@ -3829,9 +3829,35 @@ void ScriptDialog::qtDropOn(int dragListType, int targetListType)
 	}
 }
 
-// Does the script at the given selection deep-match the (lowercased) search text? Mirrors
-// the deep scan in OnFindNext: comment + uiText + every condition/action parameter string.
-static Bool qtScriptDeepMatches(Script *pScr, const AsciiString &needleLower)
+// Case-insensitive "haystack contains needle" that walks the strings in place. Deliberately
+// NOT AsciiString::toLower(): that round-trips through a fixed 2K stack buffer with an
+// unbounded strcpy, and a big script's comment+uiText blows it (GS stack-cookie crash).
+static Bool qtContainsNoCase(const char *haystack, const char *needle)
+{
+	if (haystack == NULL || needle == NULL || needle[0] == 0)
+	{
+		return false;
+	}
+	for (const char *h = haystack; *h; h++)
+	{
+		const char *a = h;
+		const char *b = needle;
+		while (*a && *b && tolower((unsigned char)*a) == tolower((unsigned char)*b))
+		{
+			a++;
+			b++;
+		}
+		if (*b == 0)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+// Does the script at the given selection deep-match the search text? Mirrors the deep scan
+// in OnFindNext: comment + uiText + every condition/action parameter string.
+static Bool qtScriptDeepMatches(Script *pScr, const AsciiString &needle)
 {
 	if (pScr == NULL)
 	{
@@ -3839,8 +3865,7 @@ static Bool qtScriptDeepMatches(Script *pScr, const AsciiString &needleLower)
 	}
 	AsciiString content = pScr->getComment();
 	content.concat(pScr->getUiText());
-	content.toLower();
-	if (strstr(content.str(), needleLower.str()) != NULL)
+	if (qtContainsNoCase(content.str(), needle.str()))
 	{
 		return true;
 	}
@@ -3850,9 +3875,7 @@ static Bool qtScriptDeepMatches(Script *pScr, const AsciiString &needleLower)
 		{
 			for (int p = 0; p < c->getNumParameters(); ++p)
 			{
-				AsciiString ps = c->getParameter(p)->getString();
-				ps.toLower();
-				if (strstr(ps.str(), needleLower.str()) != NULL)
+				if (qtContainsNoCase(c->getParameter(p)->getString().str(), needle.str()))
 				{
 					return true;
 				}
@@ -3863,9 +3886,7 @@ static Bool qtScriptDeepMatches(Script *pScr, const AsciiString &needleLower)
 	{
 		for (int p = 0; p < a->getNumParameters(); ++p)
 		{
-			AsciiString ps = a->getParameter(p)->getString();
-			ps.toLower();
-			if (strstr(ps.str(), needleLower.str()) != NULL)
+			if (qtContainsNoCase(a->getParameter(p)->getString().str(), needle.str()))
 			{
 				return true;
 			}
@@ -3895,9 +3916,7 @@ namespace {
 				}
 				return;
 			}
-			AsciiString lower = label;
-			lower.toLower();
-			Bool match = (strstr(lower.str(), needle.str()) != NULL);
+			Bool match = qtContainsNoCase(label.str(), needle.str());
 			if (!match)
 			{
 				ListType lt;
@@ -3927,7 +3946,6 @@ int ScriptDialog::qtFindNext(const char *text, int fromListType, int *outListTyp
 		return 0;
 	}
 	AsciiString needle = text;
-	needle.toLower();
 	QtFindVisitor fv(this, needle, fromListType);
 	qtWalkModel(m_sides, m_bCleanScriptName, fv);
 	if (!fv.found)
