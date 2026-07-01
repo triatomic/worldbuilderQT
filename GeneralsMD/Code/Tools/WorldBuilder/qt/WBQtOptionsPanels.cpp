@@ -27,6 +27,7 @@
 #include "panels/WBQtScorchPanel.h"
 #include "panels/WBQtMeshMoldPanel.h"
 #include "panels/WBQtObjectPropsPanel.h"
+#include "panels/WBQtWavePanel.h"
 #include "resource.h"
 
 #include <QApplication>
@@ -65,6 +66,7 @@ static QWidget *wbQtPanelFor(int dialogID, QWidget *owner)
 	static WBQtScorchPanel          *scorchPanel = NULL;
 	static WBQtMeshMoldPanel        *meshMoldPanel = NULL;
 	static WBQtObjectPropsPanel     *objectPropsPanel = NULL;
+	static WBQtWavePanel            *wavePanel = NULL;
 
 	switch (dialogID)
 	{
@@ -186,6 +188,13 @@ static QWidget *wbQtPanelFor(int dialogID, QWidget *owner)
 				objectPropsPanel = new WBQtObjectPropsPanel(owner);
 			}
 			return objectPropsPanel;
+
+		case IDD_WAVE_EDITOR_OPTIONS:
+			if (wavePanel == NULL)
+			{
+				wavePanel = new WBQtWavePanel(owner);
+			}
+			return wavePanel;
 
 		default:
 			return NULL;

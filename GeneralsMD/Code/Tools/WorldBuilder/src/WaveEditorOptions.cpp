@@ -27,6 +27,9 @@
 #include "MainFrm.h"
 #include "DrawObject.h"
 #include "wbview3d.h"
+#ifdef RTS_HAS_QT
+#include "qt/panels/WBQtWaveBridge.h"
+#endif
 
 WaveEditorOptions*	WaveEditorOptions::m_staticThis = NULL;
 
@@ -131,6 +134,9 @@ void WaveEditorOptions::refresh(void)
 		m_staticThis->updateTypeLabel();
 		m_staticThis->populateList();
 	}
+#ifdef RTS_HAS_QT
+	WBQtWave_PushRefresh();
+#endif
 }
 
 BOOL WaveEditorOptions::OnInitDialog()
@@ -286,6 +292,9 @@ void WaveEditorOptions::adjustBucketBrushSize(Int delta)
 		if (pSlider) pSlider->SetPos(sz);
 		m_staticThis->updateBrushSizeLabel();
 	}
+#ifdef RTS_HAS_QT
+	WBQtWave_PushBrushSize();
+#endif
 }
 
 /// The bucket brush-size slider moved: push the new radius into the tool and update the
