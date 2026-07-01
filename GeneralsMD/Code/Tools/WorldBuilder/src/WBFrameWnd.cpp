@@ -30,6 +30,7 @@
 #ifdef RTS_HAS_QT
 #include "qt/WBQtPanelBridge.h"
 #include "qt/panels/WBQtGlobalLightBridge.h"
+#include "qt/panels/WBQtCameraBridge.h"
 #endif
 /////////////////////////////////////////////////////////////////////////////
 // CWBFrameWnd
@@ -166,6 +167,11 @@ BOOL CWB3dFrameWnd::PreTranslateMessage(MSG* pMsg)
 	}
 	// Same skip for the Qt Global Light Options window (its angle/color fields take digits).
 	if (WBQtGlobalLight_OwnsFocus())
+	{
+		return CWnd::PreTranslateMessage(pMsg);
+	}
+	// And for the Qt Camera Options window (its pitch field takes digits).
+	if (WBQtCamera_OwnsFocus())
 	{
 		return CWnd::PreTranslateMessage(pMsg);
 	}

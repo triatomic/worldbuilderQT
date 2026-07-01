@@ -40,6 +40,7 @@
 #include "qt/WBQtBridge.h"
 #include "qt/WBQtPanelBridge.h"
 #include "qt/panels/WBQtGlobalLightBridge.h"
+#include "qt/panels/WBQtCameraBridge.h"
 #endif
 #define ADJUST_VIEW_TIMER 6969
 #define COUNTDOWN_TIMER 6910
@@ -922,6 +923,11 @@ void CMainFrame::OnTimer(UINT nIDEvent)
 
 void CMainFrame::OnEditCameraoptions() 
 {
+#ifdef RTS_HAS_QT
+	// Qt mode: open the Qt Camera window; the MFC dialog stays hidden (waypoint/center logic owner).
+	WBQtCamera_Open(GetSafeHwnd());
+	return;
+#endif
 	m_cameraOptions.ShowWindow(SW_SHOWNA);
 }
 

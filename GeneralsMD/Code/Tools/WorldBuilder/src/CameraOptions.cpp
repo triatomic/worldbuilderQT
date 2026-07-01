@@ -30,6 +30,9 @@
 
 #include "WaypointOptions.h" //WST 10/7/2002
 #include "CUndoable.h" //WST 10/7/2002
+#ifdef RTS_HAS_QT
+#include "qt/panels/WBQtCameraBridge.h"
+#endif
 
 /////////////////////////////////////////////////////////////////////////////
 // CameraOptions dialog
@@ -227,6 +230,9 @@ void CameraOptions::stuffValuesIntoFields( void )
 void CameraOptions::update( void )
 {
 	stuffValuesIntoFields();
+#ifdef RTS_HAS_QT
+	WBQtCamera_PushRefresh();
+#endif
 }
 
 void CameraOptions::applyCameraPitch( Real pitch )
@@ -302,6 +308,9 @@ BOOL CameraOptions::OnInitDialog()
 	
 	m_pitchPopup.SetupPopSliderButton(this, IDC_PITCH_POPUP, this);
 	
+#ifdef RTS_HAS_QT
+	s_qtInstance = this;
+#endif
 	return TRUE;  // return TRUE unless you set the focus to a control
 	              // EXCEPTION: OCX Property Pages should return FALSE
 }
@@ -326,3 +335,95 @@ void CameraOptions::OnShowWindow(BOOL bShow, UINT nStatus)
 
 	update();
 }
+
+#ifdef RTS_HAS_QT
+//----------------------------------------------------------------------------------------
+// Qt front-end support (WBQtCameraBridge). Pitch and the readouts go straight to the 3D
+// view (same calls the MFC handlers make); DropWaypoint / CenterOnSelected reuse the MFC
+// button handlers via the hidden instance (they touch no dialog controls).
+//----------------------------------------------------------------------------------------
+
+CameraOptions *CameraOptions::s_qtInstance = NULL;
+
+double CameraOptions::qtGetPitch(void)
+{
+	WbView3d *p3View = CWorldBuilderDoc::GetActive3DView();
+	return p3View ? (double)p3View->getCameraPitch() : 1.0;
+}
+
+void CameraOptions::qtSetPitch(double pitch)
+{
+	WbView3d *p3View = CWorldBuilderDoc::GetActive3DView();
+	if (p3View != NULL)
+	{
+		p3View->setCameraPitch((Real)pitch);
+	}
+}
+
+void CameraOptions::qtResetCamera(void)
+{
+	WbView3d *p3View = CWorldBuilderDoc::GetActive3DView();
+	if (p3View != NULL)
+	{
+		p3View->setDefaultCamera();
+	}
+	if (s_qtInstance != NULL)
+	{
+		s_qtInstance->update();
+	}
+}
+
+void CameraOptions::qtDropWaypoint(void)
+{
+	if (s_qtInstance != NULL)
+	{
+		s_qtInstance->OnDropWaypointButton();
+	}
+}
+
+void CameraOptions::qtCenterOnSelected(void)
+{
+	if (s_qtInstance != NULL)
+	{
+		s_qtInstance->OnCenterOnSelectedButton();
+	}
+}
+
+int CameraOptions::qtGetInfo(float *height, float *zoom, float *posX, float *posY,
+                             float *tgtX, float *tgtY)
+{
+	WbView3d *p3View = CWorldBuilderDoc::GetActive3DView();
+	if (p3View == NULL)
+	{
+		return 0;
+	}
+	if (height != NULL)
+	{
+		*height = p3View->getHeightAboveGround();
+	}
+	if (zoom != NULL)
+	{
+		*zoom = p3View->getCurrentZoom();
+	}
+	Vector3 source = p3View->getCameraSource();
+	Vector3 target = p3View->getCameraTarget();
+	if (posX != NULL)
+	{
+		*posX = target.X;
+	}
+	if (posY != NULL)
+	{
+		*posY = target.Y;
+	}
+	// Same expression the MFC readout uses for the Target line.
+	if (tgtX != NULL)
+	{
+		*tgtX = target.X - 1.0f*(source.X - target.X);
+	}
+	if (tgtY != NULL)
+	{
+		*tgtY = target.Y - 1.0f*(source.Y - target.Y);
+	}
+	return 1;
+}
+#endif // RTS_HAS_QT
