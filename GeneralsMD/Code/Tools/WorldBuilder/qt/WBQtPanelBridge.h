@@ -38,6 +38,27 @@ int  WBQtFeather_GetMirrorX(void);
 int  WBQtFeather_GetMirrorY(void);
 int  WBQtFeather_GetMirrorXY(void);
 
+// --- Brush panel: forward push, tool -> Qt widget (implemented Qt-side) ------------------
+void WBQtBrush_PushWidth(int v);
+void WBQtBrush_PushFeather(int v);
+void WBQtBrush_PushHeight(int v);
+
+// --- Brush panel: reverse, Qt widget -> tool (implemented MFC-side, WBQtBrushBridge) ------
+void WBQtBrush_SetWidth(int v);
+void WBQtBrush_SetFeather(int v);
+void WBQtBrush_SetHeight(int v);
+void WBQtBrush_ToggleMirror(void);
+void WBQtBrush_ToggleMirrorX(void);
+void WBQtBrush_ToggleMirrorY(void);
+void WBQtBrush_ToggleMirrorXY(void);
+int  WBQtBrush_GetWidth(void);
+int  WBQtBrush_GetFeather(void);
+int  WBQtBrush_GetHeight(void);
+int  WBQtBrush_GetMirror(void);
+int  WBQtBrush_GetMirrorX(void);
+int  WBQtBrush_GetMirrorY(void);
+int  WBQtBrush_GetMirrorXY(void);
+
 #ifdef __cplusplus
 }
 #endif

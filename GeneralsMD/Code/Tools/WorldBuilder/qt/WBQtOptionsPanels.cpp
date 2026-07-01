@@ -11,6 +11,7 @@
 #include "WBQtPanelBridge.h"
 #include "qwinwidget.h"
 #include "panels/WBQtFeatherPanel.h"
+#include "panels/WBQtBrushPanel.h"
 #include "resource.h"
 
 #include <QApplication>
@@ -26,6 +27,7 @@ static int         g_currentDialogID = 0;
 static QWidget *wbQtPanelFor(int dialogID, QWidget *owner)
 {
 	static WBQtFeatherPanel *featherPanel = NULL;
+	static WBQtBrushPanel   *brushPanel = NULL;
 
 	switch (dialogID)
 	{
@@ -35,6 +37,13 @@ static QWidget *wbQtPanelFor(int dialogID, QWidget *owner)
 				featherPanel = new WBQtFeatherPanel(owner);
 			}
 			return featherPanel;
+
+		case IDD_BRUSH_OPTIONS:
+			if (brushPanel == NULL)
+			{
+				brushPanel = new WBQtBrushPanel(owner);
+			}
+			return brushPanel;
 
 		default:
 			return NULL;

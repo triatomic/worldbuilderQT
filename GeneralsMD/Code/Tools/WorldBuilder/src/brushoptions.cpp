@@ -25,6 +25,9 @@
 #include "brushoptions.h"
 #include "WorldBuilderView.h"
 #include "BrushTool.h"
+#ifdef RTS_HAS_QT
+#include "qt/WBQtPanelBridge.h"
+#endif
 
 BrushOptions *BrushOptions::m_staticThis = NULL;
 Int BrushOptions::m_currentWidth = 0;
@@ -57,6 +60,9 @@ void BrushOptions::setFeather(Int feather)
 	CString buf;
 	buf.Format("%d", feather);
 	m_currentFeather = feather;
+#ifdef RTS_HAS_QT
+	WBQtBrush_PushFeather(feather);
+#endif
 	if (m_staticThis && !m_staticThis->m_updating) {
 		CWnd *pEdit = m_staticThis->GetDlgItem(IDC_FEATHER_EDIT);
 		if (pEdit) pEdit->SetWindowText(buf);
@@ -70,6 +76,9 @@ void BrushOptions::setWidth(Int width)
 	CString buf;
 	buf.Format("%d", width);
 	m_currentWidth = width;
+#ifdef RTS_HAS_QT
+	WBQtBrush_PushWidth(width);
+#endif
 	if (m_staticThis && !m_staticThis->m_updating) {
 		CWnd *pEdit = m_staticThis->GetDlgItem(IDC_SIZE_EDIT);
 		if (pEdit) pEdit->SetWindowText(buf);
@@ -81,6 +90,9 @@ void BrushOptions::setHeight(Int height)
 	char buffer[50];
 	sprintf(buffer, "%d", height);
 	m_currentHeight = height;
+#ifdef RTS_HAS_QT
+	WBQtBrush_PushHeight(height);
+#endif
 	if (m_staticThis && !m_staticThis->m_updating) {
 		CWnd *pEdit = m_staticThis->GetDlgItem(IDC_HEIGHT_EDIT);
 		if (pEdit) pEdit->SetWindowText(buffer);
