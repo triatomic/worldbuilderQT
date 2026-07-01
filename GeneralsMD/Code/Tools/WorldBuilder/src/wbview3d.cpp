@@ -101,6 +101,9 @@
 #include "GameClient/View.h"
 #include "GlobalLightOptions.h"
 #include "LayersList.h"
+#ifdef RTS_HAS_QT
+#include "qt/panels/WBQtLayersBridge.h"
+#endif
 #include "MinimapDialog.h"
 #include "ImpassableOptions.h"
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
@@ -5141,6 +5144,21 @@ void WbView3d::OnViewLayersList()
 {
 	m_showLayersList = !m_showLayersList;
 	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "ShowLayersList", m_showLayersList ? 1 : 0);
+#ifdef RTS_HAS_QT
+	// Qt mode: toggle the Qt Layers window; the hidden MFC dialog stays the model owner and
+	// keeps updates enabled while the Qt window is up (updateUIFromList feeds the Qt push).
+	if (m_showLayersList)
+	{
+		WBQtLayers_Open(AfxGetMainWnd()->GetSafeHwnd());
+		TheLayersList->enableUpdates();
+	}
+	else
+	{
+		WBQtLayers_Close();
+		TheLayersList->disableUpdates();
+	}
+	return;
+#endif
 	TheLayersList->ShowWindow(m_showLayersList ? SW_SHOW : SW_HIDE);
 	if (m_showLayersList) {
 		TheLayersList->enableUpdates();

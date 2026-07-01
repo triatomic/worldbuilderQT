@@ -31,6 +31,7 @@
 #include "qt/WBQtPanelBridge.h"
 #include "qt/panels/WBQtGlobalLightBridge.h"
 #include "qt/panels/WBQtCameraBridge.h"
+#include "qt/panels/WBQtLayersBridge.h"
 #endif
 /////////////////////////////////////////////////////////////////////////////
 // CWBFrameWnd
@@ -172,6 +173,11 @@ BOOL CWB3dFrameWnd::PreTranslateMessage(MSG* pMsg)
 	}
 	// And for the Qt Camera Options window (its pitch field takes digits).
 	if (WBQtCamera_OwnsFocus())
+	{
+		return CWnd::PreTranslateMessage(pMsg);
+	}
+	// And for the Qt Layers window (inline layer rename takes typed text).
+	if (WBQtLayers_OwnsFocus())
 	{
 		return CWnd::PreTranslateMessage(pMsg);
 	}

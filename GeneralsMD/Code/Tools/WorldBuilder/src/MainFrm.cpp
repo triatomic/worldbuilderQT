@@ -356,6 +356,11 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	m_layersList = new LayersList(LayersList::IDD, this);
 	m_layersList->Create(LayersList::IDD, this);
 	m_layersList->ShowWindow(::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowLayersList", 0) ? SW_SHOW : SW_HIDE);
+#ifdef RTS_HAS_QT
+	// Qt mode: the MFC dialog is only the hidden model owner; the Qt Layers window is opened
+	// from the View menu (qApp is not up yet here, so no startup auto-open).
+	m_layersList->ShowWindow(SW_HIDE);
+#endif
 	
 	CRect optionsRect;
 	m_globalLightOptions.GetWindowRect(&optionsRect);

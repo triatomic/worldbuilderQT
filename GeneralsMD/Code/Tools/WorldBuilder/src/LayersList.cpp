@@ -47,6 +47,9 @@
 #include "GameLogic/PolygonTrigger.h"
 
 #include <stack>
+#ifdef RTS_HAS_QT
+#include "qt/panels/WBQtLayersBridge.h"
+#endif
 
 
 static int newLayerNum = 1;
@@ -465,6 +468,9 @@ void LayersList::updateUIFromList(void)
 			pTree->InsertItem(uniqueID.str(), iconToShow, iconToShow, thisBranch);
 		}
 	}
+#ifdef RTS_HAS_QT
+	WBQtLayers_PushRefresh();
+#endif
 }
 
 Bool LayersList::findMapObjectAndList(IN MapObject *objectToFind, OUT ListLayerIt *layerIt, OUT ListMapObjectPtrIt *objectIt)
@@ -1381,3 +1387,410 @@ std::string LayersList::ThePolygonTriggerLayerName = "Default Trigger Layer";
 std::string LayersList::TheActiveLayerName;
 const std::string LayersList::TheUnmutableDefaultLayerName = "Default Object Layer";
 extern LayersList *TheLayersList = NULL;
+
+
+#ifdef RTS_HAS_QT
+//----------------------------------------------------------------------------------------
+// Qt front-end support (WBQtLayersBridge). These are the MFC command handlers keyed by
+// layer/item NAME instead of the last-clicked tree item, operating on TheLayersList (the
+// hidden MFC dialog, still the model owner). Where a handler only touched the hidden MFC
+// tree cosmetically, updateUIFromList() rebuilds it (and pushes to the Qt window).
+//----------------------------------------------------------------------------------------
+
+namespace
+{
+	void qtLayersCopyStr(char *out, int cap, const char *src)
+	{
+		if (out == NULL || cap <= 0) { return; }
+		if (src == NULL) { out[0] = 0; return; }
+		strncpy(out, src, cap - 1);
+		out[cap - 1] = 0;
+	}
+}
+
+int LayersList::qtGetLayerCount(void)
+{
+	return TheLayersList ? (int)TheLayersList->mLayers.size() : 0;
+}
+
+int LayersList::qtGetLayerName(int i, char *out, int cap)
+{
+	if (TheLayersList == NULL || i < 0)
+	{
+		return 0;
+	}
+	ListLayerIt it = TheLayersList->mLayers.begin();
+	while (i > 0 && it != TheLayersList->mLayers.end())
+	{
+		++it;
+		--i;
+	}
+	if (it == TheLayersList->mLayers.end())
+	{
+		return 0;
+	}
+	qtLayersCopyStr(out, cap, it->layerName.str());
+	return 1;
+}
+
+int LayersList::qtGetLayerState(int i)
+{
+	if (TheLayersList == NULL || i < 0)
+	{
+		return 0;
+	}
+	ListLayerIt it = TheLayersList->mLayers.begin();
+	while (i > 0 && it != TheLayersList->mLayers.end())
+	{
+		++it;
+		--i;
+	}
+	if (it == TheLayersList->mLayers.end())
+	{
+		return 0;
+	}
+	// Active wins over hidden, matching updateTreeImages.
+	if (it->layerName.compareNoCase(TheActiveLayerName.c_str()) == 0)
+	{
+		return 2;
+	}
+	return it->show ? 0 : 1;
+}
+
+int LayersList::qtGetItemCount(int layer)
+{
+	if (TheLayersList == NULL || layer < 0)
+	{
+		return 0;
+	}
+	ListLayerIt it = TheLayersList->mLayers.begin();
+	while (layer > 0 && it != TheLayersList->mLayers.end())
+	{
+		++it;
+		--layer;
+	}
+	if (it == TheLayersList->mLayers.end())
+	{
+		return 0;
+	}
+	return (int)(it->objectsInLayer.size() + it->polygonTriggersInLayer.size());
+}
+
+int LayersList::qtGetItemLabel(int layer, int j, char *out, int cap)
+{
+	if (TheLayersList == NULL || layer < 0 || j < 0)
+	{
+		return 0;
+	}
+	ListLayerIt it = TheLayersList->mLayers.begin();
+	while (layer > 0 && it != TheLayersList->mLayers.end())
+	{
+		++it;
+		--layer;
+	}
+	if (it == TheLayersList->mLayers.end())
+	{
+		return 0;
+	}
+	// Objects first, then triggers -- the same order updateUIFromList builds the tree in.
+	int objCount = (int)it->objectsInLayer.size();
+	if (j < objCount)
+	{
+		ListMapObjectPtrIt objIt = it->objectsInLayer.begin();
+		while (j > 0)
+		{
+			++objIt;
+			--j;
+		}
+		Bool exists;
+		AsciiString uniqueID = (*objIt)->getProperties()->getAsciiString(TheKey_uniqueID, &exists);
+		qtLayersCopyStr(out, cap, exists ? uniqueID.str() : (*objIt)->getName().str());
+		return 1;
+	}
+	j -= objCount;
+	ListPolygonTriggerPtrIt trigIt = it->polygonTriggersInLayer.begin();
+	while (j > 0 && trigIt != it->polygonTriggersInLayer.end())
+	{
+		++trigIt;
+		--j;
+	}
+	if (trigIt == it->polygonTriggersInLayer.end())
+	{
+		return 0;
+	}
+	qtLayersCopyStr(out, cap, (*trigIt)->getTriggerName().str());
+	return 1;
+}
+
+int LayersList::qtNewLayer(char *nameOut, int cap)
+{
+	if (TheLayersList == NULL)
+	{
+		return 0;
+	}
+	static char buffer[1024];
+	sprintf(buffer, "%s %d", TheDefaultNewLayerName.c_str(), newLayerNum);
+	TheLayersList->addLayerNamed(buffer);
+	++newLayerNum;
+	TheLayersList->updateUIFromList();
+	qtLayersCopyStr(nameOut, cap, buffer);
+	return 1;
+}
+
+void LayersList::qtDeleteLayer(const char *name)
+{
+	if (TheLayersList == NULL || name == NULL)
+	{
+		return;
+	}
+	AsciiString asciiCatToDelete(name);
+	if (asciiCatToDelete.compareNoCase(AsciiString(TheDefaultLayerName.c_str())) == 0)
+	{
+		return;
+	}
+	if (asciiCatToDelete.compareNoCase(AsciiString(ThePolygonTriggerLayerName.c_str())) == 0)
+	{
+		return;
+	}
+	ListLayerIt srcLayerIt, dstLayerIt;
+	if (!TheLayersList->findLayerNamed(asciiCatToDelete, &srcLayerIt))
+	{
+		return;
+	}
+	if (asciiCatToDelete.compareNoCase(TheActiveLayerName.c_str()) == 0)
+	{
+		// The active layer is being deleted.
+		TheActiveLayerName = AsciiString::TheEmptyString.str();
+		if (!TheLayersList->findLayerNamed(AsciiString(TheDefaultLayerName.c_str()), &dstLayerIt))
+		{
+			return;
+		}
+	}
+	else
+	{
+		if (!TheLayersList->findLayerNamed(AsciiString(TheActiveLayerName.c_str()), &dstLayerIt))
+		{
+			if (!TheLayersList->findLayerNamed(AsciiString(TheDefaultLayerName.c_str()), &dstLayerIt))
+			{
+				return;
+			}
+		}
+	}
+	TheLayersList->mergeLayerInto(srcLayerIt, dstLayerIt);
+	TheLayersList->updateUIFromList();
+}
+
+void LayersList::qtToggleHideLayer(const char *name)
+{
+	if (TheLayersList == NULL || name == NULL)
+	{
+		return;
+	}
+	ListLayerIt layerIt;
+	if (!TheLayersList->findLayerNamed(AsciiString(name), &layerIt))
+	{
+		return;
+	}
+	CWorldBuilderDoc *pDoc = CWorldBuilderDoc::GetActiveDoc();
+	if (!pDoc)
+	{
+		return;
+	}
+	layerIt->show = !layerIt->show;
+	TheLayersList->updateObjectRenderFlags(&layerIt);
+	TheLayersList->updateTreeImages();
+	WbView3d *p3View = pDoc->GetActive3DView();
+	if (p3View)
+	{
+		p3View->resetRenderObjects();
+		p3View->invalObjectInView(NULL);
+	}
+}
+
+void LayersList::qtToggleActiveLayer(const char *name)
+{
+	if (TheLayersList == NULL || name == NULL)
+	{
+		return;
+	}
+	ListLayerIt srclayerIt;
+	if (!TheLayersList->findLayerNamed(AsciiString(name), &srclayerIt))
+	{
+		return;
+	}
+	if (srclayerIt->layerName.compareNoCase(TheActiveLayerName.c_str()) == 0)
+	{
+		// No layer is selected as default.
+		TheActiveLayerName = AsciiString::TheEmptyString.str();
+	}
+	else
+	{
+		// Select this layer to be the default as new objects and triggers are added.
+		TheActiveLayerName = srclayerIt->layerName.str();
+		// The active layer has to be shown.
+		srclayerIt->show = true;
+		TheLayersList->updateObjectRenderFlags(&srclayerIt);
+	}
+	TheLayersList->updateTreeImages();
+}
+
+int LayersList::qtRenameLayer(const char *oldName, const char *newName)
+{
+	if (TheLayersList == NULL || oldName == NULL || newName == NULL || newName[0] == 0)
+	{
+		return 0;
+	}
+	if (strcmp(oldName, ThePolygonTriggerLayerName.c_str()) == 0)
+	{
+		// The default polygon trigger layer cannot be renamed (mirrors OnBeginEditLabel).
+		return 0;
+	}
+	ListLayerIt layerIt;
+	if (!TheLayersList->findLayerNamed(AsciiString(oldName), &layerIt))
+	{
+		return 0;
+	}
+	layerIt->layerName = AsciiString(newName);
+	if (AsciiString(oldName).compareNoCase(AsciiString(TheDefaultLayerName.c_str())) == 0)
+	{
+		// Update the default label to be the new layer name (mirrors OnEndEditLabel).
+		TheDefaultLayerName = layerIt->layerName.str();
+	}
+	TheLayersList->updateUIFromList();
+	return 1;
+}
+
+void LayersList::qtMergeLayerInto(const char *src, const char *dst)
+{
+	if (TheLayersList == NULL || src == NULL || dst == NULL)
+	{
+		return;
+	}
+	ListLayerIt srcIt, dstIt;
+	if (!TheLayersList->findLayerNamed(AsciiString(src), &srcIt))
+	{
+		return;
+	}
+	if (!TheLayersList->findLayerNamed(AsciiString(dst), &dstIt))
+	{
+		return;
+	}
+	if (srcIt == dstIt)
+	{
+		return;
+	}
+	TheLayersList->mergeLayerInto(srcIt, dstIt);
+	TheLayersList->updateUIFromList();
+}
+
+void LayersList::qtMoveObjectToLayer(const char *label, const char *layerName)
+{
+	if (TheLayersList == NULL || label == NULL || layerName == NULL)
+	{
+		return;
+	}
+	MapObject *objToMove = findObjectByUID(AsciiString(label));
+	if (objToMove)
+	{
+		TheLayersList->changeMapObjectLayer(objToMove, AsciiString(layerName));
+	}
+	else
+	{
+		PolygonTrigger *triggerToMove = findPolygonTriggerByUID(AsciiString(label));
+		if (triggerToMove)
+		{
+			TheLayersList->changePolygonTriggerLayer(triggerToMove, AsciiString(layerName));
+		}
+	}
+	TheLayersList->updateUIFromList();
+}
+
+void LayersList::qtMoveViewSelectionToLayer(const char *layerName)
+{
+	if (TheLayersList == NULL || layerName == NULL)
+	{
+		return;
+	}
+	ListLayerIt layerIt;
+	if (!TheLayersList->findLayerNamed(AsciiString(layerName), &layerIt))
+	{
+		return;
+	}
+	MapObject *mapObject = MapObject::getFirstMapObject();
+	std::stack<MapObject*> allSelectedObjects;
+	while (mapObject)
+	{
+		if (mapObject->isSelected())
+		{
+			allSelectedObjects.push(mapObject);
+		}
+		mapObject = mapObject->getNext();
+	}
+	while (allSelectedObjects.size() > 0)
+	{
+		TheLayersList->changeMapObjectLayer(allSelectedObjects.top(), layerIt->layerName);
+		allSelectedObjects.pop();
+	}
+	PolygonTrigger *polygonTrigger = PolygonTrigger::getFirstPolygonTrigger();
+	std::stack<PolygonTrigger*> allSelectedTriggers;
+	while (polygonTrigger)
+	{
+		if (polygonTrigger->getSelected())
+		{
+			allSelectedTriggers.push(polygonTrigger);
+		}
+		polygonTrigger = polygonTrigger->getNext();
+	}
+	while (allSelectedTriggers.size() > 0)
+	{
+		TheLayersList->changePolygonTriggerLayer(allSelectedTriggers.top(), layerIt->layerName);
+		allSelectedTriggers.pop();
+	}
+	// Trigger re-render of shadows / objects in the view (mirrors OnMergeViewSelection).
+	CWorldBuilderDoc *pDoc = CWorldBuilderDoc::GetActiveDoc();
+	if (pDoc)
+	{
+		WbView3d *p3View = pDoc->GetActive3DView();
+		if (p3View)
+		{
+			p3View->resetRenderObjects();
+			p3View->invalObjectInView(NULL);
+		}
+	}
+	TheLayersList->updateUIFromList();
+}
+
+void LayersList::qtSelectItem(const char *label)
+{
+	if (TheLayersList == NULL || label == NULL)
+	{
+		return;
+	}
+	AsciiString selectedItemAsciiString(label);
+	// Unselect everything on the map and get ready to find the one the user wanted.
+	unselectAllMapObjects();
+	unselectAllPolygonTriggers();
+	ListLayerIt srcLayerIt;
+	if (TheLayersList->findLayerNamed(selectedItemAsciiString, &srcLayerIt))
+	{
+		// A layer: select all map objects and triggers in it (mirrors OnSelectLayerObject).
+		ListMapObjectPtrIt mopIt;
+		for (mopIt = srcLayerIt->objectsInLayer.begin(); mopIt != srcLayerIt->objectsInLayer.end(); ++mopIt)
+		{
+			(*mopIt)->setSelected(true);
+		}
+		ListPolygonTriggerPtrIt ptpIt;
+		for (ptpIt = srcLayerIt->polygonTriggersInLayer.begin(); ptpIt != srcLayerIt->polygonTriggersInLayer.end(); ++ptpIt)
+		{
+			(*ptpIt)->setSelected(true);
+		}
+	}
+	else
+	{
+		if (!findAndSelectMapObject(selectedItemAsciiString))
+		{
+			findAndSelectPolygonTrigger(selectedItemAsciiString);
+		}
+	}
+}
+#endif // RTS_HAS_QT
