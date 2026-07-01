@@ -86,6 +86,36 @@ class GroveOptions : public COptionsPanel
 		virtual void OnMove(int x, int y);
 		virtual void OnOK();
 		virtual void OnClose();
+#ifdef RTS_HAS_QT
+	public:
+		// Qt panel support (WBQtGroveBridge): the Qt Grove panel drives these hidden MFC
+		// dialog controls so the TheGroveOptions getters GroveTool reads keep returning the
+		// right thing. Defined (guarded) in GroveOptions.cpp; instance methods reached via
+		// TheGroveOptions from src/WBQtGroveBridge.cpp.
+		int  qtGetTreeTypeCount(int type);                 // count for a combo (type 1..11)
+		int  qtGetTreeTypeName(int type, int index, char *out, int cap); // combo entry text
+		int  qtGetTreeTypeSel(int type);                   // current combo selection
+		void qtSetTreeTypeSel(int type, int index);        // set combo selection (+preview)
+		int  qtGetWeight(int type);                        // Per<type> edit value
+		void qtSetWeight(int type, int value);             // write Per<type> edit + resave
+		int  qtGetTotalPerc(void);                         // the running total display
+		int  qtGetNumTrees(void);                          // NumberTrees edit value
+		void qtSetNumTrees(int value);                     // write NumberTrees edit + persist
+		int  qtGetAllowWater(void);
+		void qtSetAllowWater(int on);
+		int  qtGetAllowCliff(void);
+		void qtSetAllowCliff(int on);
+		int  qtGetUsePropsOnly(void);
+		void qtSetUsePropsOnly(int on);
+		int  qtGetSetCount(void);                          // number of named sets
+		int  qtGetSetName(int index, char *out, int cap);  // set-name combo entry text
+		int  qtGetCurrentSet(void);                        // current set selection
+		void qtSelectSet(int index);                       // pick a set (loads its makeup)
+		void qtSaveSet(void);                              // Save button
+		void qtOpenSettings(void);                         // Settings button
+		int  qtGetPreviewSize(int *widthOut, int *heightOut);
+		int  qtRenderPreview(unsigned char *bgrOut, int cap); // preview of last-changed combo
+#endif
 	DECLARE_MESSAGE_MAP()
 };
 

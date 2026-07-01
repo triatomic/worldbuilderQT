@@ -849,3 +849,315 @@ BEGIN_MESSAGE_MAP(GroveOptions, CDialog)
 	ON_BN_CLICKED(IDC_Grove_SaveSet, OnSaveSetName)
 	ON_BN_CLICKED(IDC_Grove_Settings, OnOpenGroveSettings)
 END_MESSAGE_MAP()
+
+#ifdef RTS_HAS_QT
+//----------------------------------------------------------------------------------------
+// GroveOptions Qt-support methods (declared in GroveOptions.h). The Qt Grove panel drives
+// the hidden MFC dialog controls through these so the TheGroveOptions getters GroveTool
+// reads (getNumTrees / getNumType / getTypeName / getTotalTreePerc / getCanPlace*) keep
+// returning the right values. They reuse the same GetDlgItem paths and the existing On*
+// handlers so behaviour matches the MFC panel exactly.
+//----------------------------------------------------------------------------------------
+
+// Combo/edit control IDs by type (1..11), mirroring the arrays used throughout this file.
+static const int kGroveTypeComboIDs[TREES_PER_SET] = {
+	IDC_Grove_Type1, IDC_Grove_Type2, IDC_Grove_Type3, IDC_Grove_Type4, IDC_Grove_Type5,
+	IDC_Grove_Type6, IDC_Grove_Type7, IDC_Grove_Type8, IDC_Grove_Type9, IDC_Grove_Type10,
+	IDC_Grove_Type11
+};
+static const int kGrovePerIDs[TREES_PER_SET] = {
+	IDC_Grove_Per1, IDC_Grove_Per2, IDC_Grove_Per3, IDC_Grove_Per4, IDC_Grove_Per5,
+	IDC_Grove_Per6, IDC_Grove_Per7, IDC_Grove_Per8, IDC_Grove_Per9, IDC_Grove_Per10,
+	IDC_Grove_Per11
+};
+
+// The MFC preview is a fixed 128x128 BGR image (see the PREVIEW dimensions in ObjectPreview.cpp,
+// which are file-scope there, so mirror the literals here like the other Qt bridges do).
+#define WBQT_GROVE_PREVIEW_W 128
+#define WBQT_GROVE_PREVIEW_H 128
+
+// Which tree-type combo last drove the preview (1..11), 0 == none. Only one GroveOptions
+// instance ever exists (TheGroveOptions), so a file-scope latch is sufficient and avoids
+// changing the class layout.
+static int gGroveQtPreviewType = 0;
+
+int GroveOptions::qtGetTreeTypeCount(int type)
+{
+	if (type < 1 || type > TREES_PER_SET)
+	{
+		return 0;
+	}
+	CComboBox *pBox = (CComboBox*) GetDlgItem(kGroveTypeComboIDs[type - 1]);
+	if (pBox == NULL)
+	{
+		return 0;
+	}
+	return pBox->GetCount();
+}
+
+int GroveOptions::qtGetTreeTypeName(int type, int index, char *out, int cap)
+{
+	if (out == NULL || cap <= 0)
+	{
+		return 0;
+	}
+	out[0] = 0;
+	if (type < 1 || type > TREES_PER_SET)
+	{
+		return 0;
+	}
+	CComboBox *pBox = (CComboBox*) GetDlgItem(kGroveTypeComboIDs[type - 1]);
+	if (pBox == NULL || index < 0 || index >= pBox->GetCount())
+	{
+		return 0;
+	}
+	CString cstr;
+	pBox->GetLBText(index, cstr);
+	strncpy(out, (LPCSTR)cstr, cap - 1);
+	out[cap - 1] = 0;
+	return 1;
+}
+
+int GroveOptions::qtGetTreeTypeSel(int type)
+{
+	if (type < 1 || type > TREES_PER_SET)
+	{
+		return -1;
+	}
+	CComboBox *pBox = (CComboBox*) GetDlgItem(kGroveTypeComboIDs[type - 1]);
+	if (pBox == NULL)
+	{
+		return -1;
+	}
+	return pBox->GetCurSel();
+}
+
+void GroveOptions::qtSetTreeTypeSel(int type, int index)
+{
+	if (type < 1 || type > TREES_PER_SET)
+	{
+		return;
+	}
+	CComboBox *pBox = (CComboBox*) GetDlgItem(kGroveTypeComboIDs[type - 1]);
+	if (pBox == NULL)
+	{
+		return;
+	}
+	pBox->SetCurSel(index);
+	gGroveQtPreviewType = type;
+	// Persist the makeup exactly like the MFC ON_CBN_SELENDOK handler would. The preview
+	// there is driven off GetFocus(); here we render it explicitly via qtRenderPreview.
+	_updateGroveMakeup();
+}
+
+int GroveOptions::qtGetWeight(int type)
+{
+	if (type < 1 || type > TREES_PER_SET)
+	{
+		return 0;
+	}
+	CWnd *pWnd = GetDlgItem(kGrovePerIDs[type - 1]);
+	if (pWnd == NULL)
+	{
+		return 0;
+	}
+	char buff[ARBITRARY_BUFF_SIZE];
+	pWnd->GetWindowText(buff, ARBITRARY_BUFF_SIZE - 1);
+	return atoi(buff);
+}
+
+void GroveOptions::qtSetWeight(int type, int value)
+{
+	if (type < 1 || type > TREES_PER_SET)
+	{
+		return;
+	}
+	CWnd *pWnd = GetDlgItem(kGrovePerIDs[type - 1]);
+	if (pWnd == NULL)
+	{
+		return;
+	}
+	char buff[ARBITRARY_BUFF_SIZE];
+	sprintf(buff, "%d", value);
+	pWnd->SetWindowText(buff);
+	// Recompute + persist the weights and refresh the total, like ON_EN_KILLFOCUS.
+	_updateTreeWeights();
+}
+
+int GroveOptions::qtGetTotalPerc(void)
+{
+	return getTotalTreePerc();
+}
+
+int GroveOptions::qtGetNumTrees(void)
+{
+	return getNumTrees();
+}
+
+void GroveOptions::qtSetNumTrees(int value)
+{
+	CWnd *pWnd = GetDlgItem(IDC_Grove_NumberTrees);
+	if (pWnd == NULL)
+	{
+		return;
+	}
+	char buff[ARBITRARY_BUFF_SIZE];
+	sprintf(buff, "%d", value);
+	pWnd->SetWindowText(buff);
+	_updateTreeCount();
+}
+
+int GroveOptions::qtGetAllowWater(void)
+{
+	return getCanPlaceInWater() ? 1 : 0;
+}
+
+void GroveOptions::qtSetAllowWater(int on)
+{
+	CButton *pButt = (CButton*) GetDlgItem(IDC_Grove_AllowWaterPlacement);
+	if (pButt != NULL)
+	{
+		pButt->SetCheck(on ? 1 : 0);
+		_updatePlacementAllowed();
+	}
+}
+
+int GroveOptions::qtGetAllowCliff(void)
+{
+	return getCanPlaceOnCliffs() ? 1 : 0;
+}
+
+void GroveOptions::qtSetAllowCliff(int on)
+{
+	CButton *pButt = (CButton*) GetDlgItem(IDC_Grove_AllowCliffPlacement);
+	if (pButt != NULL)
+	{
+		pButt->SetCheck(on ? 1 : 0);
+		_updatePlacementAllowed();
+	}
+}
+
+int GroveOptions::qtGetUsePropsOnly(void)
+{
+	return isUsePropsOnly() ? 1 : 0;
+}
+
+void GroveOptions::qtSetUsePropsOnly(int on)
+{
+	CButton *pButt = (CButton*) GetDlgItem(IDC_Grove_UsePropsOnly);
+	if (pButt != NULL)
+	{
+		pButt->SetCheck(on ? 1 : 0);
+		_updatePlacementAllowed();
+		// Props-only changes what the totals count; refresh the display like the MFC panel.
+		_updateTreeWeights();
+	}
+}
+
+int GroveOptions::qtGetSetCount(void)
+{
+	CComboBox *pBox = (CComboBox*) GetDlgItem(IDC_Grove_SetName);
+	if (pBox == NULL)
+	{
+		return 0;
+	}
+	return pBox->GetCount();
+}
+
+int GroveOptions::qtGetSetName(int index, char *out, int cap)
+{
+	if (out == NULL || cap <= 0)
+	{
+		return 0;
+	}
+	out[0] = 0;
+	CComboBox *pBox = (CComboBox*) GetDlgItem(IDC_Grove_SetName);
+	if (pBox == NULL || index < 0 || index >= pBox->GetCount())
+	{
+		return 0;
+	}
+	CString cstr;
+	pBox->GetLBText(index, cstr);
+	strncpy(out, (LPCSTR)cstr, cap - 1);
+	out[cap - 1] = 0;
+	return 1;
+}
+
+int GroveOptions::qtGetCurrentSet(void)
+{
+	CComboBox *pBox = (CComboBox*) GetDlgItem(IDC_Grove_SetName);
+	if (pBox == NULL)
+	{
+		return 0;
+	}
+	return pBox->GetCurSel();
+}
+
+void GroveOptions::qtSelectSet(int index)
+{
+	CComboBox *pBox = (CComboBox*) GetDlgItem(IDC_Grove_SetName);
+	if (pBox == NULL)
+	{
+		return;
+	}
+	pBox->SetCurSel(index);
+	// Mirror OnSelchangeGroveSetName: persist the index and load the set makeup + ratios.
+	CustomConfigProfile::WriteInt("AdrianeGroveOptions", "SetNameIndex", index, GROVE_INI_FILE);
+	_loadSet(index);
+}
+
+void GroveOptions::qtSaveSet(void)
+{
+	OnSaveSetName();
+}
+
+void GroveOptions::qtOpenSettings(void)
+{
+	OnOpenGroveSettings();
+}
+
+int GroveOptions::qtGetPreviewSize(int *widthOut, int *heightOut)
+{
+	if (widthOut != NULL)
+	{
+		*widthOut = WBQT_GROVE_PREVIEW_W;
+	}
+	if (heightOut != NULL)
+	{
+		*heightOut = WBQT_GROVE_PREVIEW_H;
+	}
+	return 1;
+}
+
+int GroveOptions::qtRenderPreview(unsigned char *bgrOut, int cap)
+{
+	if (bgrOut == NULL || cap < WBQT_GROVE_PREVIEW_W * WBQT_GROVE_PREVIEW_H * 3)
+	{
+		return 0;
+	}
+	// Resolve the template from the combo that last drove the preview, mirroring the MFC
+	// _updateGroveMakeup preview branch (sel <= 0 == the blank entry == no preview).
+	const ThingTemplate *tpl = NULL;
+	if (gGroveQtPreviewType >= 1 && gGroveQtPreviewType <= TREES_PER_SET)
+	{
+		CComboBox *pCombo = (CComboBox*) GetDlgItem(kGroveTypeComboIDs[gGroveQtPreviewType - 1]);
+		if (pCombo != NULL)
+		{
+			int sel = pCombo->GetCurSel();
+			if (sel > 0)
+			{
+				CString text;
+				pCombo->GetLBText(sel, text);
+				tpl = TheThingFactory->findTemplate(AsciiString((LPCSTR)text));
+			}
+		}
+	}
+	const UnsignedByte *data = ObjectPreview::qtRenderTemplatePreview(tpl);
+	if (data == NULL)
+	{
+		return 0;
+	}
+	memcpy(bgrOut, data, WBQT_GROVE_PREVIEW_W * WBQT_GROVE_PREVIEW_H * 3);
+	return 1;
+}
+#endif
