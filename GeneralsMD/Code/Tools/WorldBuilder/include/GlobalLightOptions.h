@@ -135,6 +135,28 @@ public:
 	virtual void PopSliderChanged(const long sliderID, long theVal);
 	virtual void PopSliderFinished(const long sliderID, long theVal);
 
+#ifdef RTS_HAS_QT
+	// Qt front-end support (WBQtGlobalLightBridge). The MFC dialog stays created + hidden
+	// (a CMainFrame member) and owns the working state + apply logic; the Qt window drives
+	// it through these statics. Defined in GlobalLightOptions.cpp. Lights: 0 Sun, 1/2 Accents.
+	static int  qtGetLighting(void);
+	static void qtSetLighting(int mode);
+	static void qtGetAngles(int light, int *azimuth, int *elevation);
+	static void qtSetAngles(int light, int azimuth, int elevation);
+	static void qtGetAmbient(int *r, int *g, int *b);
+	static void qtSetAmbient(int r, int g, int b);
+	static void qtGetDiffuse(int light, int *r, int *g, int *b);
+	static void qtSetDiffuse(int light, int r, int g, int b);
+	static void qtGetLightPos(int light, float *x, float *y, float *z);
+	static void qtGetTimeOfDayName(char *out, int cap);
+	static void qtResetLights(void);
+	static void qtSyncFromGlobals(void);
+	static void qtFeedbackOff(void);
+private:
+	static GlobalLightOptions *s_qtInstance;
+public:
+#endif
+
 };
 
 //{{AFX_INSERT_LOCATION}}

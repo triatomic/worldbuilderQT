@@ -29,6 +29,7 @@
 #include "ToastDialog.h"
 #ifdef RTS_HAS_QT
 #include "qt/WBQtPanelBridge.h"
+#include "qt/panels/WBQtGlobalLightBridge.h"
 #endif
 /////////////////////////////////////////////////////////////////////////////
 // CWBFrameWnd
@@ -160,6 +161,11 @@ BOOL CWB3dFrameWnd::PreTranslateMessage(MSG* pMsg)
 	// swallow keystrokes meant for the script editor's search / rename fields. Route
 	// straight to CWnd so the message dispatches to the focused Qt control.
 	if (WBQtScript_OwnsFocus() || WBQt_OptionPanelOwnsFocus())
+	{
+		return CWnd::PreTranslateMessage(pMsg);
+	}
+	// Same skip for the Qt Global Light Options window (its angle/color fields take digits).
+	if (WBQtGlobalLight_OwnsFocus())
 	{
 		return CWnd::PreTranslateMessage(pMsg);
 	}

@@ -532,6 +532,9 @@ BOOL GlobalLightOptions::OnInitDialog()
 		item->DestroyWindow();
 	}
 
+#ifdef RTS_HAS_QT
+	s_qtInstance = this;
+#endif
 	return TRUE;  // return TRUE unless you set the focus to a control
 	              // EXCEPTION: OCX Property Pages should return FALSE
 }
@@ -966,3 +969,232 @@ void GlobalLightOptions::OnMove(int x, int y)
 	}
 	
 }
+
+#ifdef RTS_HAS_QT
+//----------------------------------------------------------------------------------------
+// Qt front-end support (WBQtGlobalLightBridge). The hidden MFC dialog owns the working
+// state; setters update it then run the same applyAngle/applyColor paths the MFC handlers
+// use (updateEditFields guards itself, so writing the hidden edits doesn't re-fire the
+// EN_CHANGE handlers). Getters read the members / TheGlobalData like stuffValuesIntoFields.
+//----------------------------------------------------------------------------------------
+
+GlobalLightOptions *GlobalLightOptions::s_qtInstance = NULL;
+
+int GlobalLightOptions::qtGetLighting(void)
+{
+	return s_qtInstance ? s_qtInstance->m_lighting : (int)K_BOTH;
+}
+
+void GlobalLightOptions::qtSetLighting(int mode)
+{
+	if (s_qtInstance == NULL)
+	{
+		return;
+	}
+	s_qtInstance->m_lighting = mode;
+	s_qtInstance->stuffValuesIntoFields(K_SUN);
+	s_qtInstance->stuffValuesIntoFields(K_ACCENT1);
+	s_qtInstance->stuffValuesIntoFields(K_ACCENT2);
+}
+
+void GlobalLightOptions::qtGetAngles(int light, int *azimuth, int *elevation)
+{
+	if (azimuth != NULL)
+	{
+		*azimuth = 0;
+	}
+	if (elevation != NULL)
+	{
+		*elevation = 0;
+	}
+	if (s_qtInstance == NULL || light < 0 || light > 2)
+	{
+		return;
+	}
+	if (azimuth != NULL)
+	{
+		*azimuth = s_qtInstance->m_angleAzimuth[light];
+	}
+	if (elevation != NULL)
+	{
+		*elevation = s_qtInstance->m_angleElevation[light];
+	}
+}
+
+void GlobalLightOptions::qtSetAngles(int light, int azimuth, int elevation)
+{
+	if (s_qtInstance == NULL || light < 0 || light > 2)
+	{
+		return;
+	}
+	s_qtInstance->m_angleAzimuth[light] = azimuth;
+	s_qtInstance->m_angleElevation[light] = elevation;
+	s_qtInstance->updateEditFields();
+	s_qtInstance->applyAngle(light);
+}
+
+void GlobalLightOptions::qtGetAmbient(int *r, int *g, int *b)
+{
+	if (s_qtInstance == NULL)
+	{
+		return;
+	}
+	const GlobalData::TerrainLighting *tl;
+	if (s_qtInstance->m_lighting == K_OBJECTS || s_qtInstance->m_lighting == K_BOTH)
+	{
+		tl = &TheGlobalData->m_terrainObjectsLighting[TheGlobalData->m_timeOfDay][K_SUN];
+	}
+	else
+	{
+		tl = &TheGlobalData->m_terrainLighting[TheGlobalData->m_timeOfDay][K_SUN];
+	}
+	if (r != NULL)
+	{
+		*r = s_qtInstance->PercentToComponent(tl->ambient.red);
+	}
+	if (g != NULL)
+	{
+		*g = s_qtInstance->PercentToComponent(tl->ambient.green);
+	}
+	if (b != NULL)
+	{
+		*b = s_qtInstance->PercentToComponent(tl->ambient.blue);
+	}
+}
+
+void GlobalLightOptions::qtSetAmbient(int r, int g, int b)
+{
+	if (s_qtInstance == NULL)
+	{
+		return;
+	}
+	// Write the hidden edits under the guard so EN_CHANGE doesn't double-apply, then run
+	// the same applyColor path the MFC handler uses (it reads the edits back).
+	s_qtInstance->m_updating = true;
+	s_qtInstance->PutInt(IDC_RA_EDIT, r);
+	s_qtInstance->PutInt(IDC_GA_EDIT, g);
+	s_qtInstance->PutInt(IDC_BA_EDIT, b);
+	s_qtInstance->m_updating = false;
+	s_qtInstance->applyColor(K_SUN);
+}
+
+void GlobalLightOptions::qtGetDiffuse(int light, int *r, int *g, int *b)
+{
+	if (s_qtInstance == NULL || light < 0 || light > 2)
+	{
+		return;
+	}
+	const GlobalData::TerrainLighting *tl;
+	if (s_qtInstance->m_lighting == K_OBJECTS || s_qtInstance->m_lighting == K_BOTH)
+	{
+		tl = &TheGlobalData->m_terrainObjectsLighting[TheGlobalData->m_timeOfDay][light];
+	}
+	else
+	{
+		tl = &TheGlobalData->m_terrainLighting[TheGlobalData->m_timeOfDay][light];
+	}
+	if (r != NULL)
+	{
+		*r = s_qtInstance->PercentToComponent(tl->diffuse.red);
+	}
+	if (g != NULL)
+	{
+		*g = s_qtInstance->PercentToComponent(tl->diffuse.green);
+	}
+	if (b != NULL)
+	{
+		*b = s_qtInstance->PercentToComponent(tl->diffuse.blue);
+	}
+}
+
+void GlobalLightOptions::qtSetDiffuse(int light, int r, int g, int b)
+{
+	if (s_qtInstance == NULL || light < 0 || light > 2)
+	{
+		return;
+	}
+	s_qtInstance->m_updating = true;
+	s_qtInstance->PutInt(s_qtInstance->kUIRedIDs[light], r);
+	s_qtInstance->PutInt(s_qtInstance->kUIGreenIDs[light], g);
+	s_qtInstance->PutInt(s_qtInstance->kUIBlueIDs[light], b);
+	s_qtInstance->m_updating = false;
+	s_qtInstance->applyColor(light);
+}
+
+void GlobalLightOptions::qtGetLightPos(int light, float *x, float *y, float *z)
+{
+	if (s_qtInstance == NULL || light < 0 || light > 2)
+	{
+		return;
+	}
+	// Same formula applyAngle uses for the XYZ readout.
+	float el = (float)s_qtInstance->m_angleElevation[light];
+	float az = (float)s_qtInstance->m_angleAzimuth[light];
+	float lx = sin(PI/2.0f + el/180.0f*PI) * cos(az/180.0f*PI);
+	float ly = sin(PI/2.0f + el/180.0f*PI) * sin(az/180.0f*PI);
+	float lz = cos(PI/2.0f + el/180.0f*PI);
+	if (x != NULL)
+	{
+		*x = lx;
+	}
+	if (y != NULL)
+	{
+		*y = ly;
+	}
+	if (z != NULL)
+	{
+		*z = lz;
+	}
+}
+
+void GlobalLightOptions::qtGetTimeOfDayName(char *out, int cap)
+{
+	if (out == NULL || cap <= 0)
+	{
+		return;
+	}
+	const char *name = "Morning";
+	switch (TheGlobalData->m_timeOfDay)
+	{
+		default:
+		case TIME_OF_DAY_MORNING:   name = "Morning";   break;
+		case TIME_OF_DAY_AFTERNOON: name = "Afternoon"; break;
+		case TIME_OF_DAY_EVENING:   name = "Evening";   break;
+		case TIME_OF_DAY_NIGHT:     name = "Night";     break;
+	}
+	strncpy(out, name, cap - 1);
+	out[cap - 1] = 0;
+}
+
+void GlobalLightOptions::qtResetLights(void)
+{
+	if (s_qtInstance != NULL)
+	{
+		s_qtInstance->OnResetLights();
+	}
+}
+
+void GlobalLightOptions::qtSyncFromGlobals(void)
+{
+	if (s_qtInstance == NULL)
+	{
+		return;
+	}
+	s_qtInstance->stuffValuesIntoFields(K_SUN);
+	s_qtInstance->stuffValuesIntoFields(K_ACCENT1);
+	s_qtInstance->stuffValuesIntoFields(K_ACCENT2);
+}
+
+void GlobalLightOptions::qtFeedbackOff(void)
+{
+	WbView3d *pView = CWorldBuilderDoc::GetActive3DView();
+	if (pView != NULL)
+	{
+		Coord3D lightRay;
+		lightRay.x = 0.0f; lightRay.y = 0.0f; lightRay.z = -1.0f;
+		pView->doLightFeedback(false, lightRay, 0);
+		pView->doLightFeedback(false, lightRay, 1);
+		pView->doLightFeedback(false, lightRay, 2);
+	}
+}
+#endif // RTS_HAS_QT

@@ -39,6 +39,7 @@
 #ifdef RTS_HAS_QT
 #include "qt/WBQtBridge.h"
 #include "qt/WBQtPanelBridge.h"
+#include "qt/panels/WBQtGlobalLightBridge.h"
 #endif
 #define ADJUST_VIEW_TIMER 6969
 #define COUNTDOWN_TIMER 6910
@@ -658,6 +659,11 @@ void CMainFrame::showOptionsDialog(Int dialogID)
 
 void CMainFrame::OnEditGloballightoptions() 
 {
+#ifdef RTS_HAS_QT
+	// Qt mode: open the Qt Global Light window; the MFC dialog stays hidden (state owner).
+	WBQtGlobalLight_Open(GetSafeHwnd());
+	return;
+#endif
 	m_globalLightOptions.ShowWindow(SW_SHOWNA);
 }
 

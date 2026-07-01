@@ -119,6 +119,7 @@ set(WORLDBUILDER_SRC
     "src/WBQtMeshMoldBridge.cpp"
     "src/WBQtObjectPropsBridge.cpp"
     "src/WBQtWaveBridge.cpp"
+    "src/WBQtGlobalLightBridge.cpp"
     "src/wbview.cpp"
     "src/wbview3d.cpp"
     "src/WHeightMapEdit.cpp"
@@ -348,7 +349,9 @@ if(RTS_ENABLE_WORLDBUILDER_QT)
         "qt/panels/WBQtScrubSpinBox.cpp"
         "qt/panels/WBQtScrubSpinBox.h"
         "qt/panels/WBQtWavePanel.cpp"
-        "qt/panels/WBQtWavePanel.h")
+        "qt/panels/WBQtWavePanel.h"
+        "qt/panels/WBQtGlobalLightPanel.cpp"
+        "qt/panels/WBQtGlobalLightPanel.h")
 
     set_target_properties(z_worldbuilder_qt PROPERTIES AUTOMOC ON)
 
