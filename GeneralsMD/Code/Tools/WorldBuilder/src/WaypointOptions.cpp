@@ -33,6 +33,9 @@
 #include "GameLogic/Scripts.h"
 #include "Common/WellKnownKeys.h"
 #include "LayersList.h"
+#ifdef RTS_HAS_QT
+#include "qt/panels/WBQtWaypointBridge.h"
+#endif
 
 WaypointOptions *WaypointOptions::m_staticThis = NULL;
 /////////////////////////////////////////////////////////////////////////////
@@ -323,6 +326,9 @@ void WaypointOptions::update(void)
 	if (m_staticThis) {
 		m_staticThis->updateTheUI();
 	}
+#ifdef RTS_HAS_QT
+	WBQtWaypoint_PushRefresh();
+#endif
 }
 
 /////////////////////////////////////////////////////////////////////////////

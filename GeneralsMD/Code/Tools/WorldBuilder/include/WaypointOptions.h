@@ -89,6 +89,13 @@ public:
 	static Bool isUnique(AsciiString name, MapObject* theMapObj = NULL);
 	static AsciiString GenerateUniqueName(Int id);
 
+#ifdef RTS_HAS_QT
+	// Qt panel support (WBQtWaypointBridge): the Qt Waypoint panel edits the same selected
+	// waypoint / trigger this dialog does. Defined in src/WBQtWaypointBridge.cpp; a member
+	// static so the rename path can reuse isUnique() and the trigger duplicate check.
+	static void qtSetSelectionName(const char *name);
+#endif
+
 
 };
 
