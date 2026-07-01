@@ -357,7 +357,9 @@ if(RTS_ENABLE_WORLDBUILDER_QT)
         "qt/panels/WBQtCameraPanel.cpp"
         "qt/panels/WBQtCameraPanel.h"
         "qt/panels/WBQtLayersPanel.cpp"
-        "qt/panels/WBQtLayersPanel.h")
+        "qt/panels/WBQtLayersPanel.h"
+        "qt/panels/WBQtMinimapHost.cpp"
+        "qt/panels/WBQtMinimapBridge.h")
 
     set_target_properties(z_worldbuilder_qt PROPERTIES AUTOMOC ON)
 

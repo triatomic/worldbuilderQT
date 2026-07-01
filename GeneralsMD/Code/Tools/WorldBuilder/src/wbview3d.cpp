@@ -103,6 +103,7 @@
 #include "LayersList.h"
 #ifdef RTS_HAS_QT
 #include "qt/panels/WBQtLayersBridge.h"
+#include "qt/panels/WBQtMinimapBridge.h"
 #endif
 #include "MinimapDialog.h"
 #include "ImpassableOptions.h"
@@ -5174,6 +5175,26 @@ void WbView3d::OnUpdateViewLayersList(CCmdUI* pCmdUI)
 
 void WbView3d::OnViewMinimap()
 {
+#ifdef RTS_HAS_QT
+	// Qt mode: the live MFC minimap is hosted inside a Qt tool window (QWinHost); toggle
+	// that window. The hosted dialog's IsWindowVisible tracks it, so the menu checkmark
+	// and every refresh gate keep working unchanged.
+	if (TheMinimapDialog)
+	{
+		if (WBQtMinimap_IsOpen())
+		{
+			WBQtMinimap_Close();
+			::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "ShowMinimap", 0);
+		}
+		else
+		{
+			WBQtMinimap_Open(AfxGetMainWnd()->GetSafeHwnd(), TheMinimapDialog->GetSafeHwnd());
+			::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "ShowMinimap", 1);
+			TheMinimapDialog->rebuildTerrain();
+		}
+	}
+	return;
+#endif
 	if (TheMinimapDialog)
 	{
 		Bool visible = TheMinimapDialog->IsWindowVisible();

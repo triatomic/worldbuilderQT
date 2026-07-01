@@ -373,6 +373,11 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	m_minimapDialog = new MinimapDialog(this);
 	m_minimapDialog->Create(MinimapDialog::IDD, this);
 	m_minimapDialog->ShowWindow(::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowMinimap", 0) ? SW_SHOW : SW_HIDE);
+#ifdef RTS_HAS_QT
+	// Qt mode: the minimap opens hosted inside a Qt window from the View menu (qApp is not
+	// up yet here, so no startup auto-open); keep the raw MFC popup hidden.
+	m_minimapDialog->ShowWindow(SW_HIDE);
+#endif
 	// Restore the saved window position. OnExitSizeMove persists Top/Left when the user
 	// finishes moving the dialog; just read them back here. The -32000 sentinel means
 	// "never saved" -- leave the dialog at its default spawn position in that case.
