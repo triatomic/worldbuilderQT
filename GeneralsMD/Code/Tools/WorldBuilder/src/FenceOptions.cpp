@@ -42,6 +42,9 @@ so forth is all handled in the object options panel.  jba. */
 #include "Common/ThingSort.h"
 #include "GameLogic/SidesList.h"
 #include "GameClient/Color.h"
+#ifdef RTS_HAS_QT
+#include "qt/panels/WBQtFenceBridge.h"
+#endif
 
 #include <list>
 
@@ -163,6 +166,11 @@ void FenceOptions::updateObjectOptions()
 		m_objectPreview.SetThingTemplate(NULL);
 	}
 	m_objectPreview.Invalidate();
+#ifdef RTS_HAS_QT
+	// Keep the Qt Fence panel (if shown) in step: re-seed its spacing field + preview from
+	// the selection we just applied.
+	WBQtFence_PushRefresh();
+#endif
 }
 
 

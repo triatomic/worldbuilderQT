@@ -100,6 +100,20 @@ public:
 	static Bool hasSelectedObject(void);
 	static Real getFenceSpacing(void) {return m_fenceSpacing;}
 	static Real getFenceOffset(void) {return m_fenceOffset;}
+#ifdef RTS_HAS_QT
+	// Qt panel support (WBQtFenceBridge): let the Qt Fence panel mirror the filtered
+	// template list and drive the same selection statics FenceTool reads. Defined in
+	// src/WBQtFenceBridge.cpp; member statics so they can reach the private state and
+	// call updateObjectOptions() (which itself calls ObjectOptions::selectObject).
+	static MapObject *qtGetObjectListHead(void);
+	static int qtGetShowAll(void);
+	static void qtSetShowAll(int showAll);
+	static void qtSelectIndex(int filteredIndex);
+	static int qtGetCurrentIndex(void);
+	static double qtGetSpacing(void);
+	static void qtSetSpacing(double spacing);
+	static double qtGetOffset(void);
+#endif
 }; 
 
 //{{AFX_INSERT_LOCATION}}
