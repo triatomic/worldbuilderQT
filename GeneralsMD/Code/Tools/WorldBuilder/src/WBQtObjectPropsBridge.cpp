@@ -133,4 +133,160 @@ extern "C" void WBQtObjectProps_SetStoppingDistance(double dist)
 	MapObjectProps::qtSetStoppingDistance(dist);
 }
 
+// --- Phase 3a: Visual section ---------------------------------------------------------------
+
+extern "C" int WBQtObjectProps_GetWeather(void)
+{
+	return MapObjectProps::qtGetWeather();
+}
+
+extern "C" void WBQtObjectProps_SetWeather(int index)
+{
+	MapObjectProps::qtSetWeather(index);
+}
+
+extern "C" int WBQtObjectProps_GetTime(void)
+{
+	return MapObjectProps::qtGetTime();
+}
+
+extern "C" void WBQtObjectProps_SetTime(int index)
+{
+	MapObjectProps::qtSetTime(index);
+}
+
+extern "C" int WBQtObjectProps_GetPosition(char *out, int cap)
+{
+	return MapObjectProps::qtGetPosition(out, cap);
+}
+
+extern "C" void WBQtObjectProps_SetPosition(const char *text)
+{
+	MapObjectProps::qtSetPosition(text);
+}
+
+extern "C" double WBQtObjectProps_GetZOffset(void)
+{
+	return MapObjectProps::qtGetZOffset();
+}
+
+extern "C" void WBQtObjectProps_SetZOffset(double z)
+{
+	MapObjectProps::qtSetZOffset(z);
+}
+
+extern "C" double WBQtObjectProps_GetAngle(void)
+{
+	return MapObjectProps::qtGetAngle();
+}
+
+extern "C" void WBQtObjectProps_SetAngle(double deg)
+{
+	MapObjectProps::qtSetAngle(deg);
+}
+
+// --- Phase 3b: Sound section ----------------------------------------------------------------
+
+extern "C" int WBQtObjectProps_GetSoundCount(void)
+{
+	return MapObjectProps::qtGetSoundCount();
+}
+
+extern "C" int WBQtObjectProps_GetSoundItem(int i, char *out, int cap)
+{
+	return MapObjectProps::qtGetSoundItem(i, out, cap);
+}
+
+extern "C" int WBQtObjectProps_GetSoundCurSel(void)
+{
+	return MapObjectProps::qtGetSoundCurSel();
+}
+
+extern "C" void WBQtObjectProps_SetSoundCurSel(int i)
+{
+	MapObjectProps::qtSetSoundCurSel(i);
+}
+
+extern "C" int WBQtObjectProps_GetSoundPlaying(void)
+{
+	return MapObjectProps::qtGetSoundPlaying();
+}
+
+extern "C" void WBQtObjectProps_ToggleSoundPreview(void)
+{
+	MapObjectProps::qtToggleSoundPreview();
+}
+
+extern "C" int WBQtObjectProps_GetSoundFlag(int which)
+{
+	return MapObjectProps::qtGetSoundFlag(which);
+}
+
+extern "C" int WBQtObjectProps_GetSoundFlagEnabled(int which)
+{
+	return MapObjectProps::qtGetSoundFlagEnabled(which);
+}
+
+extern "C" void WBQtObjectProps_SetSoundFlag(int which, int on)
+{
+	MapObjectProps::qtSetSoundFlag(which, on);
+}
+
+extern "C" int WBQtObjectProps_GetSoundInt(int which, int *outEnabled)
+{
+	return MapObjectProps::qtGetSoundInt(which, outEnabled);
+}
+
+extern "C" void WBQtObjectProps_SetSoundInt(int which, int value)
+{
+	MapObjectProps::qtSetSoundInt(which, value);
+}
+
+extern "C" int WBQtObjectProps_GetSoundPriorityCount(void)
+{
+	return MapObjectProps::qtGetSoundPriorityCount();
+}
+
+extern "C" int WBQtObjectProps_GetSoundPriorityName(int i, char *out, int cap)
+{
+	return MapObjectProps::qtGetSoundPriorityName(i, out, cap);
+}
+
+extern "C" int WBQtObjectProps_GetSoundPriority(int *outEnabled)
+{
+	return MapObjectProps::qtGetSoundPriority(outEnabled);
+}
+
+extern "C" void WBQtObjectProps_SetSoundPriority(int i)
+{
+	MapObjectProps::qtSetSoundPriority(i);
+}
+
+// --- Phase 3c: Pre-built upgrades ----------------------------------------------------------
+
+extern "C" int WBQtObjectProps_GetUpgradeCount(void)
+{
+	return MapObjectProps::qtGetUpgradeCount();
+}
+
+extern "C" int WBQtObjectProps_GetUpgradeItem(int i, char *out, int cap)
+{
+	return MapObjectProps::qtGetUpgradeItem(i, out, cap);
+}
+
+extern "C" int WBQtObjectProps_GetUpgradeSelected(int i)
+{
+	return MapObjectProps::qtGetUpgradeSelected(i);
+}
+
+extern "C" void WBQtObjectProps_SetUpgradeSelected(int i, int on)
+{
+	MapObjectProps::qtSetUpgradeSelected(i, on);
+}
+
+extern "C" void WBQtObjectProps_CommitUpgrades(void)
+{
+	MapObjectProps::qtCommitUpgrades();
+}
+
 #endif // RTS_HAS_QT

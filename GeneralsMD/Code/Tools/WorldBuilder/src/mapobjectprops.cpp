@@ -3625,4 +3625,486 @@ void MapObjectProps::qtSetStoppingDistance(double dist)
 	}
 	TheMapObjectProps->_StoppingDistanceToDict();
 }
+
+//----------------------------------------------------------------------------------------
+// Phase 3a: Visual section (weather, time, XY position, Z offset, angle). Weather/Time are
+// index combos driven through _WeatherToDict / _TimeToDict; XY / Z / Angle write the hidden
+// MFC edit then call the real SetPosition / SetZOffset / SetAngle (single-object, via
+// ModifyObjectUndoable) so the undo path is reused. The getters read the members the MFC
+// Show* helpers already populated during updateTheUI.
+//----------------------------------------------------------------------------------------
+
+int MapObjectProps::qtGetWeather(void)
+{
+	if (TheMapObjectProps == NULL || TheMapObjectProps->m_dictToEdit == NULL)
+	{
+		return 0;
+	}
+	Bool exists;
+	return TheMapObjectProps->m_dictToEdit->getInt(TheKey_objectWeather, &exists);
+}
+
+void MapObjectProps::qtSetWeather(int index)
+{
+	if (TheMapObjectProps == NULL || index < 0)
+	{
+		return;
+	}
+	CComboBox *pCombo = (CComboBox *)TheMapObjectProps->GetDlgItem(IDC_MAPOBJECT_Weather);
+	if (pCombo != NULL)
+	{
+		pCombo->SetCurSel(index);
+	}
+	TheMapObjectProps->_WeatherToDict();
+}
+
+int MapObjectProps::qtGetTime(void)
+{
+	if (TheMapObjectProps == NULL || TheMapObjectProps->m_dictToEdit == NULL)
+	{
+		return 0;
+	}
+	Bool exists;
+	return TheMapObjectProps->m_dictToEdit->getInt(TheKey_objectTime, &exists);
+}
+
+void MapObjectProps::qtSetTime(int index)
+{
+	if (TheMapObjectProps == NULL || index < 0)
+	{
+		return;
+	}
+	CComboBox *pCombo = (CComboBox *)TheMapObjectProps->GetDlgItem(IDC_MAPOBJECT_Time);
+	if (pCombo != NULL)
+	{
+		pCombo->SetCurSel(index);
+	}
+	TheMapObjectProps->_TimeToDict();
+}
+
+int MapObjectProps::qtGetPosition(char *out, int cap)
+{
+	if (out == NULL || cap <= 0)
+	{
+		return 0;
+	}
+	if (TheMapObjectProps == NULL || TheMapObjectProps->m_selectedObject == NULL)
+	{
+		out[0] = 0;
+		return 0;
+	}
+	_snprintf(out, cap - 1, "%0.2f, %0.2f",
+		TheMapObjectProps->m_position.x, TheMapObjectProps->m_position.y);
+	out[cap - 1] = 0;
+	return 1;
+}
+
+void MapObjectProps::qtSetPosition(const char *text)
+{
+	if (TheMapObjectProps == NULL)
+	{
+		return;
+	}
+	CWnd *pEdit = TheMapObjectProps->GetDlgItem(IDC_MAPOBJECT_XYPosition);
+	if (pEdit != NULL)
+	{
+		pEdit->SetWindowText(text ? text : "");
+	}
+	TheMapObjectProps->SetPosition();
+}
+
+double MapObjectProps::qtGetZOffset(void)
+{
+	if (TheMapObjectProps == NULL)
+	{
+		return 0.0;
+	}
+	return TheMapObjectProps->m_height;
+}
+
+void MapObjectProps::qtSetZOffset(double z)
+{
+	if (TheMapObjectProps == NULL)
+	{
+		return;
+	}
+	CWnd *pEdit = TheMapObjectProps->GetDlgItem(IDC_MAPOBJECT_ZOffset);
+	if (pEdit != NULL)
+	{
+		static char buf[32];
+		sprintf(buf, "%0.2f", z);
+		pEdit->SetWindowText(buf);
+	}
+	TheMapObjectProps->SetZOffset();
+}
+
+double MapObjectProps::qtGetAngle(void)
+{
+	if (TheMapObjectProps == NULL)
+	{
+		return 0.0;
+	}
+	return TheMapObjectProps->m_angle;
+}
+
+void MapObjectProps::qtSetAngle(double deg)
+{
+	if (TheMapObjectProps == NULL)
+	{
+		return;
+	}
+	CWnd *pEdit = TheMapObjectProps->GetDlgItem(IDC_MAPOBJECT_Angle);
+	if (pEdit != NULL)
+	{
+		static char buf[32];
+		sprintf(buf, "%0.2f", deg);
+		pEdit->SetWindowText(buf);
+	}
+	TheMapObjectProps->SetAngle();
+}
+
+//----------------------------------------------------------------------------------------
+// Phase 3b: Sound section. The MFC dictTo* handlers (run during updateTheUI) set both the
+// value AND the enabled state of every sound control, encoding all the customize/looping/
+// none gating. So the Qt getters just read the LIVE MFC control (check/text + IsWindowEnabled)
+// and the setters write the control then call the matching *ToDict handler. Any control write
+// re-runs updateTheUI (via the undoable's Do), which re-gates everything and pushes back to Qt.
+//----------------------------------------------------------------------------------------
+
+// Sound flag ids -- keep in sync with the WBQT_SND_* enum in WBQtObjectPropsBridge.h.
+enum
+{
+	QT_SND_CUSTOMIZE = 0,
+	QT_SND_ENABLED,
+	QT_SND_LOOPING
+};
+// Sound int-edit ids.
+enum
+{
+	QT_SND_LOOPCOUNT = 0,
+	QT_SND_VOLUME,
+	QT_SND_MINVOLUME,
+	QT_SND_MINRANGE,
+	QT_SND_MAXRANGE
+};
+
+namespace
+{
+	int qtSndFlagControlId(int which)
+	{
+		switch (which)
+		{
+			case QT_SND_CUSTOMIZE: return IDC_CUSTOMIZE_CHECKBOX;
+			case QT_SND_ENABLED:   return IDC_ENABLED_CHECKBOX;
+			case QT_SND_LOOPING:   return IDC_LOOPING_CHECKBOX;
+			default: return 0;
+		}
+	}
+	int qtSndIntControlId(int which)
+	{
+		switch (which)
+		{
+			case QT_SND_LOOPCOUNT: return IDC_LOOPCOUNT_EDIT;
+			case QT_SND_VOLUME:    return IDC_VOLUME_EDIT;
+			case QT_SND_MINVOLUME: return IDC_MIN_VOLUME_EDIT;
+			case QT_SND_MINRANGE:  return IDC_MIN_RANGE_EDIT;
+			case QT_SND_MAXRANGE:  return IDC_MAX_RANGE_EDIT;
+			default: return 0;
+		}
+	}
+}
+
+int MapObjectProps::qtGetSoundCount(void)
+{
+	if (TheMapObjectProps == NULL)
+	{
+		return 0;
+	}
+	CComboBox *pCombo = (CComboBox *)TheMapObjectProps->GetDlgItem(IDC_SOUND_COMBO);
+	return pCombo ? pCombo->GetCount() : 0;
+}
+
+int MapObjectProps::qtGetSoundItem(int i, char *out, int cap)
+{
+	if (out == NULL || cap <= 0 || TheMapObjectProps == NULL)
+	{
+		return 0;
+	}
+	CComboBox *pCombo = (CComboBox *)TheMapObjectProps->GetDlgItem(IDC_SOUND_COMBO);
+	if (pCombo == NULL || i < 0 || i >= pCombo->GetCount())
+	{
+		return 0;
+	}
+	CString text;
+	pCombo->GetLBText(i, text);
+	strncpy(out, (const char *)text, cap - 1);
+	out[cap - 1] = 0;
+	return 1;
+}
+
+int MapObjectProps::qtGetSoundCurSel(void)
+{
+	if (TheMapObjectProps == NULL)
+	{
+		return -1;
+	}
+	CComboBox *pCombo = (CComboBox *)TheMapObjectProps->GetDlgItem(IDC_SOUND_COMBO);
+	return pCombo ? pCombo->GetCurSel() : -1;
+}
+
+void MapObjectProps::qtSetSoundCurSel(int i)
+{
+	if (TheMapObjectProps == NULL)
+	{
+		return;
+	}
+	CComboBox *pCombo = (CComboBox *)TheMapObjectProps->GetDlgItem(IDC_SOUND_COMBO);
+	if (pCombo != NULL && i >= 0)
+	{
+		pCombo->SetCurSel(i);
+	}
+	TheMapObjectProps->attachedSoundToDict();
+}
+
+int MapObjectProps::qtGetSoundPlaying(void)
+{
+	return (TheMapObjectProps != NULL && TheMapObjectProps->m_soundPreviewPlaying) ? 1 : 0;
+}
+
+void MapObjectProps::qtToggleSoundPreview(void)
+{
+	if (TheMapObjectProps != NULL)
+	{
+		TheMapObjectProps->OnPlaySound();
+	}
+}
+
+int MapObjectProps::qtGetSoundFlag(int which)
+{
+	if (TheMapObjectProps == NULL)
+	{
+		return 0;
+	}
+	int id = qtSndFlagControlId(which);
+	CButton *pButton = id ? (CButton *)TheMapObjectProps->GetDlgItem(id) : NULL;
+	return pButton ? pButton->GetCheck() : 0;
+}
+
+int MapObjectProps::qtGetSoundFlagEnabled(int which)
+{
+	if (TheMapObjectProps == NULL)
+	{
+		return 0;
+	}
+	int id = qtSndFlagControlId(which);
+	CWnd *pWnd = id ? TheMapObjectProps->GetDlgItem(id) : NULL;
+	return (pWnd && pWnd->IsWindowEnabled()) ? 1 : 0;
+}
+
+void MapObjectProps::qtSetSoundFlag(int which, int on)
+{
+	if (TheMapObjectProps == NULL)
+	{
+		return;
+	}
+	int id = qtSndFlagControlId(which);
+	CButton *pButton = id ? (CButton *)TheMapObjectProps->GetDlgItem(id) : NULL;
+	if (pButton != NULL)
+	{
+		pButton->SetCheck(on ? 1 : 0);
+	}
+	switch (which)
+	{
+		case QT_SND_CUSTOMIZE: TheMapObjectProps->customizeToDict(); break;
+		case QT_SND_ENABLED:   TheMapObjectProps->enabledToDict();   break;
+		case QT_SND_LOOPING:   TheMapObjectProps->loopingToDict();   break;
+		default: break;
+	}
+}
+
+int MapObjectProps::qtGetSoundInt(int which, int *outEnabled)
+{
+	if (outEnabled != NULL)
+	{
+		*outEnabled = 0;
+	}
+	if (TheMapObjectProps == NULL)
+	{
+		return 0;
+	}
+	int id = qtSndIntControlId(which);
+	CWnd *pEdit = id ? TheMapObjectProps->GetDlgItem(id) : NULL;
+	if (pEdit == NULL)
+	{
+		return 0;
+	}
+	if (outEnabled != NULL)
+	{
+		*outEnabled = pEdit->IsWindowEnabled() ? 1 : 0;
+	}
+	CString text;
+	pEdit->GetWindowText(text);
+	return atoi((const char *)text);
+}
+
+void MapObjectProps::qtSetSoundInt(int which, int value)
+{
+	if (TheMapObjectProps == NULL)
+	{
+		return;
+	}
+	int id = qtSndIntControlId(which);
+	CWnd *pEdit = id ? TheMapObjectProps->GetDlgItem(id) : NULL;
+	if (pEdit != NULL)
+	{
+		static char buf[32];
+		sprintf(buf, "%d", value);
+		pEdit->SetWindowText(buf);
+	}
+	switch (which)
+	{
+		case QT_SND_LOOPCOUNT: TheMapObjectProps->loopCountToDict(); break;
+		case QT_SND_VOLUME:    TheMapObjectProps->volumeToDict();    break;
+		case QT_SND_MINVOLUME: TheMapObjectProps->minVolumeToDict(); break;
+		case QT_SND_MINRANGE:  TheMapObjectProps->minRangeToDict();  break;
+		case QT_SND_MAXRANGE:  TheMapObjectProps->maxRangeToDict();  break;
+		default: break;
+	}
+}
+
+int MapObjectProps::qtGetSoundPriorityCount(void)
+{
+	if (TheMapObjectProps == NULL)
+	{
+		return 0;
+	}
+	CComboBox *pCombo = (CComboBox *)TheMapObjectProps->GetDlgItem(IDC_PRIORITY_COMBO);
+	return pCombo ? pCombo->GetCount() : 0;
+}
+
+int MapObjectProps::qtGetSoundPriorityName(int i, char *out, int cap)
+{
+	if (out == NULL || cap <= 0 || TheMapObjectProps == NULL)
+	{
+		return 0;
+	}
+	CComboBox *pCombo = (CComboBox *)TheMapObjectProps->GetDlgItem(IDC_PRIORITY_COMBO);
+	if (pCombo == NULL || i < 0 || i >= pCombo->GetCount())
+	{
+		return 0;
+	}
+	CString text;
+	pCombo->GetLBText(i, text);
+	strncpy(out, (const char *)text, cap - 1);
+	out[cap - 1] = 0;
+	return 1;
+}
+
+int MapObjectProps::qtGetSoundPriority(int *outEnabled)
+{
+	if (outEnabled != NULL)
+	{
+		*outEnabled = 0;
+	}
+	if (TheMapObjectProps == NULL)
+	{
+		return -1;
+	}
+	CComboBox *pCombo = (CComboBox *)TheMapObjectProps->GetDlgItem(IDC_PRIORITY_COMBO);
+	if (pCombo == NULL)
+	{
+		return -1;
+	}
+	if (outEnabled != NULL)
+	{
+		*outEnabled = pCombo->IsWindowEnabled() ? 1 : 0;
+	}
+	return pCombo->GetCurSel();
+}
+
+void MapObjectProps::qtSetSoundPriority(int i)
+{
+	if (TheMapObjectProps == NULL || i < 0)
+	{
+		return;
+	}
+	CComboBox *pCombo = (CComboBox *)TheMapObjectProps->GetDlgItem(IDC_PRIORITY_COMBO);
+	if (pCombo != NULL)
+	{
+		pCombo->SetCurSel(i);
+	}
+	TheMapObjectProps->priorityToDict();
+}
+
+//----------------------------------------------------------------------------------------
+// Phase 3c: Pre-built upgrades listbox (multi-select, single-object). The Qt list mirrors the
+// MFC listbox that _DictToPrebuiltUpgrades fills + pre-selects; the setter writes the MFC item
+// selection then calls _PrebuiltUpgradesToDict (which rebuilds the grant-upgrade keys).
+//----------------------------------------------------------------------------------------
+
+int MapObjectProps::qtGetUpgradeCount(void)
+{
+	if (TheMapObjectProps == NULL)
+	{
+		return 0;
+	}
+	CListBox *pBox = (CListBox *)TheMapObjectProps->GetDlgItem(IDC_MAPOBJECT_BuildWithUpgrades);
+	return pBox ? pBox->GetCount() : 0;
+}
+
+int MapObjectProps::qtGetUpgradeItem(int i, char *out, int cap)
+{
+	if (out == NULL || cap <= 0 || TheMapObjectProps == NULL)
+	{
+		return 0;
+	}
+	CListBox *pBox = (CListBox *)TheMapObjectProps->GetDlgItem(IDC_MAPOBJECT_BuildWithUpgrades);
+	if (pBox == NULL || i < 0 || i >= pBox->GetCount())
+	{
+		return 0;
+	}
+	CString text;
+	pBox->GetText(i, text);
+	strncpy(out, (const char *)text, cap - 1);
+	out[cap - 1] = 0;
+	return 1;
+}
+
+int MapObjectProps::qtGetUpgradeSelected(int i)
+{
+	if (TheMapObjectProps == NULL)
+	{
+		return 0;
+	}
+	CListBox *pBox = (CListBox *)TheMapObjectProps->GetDlgItem(IDC_MAPOBJECT_BuildWithUpgrades);
+	if (pBox == NULL || i < 0 || i >= pBox->GetCount())
+	{
+		return 0;
+	}
+	return (pBox->GetSel(i) > 0) ? 1 : 0;
+}
+
+void MapObjectProps::qtSetUpgradeSelected(int i, int on)
+{
+	if (TheMapObjectProps == NULL)
+	{
+		return;
+	}
+	CListBox *pBox = (CListBox *)TheMapObjectProps->GetDlgItem(IDC_MAPOBJECT_BuildWithUpgrades);
+	if (pBox == NULL || i < 0 || i >= pBox->GetCount())
+	{
+		return;
+	}
+	// Set the item's selection only; the Qt panel calls qtCommitUpgrades() once after applying the
+	// whole selection set, so a multi-item change produces a single undoable (not one per item).
+	pBox->SetSel(i, on ? TRUE : FALSE);
+}
+
+void MapObjectProps::qtCommitUpgrades(void)
+{
+	if (TheMapObjectProps != NULL)
+	{
+		TheMapObjectProps->_PrebuiltUpgradesToDict();
+	}
+}
 #endif

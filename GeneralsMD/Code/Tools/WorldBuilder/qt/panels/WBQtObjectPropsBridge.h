@@ -77,6 +77,74 @@ void   WBQtObjectProps_SetShroudClearingDistance(int dist);
 double WBQtObjectProps_GetStoppingDistance(void);
 void   WBQtObjectProps_SetStoppingDistance(double dist);
 
+// --- Phase 3a: Visual section (weather, time, XY position, Z offset, angle) ------------------
+// Weather / Time are index combos (index 0 == the "Use Map ..." default). XY position is the
+// "x, y" text the MFC edit uses; Z offset and angle are reals (angle in degrees). XY/Z/Angle apply
+// to the single selected object (ModifyObjectUndoable), like the MFC edits.
+int    WBQtObjectProps_GetWeather(void);
+void   WBQtObjectProps_SetWeather(int index);
+int    WBQtObjectProps_GetTime(void);
+void   WBQtObjectProps_SetTime(int index);
+int    WBQtObjectProps_GetPosition(char *out, int cap);
+void   WBQtObjectProps_SetPosition(const char *text);
+double WBQtObjectProps_GetZOffset(void);
+void   WBQtObjectProps_SetZOffset(double z);
+double WBQtObjectProps_GetAngle(void);
+void   WBQtObjectProps_SetAngle(double deg);
+
+// --- Phase 3b: Sound section ----------------------------------------------------------------
+// The MFC dictTo* handlers gate every sound control's enable state, so the Qt panel reads the
+// live control value + its enabled flag and mirrors it. Sound-flag ids and int-edit ids below.
+enum {
+	WBQT_SND_CUSTOMIZE = 0,
+	WBQT_SND_ENABLED,
+	WBQT_SND_LOOPING
+};
+enum {
+	WBQT_SNDINT_LOOPCOUNT = 0,
+	WBQT_SNDINT_VOLUME,
+	WBQT_SNDINT_MINVOLUME,
+	WBQT_SNDINT_MINRANGE,
+	WBQT_SNDINT_MAXRANGE
+};
+
+// Attached-sound combo (holds thousands of events; enumerate once, then track selection).
+int  WBQtObjectProps_GetSoundCount(void);
+int  WBQtObjectProps_GetSoundItem(int i, char *out, int cap);
+int  WBQtObjectProps_GetSoundCurSel(void);
+void WBQtObjectProps_SetSoundCurSel(int i);
+
+// Listen button: toggles preview; GetSoundPlaying reports whether it's currently playing (so the
+// Qt button can show Listen / Stop).
+int  WBQtObjectProps_GetSoundPlaying(void);
+void WBQtObjectProps_ToggleSoundPreview(void);
+
+// Customize / Enabled / Looping checkboxes (WBQT_SND_* ids). GetFlagEnabled reports the gated
+// enable state so the Qt checkbox greys out exactly like the MFC one.
+int  WBQtObjectProps_GetSoundFlag(int which);
+int  WBQtObjectProps_GetSoundFlagEnabled(int which);
+void WBQtObjectProps_SetSoundFlag(int which, int on);
+
+// Loop count / volume / min volume / min range / max range edits (WBQT_SNDINT_* ids). The int
+// getter also reports the control's enabled state via *outEnabled.
+int  WBQtObjectProps_GetSoundInt(int which, int *outEnabled);
+void WBQtObjectProps_SetSoundInt(int which, int value);
+
+// Priority combo.
+int  WBQtObjectProps_GetSoundPriorityCount(void);
+int  WBQtObjectProps_GetSoundPriorityName(int i, char *out, int cap);
+int  WBQtObjectProps_GetSoundPriority(int *outEnabled);
+void WBQtObjectProps_SetSoundPriority(int i);
+
+// --- Phase 3c: Pre-built upgrades listbox (multi-select, single-object) ----------------------
+// The Qt list mirrors the MFC listbox; SetUpgradeSelected writes the MFC item's selection then
+// runs _PrebuiltUpgradesToDict (single-object; a multi-select shows "Single Selection Only").
+int  WBQtObjectProps_GetUpgradeCount(void);
+int  WBQtObjectProps_GetUpgradeItem(int i, char *out, int cap);
+int  WBQtObjectProps_GetUpgradeSelected(int i);
+void WBQtObjectProps_SetUpgradeSelected(int i, int on);	// set item sel only
+void WBQtObjectProps_CommitUpgrades(void);	// apply the selection set as one undoable
+
 // --- Forward: MFC dialog -> Qt widget (implemented Qt-side, WBQtObjectPropsBridge.cpp) ------
 // MapObjectProps::updateTheUI() calls this after re-seeding its controls from the new selection;
 // it re-reads the panel from the Get* funcs above (no-op when the Qt panel isn't open).

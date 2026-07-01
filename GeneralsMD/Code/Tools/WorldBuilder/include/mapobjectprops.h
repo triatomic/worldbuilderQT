@@ -241,6 +241,46 @@ public:
 	static void qtSetShroudClearingDistance(int dist);
 	static double qtGetStoppingDistance(void);
 	static void qtSetStoppingDistance(double dist);
+	// Phase 3a: Visual section. Weather/Time are index combos; XY/Z/Angle drive the same
+	// ModifyObjectUndoable path as the MFC edits (single-object).
+	static int  qtGetWeather(void);
+	static void qtSetWeather(int index);
+	static int  qtGetTime(void);
+	static void qtSetTime(int index);
+	static int  qtGetPosition(char *out, int cap);
+	static void qtSetPosition(const char *text);
+	static double qtGetZOffset(void);
+	static void qtSetZOffset(double z);
+	static double qtGetAngle(void);
+	static void qtSetAngle(double deg);
+	// Phase 3b: Sound section. The MFC dictTo* handlers already encode the enable-state gating
+	// (customize off disables the rest; looping off disables loop count; sound == none disables
+	// customize/enabled), so the Qt getters read the LIVE MFC control (value + IsWindowEnabled)
+	// after updateTheUI has run, and the setters write the control then call the *ToDict handler.
+	static int  qtGetSoundCount(void);
+	static int  qtGetSoundItem(int i, char *out, int cap);
+	static int  qtGetSoundCurSel(void);
+	static void qtSetSoundCurSel(int i);
+	static int  qtGetSoundPlaying(void);
+	static void qtToggleSoundPreview(void);
+	// which = WBQT_SND_* id; Get returns the checkbox state, GetEnabled its enable state.
+	static int  qtGetSoundFlag(int which);
+	static int  qtGetSoundFlagEnabled(int which);
+	static void qtSetSoundFlag(int which, int on);
+	// Numeric sound edits (loop count int; volumes/ranges are the 0-100 / raw ints the edits show).
+	static int  qtGetSoundInt(int which, int *outEnabled);
+	static void qtSetSoundInt(int which, int value);
+	static int  qtGetSoundPriorityCount(void);
+	static int  qtGetSoundPriorityName(int i, char *out, int cap);
+	static int  qtGetSoundPriority(int *outEnabled);
+	static void qtSetSoundPriority(int i);
+	// Phase 3c: Pre-built upgrades listbox (multi-select, single-object). The Qt list mirrors
+	// the MFC listbox; the setter writes the MFC item selection then runs _PrebuiltUpgradesToDict.
+	static int  qtGetUpgradeCount(void);
+	static int  qtGetUpgradeItem(int i, char *out, int cap);
+	static int  qtGetUpgradeSelected(int i);
+	static void qtSetUpgradeSelected(int i, int on);
+	static void qtCommitUpgrades(void);
 #endif
   
 private:

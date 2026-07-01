@@ -20,6 +20,9 @@ class QComboBox;
 class QGroupBox;
 class QLabel;
 class QLineEdit;
+class QListWidget;
+class QPushButton;
+class WBQtScrubSpinBox;
 
 class WBQtObjectPropsPanel : public QWidget
 {
@@ -46,15 +49,35 @@ private slots:
 	void onTargetingChanged();
 	void onShroudChanged();
 	void onStoppingChanged();
+	// Visual section.
+	void onWeatherChanged(int index);
+	void onTimeChanged(int index);
+	void onPositionChanged();
+	void onZChanged();
+	void onAngleChanged();
+	// Sound section.
+	void onSoundChanged(int index);
+	void onListenClicked();
+	void onSoundFlagToggled();
+	void onLoopCountChanged();
+	void onPriorityChanged(int index);
+	void onVolumeChanged();
+	void onMinVolumeChanged();
+	void onMinRangeChanged();
+	void onMaxRangeChanged();
+	// Pre-built upgrades.
+	void onUpgradeSelectionChanged();
 
 private:
 	void rebuildTeams();	// repopulate the team combo from the bridge
 	void applyFlag(int flagId, QCheckBox *box);
+	void rebuildSoundList();	// enumerate the (large) attached-sound combo once
 
 	QLabel    *m_selectionLabel;	// "No Selection" / "N objects" / the object name
 	QGroupBox *m_generalBox;
 	QLineEdit *m_name;
 	QComboBox *m_team;
+	QComboBox *m_script;	// disabled, matches the MFC "Script:" row
 
 	// Logical section.
 	QGroupBox      *m_logicalBox;
@@ -74,6 +97,34 @@ private:
 	QLineEdit      *m_stopping;		// Stopping distance (real; edit like the MFC ES_AUTOHSCROLL)
 	QLineEdit      *m_targeting;	// "Targeting" == the object's vision/visual range (int)
 	QLineEdit      *m_shroud;		// Shroud clearing distance (int)
+
+	// Visual section. Z and Angle use a scrub-spinbox: click-drag horizontally to scrub the value
+	// (the drag-to-change affordance mirroring the MFC WBPopupSlider button beside those edits).
+	QGroupBox       *m_visualBox;
+	QLineEdit       *m_xyPos;		// "x, y"
+	WBQtScrubSpinBox *m_zOffset;	// range -100..100 (matches IDC_HEIGHT_POPUP)
+	QComboBox       *m_weather;
+	WBQtScrubSpinBox *m_angle;		// range 0..360 (matches IDC_ANGLE_POPUP)
+	QComboBox       *m_time;
+
+	// Sound section.
+	QGroupBox   *m_soundBox;
+	QComboBox   *m_sound;			// attached-sound combo (mirrors the large MFC combo)
+	QPushButton *m_listen;			// preview toggle (Listen / Stop)
+	QCheckBox   *m_customize;
+	QCheckBox   *m_soundEnabled;
+	QCheckBox   *m_looping;
+	QLineEdit   *m_loopCount;
+	QComboBox   *m_priority;
+	QLineEdit   *m_volume;
+	QLineEdit   *m_minVolume;
+	QLineEdit   *m_minRange;
+	QLineEdit   *m_maxRange;
+	bool         m_soundListBuilt;	// the sound combo is enumerated once (it holds thousands)
+
+	// Pre-built upgrades.
+	QGroupBox   *m_upgradesBox;
+	QListWidget *m_upgrades;		// multi-select list of grantable upgrades
 
 	bool m_updating;	// re-entrancy guard, mirrors MFC MapObjectProps::m_updating
 

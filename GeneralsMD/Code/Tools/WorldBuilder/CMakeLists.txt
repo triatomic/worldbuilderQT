@@ -343,7 +343,9 @@ if(RTS_ENABLE_WORLDBUILDER_QT)
         "qt/panels/WBQtMeshMoldPanel.cpp"
         "qt/panels/WBQtMeshMoldPanel.h"
         "qt/panels/WBQtObjectPropsPanel.cpp"
-        "qt/panels/WBQtObjectPropsPanel.h")
+        "qt/panels/WBQtObjectPropsPanel.h"
+        "qt/panels/WBQtScrubSpinBox.cpp"
+        "qt/panels/WBQtScrubSpinBox.h")
 
     set_target_properties(z_worldbuilder_qt PROPERTIES AUTOMOC ON)
 
