@@ -159,7 +159,7 @@ BOOL CWB3dFrameWnd::PreTranslateMessage(MSG* pMsg)
 	// translation (CFrameWnd::PreTranslateMessage) -- otherwise single-key tool shortcuts
 	// swallow keystrokes meant for the script editor's search / rename fields. Route
 	// straight to CWnd so the message dispatches to the focused Qt control.
-	if (WBQtScript_OwnsFocus())
+	if (WBQtScript_OwnsFocus() || WBQt_OptionPanelOwnsFocus())
 	{
 		return CWnd::PreTranslateMessage(pMsg);
 	}

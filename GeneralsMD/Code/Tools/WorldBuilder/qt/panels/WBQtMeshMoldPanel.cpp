@@ -68,12 +68,27 @@ WBQtMeshMoldPanel::WBQtMeshMoldPanel(QWidget *owner)
 	moldLay->addLayout(moldBtnRow);
 	root->addWidget(moldBox, 1);
 
+	// Developer Note: the informational text the MFC dialog shows (the custom-mold blurb and
+	// the shift-drag height hint). Wrapping labels so the text isn't clipped.
+	QGroupBox *noteBox = new QGroupBox("Developer Note:", this);
+	QVBoxLayout *noteLay = new QVBoxLayout(noteBox);
+	QLabel *noteText = new QLabel(
+		"This tool allows the use of custom molds. Click 'How To Create Molds' to access the "
+		"AGX750 tutorial.", noteBox);
+	noteText->setWordWrap(true);
+	noteLay->addWidget(noteText);
+	QLabel *hintText = new QLabel(
+		"Hold Shift and drag with the mouse to increase or decrease the height.", noteBox);
+	hintText->setWordWrap(true);
+	noteLay->addWidget(hintText);
+	root->addWidget(noteBox);
+
 	// Angle / scale / height rows.
 	QGroupBox *xformBox = new QGroupBox("Transform", this);
 	QVBoxLayout *xformLay = new QVBoxLayout(xformBox);
-	makeRow(this, "Angle:", kMinAngle, kMaxAngle, &m_angleSlider, &m_angleSpin, xformLay);
-	makeRow(this, "Scale %:", kMinScale, kMaxScale, &m_scaleSlider, &m_scaleSpin, xformLay);
-	makeRow(this, "Height:", kMinHeight, kMaxHeight, &m_heightSlider, &m_heightSpin, xformLay);
+	makeRow(this, "Angle (deg):", kMinAngle, kMaxAngle, &m_angleSlider, &m_angleSpin, xformLay);
+	makeRow(this, "Scale (%):", kMinScale, kMaxScale, &m_scaleSlider, &m_scaleSpin, xformLay);
+	makeRow(this, "Height (ft):", kMinHeight, kMaxHeight, &m_heightSlider, &m_heightSpin, xformLay);
 	root->addWidget(xformBox);
 
 	// Preview toggle + Apply.

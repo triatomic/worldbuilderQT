@@ -1564,7 +1564,14 @@ void TerrainMaterial::qtDeleteFavorite(int index)
 		if (i == index)
 		{
 			m_staticThis->m_favTreeView.DeleteItem(hItem);
-			m_staticThis->SaveFavoritesToMapFolder();
+			// Persist only when a saved map exists -- SaveFavoritesToMapFolder derefs the active
+			// doc (crash if none / unsaved). The MFC OnDeleteFavorite doesn't persist at all;
+			// guarding keeps the deletion but avoids the NULL-doc crash.
+			CWorldBuilderDoc *pDoc = CWorldBuilderDoc::GetActiveDoc();
+			if (pDoc != NULL && !pDoc->GetPathName().IsEmpty())
+			{
+				m_staticThis->SaveFavoritesToMapFolder();
+			}
 			return;
 		}
 		i++;

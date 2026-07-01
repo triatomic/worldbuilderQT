@@ -246,3 +246,27 @@ extern "C" void WBQt_HideOptionsPanel(void)
 		g_currentDialogID = 0;
 	}
 }
+
+extern "C" int WBQt_OptionPanelOwnsFocus(void)
+{
+	// Non-zero when the currently-shown Qt option panel (or one of its child controls -- e.g.
+	// a search / rename QLineEdit) holds the Win32 keyboard focus. The MFC frame's
+	// PreTranslateMessage ORs this in so its accelerator table (single-key tool shortcuts)
+	// does NOT swallow keystrokes meant for a panel's text field. Same idea as the Script
+	// window's WBQtScript_OwnsFocus, but for the floating option panels.
+	if (g_currentPanel == NULL || !g_currentPanel->isVisible())
+	{
+		return 0;
+	}
+	HWND focus = ::GetFocus();
+	HWND panelHwnd = reinterpret_cast<HWND>(g_currentPanel->winId());
+	if (focus == NULL || panelHwnd == NULL)
+	{
+		return 0;
+	}
+	if (focus == panelHwnd || ::IsChild(panelHwnd, focus))
+	{
+		return 1;
+	}
+	return 0;
+}

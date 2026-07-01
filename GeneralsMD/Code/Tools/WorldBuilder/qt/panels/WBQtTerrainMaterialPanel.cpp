@@ -33,7 +33,7 @@ WBQtTerrainMaterialPanel::WBQtTerrainMaterialPanel(QWidget *owner)
 	  m_updating(false)
 {
 	setWindowTitle("Terrain Material Options");
-	resize(340, 760);
+	resize(340, 820);
 
 	QVBoxLayout *root = new QVBoxLayout(this);
 
@@ -51,7 +51,11 @@ WBQtTerrainMaterialPanel::WBQtTerrainMaterialPanel(QWidget *owner)
 	m_tree = new QTreeWidget(this);
 	m_tree->setHeaderHidden(true);
 	m_tree->setColumnCount(1);
-	root->addWidget(m_tree, 1);
+	// The texture tree is the primary control (like the MFC dialog) -- give it a large minimum
+	// so the many groups below can't squeeze it down to a few rows, and let it take the slack.
+	m_tree->setMinimumHeight(240);
+	m_tree->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+	root->addWidget(m_tree, 3);
 
 	m_nameLabel = new QLabel("No Selection", this);
 	root->addWidget(m_nameLabel);
@@ -617,7 +621,10 @@ void WBQtTerrainMaterialPanel::onSetFavorite()
 
 void WBQtTerrainMaterialPanel::onDeleteFavorite()
 {
-	QModelIndexList idx = m_favTree->selectionModel()->selectedRows();
+	// NOTE: do NOT hold a QModelIndexList here. WorldBuilder globally overrides operator
+	// new/delete to route through the game's MemoryPool; a QModelIndexList's heap node array
+	// is allocated by Qt but freed via that override on scope exit, which frees a block the
+	// game pool never owned -> access violation (crash on delete-favorite). Use selectedItems().
 	QList<QTreeWidgetItem*> sel = m_favTree->selectedItems();
 	if (sel.isEmpty())
 	{

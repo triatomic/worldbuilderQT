@@ -16,6 +16,10 @@ extern "C" {
 // other Qt panel, and return non-zero. Otherwise return 0 (caller shows the MFC panel).
 int  WBQt_ShowOptionsPanel(void *frameHwnd, int dialogID, int x, int y, int w, int h);
 void WBQt_HideOptionsPanel(void);
+// Non-zero when the current Qt option panel (or a child control, e.g. a search box) holds the
+// Win32 keyboard focus -- the frame's PreTranslateMessage ORs this so tool-hotkey accelerators
+// don't swallow keystrokes typed into a panel's text field.
+int  WBQt_OptionPanelOwnsFocus(void);
 
 // --- Feather panel: forward push, tool -> Qt widget (implemented Qt-side) ---------------
 void WBQtFeather_PushFeather(int v);
