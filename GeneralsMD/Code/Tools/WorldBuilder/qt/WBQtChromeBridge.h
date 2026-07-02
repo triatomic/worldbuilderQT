@@ -30,6 +30,11 @@ int WBQtChrome_PopupActive(void);
 // letter. Returns 1 if a menu opened, 0 otherwise.
 int WBQtChrome_ActivateMenu(int letter);
 
+// Tier 4b: build the Qt toolbar (the exe's RT_TOOLBAR IDR_MAINFRAME + its bitmap strip,
+// the same pieces MFC's LoadToolBar used) into the chrome column. Returns 1 on success
+// (the caller then hides the MFC toolbar).
+int WBQtChrome_InstallToolBar(void);
+
 // ============ Qt -> MFC (implemented in src/WBQtChromeBridge.cpp) ============
 
 // Command enable/check state == CCmdUI::DoUpdate on the frame's routing (frame -> active
@@ -39,6 +44,9 @@ int WBQtChromeData_QueryCommand(int id, int *enabledOut, int *checkedOut);
 
 // The command's status prompt (the RC string-table text before '\n'). Returns 0 if none.
 int WBQtChromeData_GetPrompt(int id, char *bufOut, int cap);
+
+// The command's tooltip (the RC string-table text after '\n'). Returns 0 if none.
+int WBQtChromeData_GetTooltip(int id, char *bufOut, int cap);
 
 // The MFC recent-file list (for the File menu's dynamic MRU section).
 int WBQtChromeData_GetMruCount(void);
@@ -51,6 +59,10 @@ void WBQtChrome_SetFrameStatusText(const char *text);
 // ones: toggle the bar and re-flow the viewport host.
 void WBQtChrome_ToggleMfcBar(int statusBar);
 int  WBQtChrome_IsMfcBarVisible(int statusBar);
+
+// Tier 4b: show/hide an MFC bar outright (0 = toolbar, 1 = status bar) and re-flow the
+// viewport host -- used to retire the MFC toolbar once the Qt one is up.
+void WBQtChrome_SetMfcBarVisible(int statusBar, int visible);
 
 #ifdef __cplusplus
 }

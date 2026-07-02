@@ -123,6 +123,14 @@ QWidget *WBQt_GetViewportHostWidget(void)
 	return g_wbViewportHost;
 }
 
+// Tier 4b: the hosted 3D view's HWND, so the chrome can hand keyboard focus back to it
+// after a toolbar click.
+void *WBQt_GetHostedViewWindow(void)
+{
+	return (g_wbViewportPane != NULL)
+		? reinterpret_cast<void *>(g_wbViewportPane->window()) : NULL;
+}
+
 void WBQt_SetViewportHostGeometry(int x, int y, int width, int height)
 {
 	if (g_wbViewportHost != NULL)

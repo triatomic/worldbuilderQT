@@ -549,6 +549,12 @@ BOOL CWorldBuilderApp::InitInstance()
 			{
 				::SetMenu(pFrame->GetSafeHwnd(), NULL);
 				pFrame->positionQtViewportHost();
+				// Tier 4b: the Qt toolbar joins the same column; retire the MFC toolbar
+				// (SetMfcBarVisible re-flows the viewport host).
+				if (WBQtChrome_InstallToolBar())
+				{
+					WBQtChrome_SetMfcBarVisible(0, 0);
+				}
 			}
 			else
 			{

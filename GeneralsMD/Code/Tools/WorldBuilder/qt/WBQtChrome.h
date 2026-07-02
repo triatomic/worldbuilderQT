@@ -10,8 +10,11 @@
 #include <QList>
 
 class QAction;
+class QEvent;
 class QMenu;
 class QMenuBar;
+class QTimer;
+class QToolBar;
 class QWidget;
 
 class WBQtChromeController : public QObject
@@ -26,12 +29,19 @@ public:
 
 	bool activateMenuByMnemonic(int letter);
 
+	bool installToolBar();
+
+protected:
+	bool eventFilter(QObject *obj, QEvent *event);
+
 private slots:
 	void onActionTriggered();
 	void onMenuAboutToShow();
 	void onMenuAboutToHide();
 	void onMenuHovered(QAction *action);
 	void checkPopupsClosed();
+	void onToolActionHovered();
+	void onToolBarTick();
 
 private:
 	void buildMenu(void *hMenu, QMenu *target);
@@ -50,6 +60,8 @@ private:
 	QMenu *m_mruMenu;			// the popup holding the MRU placeholder (File)
 	QAction *m_mruPlaceholder;	// the resource's grayed "Recent File" item
 	QList<QAction *> m_mruActions;
+	QToolBar *m_toolBar;		// Tier 4b; NULL until installToolBar
+	QTimer *m_toolBarTimer;		// sweeps the buttons' enabled/checked state
 };
 
 #endif // WB_QT_CHROME_H

@@ -17,11 +17,16 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QBoxLayout>
+#include <QEvent>
+#include <QImage>
 #include <QLayout>
 #include <QMenu>
 #include <QMenuBar>
+#include <QPixmap>
 #include <QString>
 #include <QTimer>
+#include <QToolBar>
 
 #include "resource.h"		// ID_QTTHEME_* (pure #defines; res is on the qt include path)
 #include "WBQtTheme.h"
@@ -34,8 +39,10 @@
 #define WBQT_ID_VIEW_TOOLBAR	0xE800	// == ID_VIEW_TOOLBAR
 #define WBQT_ID_VIEW_STATUS_BAR	0xE801	// == ID_VIEW_STATUS_BAR
 
-// Defined in WBQtBridge.cpp: the Phase-2 viewport-host column the chrome inserts into.
+// Defined in WBQtBridge.cpp: the Phase-2 viewport-host column the chrome inserts into,
+// and the hosted 3D view's HWND (for putting keyboard focus back after toolbar clicks).
 QWidget *WBQt_GetViewportHostWidget(void);
+void *WBQt_GetHostedViewWindow(void);
 
 WBQtChromeController *WBQtChromeController::s_instance = NULL;
 
@@ -47,7 +54,9 @@ WBQtChromeController::WBQtChromeController(QWidget *host, void *frameHwnd, void 
 	m_openPopups(0),
 	m_savedFocus(NULL),
 	m_mruMenu(NULL),
-	m_mruPlaceholder(NULL)
+	m_mruPlaceholder(NULL),
+	m_toolBar(NULL),
+	m_toolBarTimer(NULL)
 {
 	s_instance = this;
 
@@ -118,6 +127,184 @@ bool WBQtChromeController::activateMenuByMnemonic(int letter)
 		}
 	}
 	return false;
+}
+
+// Tier 4b: build the Qt toolbar from the exe's own IDR_MAINFRAME TOOLBAR resource and its
+// bitmap strip -- exactly the two pieces MFC's LoadToolBar consumed.
+bool WBQtChromeController::installToolBar()
+{
+	if (m_toolBar != NULL)
+	{
+		return true;
+	}
+
+	// RT_TOOLBAR (241, the MFC resource type): WORD version(1)/width/height/count then
+	// ids[] (0 = a separator). The bitmap strip holds one width x height image per
+	// NON-separator id, in order.
+	HINSTANCE inst = ::GetModuleHandleA(NULL);
+	HRSRC res = ::FindResourceA(inst, MAKEINTRESOURCEA(IDR_MAINFRAME), MAKEINTRESOURCEA(241));
+	if (res == NULL)
+	{
+		return false;
+	}
+	HGLOBAL global = ::LoadResource(inst, res);
+	if (global == NULL)
+	{
+		return false;
+	}
+	const WORD *data = reinterpret_cast<const WORD *>(::LockResource(global));
+	if (data == NULL || data[0] != 1)
+	{
+		return false;
+	}
+	int iconW = data[1];
+	int iconH = data[2];
+	int itemCount = data[3];
+	const WORD *ids = data + 4;
+	if (iconW <= 0 || iconH <= 0 || itemCount <= 0)
+	{
+		return false;
+	}
+
+	// The strip, converted to 32bpp so the source depth doesn't matter. MFC's
+	// AfxLoadSysColorBitmap treats RGB(192,192,192) as the button face -- transparent here.
+	QImage strip;
+	{
+		HBITMAP hbm = (HBITMAP)::LoadImageA(inst, MAKEINTRESOURCEA(IDR_MAINFRAME),
+			IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION);
+		if (hbm == NULL)
+		{
+			return false;
+		}
+		BITMAP bm;
+		memset(&bm, 0, sizeof(bm));
+		::GetObjectA(hbm, sizeof(bm), &bm);
+		QImage img(bm.bmWidth, bm.bmHeight, QImage::Format_ARGB32);
+		BITMAPINFO bi;
+		memset(&bi, 0, sizeof(bi));
+		bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+		bi.bmiHeader.biWidth = bm.bmWidth;
+		bi.bmiHeader.biHeight = -bm.bmHeight;	// top-down rows, matching QImage
+		bi.bmiHeader.biPlanes = 1;
+		bi.bmiHeader.biBitCount = 32;
+		bi.bmiHeader.biCompression = BI_RGB;
+		HDC dc = ::GetDC(NULL);
+		int got = ::GetDIBits(dc, hbm, 0, bm.bmHeight, img.bits(), &bi, DIB_RGB_COLORS);
+		::ReleaseDC(NULL, dc);
+		::DeleteObject(hbm);
+		if (got != bm.bmHeight)
+		{
+			return false;
+		}
+		for (int y = 0; y < img.height(); y++)
+		{
+			QRgb *line = reinterpret_cast<QRgb *>(img.scanLine(y));
+			for (int x = 0; x < img.width(); x++)
+			{
+				if ((line[x] & 0x00FFFFFF) == 0x00C0C0C0)
+				{
+					line[x] = 0;
+				}
+				else
+				{
+					line[x] |= 0xFF000000;
+				}
+			}
+		}
+		strip = img;
+	}
+
+	m_toolBar = new QToolBar(m_host);
+	m_toolBar->setMovable(false);
+	m_toolBar->setIconSize(QSize(iconW, iconH));
+	m_toolBar->installEventFilter(this);	// Leave -> clear the flyby text
+
+	int imageIndex = 0;
+	for (int i = 0; i < itemCount; i++)
+	{
+		int id = (int)ids[i];
+		if (id == 0)
+		{
+			m_toolBar->addSeparator();
+			continue;
+		}
+		QIcon icon(QPixmap::fromImage(strip.copy(imageIndex * iconW, 0, iconW, iconH)));
+		imageIndex++;
+		QAction *action = m_toolBar->addAction(icon, QString());
+		action->setData(id);
+		action->setProperty("wbToolButton", true);
+		char text[512];
+		text[0] = 0;
+		if (WBQtChromeData_GetTooltip(id, text, sizeof(text)))
+		{
+			action->setToolTip(QString::fromLocal8Bit(text));
+		}
+		connect(action, SIGNAL(triggered()), this, SLOT(onActionTriggered()));
+		connect(action, SIGNAL(hovered()), this, SLOT(onToolActionHovered()));
+	}
+
+	// Above the viewport pane; the menu bar sits higher still (QLayout::setMenuBar).
+	QBoxLayout *box = qobject_cast<QBoxLayout *>(m_host->layout());
+	if (box != NULL)
+	{
+		box->insertWidget(0, m_toolBar);
+	}
+
+	// The active-tool highlight changes without any menu opening, so sweep the button
+	// states on a modest timer -- the same trivial update handlers MFC ran on idle.
+	m_toolBarTimer = new QTimer(this);
+	m_toolBarTimer->setInterval(250);
+	connect(m_toolBarTimer, SIGNAL(timeout()), this, SLOT(onToolBarTick()));
+	m_toolBarTimer->start();
+	return true;
+}
+
+void WBQtChromeController::onToolBarTick()
+{
+	if (m_toolBar == NULL || !m_toolBar->isVisible())
+	{
+		return;
+	}
+	QList<QAction *> actions = m_toolBar->actions();
+	for (int i = 0; i < actions.size(); i++)
+	{
+		QAction *action = actions[i];
+		if (action->isSeparator())
+		{
+			continue;
+		}
+		bool ok = false;
+		int id = action->data().toInt(&ok);
+		if (!ok || id == 0)
+		{
+			continue;
+		}
+		int enabled = 1;
+		int checked = -1;
+		if (WBQtChromeData_QueryCommand(id, &enabled, &checked))
+		{
+			action->setEnabled(enabled != 0);
+			if (checked >= 0)
+			{
+				action->setCheckable(true);
+				action->setChecked(checked != 0);
+			}
+		}
+	}
+}
+
+void WBQtChromeController::onToolActionHovered()
+{
+	onMenuHovered(qobject_cast<QAction *>(sender()));
+}
+
+bool WBQtChromeController::eventFilter(QObject *obj, QEvent *event)
+{
+	if (obj == m_toolBar && event->type() == QEvent::Leave)
+	{
+		WBQtChrome_SetFrameStatusText("");
+	}
+	return QObject::eventFilter(obj, event);
 }
 
 void WBQtChromeController::buildMenu(void *hMenuVoid, QMenu *target)
@@ -202,17 +389,41 @@ void WBQtChromeController::onActionTriggered()
 	{
 		return;
 	}
-	if (id == WBQT_ID_VIEW_TOOLBAR || id == WBQT_ID_VIEW_STATUS_BAR)
+	if (id == WBQT_ID_VIEW_TOOLBAR)
 	{
-		// CFrameWnd's built-in would un-hide the MFC bar behind the Qt chrome; toggle it
-		// deliberately (the MFC bars are still the real toolbar/status bar until 4b/4c)
-		// and re-flow the viewport host.
-		WBQtChrome_ToggleMfcBar((id == WBQT_ID_VIEW_STATUS_BAR) ? 1 : 0);
+		// CFrameWnd's built-in would un-hide the MFC bar behind the Qt chrome. Toggle
+		// the Qt toolbar once it exists (4b), the still-real MFC one before that.
+		if (m_toolBar != NULL)
+		{
+			m_toolBar->setVisible(!m_toolBar->isVisible());
+		}
+		else
+		{
+			WBQtChrome_ToggleMfcBar(0);
+		}
+		return;
+	}
+	if (id == WBQT_ID_VIEW_STATUS_BAR)
+	{
+		WBQtChrome_ToggleMfcBar(1);
 		return;
 	}
 	// Same delivery as a native menu: a posted WM_COMMAND dispatched by the frame after
 	// the menu unwinds; MFC routes it frame -> active view -> doc -> app.
 	::PostMessage(reinterpret_cast<HWND>(m_frameHwnd), WM_COMMAND, MAKEWPARAM(id, 0), 0);
+	if (action->property("wbToolButton").toBool())
+	{
+		// Toolbar clicks: put the keyboard back on the 3D view so the single-key tool
+		// hotkeys and WbView key handling keep flowing without an extra viewport click.
+		void *view = WBQt_GetHostedViewWindow();
+		if (view != NULL)
+		{
+			::SetFocus(reinterpret_cast<HWND>(view));
+		}
+	}
+	// Refresh the pressed/enabled states promptly after the (posted) command lands,
+	// instead of waiting out the sweep timer.
+	QTimer::singleShot(120, this, SLOT(onToolBarTick()));
 }
 
 void WBQtChromeController::onMenuAboutToShow()
@@ -290,10 +501,17 @@ void WBQtChromeController::refreshMenuState(QMenu *menu)
 		{
 			continue;
 		}
-		if (id == WBQT_ID_VIEW_TOOLBAR || id == WBQT_ID_VIEW_STATUS_BAR)
+		if (id == WBQT_ID_VIEW_TOOLBAR)
 		{
 			action->setCheckable(true);
-			action->setChecked(WBQtChrome_IsMfcBarVisible((id == WBQT_ID_VIEW_STATUS_BAR) ? 1 : 0) != 0);
+			action->setChecked((m_toolBar != NULL) ? m_toolBar->isVisible()
+				: (WBQtChrome_IsMfcBarVisible(0) != 0));
+			continue;
+		}
+		if (id == WBQT_ID_VIEW_STATUS_BAR)
+		{
+			action->setCheckable(true);
+			action->setChecked(WBQtChrome_IsMfcBarVisible(1) != 0);
 			continue;
 		}
 		if (id >= WBQT_ID_FILE_MRU_FIRST && id <= WBQT_ID_FILE_MRU_LAST)
@@ -386,4 +604,10 @@ extern "C" int WBQtChrome_ActivateMenu(int letter)
 {
 	WBQtChromeController *chrome = WBQtChromeController::instance();
 	return (chrome != NULL && chrome->activateMenuByMnemonic(letter)) ? 1 : 0;
+}
+
+extern "C" int WBQtChrome_InstallToolBar(void)
+{
+	WBQtChromeController *chrome = WBQtChromeController::instance();
+	return (chrome != NULL && chrome->installToolBar()) ? 1 : 0;
 }

@@ -139,6 +139,34 @@ extern "C" int WBQtChromeData_GetPrompt(int id, char *bufOut, int cap)
 	return 1;
 }
 
+extern "C" int WBQtChromeData_GetTooltip(int id, char *bufOut, int cap)
+{
+	if (bufOut == NULL || cap <= 0)
+	{
+		return 0;
+	}
+	bufOut[0] = 0;
+	CString s;
+	if (!s.LoadString((UINT)id))
+	{
+		return 0;
+	}
+	// The RC convention is "status prompt\ntooltip"; the tooltip is the second part.
+	int nl = s.Find('\n');
+	if (nl < 0)
+	{
+		return 0;
+	}
+	s = s.Mid(nl + 1);
+	if (s.IsEmpty())
+	{
+		return 0;
+	}
+	strncpy(bufOut, (LPCTSTR)s, cap - 1);
+	bufOut[cap - 1] = 0;
+	return 1;
+}
+
 extern "C" int WBQtChromeData_GetMruCount(void)
 {
 	CWorldBuilderApp *pApp = (CWorldBuilderApp *)AfxGetApp();
@@ -218,6 +246,22 @@ extern "C" int WBQtChrome_IsMfcBarVisible(int statusBar)
 	}
 	CControlBar *pBar = wbQtChromeBar(pFrame, statusBar);
 	return (pBar != NULL && pBar->IsWindowVisible()) ? 1 : 0;
+}
+
+extern "C" void WBQtChrome_SetMfcBarVisible(int statusBar, int visible)
+{
+	CMainFrame *pFrame = CMainFrame::GetMainFrame();
+	if (pFrame == NULL || pFrame->GetSafeHwnd() == NULL)
+	{
+		return;
+	}
+	CControlBar *pBar = wbQtChromeBar(pFrame, statusBar);
+	if (pBar == NULL)
+	{
+		return;
+	}
+	pFrame->ShowControlBar(pBar, visible ? TRUE : FALSE, FALSE);
+	pFrame->positionQtViewportHost();
 }
 
 #endif // RTS_HAS_QT
