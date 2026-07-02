@@ -24,6 +24,8 @@ public:
 
 	bool popupActive() const { return m_openPopups > 0; }
 
+	bool activateMenuByMnemonic(int letter);
+
 private slots:
 	void onActionTriggered();
 	void onMenuAboutToShow();

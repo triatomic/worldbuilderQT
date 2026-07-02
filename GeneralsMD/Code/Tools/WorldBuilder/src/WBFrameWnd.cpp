@@ -210,6 +210,19 @@ BOOL CWB3dFrameWnd::PreTranslateMessage(MSG* pMsg)
             return TRUE;
         }
     }
+#ifdef RTS_HAS_QT
+	// Tier 4a-2: with the MFC menu detached, Alt+letter opens the matching Qt chrome
+	// menu. Accelerators get first crack so Alt+digit view toggles keep firing.
+	if (pMsg->message == WM_SYSKEYDOWN && pMsg->wParam >= 'A' && pMsg->wParam <= 'Z')
+	{
+		BOOL handled = CFrameWnd::PreTranslateMessage(pMsg);
+		if (!handled && WBQtChrome_ActivateMenu((int)pMsg->wParam))
+		{
+			return TRUE;
+		}
+		return handled;
+	}
+#endif
     return CFrameWnd::PreTranslateMessage(pMsg);
 }
 

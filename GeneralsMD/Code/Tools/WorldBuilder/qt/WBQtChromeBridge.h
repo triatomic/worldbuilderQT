@@ -26,6 +26,10 @@ int WBQtChrome_IsInstalled(void);
 // eat the keys Qt needs for menu navigation.
 int WBQtChrome_PopupActive(void);
 
+// Tier 4a-2: Alt+letter -- open the top-level menu whose mnemonic matches the (upper-case)
+// letter. Returns 1 if a menu opened, 0 otherwise.
+int WBQtChrome_ActivateMenu(int letter);
+
 // ============ Qt -> MFC (implemented in src/WBQtChromeBridge.cpp) ============
 
 // Command enable/check state == CCmdUI::DoUpdate on the frame's routing (frame -> active

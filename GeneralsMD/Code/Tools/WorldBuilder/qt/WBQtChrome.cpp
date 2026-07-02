@@ -24,6 +24,7 @@
 #include <QTimer>
 
 #include "resource.h"		// ID_QTTHEME_* (pure #defines; res is on the qt include path)
+#include "WBQtTheme.h"
 
 #include <string.h>
 
@@ -82,6 +83,41 @@ WBQtChromeController::WBQtChromeController(QWidget *host, void *frameHwnd, void 
 
 	// setMenuBar (not addWidget) so the bar gets menu-bar sizing above the layout's rows.
 	host->layout()->setMenuBar(m_menuBar);
+
+	// Tier 4a-2: with the client chrome now Qt, theme the frame's native caption too
+	// (applied now and on every theme switch).
+	WBQtTheme::registerNativeTopLevel(frameHwnd);
+}
+
+// Tier 4a-2: Alt+letter from the frame -- open the top-level menu whose '&' mnemonic
+// matches. Returns false when no menu matches (the frame then lets the key fall through).
+bool WBQtChromeController::activateMenuByMnemonic(int letter)
+{
+	QList<QAction *> actions = m_menuBar->actions();
+	for (int i = 0; i < actions.size(); i++)
+	{
+		QString text = actions[i]->text();
+		for (int c = 0; c + 1 < text.length(); c++)
+		{
+			if (text[c] != QChar('&'))
+			{
+				continue;
+			}
+			if (text[c + 1] == QChar('&'))
+			{
+				c++;
+				continue;
+			}
+			if (text[c + 1].toUpper().unicode() == letter)
+			{
+				// Opens the popup; the aboutToShow focus dance then routes the keyboard.
+				m_menuBar->setActiveAction(actions[i]);
+				return true;
+			}
+			break;
+		}
+	}
+	return false;
 }
 
 void WBQtChromeController::buildMenu(void *hMenuVoid, QMenu *target)
@@ -344,4 +380,10 @@ extern "C" int WBQtChrome_PopupActive(void)
 {
 	WBQtChromeController *chrome = WBQtChromeController::instance();
 	return (chrome != NULL && chrome->popupActive()) ? 1 : 0;
+}
+
+extern "C" int WBQtChrome_ActivateMenu(int letter)
+{
+	WBQtChromeController *chrome = WBQtChromeController::instance();
+	return (chrome != NULL && chrome->activateMenuByMnemonic(letter)) ? 1 : 0;
 }

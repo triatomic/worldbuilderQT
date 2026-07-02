@@ -35,6 +35,10 @@ namespace
 	QString s_defaultStyleName;
 	QPalette s_defaultPalette;
 
+	// Tier 4a-2: a native (non-Qt) top-level whose caption follows the theme -- the MFC
+	// main frame, registered once its client chrome is Qt.
+	HWND s_nativeTopLevel = NULL;
+
 	void setWindowDarkTitleBar(HWND hwnd, bool dark)
 	{
 		if (hwnd == NULL)
@@ -124,6 +128,11 @@ namespace
 			{
 				setWindowDarkTitleBar(reinterpret_cast<HWND>(w->winId()), dark);
 			}
+		}
+
+		if (s_nativeTopLevel != NULL && ::IsWindow(s_nativeTopLevel))
+		{
+			setWindowDarkTitleBar(s_nativeTopLevel, dark);
 		}
 	}
 
@@ -223,4 +232,13 @@ void WBQtTheme::applyApplicationTheme()
 	}
 
 	applyCurrentTheme();
+}
+
+void WBQtTheme::registerNativeTopLevel(void *hwnd)
+{
+	s_nativeTopLevel = reinterpret_cast<HWND>(hwnd);
+	if (s_nativeTopLevel != NULL && ::IsWindow(s_nativeTopLevel))
+	{
+		setWindowDarkTitleBar(s_nativeTopLevel, effectiveDark());
+	}
 }

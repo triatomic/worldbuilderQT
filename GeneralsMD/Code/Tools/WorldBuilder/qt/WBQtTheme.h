@@ -31,6 +31,11 @@ namespace WBQtTheme
 	// Apply the persisted theme to the QApplication and install the global title-bar
 	// filter. Call once, right after the QApplication exists and before showing windows.
 	void applyApplicationTheme();
+
+	// Tier 4a-2: also theme the title bar of a NATIVE (non-Qt) top-level window -- the
+	// MFC main frame, whose client chrome is Qt but whose caption is Win32. Applied
+	// immediately and re-applied on every theme switch.
+	void registerNativeTopLevel(void *hwnd);
 }
 
 #endif // WB_QT_THEME_H
