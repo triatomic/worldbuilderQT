@@ -33,6 +33,7 @@
 #include "qt/panels/WBQtCameraBridge.h"
 #include "qt/panels/WBQtLayersBridge.h"
 #include "qt/WBQtChromeBridge.h"
+#include "qt/panels/WBQtEntityFinderBridge.h"
 #endif
 /////////////////////////////////////////////////////////////////////////////
 // CWBFrameWnd
@@ -187,6 +188,11 @@ BOOL CWB3dFrameWnd::PreTranslateMessage(MSG* pMsg)
 	}
 	// And for the Qt Layers window (inline layer rename takes typed text).
 	if (WBQtLayers_OwnsFocus())
+	{
+		return CWnd::PreTranslateMessage(pMsg);
+	}
+	// And for the Qt Entity Finder (its search box / finder combos take letters).
+	if (WBQtEntityFinder_OwnsFocus())
 	{
 		return CWnd::PreTranslateMessage(pMsg);
 	}

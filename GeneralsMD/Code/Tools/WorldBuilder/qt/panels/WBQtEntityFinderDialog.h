@@ -1,0 +1,61 @@
+// WBQtEntityFinderDialog.h -- the native Qt "Help / Entity Finder / Shortcut Finder"
+// window (Tier 5a), rebuilding the modeless CAboutDlg (WorldBuilder.cpp) over the
+// WBQtEntityFinderBridge facade. A cached singleton: opened/raised by
+// WBQtEntityFinder_Open, hidden on close.
+#ifndef WB_QT_ENTITYFINDER_DIALOG_H
+#define WB_QT_ENTITYFINDER_DIALOG_H
+
+#include <QWidget>
+
+class QCheckBox;
+class QComboBox;
+class QLineEdit;
+class QPlainTextEdit;
+class QPushButton;
+
+class WBQtEntityFinderDialog : public QWidget
+{
+	Q_OBJECT
+public:
+	explicit WBQtEntityFinderDialog(void *frameHwnd);
+
+	static WBQtEntityFinderDialog *instance() { return s_instance; }
+
+	void refreshFinders();
+	bool ownsWin32Focus() const;
+
+protected:
+	void moveEvent(QMoveEvent *event);
+	void closeEvent(QCloseEvent *event);
+
+private slots:
+	void onFindHotkey();
+	void onFindObject();
+	void onRefreshObjects();
+	void onFindWaypoint();
+	void onRefreshWaypoints();
+	void onOpenDiscord();
+	void onLaunchOnStartupToggled(bool on);
+	void onFontChanged(int index);
+	void onResolutionChanged(int index);
+	void onToggleHotkeyPanel();
+
+private:
+	void populateFonts();
+	void populateResolutions();
+	void applyHotkeyPanelState(bool visible);
+
+	static WBQtEntityFinderDialog *s_instance;
+
+	QComboBox *m_objectCombo;
+	QComboBox *m_waypointCombo;
+	QComboBox *m_fontCombo;
+	QComboBox *m_resolutionCombo;
+	QCheckBox *m_launchCheck;
+	QPushButton *m_toggleButton;
+	QWidget *m_hotkeyPanel;
+	QLineEdit *m_searchEdit;
+	QPlainTextEdit *m_hotkeyText;
+};
+
+#endif // WB_QT_ENTITYFINDER_DIALOG_H

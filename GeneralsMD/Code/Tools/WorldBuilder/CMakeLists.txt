@@ -131,6 +131,7 @@ set(WORLDBUILDER_SRC
     "src/WBQtMapFileBridge.cpp"
     "src/WBQtPickUnitBridge.cpp"
     "src/WBQtChromeBridge.cpp"
+    "src/WBQtEntityFinderBridge.cpp"
     "src/wbview.cpp"
     "src/wbview3d.cpp"
     "src/WHeightMapEdit.cpp"
@@ -397,7 +398,10 @@ if(RTS_ENABLE_WORLDBUILDER_QT)
         "qt/panels/WBQtMapFileBridge.h"
         "qt/panels/WBQtPickUnitDialog.cpp"
         "qt/panels/WBQtPickUnitDialog.h"
-        "qt/panels/WBQtPickUnitBridge.h")
+        "qt/panels/WBQtPickUnitBridge.h"
+        "qt/panels/WBQtEntityFinderDialog.cpp"
+        "qt/panels/WBQtEntityFinderDialog.h"
+        "qt/panels/WBQtEntityFinderBridge.h")
 
     set_target_properties(z_worldbuilder_qt PROPERTIES AUTOMOC ON)
 

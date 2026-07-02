@@ -96,6 +96,7 @@
 #ifdef RTS_HAS_QT
 #include "qt/WBQtBridge.h"		// Phase 1 MFC -> Qt coexistence (experimental; opaque facade, no Qt headers leak here)
 #include "qt/WBQtChromeBridge.h"
+#include "qt/panels/WBQtEntityFinderBridge.h"
 #endif
 
 #ifdef _INTERNAL
@@ -1266,6 +1267,12 @@ void CWorldBuilderApp::OnRefreshAppAbout()
 // App command to run the dialog
 void CWorldBuilderApp::OnAppAbout()
 {
+#ifdef RTS_HAS_QT
+	if (WBQtEntityFinder_Open(::AfxGetMainWnd() ? ::AfxGetMainWnd()->GetSafeHwnd() : NULL))
+	{
+		return;
+	}
+#endif
 	if (g_aboutPageOn) {
 		return;
 	}
@@ -1298,6 +1305,8 @@ void CWorldBuilderApp::OnAppAbout()
 
 	CEdit* pEdit = (CEdit*)pAboutDlg->GetDlgItem(IDC_HOTKEYLIST);
 
+	// NOTE: this table is mirrored in src/WBQtEntityFinderBridge.cpp (the Qt Entity
+	// Finder) -- keep the two in sync.
 	struct HotkeyEntry
 	{
 		const char* key;
@@ -1487,6 +1496,9 @@ void CWorldBuilderApp::OnResetWindows()
 	::AfxGetApp()->WriteProfileInt(ABOUT_SECTION, "Top", top);
 	::AfxGetApp()->WriteProfileInt(ABOUT_SECTION, "Left", left);
 
+#ifdef RTS_HAS_QT
+	WBQtEntityFinder_MoveTo(left, top);
+#endif
 	// Force move About dialog if open
 	if (g_pAboutDlg && ::IsWindow(g_pAboutDlg->m_hWnd) && g_aboutPageOn) {
 		g_pAboutDlg->SetWindowPos(NULL, left, top, 0, 0,
