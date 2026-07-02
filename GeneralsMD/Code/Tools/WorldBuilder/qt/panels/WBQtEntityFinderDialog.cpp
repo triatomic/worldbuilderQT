@@ -16,6 +16,7 @@
 #include <QImage>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPainter>
 #include <QPixmap>
 #include <QPlainTextEdit>
 #include <QPushButton>
@@ -93,17 +94,50 @@ WBQtEntityFinderDialog::WBQtEntityFinderDialog(void *frameHwnd)
 	QVBoxLayout *left = new QVBoxLayout();
 	root->addLayout(left);
 
-	left->addWidget(new QLabel("Adriane [ Deathscythe ] Community Worldbuilder V3.0", this));
+	left->addWidget(new QLabel("Adriane [ Deathscythe ] & Triatomic | Community Worldbuilder V4.1.2qt_b", this));
 
 	QHBoxLayout *logoRow = new QHBoxLayout();
-	QPixmap logo1 = loadResourceBitmap(IDB_PHLOGO);
-	if (!logo1.isNull())
+	// The WB logo bitmap ships with a solid white background; knock it out to transparent
+	// (small tolerance for off-white edge pixels) so it sits cleanly on the dark theme.
+	QPixmap logo2 = loadResourceBitmap(kSecondLogoId);
+	if (!logo2.isNull())
 	{
+		QImage img = logo2.toImage().convertToFormat(QImage::Format_ARGB32);
+		for (int y = 0; y < img.height(); ++y)
+		{
+			QRgb *row = reinterpret_cast<QRgb *>(img.scanLine(y));
+			for (int x = 0; x < img.width(); ++x)
+			{
+				if (qRed(row[x]) >= 0xF0 && qGreen(row[x]) >= 0xF0 && qBlue(row[x]) >= 0xF0)
+				{
+					row[x] = qRgba(0, 0, 0, 0);
+				}
+			}
+		}
+		logo2 = QPixmap::fromImage(img);
+	}
+	// A painted modern-Qt-logo tile (brand green + white "Qt") replaces the old
+	// IDB_PHLOGO flag bitmap; sized to match the WB logo so the row stays aligned.
+	{
+		const int kTile = logo2.isNull() ? 48 : logo2.height();
+		QPixmap qtLogo(kTile, kTile);
+		qtLogo.fill(Qt::transparent);
+		QPainter p(&qtLogo);
+		p.setRenderHint(QPainter::Antialiasing, true);
+		p.setPen(Qt::NoPen);
+		p.setBrush(QColor(0x41, 0xCD, 0x52));
+		p.drawRoundedRect(QRectF(0, 0, kTile, kTile), kTile / 6.0, kTile / 6.0);
+		QFont qtFont = font();
+		qtFont.setBold(true);
+		qtFont.setPixelSize(kTile * 5 / 9);
+		p.setFont(qtFont);
+		p.setPen(Qt::white);
+		p.drawText(QRect(0, 0, kTile, kTile), Qt::AlignCenter, "Qt");
+		p.end();
 		QLabel *l = new QLabel(this);
-		l->setPixmap(logo1);
+		l->setPixmap(qtLogo);
 		logoRow->addWidget(l);
 	}
-	QPixmap logo2 = loadResourceBitmap(kSecondLogoId);
 	if (!logo2.isNull())
 	{
 		QLabel *l = new QLabel(this);
