@@ -450,4 +450,29 @@ if(RTS_ENABLE_WORLDBUILDER_QT)
                 "$<TARGET_FILE:z_worldbuilder>"
         COMMENT "Deploying Qt runtime next to WorldBuilder (RTS_ENABLE_WORLDBUILDER_QT)"
         VERBATIM)
+
+    # --- Publish staging (cmake --build --preset publish) -----------------------
+    # The z_worldbuilder_publish target collects a distributable WorldBuilder into
+    # RTS_WORLDBUILDER_PUBLISH_DIR: the exe, its pdb (WorldBuilder symbolicates its
+    # own crash dumps from a pdb found beside the exe, see /PDBALTPATH above), and
+    # the Qt runtime laid out by windeployqt (Qt5 DLLs + platforms/styles/
+    # imageformats plugins). MFC/VC runtime DLLs are NOT staged: the exe is _AFXDLL
+    # and expects the VC++ redistributable on the target machine, exactly like the
+    # shipped game.
+    set(RTS_WORLDBUILDER_PUBLISH_DIR "${CMAKE_SOURCE_DIR}/publish" CACHE PATH
+        "Folder the z_worldbuilder_publish target stages the exe + Qt runtime into")
+    add_custom_target(z_worldbuilder_publish
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${RTS_WORLDBUILDER_PUBLISH_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:z_worldbuilder>" "${RTS_WORLDBUILDER_PUBLISH_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_PDB_FILE:z_worldbuilder>" "${RTS_WORLDBUILDER_PUBLISH_DIR}"
+        COMMAND "${_qt5_bin}/windeployqt.exe"
+                --no-translations --no-system-d3d-compiler --no-opengl-sw --no-compiler-runtime
+                "$<IF:$<CONFIG:Debug>,--debug,--release>"
+                --dir "${RTS_WORLDBUILDER_PUBLISH_DIR}"
+                "$<TARGET_FILE:z_worldbuilder>"
+        COMMENT "Publishing WorldBuilder + Qt runtime to ${RTS_WORLDBUILDER_PUBLISH_DIR}"
+        VERBATIM)
+    add_dependencies(z_worldbuilder_publish z_worldbuilder)
 endif()
