@@ -51,4 +51,8 @@ void WBQt_OnViewportHostResized(int width, int height);
 void WBQt_SetThemeMode(int mode);
 int  WBQt_GetThemeMode(void);
 
+// Tier 5: the MFC frame forwards WM_SETTINGCHANGE ("ImmersiveColorSet") here so the
+// System theme mode follows a live Windows light/dark switch.
+void WBQt_OnOsThemeChanged(void);
+
 #endif // WB_QT_BRIDGE_H

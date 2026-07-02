@@ -20,6 +20,9 @@ void WBQt_HideOptionsPanel(void);
 // Win32 keyboard focus -- the frame's PreTranslateMessage ORs this so tool-hotkey accelerators
 // don't swallow keystrokes typed into a panel's text field.
 int  WBQt_OptionPanelOwnsFocus(void);
+// Reverse (MFC-side, src/WBQtHostBridge.cpp): persist the shared option-panel Top/Left the
+// way COptionsPanel::OnMove did, so a dragged Qt panel's position survives a restart.
+void WBQtPanels_SaveWindowPos(int top, int left);
 
 // --- Feather panel: forward push, tool -> Qt widget (implemented Qt-side) ---------------
 void WBQtFeather_PushFeather(int v);

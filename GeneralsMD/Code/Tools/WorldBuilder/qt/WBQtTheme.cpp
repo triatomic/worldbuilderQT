@@ -39,6 +39,10 @@ namespace
 	// main frame, registered once its client chrome is Qt.
 	HWND s_nativeTopLevel = NULL;
 
+	// The dark/light state most recently pushed by applyCurrentTheme, so a live OS theme
+	// change (onSystemThemeChanged) can tell a real flip from WM_SETTINGCHANGE noise.
+	bool s_lastAppliedDark = false;
+
 	void setWindowDarkTitleBar(HWND hwnd, bool dark)
 	{
 		if (hwnd == NULL)
@@ -103,6 +107,7 @@ namespace
 	void applyCurrentTheme()
 	{
 		const bool dark = WBQtTheme::effectiveDark();
+		s_lastAppliedDark = dark;
 		if (dark)
 		{
 			qApp->setStyle(QStyleFactory::create("Fusion"));
@@ -231,6 +236,22 @@ void WBQtTheme::applyApplicationTheme()
 		qApp->installEventFilter(new ThemeTitleBarFilter(qApp));
 	}
 
+	applyCurrentTheme();
+}
+
+void WBQtTheme::onSystemThemeChanged()
+{
+	// WM_SETTINGCHANGE fires for many unrelated settings (and more than once per theme
+	// switch), so bail unless the effective dark/light state really changed. Forced
+	// Dark / Light modes ignore the OS entirely.
+	if (!s_defaultsCaptured || mode() != ModeSystem)
+	{
+		return;
+	}
+	if (osPrefersDark() == s_lastAppliedDark)
+	{
+		return;
+	}
 	applyCurrentTheme();
 }
 

@@ -32,6 +32,11 @@ namespace WBQtTheme
 	// filter. Call once, right after the QApplication exists and before showing windows.
 	void applyApplicationTheme();
 
+	// Tier 5: react to a live Windows light/dark switch (WM_SETTINGCHANGE
+	// "ImmersiveColorSet", forwarded by the MFC frame). Re-applies the theme only when
+	// the mode is System AND the OS preference actually flipped.
+	void onSystemThemeChanged();
+
 	// Tier 4a-2: also theme the title bar of a NATIVE (non-Qt) top-level window -- the
 	// MFC main frame, whose client chrome is Qt but whose caption is Win32. Applied
 	// immediately and re-applied on every theme switch.

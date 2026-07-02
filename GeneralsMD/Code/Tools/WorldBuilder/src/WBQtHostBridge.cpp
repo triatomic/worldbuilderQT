@@ -12,7 +12,9 @@
 #include "MainFrm.h"
 #include "WorldBuilderDoc.h"
 #include "wbview3d.h"
+#include "OptionsPanel.h"
 #include "qt/WBQtBridge.h"
+#include "qt/WBQtPanelBridge.h"
 
 #ifdef RTS_HAS_QT
 extern "C" void WBQt_OnViewportHostResized(int width, int height)
@@ -28,6 +30,27 @@ extern "C" void WBQt_OnViewportHostResized(int width, int height)
 		// Idempotent: reset3dEngineDisplaySize early-outs when the size is unchanged and
 		// no-ops until the device is inited, so an early/duplicate call is harmless.
 		p3d->reset3dEngineDisplaySize(width, height);
+	}
+}
+
+// Tier 5: persist the shared option-panel position exactly like COptionsPanel::OnMove,
+// so a dragged Qt panel's Top/Left survives a restart (showOptionsDialog seeds the Qt
+// panels from these keys).
+extern "C" void WBQtPanels_SaveWindowPos(int top, int left)
+{
+	::AfxGetApp()->WriteProfileInt(OPTIONS_PANEL_SECTION, "Top", top);
+	::AfxGetApp()->WriteProfileInt(OPTIONS_PANEL_SECTION, "Left", left);
+}
+
+// Tier 5: follow a live Windows light/dark switch. The Settings app broadcasts
+// WM_SETTINGCHANGE with "ImmersiveColorSet" after flipping the app theme; forward it so
+// the Qt side re-applies when the theme mode is System. Declared in MainFrm.h.
+void CMainFrame::OnSettingChange(UINT uFlags, LPCTSTR lpszSection)
+{
+	CFrameWnd::OnSettingChange(uFlags, lpszSection);
+	if (lpszSection != NULL && ::lstrcmpi(lpszSection, TEXT("ImmersiveColorSet")) == 0)
+	{
+		WBQt_OnOsThemeChanged();
 	}
 }
 #endif

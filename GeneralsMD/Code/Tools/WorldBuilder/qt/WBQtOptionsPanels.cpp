@@ -31,6 +31,7 @@
 #include "resource.h"
 
 #include <QApplication>
+#include <QEvent>
 #include <QSet>
 #include <QWidget>
 
@@ -45,6 +46,39 @@ static int         g_currentDialogID = 0;
 // to the pointer tool and back -- must NOT snap it back to the registry coords and discard
 // the user's drag. Only the first show of a given panel positions it.
 static QSet<QWidget*> g_positionedPanels;
+
+// Tier 5: persist a dragged panel's position. MFC's COptionsPanel::OnMove wrote the shared
+// OPTIONS_PANEL_SECTION Top/Left on every move; this filter does the same for the Qt panels
+// (one instance, installed on each panel at its first show). Programmatic seeding happens
+// while the panel is still hidden, so the isVisible() gate keeps the seed itself from being
+// echoed back into the profile.
+class WBQtPanelMoveSaver : public QObject
+{
+public:
+	explicit WBQtPanelMoveSaver(QObject *owner)
+		: QObject(owner)
+	{
+	}
+
+protected:
+	virtual bool eventFilter(QObject *obj, QEvent *event)
+	{
+		if (event->type() == QEvent::Move && obj->isWidgetType())
+		{
+			QWidget *w = static_cast<QWidget *>(obj);
+			if (w->isVisible() && !(w->windowState() & Qt::WindowMinimized))
+			{
+				// frameGeometry: MFC saved GetWindowRect (frame coords), and the seed
+				// re-applies via move(), which also targets the frame corner.
+				const QRect frame = w->frameGeometry();
+				WBQtPanels_SaveWindowPos(frame.top(), frame.left());
+			}
+		}
+		return QObject::eventFilter(obj, event);
+	}
+};
+
+static WBQtPanelMoveSaver *g_panelMoveSaver = NULL;
 
 // Map a dialog ID to its (lazily created, cached) Qt panel, or NULL if not migrated.
 static QWidget *wbQtPanelFor(int dialogID, QWidget *owner)
@@ -244,8 +278,18 @@ extern "C" int WBQt_ShowOptionsPanel(void *frameHwnd, int dialogID, int x, int y
 	// hides and re-shows the panel doesn't reset its position.
 	if (!g_positionedPanels.contains(panel))
 	{
-		panel->setGeometry(x, y, w, h);
+		// move() places the FRAME corner of a top-level widget (== the MFC SetWindowPos /
+		// GetWindowRect coords the profile stores); setGeometry would place the client
+		// area and creep the panel down-right by the frame size now that positions are
+		// written back on every drag.
+		panel->move(x, y);
+		panel->resize(w, h);
 		g_positionedPanels.insert(panel);
+		if (g_panelMoveSaver == NULL)
+		{
+			g_panelMoveSaver = new WBQtPanelMoveSaver(g_panelOwner);
+		}
+		panel->installEventFilter(g_panelMoveSaver);
 	}
 	panel->show();
 	panel->raise();

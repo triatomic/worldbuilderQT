@@ -124,6 +124,9 @@ public:
 	// Tier 4c: mirror every SetMessageText into the Qt status row (push, no polling).
 	// Defined in src/WBQtChromeBridge.cpp.
 	afx_msg LRESULT OnSetMessageString(WPARAM wParam, LPARAM lParam);
+	// Tier 5: follow a live Windows light/dark switch while the Qt theme mode is System.
+	// Defined in src/WBQtHostBridge.cpp.
+	afx_msg void OnSettingChange(UINT uFlags, LPCTSTR lpszSection);
 #endif
 
 protected:  // control bar embedded members

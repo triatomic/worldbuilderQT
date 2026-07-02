@@ -86,6 +86,14 @@ int WBQt_GetThemeMode(void)
 	return (int)WBQtTheme::mode();
 }
 
+void WBQt_OnOsThemeChanged(void)
+{
+	if (qApp != NULL)
+	{
+		WBQtTheme::onSystemThemeChanged();
+	}
+}
+
 void *WBQt_HostViewport(void *frameHwnd, void *viewHwnd)
 {
 	if (g_wbViewportHost != NULL)
