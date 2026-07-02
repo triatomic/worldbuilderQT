@@ -3369,14 +3369,23 @@ Bool ScriptDialog::ParseTeamsDataChunk(DataChunkInput &file, DataChunkInfo *info
 			::AfxMessageBox(warning.str(), MB_OK);	
 			TeamsInfo ti;	 
 			ti.init(&teamDict);
-			CFixTeamOwnerDialog fix(&ti, &pThis->m_sides);
 			bool nameSet = false;
+#ifdef RTS_HAS_QT
+			char qtOwner[256];
+			if (WBQtFixTeamOwner_Run(&ti, &pThis->m_sides, ::AfxGetMainWnd()->GetSafeHwnd(), qtOwner, sizeof(qtOwner)) != 0)
+			{
+				teamDict.setAsciiString(TheKey_teamOwner, AsciiString(qtOwner));
+				nameSet = true;
+			}
+#else
+			CFixTeamOwnerDialog fix(&ti, &pThis->m_sides);
 			if (fix.DoModal() == IDOK) {
 				if (fix.pickedValidTeam()) {
 					teamDict.setAsciiString(TheKey_teamOwner, fix.getSelectedOwner());
 					nameSet = true;
 				}
 			}
+#endif
 						
 			if (nameSet == false) {
 				AsciiString neutralPlayerName; // neutral player name is empty string

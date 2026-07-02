@@ -632,6 +632,15 @@ void EditParameter::qtPreviewAudio(Parameter *pParm, const char *eventName)
 	}
 }
 
+// == BaseBuildProps' script combo fill (loadScripts is protected; this member static fronts it
+// for the misc-modal bridge, which reads the rows back via WBQtParamData_GetOption).
+Int EditParameter::qtLoadSubroutineScripts(CComboBox *pCombo)
+{
+	pCombo->ResetContent();
+	loadScripts(pCombo, true);
+	return pCombo->GetCount();
+}
+
 // ================= the C facade =================
 
 // The hidden combo the options are loaded into. CBS_SORT + CBS_SIMPLE match the real dialog's
@@ -692,6 +701,16 @@ extern "C" int WBQtParamData_Describe(void *parameter, const char *unitName,
 		*initialSelOut = initialSel;
 	}
 	return count;
+}
+
+extern "C" int WBQtParamData_LoadSubroutineScripts(void)
+{
+	CComboBox *pCombo = qtHiddenCombo();
+	if (pCombo->GetSafeHwnd() == NULL)
+	{
+		return 0;
+	}
+	return EditParameter::qtLoadSubroutineScripts(pCombo);
 }
 
 extern "C" void WBQtParamData_GetOption(int i, char *buf, int cap)

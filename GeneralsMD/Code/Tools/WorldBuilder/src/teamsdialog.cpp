@@ -37,6 +37,9 @@
 
 #include "Common/DataChunk.h"
 #include "Common/FileSystem.h"
+#ifdef RTS_HAS_QT
+#include "qt/panels/WBQtMiscModalsBridge.h"
+#endif
 
 static Int thePrevCurTeam = 0;
 
@@ -781,6 +784,16 @@ Bool CTeamsDialog::isValidTeamOwner( AsciiString ownerName )
 
 void CTeamsDialog::doCorrectTeamOwnerDialog( TeamsInfo *ti )
 {
+#ifdef RTS_HAS_QT
+	{
+		char qtOwner[256];
+		if (WBQtFixTeamOwner_Run(ti, &m_sides, ::AfxGetMainWnd()->GetSafeHwnd(), qtOwner, sizeof(qtOwner)) != 0)
+		{
+			ti->getDict()->setAsciiString(TheKey_teamOwner, AsciiString(qtOwner));
+		}
+		return;
+	}
+#endif
 	CFixTeamOwnerDialog fix(ti, &m_sides);
 	if (fix.DoModal() == IDOK) {
 		if (fix.pickedValidTeam()) {

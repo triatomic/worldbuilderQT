@@ -45,6 +45,7 @@
 #ifdef RTS_HAS_QT
 #include "qt/panels/WBQtPlayerListBridge.h"
 #include "qt/panels/WBQtTeamsBridge.h"
+#include "qt/panels/WBQtMiscModalsBridge.h"
 #endif
 
 #ifdef _INTERNAL
@@ -1297,6 +1298,19 @@ void WbView::OnValidationFixTeams()
 			anyFixes = true;
 			::AfxMessageBox(warning.str(), MB_OK);	
 			TeamsInfo ti;	 
+#ifdef RTS_HAS_QT
+			char qtOwner[256];
+			if (WBQtFixTeamOwner_Run(&ti, TheSidesList, ::AfxGetMainWnd()->GetSafeHwnd(), qtOwner, sizeof(qtOwner)) != 0)
+			{
+				AsciiString team;
+				team.set("team");
+				team.concat(AsciiString(qtOwner));
+				if (TheSidesList->findTeamInfo(team)==NULL) {
+					team.set("team"); // neutral.
+				}
+				pMapObj->getProperties()->setAsciiString(TheKey_originalOwner,  team);
+			}
+#else
 			CFixTeamOwnerDialog fix(&ti, TheSidesList);
 			if (fix.DoModal() == IDOK) {
 				if (fix.pickedValidTeam()) {
@@ -1309,6 +1323,7 @@ void WbView::OnValidationFixTeams()
 					pMapObj->getProperties()->setAsciiString(TheKey_originalOwner,  team);
 				}
 			}
+#endif
 		}
 	}
 	

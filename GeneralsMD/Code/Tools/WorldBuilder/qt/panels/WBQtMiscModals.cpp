@@ -3,10 +3,12 @@
 // IDD_EXPORT_SCRIPTS_OPTIONS dialogs; all state round-trips through the bridge.
 #include "WBQtMiscModals.h"
 #include "WBQtMiscModalsBridge.h"
+#include "WBQtParamBridge.h"	// subroutine-script enumeration for Building Properties
 
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QGridLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -17,6 +19,8 @@
 #include <QVBoxLayout>
 
 #include <qt_windows.h>
+
+#include <string.h>
 
 namespace
 {
@@ -310,6 +314,103 @@ void WBQtMapSettingsDialog::accept()
 	QDialog::accept();
 }
 
+// ===================== WBQtFixTeamOwnerDialog =====================
+
+WBQtFixTeamOwnerDialog::WBQtFixTeamOwnerDialog(void *teamsInfo, void *sidesList, QWidget *parent)
+	: QDialog(parent),
+	m_sidesList(sidesList),
+	m_pickedSide(-1)
+{
+	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
+	setWindowTitle("Select a valid Player");
+
+	QVBoxLayout *root = new QVBoxLayout(this);
+	char buf[kNameCap];
+	buf[0] = 0;
+	WBQtFixOwnerData_GetPrompt(teamsInfo, buf, sizeof(buf));
+	QLabel *prompt = new QLabel(QString::fromLocal8Bit(buf), this);
+	prompt->setWordWrap(true);
+	root->addWidget(prompt);
+
+	m_list = new QListWidget(this);
+	int count = WBQtFixOwnerData_GetCount(sidesList);
+	for (int i = 0; i < count; i++)
+	{
+		buf[0] = 0;
+		WBQtFixOwnerData_GetDisplay(sidesList, i, buf, sizeof(buf));
+		QListWidgetItem *item = new QListWidgetItem(QString::fromLocal8Bit(buf), m_list);
+		item->setData(Qt::UserRole, i);	// side index survives the sort
+	}
+	m_list->sortItems(Qt::AscendingOrder);	// == the LBS_SORT display
+	root->addWidget(m_list, 1);
+
+	addOkCancel(root, this, true);
+	resize(300, 240);
+}
+
+void WBQtFixTeamOwnerDialog::accept()
+{
+	// == OnOK, but the row maps back through the stored side index (the MFC dialog indexed
+	// the SORTED row into the unsorted sides list).
+	QListWidgetItem *item = m_list->currentItem();
+	if (item != NULL)
+	{
+		m_pickedSide = item->data(Qt::UserRole).toInt();
+	}
+	QDialog::accept();
+}
+
+// ===================== WBQtBaseBuildPropsDialog =====================
+
+WBQtBaseBuildPropsDialog::WBQtBaseBuildPropsDialog(const QString &name, const QString &script, int health, int unsellable, QWidget *parent)
+	: QDialog(parent)
+{
+	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
+	setWindowTitle("Building Properties");
+
+	QVBoxLayout *root = new QVBoxLayout(this);
+
+	QGridLayout *grid = new QGridLayout();
+	grid->addWidget(new QLabel("Name:", this), 0, 0);
+	m_nameEdit = new QLineEdit(name, this);
+	grid->addWidget(m_nameEdit, 0, 1);
+	grid->addWidget(new QLabel("Script:", this), 1, 0);
+	m_scriptCombo = new QComboBox(this);
+	char buf[kNameCap];
+	int count = WBQtParamData_LoadSubroutineScripts();
+	QStringList scripts;
+	for (int i = 0; i < count; i++)
+	{
+		buf[0] = 0;
+		WBQtParamData_GetOption(i, buf, sizeof(buf));
+		scripts.append(QString::fromLocal8Bit(buf));
+	}
+	scripts.append("<none>");
+	m_scriptCombo->addItems(scripts);
+	// == OnInitDialog: empty script selects <none>; unknown scripts fall back gracefully.
+	QString current = script.isEmpty() ? QString("<none>") : script;
+	int index = m_scriptCombo->findText(current);
+	if (index < 0)
+	{
+		m_scriptCombo->addItem(current);
+		index = m_scriptCombo->findText(current);
+	}
+	m_scriptCombo->setCurrentIndex(index);
+	grid->addWidget(m_scriptCombo, 1, 1);
+	grid->addWidget(new QLabel("Starting Health", this), 2, 0);
+	m_healthEdit = new QLineEdit(QString::number(health), this);
+	m_healthEdit->setFixedWidth(60);
+	grid->addWidget(m_healthEdit, 2, 1, Qt::AlignLeft);
+	root->addLayout(grid);
+
+	m_unsellableCheck = new QCheckBox("Unsellable", this);
+	m_unsellableCheck->setChecked(unsellable != 0);
+	root->addWidget(m_unsellableCheck);
+
+	addOkCancel(root, this, true);
+	resize(340, 190);
+}
+
 // ===================== WBQtExportScriptsDialog =====================
 
 WBQtExportScriptsDialog::WBQtExportScriptsDialog(QWidget *parent)
@@ -425,4 +526,55 @@ extern "C" int WBQtExportScriptsOptions_Run(void *frameHwnd)
 {
 	WBQtExportScriptsDialog dlg;
 	return runModal(dlg, frameHwnd);
+}
+
+extern "C" int WBQtFixTeamOwner_Run(void *teamsInfo, void *sidesList, void *frameHwnd, char *ownerOut, int cap)
+{
+	if (ownerOut != NULL && cap > 0)
+	{
+		ownerOut[0] = 0;
+	}
+	WBQtFixTeamOwnerDialog dlg(teamsInfo, sidesList);
+	if (runModal(dlg, frameHwnd) != 0 && dlg.pickedSide() >= 0)
+	{
+		WBQtFixOwnerData_GetInternal(sidesList, dlg.pickedSide(), ownerOut, cap);
+		return 1;
+	}
+	return 0;
+}
+
+extern "C" int WBQtBaseBuildProps_Run(void *frameHwnd, const char *name, const char *script, int health, int unsellable,
+	char *nameOut, int nameCap, char *scriptOut, int scriptCap, int *healthOut, int *unsellableOut)
+{
+	WBQtBaseBuildPropsDialog dlg(QString::fromLocal8Bit(name ? name : ""),
+		QString::fromLocal8Bit(script ? script : ""), health, unsellable);
+	if (runModal(dlg, frameHwnd) == 0)
+	{
+		return 0;
+	}
+	// == BaseBuildProps::OnOK: texts verbatim (including a literal "<none>", matching MFC);
+	// empty health -> 100, negative -> 0.
+	QByteArray nameBytes = dlg.m_nameEdit->text().toLocal8Bit();
+	strncpy(nameOut, nameBytes.constData(), nameCap - 1);
+	nameOut[nameCap - 1] = 0;
+	QByteArray scriptBytes = dlg.m_scriptCombo->currentText().toLocal8Bit();
+	strncpy(scriptOut, scriptBytes.constData(), scriptCap - 1);
+	scriptOut[scriptCap - 1] = 0;
+	QString healthText = dlg.m_healthEdit->text();
+	int outHealth;
+	if (healthText.isEmpty())
+	{
+		outHealth = 100;
+	}
+	else
+	{
+		outHealth = healthText.toInt();
+		if (outHealth < 0)
+		{
+			outHealth = 0;
+		}
+	}
+	*healthOut = outHealth;
+	*unsellableOut = dlg.m_unsellableCheck->isChecked() ? 1 : 0;
+	return 1;
 }

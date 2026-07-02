@@ -45,6 +45,10 @@ int  WBQtParamData_Describe(void *parameter, const char *unitName,
 	char *initialTextOut, int textCap);
 void WBQtParamData_GetOption(int i, char *buf, int cap);
 
+// Fill the hidden combo with the subroutine-script list (read back via GetOption); returns the
+// count. Used by dialogs outside the parameter editors (BaseBuildProps' script combo).
+int  WBQtParamData_LoadSubroutineScripts(void);
+
 // Write the value back (== EditParameter::OnOK). `text` is the edit/selected-row text,
 // `selIndex` the selected row (-1 none). Returns 0 if the input does not parse (beep + stay).
 int  WBQtParam_Store(void *parameter, const char *text, int selIndex);

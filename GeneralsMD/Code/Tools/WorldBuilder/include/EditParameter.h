@@ -70,6 +70,7 @@ public:
 	static Int qtDescribe(Parameter *pParm, AsciiString unitName, CComboBox *pCombo, AsciiString *captionOut, Int *kindOut, Int *showAudioOut, Int *initialSelOut, AsciiString *initialTextOut);
 	static Int qtStore(Parameter *pParm, const char *text, Int selIndex);
 	static void qtPreviewAudio(Parameter *pParm, const char *eventName);
+	static Int qtLoadSubroutineScripts(CComboBox *pCombo);
 #endif
 
 protected:

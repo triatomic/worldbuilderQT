@@ -62,6 +62,21 @@ void WBQtMapSettings_Store(int timeOfDayIndex, int weatherIndex, int compression
 void WBQtExportScripts_Get(int *waypoints, int *triggers, int *units, int *teams, int *sides, int *allScripts);
 void WBQtExportScripts_Store(int waypoints, int triggers, int units, int teams, int sides, int allScripts);
 
+// --- Fix Team Owner (== CFixTeamOwnerDialog): pick a valid player for an orphaned team.
+// Run returns 1 with the picked INTERNAL player name in ownerOut, 0 on cancel/no pick.
+// (The MFC dialog's sorted listbox was index-mapped into the UNSORTED sides list -- a wrong-
+// owner bug when display names sort differently; the Qt version maps rows correctly.) ---
+int  WBQtFixTeamOwner_Run(void *teamsInfo, void *sidesList, void *frameHwnd, char *ownerOut, int cap);
+void WBQtFixOwnerData_GetPrompt(void *teamsInfo, char *buf, int cap);
+int  WBQtFixOwnerData_GetCount(void *sidesList);
+void WBQtFixOwnerData_GetDisplay(void *sidesList, int i, char *buf, int cap);
+void WBQtFixOwnerData_GetInternal(void *sidesList, int i, char *buf, int cap);
+
+// --- Building Properties (== BaseBuildProps, popped from the Build List's double-click).
+// Values in/out; returns 1 on OK. The script list comes from WBQtParamData_LoadSubroutineScripts. ---
+int WBQtBaseBuildProps_Run(void *frameHwnd, const char *name, const char *script, int health, int unsellable,
+	char *nameOut, int nameCap, char *scriptOut, int scriptCap, int *healthOut, int *unsellableOut);
+
 #ifdef __cplusplus
 }
 #endif

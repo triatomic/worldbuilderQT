@@ -76,6 +76,37 @@ private:
 	QLineEdit *m_mapName;
 };
 
+// Fix Team Owner: pick a valid player for an orphaned team (== CFixTeamOwnerDialog). Rows
+// carry the side index as item data, so the sorted display maps to the right player (fixes
+// the MFC sorted-listbox/unsorted-sides index bug).
+class WBQtFixTeamOwnerDialog : public QDialog
+{
+	Q_OBJECT
+public:
+	WBQtFixTeamOwnerDialog(void *teamsInfo, void *sidesList, QWidget *parent = 0);
+
+	void accept();
+	int pickedSide() const { return m_pickedSide; }	// -1 = none
+
+private:
+	void *m_sidesList;
+	QListWidget *m_list;
+	int m_pickedSide;
+};
+
+// Building Properties (== BaseBuildProps): name / subroutine-script / health / unsellable.
+class WBQtBaseBuildPropsDialog : public QDialog
+{
+	Q_OBJECT
+public:
+	WBQtBaseBuildPropsDialog(const QString &name, const QString &script, int health, int unsellable, QWidget *parent = 0);
+
+	QLineEdit *m_nameEdit;
+	QComboBox *m_scriptCombo;
+	QLineEdit *m_healthEdit;
+	QCheckBox *m_unsellableCheck;
+};
+
 // Export Scripts Options: the six export flags + the all/selected radio.
 class WBQtExportScriptsDialog : public QDialog
 {

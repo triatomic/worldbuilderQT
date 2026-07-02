@@ -25,6 +25,9 @@
 #include "BuildList.h"
 #include "BuildListTool.h"
 #include "BaseBuildProps.h"
+#ifdef RTS_HAS_QT
+#include "qt/panels/WBQtMiscModalsBridge.h"
+#endif
 #include "CUndoable.h"
 #include "PointerTool.h"
 #include "WHeightMapEdit.h"
@@ -632,6 +635,24 @@ void BuildList::OnDblclkBuildList()
 		if (pBI == NULL) return;
 	}
 
+#ifdef RTS_HAS_QT
+	{
+		char qtName[256];
+		char qtScript[256];
+		int qtHealth = 0;
+		int qtUnsellable = 0;
+		if (WBQtBaseBuildProps_Run(::AfxGetMainWnd()->GetSafeHwnd(), pBI->getBuildingName().str(), pBI->getScript().str(),
+				pBI->getHealth(), pBI->getUnsellable() ? 1 : 0,
+				qtName, sizeof(qtName), qtScript, sizeof(qtScript), &qtHealth, &qtUnsellable) != 0)
+		{
+			pBI->setBuildingName(AsciiString(qtName));
+			pBI->setScript(AsciiString(qtScript));
+			pBI->setHealth(qtHealth);
+			pBI->setUnsellable(qtUnsellable != 0);
+		}
+		return;
+	}
+#endif
 	BaseBuildProps dlg;
 	dlg.setProps(pBI->getBuildingName(), pBI->getScript(), pBI->getHealth(), pBI->getUnsellable());
 	if (dlg.DoModal() == IDOK) {

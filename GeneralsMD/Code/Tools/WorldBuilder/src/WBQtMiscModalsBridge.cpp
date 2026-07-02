@@ -20,6 +20,7 @@
 #include "Common/GlobalData.h"
 #include "Common/FileSystem.h"
 #include "Common/WellKnownKeys.h"
+#include "GameLogic/SidesList.h"
 #include "W3DDevice/GameClient/W3DShadow.h"
 #include "W3DDevice/GameClient/HeightMap.h"
 #include "wbview3d.h"			// WbView3d (Impassable preview calls updateHeightMapInView)
@@ -320,6 +321,73 @@ extern "C" void WBQtExportScripts_Get(int *waypoints, int *triggers, int *units,
 extern "C" void WBQtExportScripts_Store(int waypoints, int triggers, int units, int teams, int sides, int allScripts)
 {
 	ExportScriptsOptions::qtStore(units != 0, teams != 0, waypoints != 0, triggers != 0, sides != 0, allScripts != 0);
+}
+
+// ================= Fix Team Owner =================
+// == CFixTeamOwnerDialog::OnInitDialog's list build + prompt; rows are side indices.
+
+static const char *const K_NEUTRAL_NAME = "(neutral)";
+
+extern "C" void WBQtFixOwnerData_GetPrompt(void *teamsInfo, char *buf, int cap)
+{
+	TeamsInfo *ti = static_cast<TeamsInfo *>(teamsInfo);
+	AsciiString teamName = "No Name";
+	Bool exists;
+	AsciiString temp = ti->getDict()->getAsciiString(TheKey_teamName, &exists);
+	if (exists) {
+		teamName = temp;
+	}
+	CString loadStr;
+	loadStr.Format(IDS_REPLACEOWNER, teamName.str());
+	copyOut(AsciiString((LPCTSTR)loadStr), buf, cap);
+}
+
+extern "C" int WBQtFixOwnerData_GetCount(void *sidesList)
+{
+	return static_cast<SidesList *>(sidesList)->getNumSides();
+}
+
+extern "C" void WBQtFixOwnerData_GetDisplay(void *sidesList, int i, char *buf, int cap)
+{
+	if (buf != NULL && cap > 0)
+	{
+		buf[0] = 0;
+	}
+	SidesList *sl = static_cast<SidesList *>(sidesList);
+	SidesInfo *si = sl->getSideInfo(i);
+	if (si == NULL)
+	{
+		return;
+	}
+	Bool displayExists;
+	AsciiString displayName = si->getDict()->getAsciiString(TheKey_playerDisplayName, &displayExists);
+	if (displayExists) {
+		if (displayName.isEmpty()) {
+			displayName = K_NEUTRAL_NAME;
+		}
+		copyOut(displayName, buf, cap);
+	} else {
+		AsciiString internalName = si->getDict()->getAsciiString(TheKey_playerName, &displayExists);
+		if (internalName.isEmpty()) {
+			internalName = K_NEUTRAL_NAME;
+		}
+		copyOut(internalName, buf, cap);
+	}
+}
+
+extern "C" void WBQtFixOwnerData_GetInternal(void *sidesList, int i, char *buf, int cap)
+{
+	if (buf != NULL && cap > 0)
+	{
+		buf[0] = 0;
+	}
+	SidesList *sl = static_cast<SidesList *>(sidesList);
+	SidesInfo *si = sl->getSideInfo(i);
+	if (si != NULL)
+	{
+		Bool exists;
+		copyOut(si->getDict()->getAsciiString(TheKey_playerName, &exists), buf, cap);
+	}
 }
 
 // qtStore is a member static (declared in ExportScriptsOptions.h), so it can write the private
