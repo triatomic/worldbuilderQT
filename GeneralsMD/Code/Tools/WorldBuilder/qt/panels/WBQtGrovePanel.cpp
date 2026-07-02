@@ -216,8 +216,7 @@ void WBQtGrovePanel::refreshPreview()
 		// Flip + convert + the MFC ObjectPreview center-quarter zoom (shared helper).
 		QImage img = WBQtPreviewImage::fromBridgeBgr(
 			reinterpret_cast<const unsigned char*>(bgr.constData()), w, h);
-		m_preview->setPixmap(QPixmap::fromImage(img).scaled(m_preview->size(),
-			Qt::KeepAspectRatio, Qt::SmoothTransformation));
+		m_preview->setPixmap(WBQtPreviewImage::toLabelPixmap(img, m_preview->size()));
 	}
 	else
 	{

@@ -247,8 +247,7 @@ void WBQtPickUnitDialog::refreshPreview(const QString &name)
 		// Flip + convert + the MFC center-quarter zoom, shared with the other previews.
 		QImage img = WBQtPreviewImage::fromBridgeBgr(
 			reinterpret_cast<const unsigned char*>(bgr.constData()), kPreviewW, kPreviewH);
-		m_preview->setPixmap(QPixmap::fromImage(img).scaled(m_preview->size(),
-			Qt::KeepAspectRatio, Qt::SmoothTransformation));
+		m_preview->setPixmap(WBQtPreviewImage::toLabelPixmap(img, m_preview->size()));
 	}
 	else
 	{

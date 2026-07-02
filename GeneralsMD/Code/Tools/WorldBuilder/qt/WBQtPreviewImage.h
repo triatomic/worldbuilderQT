@@ -10,6 +10,7 @@
 #define WB_QT_PREVIEW_IMAGE_H
 
 #include <QImage>
+#include <QPixmap>
 
 namespace WBQtPreviewImage
 {
@@ -31,6 +32,15 @@ namespace WBQtPreviewImage
 			}
 		}
 		return img.copy(w / 4, h / 4, w / 2, h / 2);
+	}
+
+	// Fit the cropped image into the preview label. The crop is 64x64 and the labels are
+	// bigger, so this is an UPSCALE: use nearest-neighbour like the MFC StretchDIBits
+	// (its default COLORONCOLOR mode) -- bilinear smoothing turns the model into a blur.
+	inline QPixmap toLabelPixmap(const QImage &img, const QSize &labelSize)
+	{
+		return QPixmap::fromImage(img).scaled(labelSize,
+			Qt::KeepAspectRatio, Qt::FastTransformation);
 	}
 }
 
