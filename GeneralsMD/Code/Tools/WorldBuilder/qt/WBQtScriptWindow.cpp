@@ -83,6 +83,10 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	QGridLayout *optGrid = new QGridLayout(optBox);
 	m_ckCompress = new QCheckBox("Compress Script", optBox);
 	m_ckNewIcons = new QCheckBox("New Icons", optBox);
+	// The Qt tree always draws the native Qt icon set -- there is no "old icons" BMP set
+	// on the Qt side -- so the choice is fixed: show the box checked and grayed out.
+	m_ckNewIcons->setChecked(true);
+	m_ckNewIcons->setEnabled(false);
 	m_ckCleanName = new QCheckBox("Clean Script Name", optBox);
 	m_ckAutoVerify = new QCheckBox("Auto Verify", optBox);
 	m_ckSmartCopy = new QCheckBox("Smart Copy", optBox);
@@ -299,7 +303,7 @@ void WBQtScriptWindow::seedCheckboxes()
 {
 	m_updating = true;
 	m_ckCompress->setChecked(WBQtScript_GetCheckbox(WBQT_SCK_COMPRESS) != 0);
-	m_ckNewIcons->setChecked(WBQtScript_GetCheckbox(WBQT_SCK_NEWICONS) != 0);
+	// New Icons is fixed ON in the Qt window (native Qt icons; no old set) -- not re-seeded.
 	m_ckCleanName->setChecked(WBQtScript_GetCheckbox(WBQT_SCK_CLEANNAME) != 0);
 	m_ckAutoVerify->setChecked(WBQtScript_GetCheckbox(WBQT_SCK_AUTOVERIFY) != 0);
 	m_ckSmartCopy->setChecked(WBQtScript_GetCheckbox(WBQT_SCK_SMARTCOPY) != 0);
