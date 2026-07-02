@@ -6,8 +6,9 @@
 #ifndef WB_QT_CHROME_H
 #define WB_QT_CHROME_H
 
-#include <QObject>
+#include <QIcon>
 #include <QList>
+#include <QObject>
 
 class QAction;
 class QEvent;
@@ -48,10 +49,13 @@ private slots:
 	void checkPopupsClosed();
 	void onToolActionHovered();
 	void onToolBarTick();
+	void onPaletteChanged();
 
 private:
 	void buildMenu(void *hMenu, QMenu *target);
 	void addThemeMenu();
+	QIcon standardToolIcon(int id) const;
+	void applyStandardToolIcons();
 	QAction *makeCommandAction(QMenu *menu, const QString &text, int commandId);
 	void refreshMenuState(QMenu *menu);
 	void rebuildMruSection();

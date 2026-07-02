@@ -26,8 +26,10 @@
 #include <QSizePolicy>
 #include <QMenu>
 #include <QMenuBar>
+#include <QPainter>
 #include <QPixmap>
 #include <QString>
+#include <QStyle>
 #include <QTimer>
 #include <QToolBar>
 
@@ -41,6 +43,12 @@
 #define WBQT_ID_FILE_MRU_LAST	0xE11F	// == ID_FILE_MRU_FILE16
 #define WBQT_ID_VIEW_TOOLBAR	0xE800	// == ID_VIEW_TOOLBAR
 #define WBQT_ID_VIEW_STATUS_BAR	0xE801	// == ID_VIEW_STATUS_BAR
+#define WBQT_ID_FILE_NEW		0xE100	// == ID_FILE_NEW
+#define WBQT_ID_FILE_OPEN		0xE101	// == ID_FILE_OPEN
+#define WBQT_ID_FILE_SAVE		0xE103	// == ID_FILE_SAVE
+#define WBQT_ID_EDIT_COPY		0xE122	// == ID_EDIT_COPY
+#define WBQT_ID_EDIT_CUT		0xE123	// == ID_EDIT_CUT
+#define WBQT_ID_EDIT_PASTE		0xE125	// == ID_EDIT_PASTE
 
 // Defined in WBQtBridge.cpp: the Phase-2 viewport-host column the chrome inserts into,
 // and the hosted 3D view's HWND (for putting keyboard focus back after toolbar clicks).
@@ -258,6 +266,11 @@ bool WBQtChromeController::installToolBar()
 		box->insertWidget(0, m_toolBar);
 	}
 
+	// The six standard file/edit buttons swap their dated strip images for Qt-native
+	// icons; re-derived on theme switches (the glyphs paint in the palette text colour).
+	applyStandardToolIcons();
+	connect(qApp, SIGNAL(paletteChanged(QPalette)), this, SLOT(onPaletteChanged()));
+
 	// The active-tool highlight changes without any menu opening, so sweep the button
 	// states on a modest timer -- the same trivial update handlers MFC ran on idle.
 	m_toolBarTimer = new QTimer(this);
@@ -265,6 +278,95 @@ bool WBQtChromeController::installToolBar()
 	connect(m_toolBarTimer, SIGNAL(timeout()), this, SLOT(onToolBarTick()));
 	m_toolBarTimer->start();
 	return true;
+}
+
+// Qt-native icons for New/Open/Save/Cut/Copy/Paste. The first three come from the style's
+// standard set; cut/copy/paste have no QStyle standard icon on Windows, so they are drawn
+// as flat glyphs in the button-text colour (theme-aware). Everything is rendered for the
+// toolbar's icon size so the six match the rest of the strip.
+QIcon WBQtChromeController::standardToolIcon(int id) const
+{
+	QStyle *style = QApplication::style();
+	switch (id)
+	{
+		case WBQT_ID_FILE_NEW:
+			return style->standardIcon(QStyle::SP_FileIcon);
+		case WBQT_ID_FILE_OPEN:
+			return style->standardIcon(QStyle::SP_DirOpenIcon);
+		case WBQT_ID_FILE_SAVE:
+			return style->standardIcon(QStyle::SP_DialogSaveButton);
+	}
+
+	// Drawn at 2x the toolbar icon size for crisper antialiased downscaling.
+	QSize iconSize = (m_toolBar != NULL) ? m_toolBar->iconSize() : QSize(16, 15);
+	QPixmap pm(iconSize * 2);
+	pm.fill(Qt::transparent);
+	{
+		QPainter p(&pm);
+		p.setRenderHint(QPainter::Antialiasing, true);
+		QColor ink = QApplication::palette().color(QPalette::ButtonText);
+		QPen pen(ink);
+		pen.setWidthF(2.0);
+		p.setPen(pen);
+		// Coordinates assume the nominal 32x30 canvas (16x15 * 2); scale for safety.
+		p.scale(pm.width() / 32.0, pm.height() / 30.0);
+		if (id == WBQT_ID_EDIT_CUT)
+		{
+			// Scissors: crossed blades into two finger rings.
+			p.drawLine(QPointF(9, 3), QPointF(22, 20));
+			p.drawLine(QPointF(23, 3), QPointF(10, 20));
+			p.setBrush(Qt::NoBrush);
+			p.drawEllipse(QRectF(5, 20, 8, 7));
+			p.drawEllipse(QRectF(19, 20, 8, 7));
+		}
+		else if (id == WBQT_ID_EDIT_COPY)
+		{
+			// Two offset pages.
+			p.setBrush(Qt::NoBrush);
+			p.drawRect(QRectF(6, 3, 13, 17));
+			p.setBrush(QApplication::palette().color(QPalette::Button));
+			p.drawRect(QRectF(13, 10, 13, 17));
+		}
+		else if (id == WBQT_ID_EDIT_PASTE)
+		{
+			// Clipboard: board, top clip, two content lines.
+			p.setBrush(Qt::NoBrush);
+			p.drawRoundedRect(QRectF(7, 4, 18, 23), 2, 2);
+			p.setBrush(ink);
+			p.drawRect(QRectF(12, 1, 8, 6));
+			p.drawLine(QPointF(11, 14), QPointF(21, 14));
+			p.drawLine(QPointF(11, 19), QPointF(21, 19));
+		}
+	}
+	return QIcon(pm);
+}
+
+void WBQtChromeController::applyStandardToolIcons()
+{
+	if (m_toolBar == NULL)
+	{
+		return;
+	}
+	QList<QAction *> actions = m_toolBar->actions();
+	for (int i = 0; i < actions.size(); i++)
+	{
+		bool ok = false;
+		int id = actions[i]->data().toInt(&ok);
+		if (!ok)
+		{
+			continue;
+		}
+		if (id == WBQT_ID_FILE_NEW || id == WBQT_ID_FILE_OPEN || id == WBQT_ID_FILE_SAVE
+			|| id == WBQT_ID_EDIT_CUT || id == WBQT_ID_EDIT_COPY || id == WBQT_ID_EDIT_PASTE)
+		{
+			actions[i]->setIcon(standardToolIcon(id));
+		}
+	}
+}
+
+void WBQtChromeController::onPaletteChanged()
+{
+	applyStandardToolIcons();
 }
 
 void WBQtChromeController::onToolBarTick()
