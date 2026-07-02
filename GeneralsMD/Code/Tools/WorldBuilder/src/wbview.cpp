@@ -44,6 +44,7 @@
 #include "WaveEditorOptions.h"
 #ifdef RTS_HAS_QT
 #include "qt/panels/WBQtPlayerListBridge.h"
+#include "qt/panels/WBQtTeamsBridge.h"
 #endif
 
 #ifdef _INTERNAL
@@ -1340,6 +1341,10 @@ void WbView::OnUpdateShowTerrain(CCmdUI* pCmdUI)
 
 void WbView::OnEditTeamlist() 
 {
+#ifdef RTS_HAS_QT
+	WBQtTeams_Run(::AfxGetMainWnd()->GetSafeHwnd());
+	return;
+#endif
 	CTeamsDialog dlg;
 	dlg.DoModal();
 }

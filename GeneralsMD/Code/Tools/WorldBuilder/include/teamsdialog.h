@@ -50,6 +50,36 @@ public:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV support
 	//}}AFX_VIRTUAL
 
+#ifdef RTS_HAS_QT
+// Qt seam (Tier 3b-2): the Qt Teams dialog drives THIS dialog created hidden -- the
+// working-copy m_sides model and every handler (new/copy/delete/move/import/export, the
+// team property sheet, the fix-owner validation) are reused verbatim. All definitions live
+// in src/WBQtTeamsBridge.cpp (member functions may be defined in any TU).
+public:
+	static CTeamsDialog *qtOpen(void);
+	static void qtClose(int accepted);
+	static CTeamsDialog *qtInstance(void);
+	int  qtPlayerCount(void);
+	void qtPlayerName(int i, char *buf, int cap);
+	int  qtPlayerCurSel(void);
+	void qtSelectPlayer(int i);
+	int  qtTeamRowCount(void);
+	void qtTeamRowText(int row, int col, char *buf, int cap);
+	int  qtTeamRowSelected(int row);
+	void qtSelectTeamRow(int row);
+	int  qtIsCtrlEnabled(int ctrlId);
+	void qtNewTeam(void);
+	void qtDeleteTeam(void);
+	void qtCopyTeam(void);
+	void qtEditTeam(void);
+	void qtSelectTeamMembers(void);
+	void qtMoveUpTeam(void);
+	void qtMoveDownTeam(void);
+	void qtExportTeams(void);
+	void qtImportTeams(void);
+	void qtCommit(void);
+#endif
+
 // Implementation
 protected:
 
