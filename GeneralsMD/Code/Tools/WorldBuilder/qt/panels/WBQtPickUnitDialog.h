@@ -16,8 +16,9 @@ class WBQtPickUnitDialog : public QDialog
 	Q_OBJECT
 public:
 	// Replace mode == IDD_REPLACEUNIT: missing-name label on top, a "Continue without
-	// replacing..." button that finishes with code 2 (== IDIGNORE), no search row and no
-	// preview (the MFC template hides the swatch and hooks no search buttons).
+	// replacing..." button that finishes with code 2 (== IDIGNORE), and no search row
+	// (the MFC replace dialog hooks no search buttons). The model preview shows in both
+	// modes, like the MFC ObjectPreview.
 	WBQtPickUnitDialog(bool replaceMode, const QString &missingName, QWidget *parent = 0);
 
 	QString pickedName() const { return m_pickedName; }

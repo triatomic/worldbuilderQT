@@ -77,26 +77,36 @@ WBQtPickUnitDialog::WBQtPickUnitDialog(bool replaceMode, const QString &missingN
 	connect(okButton, SIGNAL(clicked()), this, SLOT(accept()));
 	connect(cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
 
+	// The model preview renders in BOTH modes: the MFC OnInitDialog creates the
+	// ObjectPreview over the placeholder rect and force-shows it, so the replace dialog
+	// had one too (the template's NOT WS_VISIBLE only hid the placeholder static).
+	m_preview = new QLabel(this);
+	m_preview->setFixedSize(96, 80);
+	m_preview->setFrameShape(QFrame::StyledPanel);
+	m_preview->setAlignment(Qt::AlignCenter);
+
 	if (replaceMode)
 	{
+		QHBoxLayout *bottomRow = new QHBoxLayout();
+		bottomRow->addWidget(m_preview);
+		QVBoxLayout *buttonCol = new QVBoxLayout();
 		QHBoxLayout *buttonRow = new QHBoxLayout();
 		buttonRow->addWidget(okButton);
 		buttonRow->addWidget(cancelButton);
 		buttonRow->addStretch(1);
-		root->addLayout(buttonRow);
+		buttonCol->addLayout(buttonRow);
 		QPushButton *ignoreButton = new QPushButton("Continue without replacing...", this);
 		ignoreButton->setAutoDefault(false);
-		root->addWidget(ignoreButton, 0, Qt::AlignLeft);
+		buttonCol->addWidget(ignoreButton, 0, Qt::AlignLeft);
+		buttonCol->addStretch(1);
+		bottomRow->addLayout(buttonCol, 1);
+		root->addLayout(bottomRow);
 		connect(ignoreButton, SIGNAL(clicked()), this, SLOT(onIgnore()));
 	}
 	else
 	{
 		// == IDD_PICKUNIT's bottom strip: preview swatch left, the tall OK over Cancel right.
 		QHBoxLayout *bottomRow = new QHBoxLayout();
-		m_preview = new QLabel(this);
-		m_preview->setFixedSize(96, 80);
-		m_preview->setFrameShape(QFrame::StyledPanel);
-		m_preview->setAlignment(Qt::AlignCenter);
 		bottomRow->addWidget(m_preview);
 		QVBoxLayout *buttonCol = new QVBoxLayout();
 		okButton->setMinimumHeight(44);
