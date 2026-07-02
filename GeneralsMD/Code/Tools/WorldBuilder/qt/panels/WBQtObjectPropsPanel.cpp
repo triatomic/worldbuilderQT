@@ -616,7 +616,28 @@ void WBQtObjectPropsPanel::onHealthChanged(int index)
 	{
 		return;
 	}
-	// Index 0..4 == 0/25/50/75/100%; index 5 == Other (take the value from the edit box).
+	// Index 5 == "Other": enable the edit box and let the user type a value; do NOT write
+	// anything yet. Writing a placeholder (e.g. 100) here would round-trip through the dict
+	// back to the matching "100%" preset and bounce the combo straight off "Other",
+	// re-disabling the box. This mirrors the MFC _HealthToDict, which enables the edit and
+	// early-returns while it is empty. Only an existing typed value is committed.
+	if (index == 5)
+	{
+		m_updating = true;
+		m_healthEdit->setEnabled(true);
+		m_updating = false;
+		m_healthEdit->setFocus();
+
+		bool ok = false;
+		int typed = m_healthEdit->text().toInt(&ok);
+		if (ok)
+		{
+			WBQtObjectProps_SetHealthPercent(typed);
+		}
+		return;
+	}
+
+	// Index 0..4 == 0/25/50/75/100% presets.
 	int value = 100;
 	switch (index)
 	{
@@ -625,23 +646,11 @@ void WBQtObjectPropsPanel::onHealthChanged(int index)
 		case 2: value = 50;  break;
 		case 3: value = 75;  break;
 		case 4: value = 100; break;
-		case 5:
-		{
-			// Enable the Other edit; if it's empty use 100 for now (the user will type a value,
-			// which fires onHealthEditChanged). Don't overwrite an existing value.
-			bool ok = false;
-			int typed = m_healthEdit->text().toInt(&ok);
-			value = ok ? typed : 100;
-			break;
-		}
 		default: value = 100; break;
 	}
 	m_updating = true;
-	m_healthEdit->setEnabled(index == 5);
-	if (index != 5)
-	{
-		m_healthEdit->clear();
-	}
+	m_healthEdit->setEnabled(false);
+	m_healthEdit->clear();
 	m_updating = false;
 	WBQtObjectProps_SetHealthPercent(value);
 }
