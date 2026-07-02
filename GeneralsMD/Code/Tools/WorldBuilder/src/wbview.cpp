@@ -42,6 +42,9 @@
 #include "FeatherOptions.h"
 #include "TerrainMaterial.h"
 #include "WaveEditorOptions.h"
+#ifdef RTS_HAS_QT
+#include "qt/panels/WBQtPlayerListBridge.h"
+#endif
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -1033,6 +1036,10 @@ void WbView::OnUpdateViewShowpolygontriggers(CCmdUI* pCmdUI)
 
 void WbView::OnEditPlayerlist() 
 {
+#ifdef RTS_HAS_QT
+	WBQtPlayerList_Run(::AfxGetMainWnd()->GetSafeHwnd());
+	return;
+#endif
 	PlayerListDlg dlg;
 	dlg.DoModal();
 }

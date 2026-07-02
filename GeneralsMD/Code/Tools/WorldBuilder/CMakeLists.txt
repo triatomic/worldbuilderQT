@@ -126,6 +126,7 @@ set(WORLDBUILDER_SRC
     "src/WBQtCondActBridge.cpp"
     "src/WBQtParamBridge.cpp"
     "src/WBQtMiscModalsBridge.cpp"
+    "src/WBQtPlayerListBridge.cpp"
     "src/wbview.cpp"
     "src/wbview3d.cpp"
     "src/WHeightMapEdit.cpp"
@@ -375,7 +376,10 @@ if(RTS_ENABLE_WORLDBUILDER_QT)
         "qt/panels/WBQtParamBridge.h"
         "qt/panels/WBQtMiscModals.cpp"
         "qt/panels/WBQtMiscModals.h"
-        "qt/panels/WBQtMiscModalsBridge.h")
+        "qt/panels/WBQtMiscModalsBridge.h"
+        "qt/panels/WBQtPlayerListDialog.cpp"
+        "qt/panels/WBQtPlayerListDialog.h"
+        "qt/panels/WBQtPlayerListBridge.h")
 
     set_target_properties(z_worldbuilder_qt PROPERTIES AUTOMOC ON)
 
