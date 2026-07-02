@@ -97,21 +97,41 @@ WBQtEntityFinderDialog::WBQtEntityFinderDialog(void *frameHwnd)
 	left->addWidget(new QLabel("Adriane [ Deathscythe ] & Triatomic | Community Worldbuilder V4.1.2qt_b", this));
 
 	QHBoxLayout *logoRow = new QHBoxLayout();
-	// The WB logo bitmap ships with a solid white background; knock it out to transparent
-	// (small tolerance for off-white edge pixels) so it sits cleanly on the dark theme.
+	// The WB logo bitmap ships with a solid white background; key it out with a SOFT
+	// white matte: alpha ramps with the pixel's distance from pure white, and the kept
+	// fraction is un-blended from the white matte -- so the anti-aliased edge pixels of
+	// the artwork fade smoothly into the dark theme instead of leaving a hard, fringed
+	// silhouette (what a binary threshold produced).
 	QPixmap logo2 = loadResourceBitmap(kSecondLogoId);
 	if (!logo2.isNull())
 	{
+		const int kSoft = 32;	// ramp width: min-channel 255..(255-kSoft) -> alpha 0..255
 		QImage img = logo2.toImage().convertToFormat(QImage::Format_ARGB32);
 		for (int y = 0; y < img.height(); ++y)
 		{
 			QRgb *row = reinterpret_cast<QRgb *>(img.scanLine(y));
 			for (int x = 0; x < img.width(); ++x)
 			{
-				if (qRed(row[x]) >= 0xF0 && qGreen(row[x]) >= 0xF0 && qBlue(row[x]) >= 0xF0)
+				const int r = qRed(row[x]);
+				const int g = qGreen(row[x]);
+				const int b = qBlue(row[x]);
+				const int d = 255 - qMin(r, qMin(g, b));	// 0 == pure white
+				if (d >= kSoft)
+				{
+					continue;	// solid artwork pixel, keep as-is
+				}
+				if (d == 0)
 				{
 					row[x] = qRgba(0, 0, 0, 0);
+					continue;
 				}
+				// alpha = d/kSoft; recovered channel = (c - (1-alpha)*255) / alpha,
+				// which un-mixes the white that BitBlt baked into the edge pixel.
+				const int a = d * 255 / kSoft;
+				const int ur = qBound(0, 255 + ((r - 255) * kSoft) / d, 255);
+				const int ug = qBound(0, 255 + ((g - 255) * kSoft) / d, 255);
+				const int ub = qBound(0, 255 + ((b - 255) * kSoft) / d, 255);
+				row[x] = qRgba(ur, ug, ub, a);
 			}
 		}
 		logo2 = QPixmap::fromImage(img);
