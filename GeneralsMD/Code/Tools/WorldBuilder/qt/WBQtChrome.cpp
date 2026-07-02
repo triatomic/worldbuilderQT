@@ -21,6 +21,8 @@
 #include <QEvent>
 #include <QImage>
 #include <QLayout>
+#include <QHBoxLayout>
+#include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
 #include <QPixmap>
@@ -56,7 +58,12 @@ WBQtChromeController::WBQtChromeController(QWidget *host, void *frameHwnd, void 
 	m_mruMenu(NULL),
 	m_mruPlaceholder(NULL),
 	m_toolBar(NULL),
-	m_toolBarTimer(NULL)
+	m_toolBarTimer(NULL),
+	m_statusRow(NULL),
+	m_statusLabel(NULL),
+	m_capsLabel(NULL),
+	m_numLabel(NULL),
+	m_scrlLabel(NULL)
 {
 	s_instance = this;
 
@@ -261,6 +268,13 @@ bool WBQtChromeController::installToolBar()
 
 void WBQtChromeController::onToolBarTick()
 {
+	// Tier 4c: the key-lock indicators ride the same tick.
+	if (m_capsLabel != NULL)
+	{
+		m_capsLabel->setEnabled((::GetKeyState(VK_CAPITAL) & 1) != 0);
+		m_numLabel->setEnabled((::GetKeyState(VK_NUMLOCK) & 1) != 0);
+		m_scrlLabel->setEnabled((::GetKeyState(VK_SCROLL) & 1) != 0);
+	}
 	if (m_toolBar == NULL || !m_toolBar->isVisible())
 	{
 		return;
@@ -296,6 +310,53 @@ void WBQtChromeController::onToolBarTick()
 void WBQtChromeController::onToolActionHovered()
 {
 	onMenuHovered(qobject_cast<QAction *>(sender()));
+}
+
+// Tier 4c: the status row -- message label + the classic CAP/NUM/SCRL indicators. The
+// message text is PUSHED from CMainFrame's WM_SETMESSAGESTRING override (every
+// SetMessageText writer, including the per-mouse-move readout, with zero polling).
+bool WBQtChromeController::installStatusBar()
+{
+	if (m_statusRow != NULL)
+	{
+		return true;
+	}
+	m_statusRow = new QWidget(m_host);
+	QHBoxLayout *row = new QHBoxLayout(m_statusRow);
+	row->setContentsMargins(6, 2, 6, 2);
+	row->setSpacing(10);
+	m_statusLabel = new QLabel(m_statusRow);
+	row->addWidget(m_statusLabel, 1);
+	m_capsLabel = new QLabel("CAP", m_statusRow);
+	row->addWidget(m_capsLabel);
+	m_numLabel = new QLabel("NUM", m_statusRow);
+	row->addWidget(m_numLabel);
+	m_scrlLabel = new QLabel("SCRL", m_statusRow);
+	row->addWidget(m_scrlLabel);
+
+	QBoxLayout *box = qobject_cast<QBoxLayout *>(m_host->layout());
+	if (box != NULL)
+	{
+		box->addWidget(m_statusRow);	// below the viewport pane
+	}
+
+	// The indicators ride the sweep timer; create it here if the toolbar didn't.
+	if (m_toolBarTimer == NULL)
+	{
+		m_toolBarTimer = new QTimer(this);
+		m_toolBarTimer->setInterval(250);
+		connect(m_toolBarTimer, SIGNAL(timeout()), this, SLOT(onToolBarTick()));
+		m_toolBarTimer->start();
+	}
+	return true;
+}
+
+void WBQtChromeController::setStatusText(const QString &text)
+{
+	if (m_statusLabel != NULL)
+	{
+		m_statusLabel->setText(text);
+	}
 }
 
 bool WBQtChromeController::eventFilter(QObject *obj, QEvent *event)
@@ -405,7 +466,14 @@ void WBQtChromeController::onActionTriggered()
 	}
 	if (id == WBQT_ID_VIEW_STATUS_BAR)
 	{
-		WBQtChrome_ToggleMfcBar(1);
+		if (m_statusRow != NULL)
+		{
+			m_statusRow->setVisible(!m_statusRow->isVisible());
+		}
+		else
+		{
+			WBQtChrome_ToggleMfcBar(1);
+		}
 		return;
 	}
 	// Same delivery as a native menu: a posted WM_COMMAND dispatched by the frame after
@@ -511,7 +579,8 @@ void WBQtChromeController::refreshMenuState(QMenu *menu)
 		if (id == WBQT_ID_VIEW_STATUS_BAR)
 		{
 			action->setCheckable(true);
-			action->setChecked(WBQtChrome_IsMfcBarVisible(1) != 0);
+			action->setChecked((m_statusRow != NULL) ? m_statusRow->isVisible()
+				: (WBQtChrome_IsMfcBarVisible(1) != 0));
 			continue;
 		}
 		if (id >= WBQT_ID_FILE_MRU_FIRST && id <= WBQT_ID_FILE_MRU_LAST)
@@ -610,4 +679,19 @@ extern "C" int WBQtChrome_InstallToolBar(void)
 {
 	WBQtChromeController *chrome = WBQtChromeController::instance();
 	return (chrome != NULL && chrome->installToolBar()) ? 1 : 0;
+}
+
+extern "C" int WBQtChrome_InstallStatusBar(void)
+{
+	WBQtChromeController *chrome = WBQtChromeController::instance();
+	return (chrome != NULL && chrome->installStatusBar()) ? 1 : 0;
+}
+
+extern "C" void WBQtChrome_SetStatusText(const char *text)
+{
+	WBQtChromeController *chrome = WBQtChromeController::instance();
+	if (chrome != NULL)
+	{
+		chrome->setStatusText(QString::fromLocal8Bit((text != NULL) ? text : ""));
+	}
 }

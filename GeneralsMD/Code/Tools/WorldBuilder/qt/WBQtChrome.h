@@ -11,6 +11,7 @@
 
 class QAction;
 class QEvent;
+class QLabel;
 class QMenu;
 class QMenuBar;
 class QTimer;
@@ -30,6 +31,11 @@ public:
 	bool activateMenuByMnemonic(int letter);
 
 	bool installToolBar();
+	bool installStatusBar();
+
+	// The WM_SETMESSAGESTRING push target: every frame status message (incl. the
+	// per-mouse-move coordinate readout) lands here with zero polling.
+	void setStatusText(const QString &text);
 
 protected:
 	bool eventFilter(QObject *obj, QEvent *event);
@@ -61,7 +67,12 @@ private:
 	QAction *m_mruPlaceholder;	// the resource's grayed "Recent File" item
 	QList<QAction *> m_mruActions;
 	QToolBar *m_toolBar;		// Tier 4b; NULL until installToolBar
-	QTimer *m_toolBarTimer;		// sweeps the buttons' enabled/checked state
+	QTimer *m_toolBarTimer;		// sweeps button states + the key-lock indicators
+	QWidget *m_statusRow;		// Tier 4c; NULL until installStatusBar
+	QLabel *m_statusLabel;
+	QLabel *m_capsLabel;
+	QLabel *m_numLabel;
+	QLabel *m_scrlLabel;
 };
 
 #endif // WB_QT_CHROME_H

@@ -555,6 +555,12 @@ BOOL CWorldBuilderApp::InitInstance()
 				{
 					WBQtChrome_SetMfcBarVisible(0, 0);
 				}
+				// Tier 4c: the Qt status row replaces the (hidden but still written) MFC
+				// status bar; messages arrive via the WM_SETMESSAGESTRING mirror.
+				if (WBQtChrome_InstallStatusBar())
+				{
+					WBQtChrome_SetMfcBarVisible(1, 0);
+				}
 			}
 			else
 			{

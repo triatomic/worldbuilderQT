@@ -121,6 +121,9 @@ public:
 	// Tier 4a: once the Qt menu bar is installed, keep CFrameWnd from re-attaching
 	// the detached MFC menu. Defined in src/WBQtChromeBridge.cpp.
 	virtual void OnUpdateFrameMenu(HMENU hMenuAlt);
+	// Tier 4c: mirror every SetMessageText into the Qt status row (push, no polling).
+	// Defined in src/WBQtChromeBridge.cpp.
+	afx_msg LRESULT OnSetMessageString(WPARAM wParam, LPARAM lParam);
 #endif
 
 protected:  // control bar embedded members

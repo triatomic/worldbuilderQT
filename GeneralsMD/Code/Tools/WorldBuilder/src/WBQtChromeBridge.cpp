@@ -31,6 +31,35 @@ void CMainFrame::OnUpdateFrameMenu(HMENU hMenuAlt)
 }
 
 //----------------------------------------------------------------------------------------
+// CMainFrame::OnSetMessageString -- declared (guarded) in MainFrm.h, mapped via
+// ON_MESSAGE(WM_SETMESSAGESTRING). Every CFrameWnd::SetMessageText writer (autosave,
+// ruler, Wave Editor, the per-mouse-move readout in wbview.cpp) funnels through this
+// message; mirror the resolved text to the Qt status row, then let the base handler keep
+// the hidden MFC status bar canonical.
+//----------------------------------------------------------------------------------------
+LRESULT CMainFrame::OnSetMessageString(WPARAM wParam, LPARAM lParam)
+{
+	if (lParam != 0)
+	{
+		WBQtChrome_SetStatusText(reinterpret_cast<LPCTSTR>(lParam));
+	}
+	else if (wParam != 0)
+	{
+		// The resource-ID form (MFC idle sends AFX_IDS_IDLEMESSAGE == "Ready").
+		CString text;
+		if (text.LoadString((UINT)wParam))
+		{
+			WBQtChrome_SetStatusText((LPCTSTR)text);
+		}
+	}
+	else
+	{
+		WBQtChrome_SetStatusText("");
+	}
+	return CFrameWnd::OnSetMessageString(wParam, lParam);
+}
+
+//----------------------------------------------------------------------------------------
 // CWorldBuilderApp MRU accessors -- declared (guarded) in WorldBuilder.h.
 // m_pRecentFileList is protected in CWinApp, so the bridge reads it through these.
 //----------------------------------------------------------------------------------------

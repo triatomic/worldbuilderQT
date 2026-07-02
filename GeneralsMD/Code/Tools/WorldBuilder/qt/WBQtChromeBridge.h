@@ -35,6 +35,14 @@ int WBQtChrome_ActivateMenu(int letter);
 // (the caller then hides the MFC toolbar).
 int WBQtChrome_InstallToolBar(void);
 
+// Tier 4c: build the Qt status row (message + CAP/NUM/SCRL) at the bottom of the chrome
+// column. Returns 1 on success (the caller then hides the MFC status bar).
+int WBQtChrome_InstallStatusBar(void);
+
+// Tier 4c: the push target for CMainFrame's WM_SETMESSAGESTRING override -- every frame
+// status message lands in the Qt row with zero polling.
+void WBQtChrome_SetStatusText(const char *text);
+
 // ============ Qt -> MFC (implemented in src/WBQtChromeBridge.cpp) ============
 
 // Command enable/check state == CCmdUI::DoUpdate on the frame's routing (frame -> active

@@ -37,6 +37,7 @@
 
 #include "ScriptDialog.h"
 #ifdef RTS_HAS_QT
+#include <afxpriv.h>	// WM_SETMESSAGESTRING
 #include "qt/WBQtBridge.h"
 #include "qt/WBQtPanelBridge.h"
 #include "qt/panels/WBQtGlobalLightBridge.h"
@@ -68,6 +69,7 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWnd)
 #ifdef RTS_HAS_QT
 	ON_COMMAND_RANGE(ID_QTTHEME_SYSTEM, ID_QTTHEME_LIGHT, OnQtTheme)
 	ON_UPDATE_COMMAND_UI_RANGE(ID_QTTHEME_SYSTEM, ID_QTTHEME_LIGHT, OnUpdateQtTheme)
+	ON_MESSAGE(WM_SETMESSAGESTRING, OnSetMessageString)
 #endif
 END_MESSAGE_MAP()
 
