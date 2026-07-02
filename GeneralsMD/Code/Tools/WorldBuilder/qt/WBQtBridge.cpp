@@ -116,6 +116,21 @@ void *WBQt_HostViewport(void *frameHwnd, void *viewHwnd)
 	g_wbViewportPane = new WbViewportHost(g_wbViewportHost);
 	box->addWidget(g_wbViewportPane);
 
+	// The MFC view carries the default CView WS_EX_CLIENTEDGE sunken border; Windows
+	// draws its highlight edge (right/bottom) in a light colour, which reads as an ugly
+	// white line around the viewport against the dark theme. The Qt chrome column does
+	// the visual framing now, so strip the edge from the hosted view.
+	{
+		HWND view = reinterpret_cast<HWND>(viewHwnd);
+		LONG exStyle = ::GetWindowLong(view, GWL_EXSTYLE);
+		if (exStyle & WS_EX_CLIENTEDGE)
+		{
+			::SetWindowLong(view, GWL_EXSTYLE, exStyle & ~WS_EX_CLIENTEDGE);
+			::SetWindowPos(view, NULL, 0, 0, 0, 0,
+				SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+		}
+	}
+
 	// setWindow adopts the view as a child (SetParent), own_hwnd == false so ~QWinHost
 	// never DestroyWindow's it -- the view stays MFC-owned.
 	g_wbViewportPane->setWindow(reinterpret_cast<HWND>(viewHwnd));
