@@ -297,6 +297,12 @@ private:
 	Bool										m_showFullWireframe;	///< true => render whole scene in LINE mode (no solid pass)
 	Bool										m_showSelectionOverlay;	///< true => tint selected objects with a highlight color
 	Bool										m_ww3dInited;
+#ifdef RTS_HAS_QT
+	// Set when a device reset (WW3D::Set_Device_Resolution) FAILED: Reset_Device releases
+	// every DX8 resource before attempting the reset and does NOT re-acquire them on
+	// failure, so rendering would deref freed buffers. redraw() retries while this is set.
+	Bool										m_deviceResetFailed;
+#endif
 	Bool										m_needToLoadRoads;
 	LightClass							*m_globalLight[MAX_GLOBAL_LIGHTS];
 	RenderObjClass						*m_lightFeedbackMesh[MAX_GLOBAL_LIGHTS];

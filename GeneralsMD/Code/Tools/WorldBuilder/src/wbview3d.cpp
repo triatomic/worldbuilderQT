@@ -662,6 +662,9 @@ WbView3d::WbView3d() :
 	// a _DEBUG build leaves it as 0xcdcdcdcd and the first createLabelFont() call
 	// dereferences that bogus pointer -> access violation.
 	m3DFont = NULL;
+#ifdef RTS_HAS_QT
+	m_deviceResetFailed = false;
+#endif
 	m_actualWinSize.x = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "Width", THREE_D_VIEW_WIDTH);
 	m_actualWinSize.y = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "Height", THREE_D_VIEW_HEIGHT);
 
@@ -847,7 +850,15 @@ void WbView3d::reset3dEngineDisplaySize(Int width, Int height)
 	m_actualWinSize.x = width;
 	m_actualWinSize.y = height;
 	if (m_ww3dInited) {
+#ifdef RTS_HAS_QT
+		// The reset can fail (device lost / Reset error) AFTER Reset_Device has already
+		// released every DX8 resource, and it does NOT re-acquire them on failure.
+		// Remember the failure so redraw() retries instead of rendering freed buffers.
+		m_deviceResetFailed =
+			(WW3D::Set_Device_Resolution(m_actualWinSize.x, m_actualWinSize.y, true) != WW3D_ERROR_OK);
+#else
 		WW3D::Set_Device_Resolution(m_actualWinSize.x, m_actualWinSize.y, true);
+#endif
 	}
 
 	// Update camera FOV instead of stretching -- Preserves ratio
@@ -2778,6 +2789,19 @@ void WbView3d::redraw(void)
 	if (!m_ww3dInited) {
 		return;
 	}
+#ifdef RTS_HAS_QT
+	if (m_deviceResetFailed) {
+		// A failed device reset released all DX8 resources without re-acquiring them
+		// (Reset_Device returns before ReAcquireResources on TestCooperativeLevel /
+		// Reset failure), so rendering would deref freed buffers (e.g. the heightmap's
+		// m_vertexBufferTiles in On_Frame_Update). Retry the reset; skip the frame
+		// until the device comes back.
+		if (WW3D::Set_Device_Resolution(m_actualWinSize.x, m_actualWinSize.y, true) != WW3D_ERROR_OK) {
+			return;
+		}
+		m_deviceResetFailed = false;
+	}
+#endif
 	
 	setupCamera();
 
