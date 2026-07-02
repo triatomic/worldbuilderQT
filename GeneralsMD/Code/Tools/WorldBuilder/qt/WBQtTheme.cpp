@@ -197,9 +197,17 @@ namespace
 						w->setProperty("wbShowFadePending", true);
 						w->setWindowOpacity(0.0);
 						QWidget *shown = w;
-						QTimer::singleShot(250, shown, [shown]() {
-							shown->setProperty("wbShowFadePending", QVariant());
-							shown->setWindowOpacity(1.0);
+						// Generous fallback: the real restore is the first-Paint handler
+						// below. This only fires if a shown window somehow never paints;
+						// it must comfortably exceed the worst first-populate stall (the
+						// Object Properties sound combo), or it un-hides a white window
+						// mid-load.
+						QTimer::singleShot(4000, shown, [shown]() {
+							if (shown->property("wbShowFadePending").toBool())
+							{
+								shown->setProperty("wbShowFadePending", QVariant());
+								shown->setWindowOpacity(1.0);
+							}
 						});
 					}
 				}

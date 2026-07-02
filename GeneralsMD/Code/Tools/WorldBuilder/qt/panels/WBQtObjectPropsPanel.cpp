@@ -559,18 +559,25 @@ void WBQtObjectPropsPanel::rebuildSoundList()
 
 	if (!m_soundListBuilt)
 	{
-		m_sound->clear();
+		// Build the whole item list first, then addItems() ONCE. Thousands of individual
+		// addItem() calls each recompute the combo's size hint / layout -- that per-item
+		// churn blocked the UI thread long enough on first open to show a white panel
+		// before the first paint. A single addItems() adds them in one shot.
+		QStringList items;
+		items.reserve(count);
 		for (int i = 0; i < count; ++i)
 		{
 			if (WBQtObjectProps_GetSoundItem(i, buf, cap))
 			{
-				m_sound->addItem(QString::fromLatin1(buf));
+				items.append(QString::fromLatin1(buf));
 			}
 			else
 			{
-				m_sound->addItem(QString());
+				items.append(QString());
 			}
 		}
+		m_sound->clear();
+		m_sound->addItems(items);
 		m_soundListBuilt = true;
 	}
 	else if (m_sound->count() > 0 && WBQtObjectProps_GetSoundItem(0, buf, cap))
