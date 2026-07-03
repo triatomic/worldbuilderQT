@@ -22,28 +22,47 @@
 #include <QApplication>
 #include <QResizeEvent>
 #include <QScreen>
+#include <QTimer>
 #include <QVBoxLayout>
 
-// A QWinHost that reports its pixel size back to the MFC side on every resize, so the
-// D3D device tracks the host. No Q_OBJECT needed -- it only overrides a virtual.
+// A QWinHost that reports its pixel size back to the MFC side so the D3D device tracks the
+// host. The device reset is COALESCED through a short single-shot timer: a theme switch or a
+// live drag-resize emits a burst of resizeEvents as the layout settles, and doing a full
+// (expensive, on a heavy map) DX8 device reset synchronously in each one storms -- if one
+// reset fails mid-cascade the failure loop never converges and the viewport freezes. The
+// timer collapses the burst to a single reset once the size stops changing.
 class WbViewportHost : public QWinHost
 {
+	Q_OBJECT
 public:
 	explicit WbViewportHost(QWidget *parent)
-		: QWinHost(parent)
+		: QWinHost(parent),
+		m_resizeTimer(new QTimer(this))
 	{
+		m_resizeTimer->setSingleShot(true);
+		m_resizeTimer->setInterval(60);
+		connect(m_resizeTimer, SIGNAL(timeout()), this, SLOT(applyDeviceSize()));
 	}
 
 protected:
 	virtual void resizeEvent(QResizeEvent *e)
 	{
 		QWinHost::resizeEvent(e);		// QWinHost sizes the hosted view to fill us
+		m_resizeTimer->start();			// (re)arm; the last event in a burst wins
+	}
+
+private slots:
+	void applyDeviceSize()
+	{
 		RECT rc;
 		if (::GetClientRect(reinterpret_cast<HWND>(winId()), &rc))
 		{
 			WBQt_OnViewportHostResized(rc.right - rc.left, rc.bottom - rc.top);
 		}
 	}
+
+private:
+	QTimer *m_resizeTimer;
 };
 
 // The Phase 2 host sandwich, owned for the process life:
@@ -428,3 +447,7 @@ void WBQt_UnhostViewport(void *frameHwnd, void *viewHwnd)
 	g_wbViewportHost = NULL;
 	g_wbViewportPane = NULL;
 }
+
+// Q_OBJECT for WbViewportHost (defined in this TU) -- AUTOMOC generates this from the
+// Q_OBJECT above; the include pulls in the moc output.
+#include "WBQtBridge.moc"
