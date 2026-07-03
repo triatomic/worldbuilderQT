@@ -577,6 +577,14 @@ BOOL CWorldBuilderApp::InitInstance()
 					}
 				}
 				pFrame->m_qtViewportHost = (HWND)WBQt_HostViewport(pFrame->GetSafeHwnd(), p3d->GetSafeHwnd());
+				// Seed the Qt title from the frame's composed one: the doc opened during
+				// ProcessShellCommand, before the Qt window existed, so the
+				// OnUpdateFrameTitle mirror had nothing to push into yet.
+				{
+					CString frameTitle;
+					pFrame->GetWindowText(frameTitle);
+					WBQt_SetMainWindowTitle((LPCTSTR)frameTitle);
+				}
 				WBQt_ShowMainWindow();
 				inverted = true;
 			}
@@ -1492,6 +1500,28 @@ void CWorldBuilderApp::OnAppAbout()
 
 /////////////////////////////////////////////////////////////////////////////
 // CWorldBuilderApp message handlers
+
+#ifdef RTS_HAS_QT
+LRESULT CWorldBuilderApp::ProcessWndProcException(CException *e, const MSG *pMsg)
+{
+	char name[128];
+	name[0] = 0;
+	if (e != NULL && e->GetRuntimeClass() != NULL && e->GetRuntimeClass()->m_lpszClassName != NULL)
+	{
+		strncpy(name, e->GetRuntimeClass()->m_lpszClassName, sizeof(name) - 1);
+		name[sizeof(name) - 1] = 0;
+	}
+	char desc[256];
+	desc[0] = 0;
+	if (e != NULL)
+	{
+		e->GetErrorMessage(desc, sizeof(desc));
+	}
+	DEBUG_LOG(("ProcessWndProcException: '%s' (%s) during msg 0x%x wParam=0x%x\n",
+		name, desc, pMsg ? pMsg->message : 0, pMsg ? (unsigned)pMsg->wParam : 0));
+	return CWinApp::ProcessWndProcException(e, pMsg);
+}
+#endif
 
 int CWorldBuilderApp::ExitInstance()
 {

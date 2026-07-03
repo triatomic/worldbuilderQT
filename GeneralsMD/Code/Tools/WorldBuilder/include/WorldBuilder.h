@@ -160,6 +160,9 @@ public:
 	// CWinApp). Defined in src/WBQtChromeBridge.cpp.
 	int qtGetMruCount(void);
 	void qtGetMruPath(int i, CString &out);
+	// Stage 1 diagnostics: log the unhandled MFC exceptions that surface as the
+	// "Internal application error." box before the base handler shows it.
+	virtual LRESULT ProcessWndProcException(CException *e, const MSG *pMsg);
 #endif
 
 	/// Set the brush tool as the active tool.

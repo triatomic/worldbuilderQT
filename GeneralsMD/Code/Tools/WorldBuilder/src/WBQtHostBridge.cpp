@@ -24,6 +24,25 @@ extern "C" void WBQt_OnViewportHostResized(int width, int height)
 		return;
 	}
 
+	// HARD GUARD: a windowed D3D8 backbuffer larger than the display mode can never
+	// Present (D3DERR_DEVICELOST every frame -> an endless Reset_Device loop that
+	// reads as a frozen white viewport, and a crash if WB is closed mid-loop). The
+	// MFC world could not hit this (the frame's outer rect was WM-clamped, so the
+	// view client always fit); the Qt window's client CAN exceed the screen, so cap
+	// the device size here no matter what size the pane reports.
+	{
+		int maxWidth = ::GetSystemMetrics(SM_CXSCREEN);
+		int maxHeight = ::GetSystemMetrics(SM_CYSCREEN);
+		if (maxWidth > 0 && width > maxWidth)
+		{
+			width = maxWidth;
+		}
+		if (maxHeight > 0 && height > maxHeight)
+		{
+			height = maxHeight;
+		}
+	}
+
 	WbView3d *p3d = CWorldBuilderDoc::GetActive3DView();
 	if (p3d != NULL)
 	{

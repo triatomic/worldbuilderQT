@@ -130,6 +130,10 @@ public:
 	// Tier 5: follow a live Windows light/dark switch while the Qt theme mode is System.
 	// Defined in src/WBQtHostBridge.cpp.
 	afx_msg void OnSettingChange(UINT uFlags, LPCTSTR lpszSection);
+	// Stage 1: MFC's close path needs the 3D view back under the frame (CDocument::
+	// OnCloseDocument ENSURE_VALIDs the view's GetParentFrame(), which is NULL while
+	// the view lives under the Qt window) -- unhost first, re-host if canceled.
+	afx_msg void OnClose();
 #endif
 
 protected:  // control bar embedded members

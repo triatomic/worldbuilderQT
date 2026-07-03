@@ -71,6 +71,7 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWnd)
 	ON_UPDATE_COMMAND_UI_RANGE(ID_QTTHEME_SYSTEM, ID_QTTHEME_LIGHT, OnUpdateQtTheme)
 	ON_MESSAGE(WM_SETMESSAGESTRING, OnSetMessageString)
 	ON_WM_SETTINGCHANGE()
+	ON_WM_CLOSE()
 #endif
 END_MESSAGE_MAP()
 
@@ -813,6 +814,37 @@ void CMainFrame::OnUpdateViewBrushfeedback(CCmdUI* pCmdUI)
 {
 	pCmdUI->SetCheck(DrawObject::isFeedbackEnabled()?1:0);
 }
+
+#ifdef RTS_HAS_QT
+void CMainFrame::OnClose()
+{
+	// Stage 1 inversion: the MFC close path walks the 3D view's GetParentFrame()
+	// (CDocument::OnCloseDocument ENSURE_VALIDs it before destroying the frame), but
+	// while the view is hosted under the Qt window that walk returns NULL and the
+	// whole close dies as an "Internal application error.". Reparent the view back
+	// under the frame BEFORE the close runs; if the user cancels the save prompt,
+	// host it again.
+	if (WBQt_InversionActive() && m_qtViewportHost != NULL)
+	{
+		WbView3d *p3d = CWorldBuilderDoc::GetActive3DView();
+		WBQt_UnhostViewport(GetSafeHwnd(), p3d ? p3d->GetSafeHwnd() : NULL);
+		m_qtViewportHost = NULL;
+		CFrameWnd::OnClose();
+		if (::IsWindow(GetSafeHwnd()))
+		{
+			// Close canceled -- put the viewport back into the Qt window.
+			p3d = CWorldBuilderDoc::GetActive3DView();
+			if (p3d != NULL)
+			{
+				m_qtViewportHost = (HWND)WBQt_HostViewport(GetSafeHwnd(), p3d->GetSafeHwnd());
+				WBQt_ShowMainWindow();
+			}
+		}
+		return;
+	}
+	CFrameWnd::OnClose();
+}
+#endif
 
 void CMainFrame::OnDestroy() 
 {

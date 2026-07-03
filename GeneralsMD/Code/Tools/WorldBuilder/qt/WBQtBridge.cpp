@@ -21,6 +21,7 @@
 
 #include <QApplication>
 #include <QResizeEvent>
+#include <QScreen>
 #include <QVBoxLayout>
 
 // A QWinHost that reports its pixel size back to the MFC side on every resize, so the
@@ -67,6 +68,50 @@ void WBQt_DisableInversion(void)
 	g_inversionActive = false;
 }
 
+// The window's CLIENT area (and with it the viewport pane / D3D backbuffer) must never
+// exceed the display mode: a windowed D3D8 backbuffer larger than the screen cannot
+// Present (D3DERR_DEVICELOST every frame -> an endless reset loop that reads as a frozen
+// white viewport). The stored [MainFrame] Width/Height historically sized the MFC frame's
+// OUTER rect (always screen-clamped by the WM), so applied as a Qt client size they can
+// be oversized -- clamp against the available screen area.
+static void wbClampToAvailableScreen(int &x, int &y, int &w, int &h)
+{
+	QScreen *screen = QApplication::primaryScreen();
+	if (screen == NULL)
+	{
+		return;
+	}
+	QRect avail = screen->availableGeometry();
+	// Approximate frame decorations (move() positions the frame corner while resize()
+	// sizes the client) so the WHOLE window rect ends up on-screen, not just the client.
+	const int frameX = 16;		// left+right resize borders
+	const int frameY = 39;		// caption + top/bottom borders
+	if (w > avail.width() - frameX)
+	{
+		w = avail.width() - frameX;
+	}
+	if (h > avail.height() - frameY)
+	{
+		h = avail.height() - frameY;
+	}
+	if (x + w + frameX > avail.right())
+	{
+		x = avail.right() - w - frameX;
+	}
+	if (y + h + frameY > avail.bottom())
+	{
+		y = avail.bottom() - h - frameY;
+	}
+	if (x < avail.left())
+	{
+		x = avail.left();
+	}
+	if (y < avail.top())
+	{
+		y = avail.top();
+	}
+}
+
 int WBQt_CreateMainWindow(void *frameHwnd, int x, int y, int w, int h)
 {
 	if (g_wbMainWindow != NULL)
@@ -81,6 +126,7 @@ int WBQt_CreateMainWindow(void *frameHwnd, int x, int y, int w, int h)
 	g_wbMainWindow = new WBQtMainWindow(frameHwnd);
 	if (w > 0 && h > 0)
 	{
+		wbClampToAvailableScreen(x, y, w, h);
 		g_wbMainWindow->move(x, y);
 		g_wbMainWindow->resize(w, h);
 	}
@@ -114,6 +160,11 @@ void WBQt_ResizeMainWindow(int width, int height)
 {
 	if (g_wbMainWindow != NULL && width > 0 && height > 0 && !g_wbMainWindow->isFullScreen())
 	{
+		// Same oversized-backbuffer guard as at creation (a 2560x1440 resolution pick on
+		// a 2560x1400 desktop would otherwise wedge the device).
+		int x = g_wbMainWindow->frameGeometry().left();
+		int y = g_wbMainWindow->frameGeometry().top();
+		wbClampToAvailableScreen(x, y, width, height);
 		g_wbMainWindow->showNormal();		// a maximized window must leave that state first
 		g_wbMainWindow->resize(width, height);
 	}
