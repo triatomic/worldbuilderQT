@@ -168,6 +168,10 @@ public:
 	// viewport-focused keys (the view lives under the Qt window, so MFC's PreTranslate
 	// tree-walk never reaches the frame); this override is the replacement.
 	virtual BOOL PreTranslateMessage(MSG *pMsg);
+	// Stage 1 phase 3 (modality): route AfxMessageBox traffic through a Qt message box
+	// parented to the Qt main window, so it centers over the app and is fenced by Qt
+	// modality (an un-parented native box is not).
+	virtual int DoMessageBox(LPCTSTR lpszPrompt, UINT nType, UINT nIDPrompt);
 #endif
 
 	/// Set the brush tool as the active tool.

@@ -147,6 +147,13 @@ void *WBQt_MainWindowHwnd(void)
 		? reinterpret_cast<void *>(g_wbMainWindow->winId()) : NULL;
 }
 
+// The Qt main window as a QWidget* (for parenting Qt dialogs / message boxes). NULL when
+// not inverted. Not in the C facade -- callers in the Qt lib declare it themselves.
+QWidget *WBQt_MainWindowWidget(void)
+{
+	return g_wbMainWindow;
+}
+
 void WBQt_ActivateMainWindow(void)
 {
 	if (g_wbMainWindow != NULL && g_wbMainWindow->isVisible())

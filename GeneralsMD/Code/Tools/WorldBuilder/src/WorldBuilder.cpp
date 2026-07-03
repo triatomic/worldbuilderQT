@@ -97,6 +97,7 @@
 #include "qt/WBQtBridge.h"		// Phase 1 MFC -> Qt coexistence (experimental; opaque facade, no Qt headers leak here)
 #include "qt/WBQtChromeBridge.h"
 #include "qt/WBQtShortcuts.h"
+#include "qt/WBQtMessageBox.h"
 #include "qt/panels/WBQtEntityFinderBridge.h"
 #include "qt/WBQtToast.h"
 #endif
@@ -1534,6 +1535,17 @@ BOOL CWorldBuilderApp::PreTranslateMessage(MSG *pMsg)
 		return TRUE;
 	}
 	return CWinApp::PreTranslateMessage(pMsg);
+}
+
+int CWorldBuilderApp::DoMessageBox(LPCTSTR lpszPrompt, UINT nType, UINT nIDPrompt)
+{
+	// Parented Qt box when the main window is up; else the MFC default (returns 0).
+	int rc = WBQtMessageBox_Show(lpszPrompt, NULL, nType);
+	if (rc != 0)
+	{
+		return rc;
+	}
+	return CWinApp::DoMessageBox(lpszPrompt, nType, nIDPrompt);
 }
 #endif
 
