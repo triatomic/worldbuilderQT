@@ -268,12 +268,19 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	if (m_optionsPanelWidth < frameRect.Width()) m_optionsPanelWidth = frameRect.Width();
 	if (m_optionsPanelHeight < frameRect.Height()) m_optionsPanelHeight = frameRect.Height();
 
+#ifdef RTS_HAS_QT
+	// De-bridged Object Properties (qt-debridge): the panel window is never Create()d --
+	// the object is only the model container behind the Qt panel (see the qtM* statics
+	// in WBQtObjectPropsBridge.cpp). makeMain still registers TheMapObjectProps.
+	m_mapObjectProps.makeMain();
+#else
 	m_mapObjectProps.Create(IDD_MAPOBJECT_PROPS, this);
 	m_mapObjectProps.makeMain();
 	m_mapObjectProps.SetWindowPos(NULL, frameRect.left, frameRect.top, 0, 0, SWP_NOZORDER|SWP_NOSIZE);
 	m_mapObjectProps.GetWindowRect(&frameRect);
 	if (m_optionsPanelWidth < frameRect.Width()) m_optionsPanelWidth = frameRect.Width();
 	if (m_optionsPanelHeight < frameRect.Height()) m_optionsPanelHeight = frameRect.Height();
+#endif
 
 	m_roadOptions.Create(IDD_ROAD_OPTIONS, this);
 	m_roadOptions.SetWindowPos(NULL, frameRect.left, frameRect.top, 0, 0, SWP_NOZORDER|SWP_NOSIZE);

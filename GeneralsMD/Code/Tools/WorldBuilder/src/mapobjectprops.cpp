@@ -1697,6 +1697,16 @@ void MapObjectProps::updateTheUI(void)
 /// Move *all* data from object to dialog controls
 void MapObjectProps::updateTheUI(MapObject *pMapObj)
 {
+#ifdef RTS_HAS_QT
+	// De-bridged (qt-debridge): windowless -> no controls to seed. The void overload
+	// above still walks the selection (m_dictSource/m_dictToEdit) and pushes the Qt
+	// refresh; every value the Qt panel shows derives from the dict via the qtM*
+	// statics in WBQtObjectPropsBridge.cpp.
+	if (GetSafeHwnd() == NULL)
+	{
+		return;
+	}
+#endif
   _DictToTeam();
   // _DictToScript();
   _DictToWeather();
