@@ -281,6 +281,31 @@ public:
 	static int  qtGetUpgradeSelected(int i);
 	static void qtSetUpgradeSelected(int i, int on);
 	static void qtCommitUpgrades(void);
+
+	// De-bridged (windowless) mode -- branch qt-debridge. The qtM* variants replicate the
+	// _XToDict handlers' model cores with the VALUE passed in instead of read back from a
+	// hidden control, so they work when the panel window is never Create()d. Defined in
+	// src/WBQtObjectPropsBridge.cpp (member statics may be defined in any TU); this
+	// class's .cpp stays additions-only.
+	static int  qtMGetFlag(int which);
+	static int  qtMGetPosition(char *out, int cap);
+	static double qtMGetZOffset(void);
+	static double qtMGetAngle(void);
+	static void qtMSetName(const char *name);
+	static void qtMSetTeam(int i);
+	static void qtMSetFlag(int which, int state);
+	static void qtMSetAggressiveness(int value);
+	static void qtMSetVeterancy(int index);
+	static void qtMSetHealthPercent(int value);
+	static void qtMSetMaxHPs(int hps);
+	static void qtMSetVisionDistance(int dist);
+	static void qtMSetShroudClearingDistance(int dist);
+	static void qtMSetStoppingDistance(double dist);
+	static void qtMSetWeather(int index);
+	static void qtMSetTime(int index);
+	static void qtMSetPosition(const char *text);
+	static void qtMSetZOffset(double z);
+	static void qtMSetAngle(double deg);
 #endif
   
 private:
