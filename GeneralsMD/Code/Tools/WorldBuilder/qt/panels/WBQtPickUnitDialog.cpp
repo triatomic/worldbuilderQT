@@ -6,6 +6,9 @@
 #include "WBQtPreviewImage.h"
 #include "WBQtTreeStyle.h"
 
+// Stage 1 phase 3: modal-dialog parent (active modal if nested, else main window). WBQtBridge.cpp.
+QWidget *WBQt_DialogParent(void);
+
 #include <QApplication>
 #include <QHBoxLayout>
 #include <QHash>
@@ -286,23 +289,14 @@ void WBQtPickUnitDialog::moveEvent(QMoveEvent *event)
 
 namespace
 {
-	// Nesting-safe modal run: the pick dialog can open on top of the Qt team sheet (whose own
-	// run entry already disabled the frame), so only re-enable what this level disabled.
-	int runPickModal(QDialog &dlg, void *frameHwnd)
+	// Stage 1 phase 3: nesting-safe by parent (the ctor already parents to the active modal --
+	// the team sheet's "..." flow -- else the caller passes NULL and Qt picks the app-modal
+	// stack). Qt ApplicationModal fences the viewport via QWinHost WindowBlocked; the old
+	// EnableWindow(frame) discipline is gone.
+	int runPickModal(QDialog &dlg, void * /*frameHwnd*/)
 	{
 		dlg.setWindowModality(Qt::ApplicationModal);
-		HWND frame = reinterpret_cast<HWND>(frameHwnd);
-		bool frameWasEnabled = (frame != NULL && ::IsWindowEnabled(frame));
-		if (frameWasEnabled)
-		{
-			::EnableWindow(frame, FALSE);
-		}
-		int rc = dlg.exec();
-		if (frameWasEnabled)
-		{
-			::EnableWindow(frame, TRUE);
-		}
-		return rc;
+		return dlg.exec();
 	}
 
 	void copyName(const QString &name, char *nameOut, int nameCap)
@@ -330,8 +324,8 @@ extern "C" int WBQtPickUnit_Run(void *frameHwnd, const int *allowable, int allow
 		return -1;	// Qt not up yet -- the caller falls back to the MFC dialog
 	}
 	WBQtPickUnitData_Build(allowable, allowCount, factionOnly);
-	// Parent to the active Qt modal (the team sheet's "..." flow) so stacking/focus nest.
-	WBQtPickUnitDialog dlg(false, QString(), QApplication::activeModalWidget());
+	// Parent to the active Qt modal (the team sheet's "..." flow) else the main window.
+	WBQtPickUnitDialog dlg(false, QString(), WBQt_DialogParent());
 	int rc = runPickModal(dlg, frameHwnd);
 	copyName(dlg.pickedName(), nameOut, nameCap);
 	return (rc == QDialog::Accepted) ? 1 : 0;
@@ -346,7 +340,7 @@ extern "C" int WBQtReplaceUnit_Run(void *frameHwnd, const char *missingName, con
 	}
 	WBQtPickUnitData_Build(allowable, allowCount, factionOnly);
 	WBQtPickUnitDialog dlg(true, QString::fromLocal8Bit(missingName ? missingName : ""),
-		QApplication::activeModalWidget());
+		WBQt_DialogParent());
 	int rc = runPickModal(dlg, frameHwnd);
 	copyName(dlg.pickedName(), nameOut, nameCap);
 	if (rc == 2)

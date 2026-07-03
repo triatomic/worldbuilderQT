@@ -7,6 +7,9 @@
 #include "WBQtTerrainMaterialBridge.h"
 #include "WBQtTreeStyle.h"
 
+// Stage 1 phase 3: modal-dialog parent (active modal if nested, else main window). WBQtBridge.cpp.
+QWidget *WBQt_DialogParent(void);
+
 #include <QApplication>
 #include <QHBoxLayout>
 #include <QHash>
@@ -195,7 +198,7 @@ void WBQtTerrainModalDialog::refreshPreview(int texClass)
 
 // ===================== the modal entry point =====================
 
-extern "C" int WBQtTerrainModal_Run(void *frameHwnd, const char *missingPath, void *heightMapEdit,
+extern "C" int WBQtTerrainModal_Run(void * /*frameHwnd*/, const char *missingPath, void *heightMapEdit,
 	int *pickedOut)
 {
 	if (pickedOut != NULL)
@@ -207,20 +210,12 @@ extern "C" int WBQtTerrainModal_Run(void *frameHwnd, const char *missingPath, vo
 		return -1;	// map validated before WBQt_Startup -- fall back to the MFC dialog
 	}
 	WBQtTerrainModalData_Build(heightMapEdit);
+	// Stage 1 phase 3: parent to the active modal (nested — this can run during a map-load
+	// flow) else the main window; Qt ApplicationModal fences the viewport.
 	WBQtTerrainModalDialog dlg(QString::fromLocal8Bit(missingPath ? missingPath : ""),
-		QApplication::activeModalWidget());
+		WBQt_DialogParent());
 	dlg.setWindowModality(Qt::ApplicationModal);
-	HWND frame = reinterpret_cast<HWND>(frameHwnd);
-	bool frameWasEnabled = (frame != NULL && ::IsWindowEnabled(frame));
-	if (frameWasEnabled)
-	{
-		::EnableWindow(frame, FALSE);
-	}
 	int rc = dlg.exec();
-	if (frameWasEnabled)
-	{
-		::EnableWindow(frame, TRUE);
-	}
 	if (pickedOut != NULL)
 	{
 		*pickedOut = dlg.pickedIndex();

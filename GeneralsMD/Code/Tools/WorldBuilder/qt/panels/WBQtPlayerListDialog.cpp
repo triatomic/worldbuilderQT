@@ -19,6 +19,9 @@
 
 #include <qt_windows.h>
 
+// Stage 1 phase 3: modal-dialog parent (active modal if nested, else main window). WBQtBridge.cpp.
+QWidget *WBQt_DialogParent(void);
+
 namespace
 {
 	const int kTextCap = 1024;
@@ -460,29 +463,21 @@ void WBQtAddPlayerDialog::accept()
 
 // ===================== the modal entry point =====================
 
-extern "C" int WBQtPlayerList_Run(void *frameHwnd)
+extern "C" int WBQtPlayerList_Run(void * /*frameHwnd*/)
 {
 	WBQtPlayerListData_Open();
-	WBQtPlayerListDialog dlg;
+	// Stage 1 phase 3: parent to the main window + Qt ApplicationModal (fences the viewport).
+	WBQtPlayerListDialog dlg(WBQt_DialogParent());
 	dlg.setWindowModality(Qt::ApplicationModal);
-	HWND frame = reinterpret_cast<HWND>(frameHwnd);
-	if (frame != NULL)
-	{
-		::EnableWindow(frame, FALSE);
-	}
 	int rc = (dlg.exec() == QDialog::Accepted) ? 1 : 0;
 	WBQtPlayerListData_Close(rc);
-	if (frame != NULL)
-	{
-		::EnableWindow(frame, TRUE);
-	}
 	return rc;
 }
 
 // Tier 5b: the standalone Add-Player run for the object-placement auto-add flow
-// (ObjectOptions.cpp). Nesting-safe frame disable -- placement can happen while other
-// windows are up.
-extern "C" int WBQtAddPlayer_Run(void *frameHwnd, const char *onlySide, char *addedOut, int cap)
+// (ObjectOptions.cpp). Nesting-safe -- placement can happen while other windows are up, so
+// the parent is the active modal if one exists, else the main window.
+extern "C" int WBQtAddPlayer_Run(void * /*frameHwnd*/, const char *onlySide, char *addedOut, int cap)
 {
 	if (addedOut != NULL && cap > 0)
 	{
@@ -492,20 +487,10 @@ extern "C" int WBQtAddPlayer_Run(void *frameHwnd, const char *onlySide, char *ad
 	{
 		return -1;	// pre-Qt startup -- the caller falls back to the MFC dialog
 	}
-	WBQtAddPlayerDialog dlg(QApplication::activeModalWidget(),
+	WBQtAddPlayerDialog dlg(WBQt_DialogParent(),
 		QString::fromLocal8Bit((onlySide != NULL) ? onlySide : ""));
 	dlg.setWindowModality(Qt::ApplicationModal);
-	HWND frame = reinterpret_cast<HWND>(frameHwnd);
-	bool frameWasEnabled = (frame != NULL && ::IsWindowEnabled(frame));
-	if (frameWasEnabled)
-	{
-		::EnableWindow(frame, FALSE);
-	}
 	int rc = dlg.exec();
-	if (frameWasEnabled)
-	{
-		::EnableWindow(frame, TRUE);
-	}
 	if (rc != QDialog::Accepted || dlg.addedTemplate().isEmpty())
 	{
 		return 0;

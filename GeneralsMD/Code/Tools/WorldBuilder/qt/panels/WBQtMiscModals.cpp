@@ -5,6 +5,9 @@
 #include "WBQtMiscModalsBridge.h"
 #include "WBQtParamBridge.h"	// subroutine-script enumeration for Building Properties
 
+// Stage 1 phase 3: modal-dialog parent (active modal if nested, else main window). WBQtBridge.cpp.
+QWidget *WBQt_DialogParent(void);
+
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
@@ -566,21 +569,14 @@ void WBQtExportScriptsDialog::accept()
 
 namespace
 {
-	// Run a modal QDialog over the MFC frame (disabled for its lifetime == DoModal), app-modal
-	// so any Qt windows are fenced too.
-	int runModal(QDialog &dlg, void *frameHwnd)
+	// Stage 1 phase 3: parent to the main window (or active modal, if nested) + Qt
+	// ApplicationModal, which fences every Qt window incl. the hosted viewport (QWinHost
+	// WindowBlocked). The old EnableWindow(frame) discipline is gone.
+	int runModal(QDialog &dlg, void * /*frameHwnd*/)
 	{
+		dlg.setParent(WBQt_DialogParent(), dlg.windowFlags());
 		dlg.setWindowModality(Qt::ApplicationModal);
-		HWND frame = reinterpret_cast<HWND>(frameHwnd);
-		if (frame != NULL)
-		{
-			::EnableWindow(frame, FALSE);
-		}
 		int rc = dlg.exec();
-		if (frame != NULL)
-		{
-			::EnableWindow(frame, TRUE);
-		}
 		return (rc == QDialog::Accepted) ? 1 : 0;
 	}
 }

@@ -154,6 +154,21 @@ QWidget *WBQt_MainWindowWidget(void)
 	return g_wbMainWindow;
 }
 
+// The correct parent for a modal Qt dialog: the currently-active modal (so a nested
+// picker centers over and is owned by the dialog that opened it), else the main window.
+// Stage 1 phase 3: replaces the manual EnableWindow(frame) discipline -- an ApplicationModal
+// QDialog parented here fences every Qt window incl. the hosted viewport (via QWinHost
+// WindowBlocked), which the old native-frame disable did for the pre-inversion viewport.
+QWidget *WBQt_DialogParent(void)
+{
+	QWidget *active = QApplication::activeModalWidget();
+	if (active != NULL)
+	{
+		return active;
+	}
+	return g_wbMainWindow;
+}
+
 void WBQt_ActivateMainWindow(void)
 {
 	if (g_wbMainWindow != NULL && g_wbMainWindow->isVisible())

@@ -22,6 +22,9 @@
 
 #include <qt_windows.h>
 
+// Stage 1 phase 3: modal-dialog parent (active modal if nested, else main window). WBQtBridge.cpp.
+QWidget *WBQt_DialogParent(void);
+
 namespace
 {
 	const int kLabelCap = 1024;
@@ -614,38 +617,28 @@ void WBQtScriptEditDialog::onSecondsChanged(int value)
 
 // ===================== the modal entry point =====================
 
-extern "C" int WBQtScriptEdit_Run(void *script, void *frameHwnd)
+extern "C" int WBQtScriptEdit_Run(void *script, void * /*frameHwnd*/)
 {
 	if (script == NULL)
 	{
 		return 0;
 	}
 	// Parent to the Qt Script window: the dialog becomes transient to it (always stacks above
-	// the script window and the frame, centers over it), like the MFC sheet owned by the
-	// ScriptDialog.
+	// the script window, centers over it), like the MFC sheet owned by the ScriptDialog. When
+	// the script window isn't visible, parent to the main window instead.
 	QWidget *owner = WBQtScriptWindow::instance();
-	if (owner != NULL && !owner->isVisible())
+	if (owner == NULL || !owner->isVisible())
 	{
-		owner = NULL;
+		owner = WBQt_DialogParent();
 	}
 	WBQtScriptEditDialog dlg(script, owner);
-	// Application-modal + a disabled MFC frame == the old CPropertySheet::DoModal discipline
-	// (Qt modality only fences Qt windows; the frame is a native window and needs the explicit
-	// EnableWindow). The Qt Script window is fenced by the modality.
+	// Stage 1 phase 3: Qt ApplicationModal fences every Qt window incl. the hosted viewport
+	// (QWinHost WindowBlocked), so the old EnableWindow(frame) discipline is gone.
 	dlg.setWindowModality(Qt::ApplicationModal);
-	HWND frame = reinterpret_cast<HWND>(frameHwnd);
-	if (frame != NULL)
-	{
-		::EnableWindow(frame, FALSE);
-	}
 	// Register our HWND so the MFC EditCondition/EditAction modals the bridge pops are owned
 	// by (and disable) this dialog.
 	WBQtScriptEdit_SetModalOwner(reinterpret_cast<void *>(dlg.winId()));
 	int rc = dlg.exec();
 	WBQtScriptEdit_SetModalOwner(NULL);
-	if (frame != NULL)
-	{
-		::EnableWindow(frame, TRUE);
-	}
 	return (rc == QDialog::Accepted) ? 1 : 0;
 }

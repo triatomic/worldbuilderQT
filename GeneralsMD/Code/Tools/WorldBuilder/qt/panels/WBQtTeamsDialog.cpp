@@ -16,6 +16,9 @@
 
 #include <qt_windows.h>
 
+// Stage 1 phase 3: modal-dialog parent (active modal if nested, else main window). WBQtBridge.cpp.
+QWidget *WBQt_DialogParent(void);
+
 namespace
 {
 	const int kTextCap = 1024;
@@ -285,22 +288,15 @@ void WBQtTeamsDialog::onImportTeams()
 
 // ===================== the modal entry point =====================
 
-extern "C" int WBQtTeams_Run(void *frameHwnd)
+extern "C" int WBQtTeams_Run(void * /*frameHwnd*/)
 {
 	// Open may pop fix-team-owner modals (== the MFC OnInitDialog) before the window shows.
 	WBQtTeamsData_Open();
-	WBQtTeamsDialog dlg;
+	// Stage 1 phase 3: parent to the main window + Qt ApplicationModal (fences the viewport
+	// via QWinHost WindowBlocked); the EnableWindow(frame) discipline is gone.
+	WBQtTeamsDialog dlg(WBQt_DialogParent());
 	dlg.setWindowModality(Qt::ApplicationModal);
-	HWND frame = reinterpret_cast<HWND>(frameHwnd);
-	if (frame != NULL)
-	{
-		::EnableWindow(frame, FALSE);
-	}
 	int rc = (dlg.exec() == QDialog::Accepted) ? 1 : 0;
 	WBQtTeamsData_Close(rc);
-	if (frame != NULL)
-	{
-		::EnableWindow(frame, TRUE);
-	}
 	return rc;
 }

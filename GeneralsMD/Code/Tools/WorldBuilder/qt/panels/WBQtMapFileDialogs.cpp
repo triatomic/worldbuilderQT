@@ -14,23 +14,22 @@
 
 #include <string.h>
 
+// Stage 1 phase 3: the parent for a modal Qt dialog (active modal if nested, else the main
+// window). Defined in WBQtBridge.cpp.
+QWidget *WBQt_DialogParent(void);
+
 namespace
 {
 	const int kPathCap = 1024;
 
-	int runMapModal(QDialog &dlg, void *frameHwnd)
+	int runMapModal(QDialog &dlg, void * /*frameHwnd*/)
 	{
+		// Stage 1 phase 3: parent to the Qt main window (or the active modal, if nested) and
+		// rely on Qt ApplicationModal -- the QWinHost WindowBlocked path fences the hosted
+		// viewport, so the old EnableWindow(frame) discipline is gone.
+		dlg.setParent(WBQt_DialogParent(), dlg.windowFlags());
 		dlg.setWindowModality(Qt::ApplicationModal);
-		HWND frame = reinterpret_cast<HWND>(frameHwnd);
-		if (frame != NULL)
-		{
-			::EnableWindow(frame, FALSE);
-		}
 		int rc = dlg.exec();
-		if (frame != NULL)
-		{
-			::EnableWindow(frame, TRUE);
-		}
 		return (rc == QDialog::Accepted) ? 1 : 0;
 	}
 
