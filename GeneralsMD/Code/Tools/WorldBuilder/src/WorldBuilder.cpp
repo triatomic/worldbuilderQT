@@ -96,6 +96,7 @@
 #ifdef RTS_HAS_QT
 #include "qt/WBQtBridge.h"		// Phase 1 MFC -> Qt coexistence (experimental; opaque facade, no Qt headers leak here)
 #include "qt/WBQtChromeBridge.h"
+#include "qt/WBQtShortcuts.h"
 #include "qt/panels/WBQtEntityFinderBridge.h"
 #include "qt/WBQtToast.h"
 #endif
@@ -1520,6 +1521,19 @@ LRESULT CWorldBuilderApp::ProcessWndProcException(CException *e, const MSG *pMsg
 	DEBUG_LOG(("ProcessWndProcException: '%s' (%s) during msg 0x%x wParam=0x%x\n",
 		name, desc, pMsg ? pMsg->message : 0, pMsg ? (unsigned)pMsg->wParam : 0));
 	return CWinApp::ProcessWndProcException(e, pMsg);
+}
+
+BOOL CWorldBuilderApp::PreTranslateMessage(MSG *pMsg)
+{
+	// The WBQtShortcuts table owns the WorldBuilder hotkeys once the window is inverted
+	// (WBQtShortcuts_TranslateKey no-ops when not inverted, so the accelerator table
+	// keeps working on the fallback path). A hit is consumed here; everything else falls
+	// through to the base, which still does tooltip relay etc.
+	if (WBQtShortcuts_TranslateKey(pMsg))
+	{
+		return TRUE;
+	}
+	return CWinApp::PreTranslateMessage(pMsg);
 }
 #endif
 

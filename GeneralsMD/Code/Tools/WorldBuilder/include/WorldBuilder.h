@@ -163,6 +163,11 @@ public:
 	// Stage 1 diagnostics: log the unhandled MFC exceptions that surface as the
 	// "Internal application error." box before the base handler shows it.
 	virtual LRESULT ProcessWndProcException(CException *e, const MSG *pMsg);
+	// Stage 1 phase 2 (keyboard flip): feed every pumped message to the WBQtShortcuts
+	// table first. After the inversion the MFC accelerator table is dead for
+	// viewport-focused keys (the view lives under the Qt window, so MFC's PreTranslate
+	// tree-walk never reaches the frame); this override is the replacement.
+	virtual BOOL PreTranslateMessage(MSG *pMsg);
 #endif
 
 	/// Set the brush tool as the active tool.

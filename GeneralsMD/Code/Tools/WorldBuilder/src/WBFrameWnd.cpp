@@ -177,60 +177,12 @@ void CWB3dFrameWnd::OnMove(int x, int y)
 BOOL CWB3dFrameWnd::PreTranslateMessage(MSG* pMsg)
 {
 #ifdef RTS_HAS_QT
-	// While a Qt chrome menu popup is open, every key must reach Qt (menu
-	// navigation) -- otherwise the accelerator table below fires tool hotkeys
-	// mid-menu, and the ESC handling would exit fullscreen instead of closing the
-	// menu.
-	if (WBQtChrome_PopupActive())
-	{
-		return CWnd::PreTranslateMessage(pMsg);
-	}
-	// When the Qt Script editor owns the keyboard focus, skip the frame's accelerator
-	// translation (CFrameWnd::PreTranslateMessage) -- otherwise single-key tool shortcuts
-	// swallow keystrokes meant for the script editor's search / rename fields. Route
-	// straight to CWnd so the message dispatches to the focused Qt control.
-	if (WBQtScript_OwnsFocus() || WBQt_OptionPanelOwnsFocus())
-	{
-		return CWnd::PreTranslateMessage(pMsg);
-	}
-	// Same skip for the Qt Global Light Options window (its angle/color fields take digits).
-	if (WBQtGlobalLight_OwnsFocus())
-	{
-		return CWnd::PreTranslateMessage(pMsg);
-	}
-	// And for the Qt Camera Options window (its pitch field takes digits).
-	if (WBQtCamera_OwnsFocus())
-	{
-		return CWnd::PreTranslateMessage(pMsg);
-	}
-	// And for the Qt Layers window (inline layer rename takes typed text).
-	if (WBQtLayers_OwnsFocus())
-	{
-		return CWnd::PreTranslateMessage(pMsg);
-	}
-	// And for the Qt Entity Finder (its search box / finder combos take letters).
-	if (WBQtEntityFinder_OwnsFocus())
-	{
-		return CWnd::PreTranslateMessage(pMsg);
-	}
-#endif
-	// DEBUG_LOG(("Clicked\n"));
-#ifdef RTS_HAS_QT
-	// Stage 1 inversion: fullscreen belongs to the Qt main window (the frame is hidden;
-	// its style-strip fullscreen below would act on an invisible window).
-	if (WBQt_InversionActive() && pMsg->message == WM_KEYDOWN)
-	{
-		if (pMsg->wParam == VK_F11)
-		{
-			WBQt_ToggleFullscreen();
-			return TRUE;
-		}
-		if (pMsg->wParam == VK_ESCAPE && WBQt_IsFullscreen())
-		{
-			WBQt_ToggleFullscreen();
-			return TRUE;
-		}
-	}
+	// Stage 1 phase 2: the WorldBuilder hotkeys (accelerator table + the F11/Esc
+	// fullscreen + the *_OwnsFocus focus guards) all moved to WBQtShortcuts, driven from
+	// CWorldBuilderApp::PreTranslateMessage -- after the inversion this frame's
+	// PreTranslate is not even reached for viewport-focused keys. Only the Alt+letter
+	// menu-mnemonic relay below still matters (it targets the frame via qmfcapp's
+	// winEventFilter). The #else branch keeps the pre-inversion behavior intact.
 #endif
     if (pMsg->message == WM_KEYDOWN)
     {

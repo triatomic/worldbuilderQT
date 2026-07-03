@@ -178,6 +178,25 @@ extern "C" int WBQtChromeData_QueryCommand(int id, int *enabledOut, int *checked
 	return 1;
 }
 
+// Stage 1 phase 2 (keyboard flip): the WBQtShortcuts table posts hotkey commands through
+// here so a disabled command is swallowed (== the accelerator table's behavior -- a grayed
+// command's accelerator is a no-op) instead of firing.
+extern "C" void WBQtShortcuts_PostCommand(int commandId)
+{
+	CMainFrame *pFrame = CMainFrame::GetMainFrame();
+	if (pFrame == NULL || pFrame->GetSafeHwnd() == NULL)
+	{
+		return;
+	}
+	int enabled = 1;
+	int checked = -1;
+	if (WBQtChromeData_QueryCommand(commandId, &enabled, &checked) && !enabled)
+	{
+		return;
+	}
+	::PostMessage(pFrame->GetSafeHwnd(), WM_COMMAND, MAKEWPARAM(commandId, 0), 0);
+}
+
 extern "C" int WBQtChromeData_GetPrompt(int id, char *bufOut, int cap)
 {
 	if (bufOut == NULL || cap <= 0)

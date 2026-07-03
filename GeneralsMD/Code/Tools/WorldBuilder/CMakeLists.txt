@@ -328,6 +328,8 @@ if(RTS_ENABLE_WORLDBUILDER_QT)
         "qt/WBQtChrome.h"
         "qt/WBQtMainWindow.cpp"
         "qt/WBQtMainWindow.h"
+        "qt/WBQtShortcuts.cpp"
+        "qt/WBQtShortcuts.h"
         "qt/WBQtChromeBridge.h"
         "qt/WBQtToast.cpp"
         "qt/WBQtToast.h"
