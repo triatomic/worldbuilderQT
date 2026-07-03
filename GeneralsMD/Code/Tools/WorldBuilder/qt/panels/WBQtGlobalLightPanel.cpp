@@ -2,6 +2,7 @@
 #include "WBQtGlobalLightPanel.h"
 #include "WBQtGlobalLightBridge.h"
 #include "WBQtScrubSpinBox.h"
+#include "WBQtWindowPos.h"
 #include "qwinwidget.h"
 
 #include <QColor>
@@ -41,6 +42,7 @@ WBQtGlobalLightPanel::WBQtGlobalLightPanel(QWidget *owner)
 	  m_updating(false)
 {
 	setWindowTitle("Global Light Options");
+	WBQtWindowPos_Track(this, "GlobalLight");
 
 	QVBoxLayout *root = new QVBoxLayout(this);
 

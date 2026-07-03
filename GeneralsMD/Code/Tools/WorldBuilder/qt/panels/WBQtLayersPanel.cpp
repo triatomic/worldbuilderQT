@@ -2,6 +2,7 @@
 #include "WBQtLayersPanel.h"
 #include "WBQtLayersBridge.h"
 #include "WBQtTreeStyle.h"
+#include "WBQtWindowPos.h"
 #include "qwinwidget.h"
 
 #include <QFont>
@@ -34,6 +35,7 @@ WBQtLayersPanel::WBQtLayersPanel(QWidget *owner)
 {
 	setWindowTitle("Layers List");
 	resize(300, 420);
+	WBQtWindowPos_Track(this, "LayersList");
 
 	QVBoxLayout *root = new QVBoxLayout(this);
 

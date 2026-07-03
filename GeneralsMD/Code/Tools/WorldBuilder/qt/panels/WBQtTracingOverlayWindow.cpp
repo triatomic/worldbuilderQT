@@ -1,6 +1,7 @@
 // WBQtTracingOverlayWindow.cpp -- see WBQtTracingOverlayWindow.h.
 #include "WBQtTracingOverlayWindow.h"
 #include "WBQtTracingOverlayBridge.h"
+#include "WBQtWindowPos.h"
 #include "qwinwidget.h"
 
 #include <QApplication>
@@ -35,6 +36,7 @@ WBQtTracingOverlayWindow::WBQtTracingOverlayWindow(QWidget *owner)
 	  m_updating(false)
 {
 	setWindowTitle("Tracing Overlay Settings");
+	WBQtWindowPos_Track(this, "TracingOverlay");
 
 	QVBoxLayout *root = new QVBoxLayout(this);
 

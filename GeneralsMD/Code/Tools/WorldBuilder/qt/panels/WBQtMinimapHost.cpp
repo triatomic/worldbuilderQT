@@ -7,6 +7,7 @@
 // the codebase (camera-change refresh, selection halos, rebuild throttles, the View-menu
 // checkmark) keeps working with no seam changes.
 #include "WBQtMinimapBridge.h"
+#include "WBQtWindowPos.h"
 #include "qwinwidget.h"
 #include "qwinhost.h"
 
@@ -42,6 +43,7 @@ extern "C" void WBQtMinimap_Open(void *frameHwnd, void *minimapHwnd)
 		s_window = new QWidget(s_owner, Qt::Tool);
 		s_window->setWindowTitle("Minimap");
 		s_window->resize(320, 340);
+		WBQtWindowPos_Track(s_window, "Minimap");
 		QVBoxLayout *lay = new QVBoxLayout(s_window);
 		lay->setContentsMargins(0, 0, 0, 0);
 		s_winHost = new QWinHost(s_window);

@@ -2,6 +2,7 @@
 #include "WBQtScriptWindow.h"
 #include "WBQtPanelBridge.h"
 #include "WBQtTreeStyle.h"
+#include "WBQtWindowPos.h"
 
 #include <QApplication>
 #include <QBrush>
@@ -79,6 +80,7 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	(void)owner;
 	setWindowTitle("Script Editor");
 	resize(900, 640);
+	WBQtWindowPos_Track(this, "ScriptEditor");
 
 	QVBoxLayout *root = new QVBoxLayout(this);
 

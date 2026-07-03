@@ -2,6 +2,7 @@
 #include "WBQtCameraPanel.h"
 #include "WBQtCameraBridge.h"
 #include "WBQtScrubSpinBox.h"
+#include "WBQtWindowPos.h"
 #include "qwinwidget.h"
 
 #include <QGridLayout>
@@ -29,6 +30,7 @@ WBQtCameraPanel::WBQtCameraPanel(QWidget *owner)
 	  m_updating(false)
 {
 	setWindowTitle("Camera Options");
+	WBQtWindowPos_Track(this, "CameraOptions");
 
 	QVBoxLayout *root = new QVBoxLayout(this);
 

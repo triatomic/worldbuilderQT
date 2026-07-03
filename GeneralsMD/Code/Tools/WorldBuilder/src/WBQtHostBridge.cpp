@@ -61,6 +61,54 @@ extern "C" void WBQtPanels_SaveWindowPos(int top, int left)
 	::AfxGetApp()->WriteProfileInt(OPTIONS_PANEL_SECTION, "Left", left);
 }
 
+// Generic per-window position store for the modeless Qt tool windows (Global Light,
+// Camera, Layers, Minimap, Script editor, Tracing Overlay). Keyed by a stable name in a
+// dedicated [QtWindowPositions] section of the same WorldBuilder.ini every other window
+// uses. Modal dialogs are not tracked, so they keep centering fresh. The -32000 sentinel
+// (== "never saved", matching the MFC minimap convention) means "no stored position".
+#define WB_QT_WINDOW_POS_SECTION "QtWindowPositions"
+
+extern "C" int WBQtWindowPos_Get(const char *name, int *topOut, int *leftOut)
+{
+	if (name == NULL)
+	{
+		return 0;
+	}
+	CString topKey;
+	CString leftKey;
+	topKey.Format("%s_Top", name);
+	leftKey.Format("%s_Left", name);
+	int top = ::AfxGetApp()->GetProfileInt(WB_QT_WINDOW_POS_SECTION, topKey, -32000);
+	int left = ::AfxGetApp()->GetProfileInt(WB_QT_WINDOW_POS_SECTION, leftKey, -32000);
+	if (top == -32000 || left == -32000)
+	{
+		return 0;
+	}
+	if (topOut != NULL)
+	{
+		*topOut = top;
+	}
+	if (leftOut != NULL)
+	{
+		*leftOut = left;
+	}
+	return 1;
+}
+
+extern "C" void WBQtWindowPos_Save(const char *name, int top, int left)
+{
+	if (name == NULL)
+	{
+		return;
+	}
+	CString topKey;
+	CString leftKey;
+	topKey.Format("%s_Top", name);
+	leftKey.Format("%s_Left", name);
+	::AfxGetApp()->WriteProfileInt(WB_QT_WINDOW_POS_SECTION, topKey, top);
+	::AfxGetApp()->WriteProfileInt(WB_QT_WINDOW_POS_SECTION, leftKey, left);
+}
+
 // Tier 5: follow a live Windows light/dark switch. The Settings app broadcasts
 // WM_SETTINGCHANGE with "ImmersiveColorSet" after flipping the app theme; forward it so
 // the Qt side re-applies when the theme mode is System. Declared in MainFrm.h.
