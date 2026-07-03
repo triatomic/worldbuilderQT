@@ -124,6 +124,9 @@ public:
 	// Tier 4c: mirror every SetMessageText into the Qt status row (push, no polling).
 	// Defined in src/WBQtChromeBridge.cpp.
 	afx_msg LRESULT OnSetMessageString(WPARAM wParam, LPARAM lParam);
+	// Stage 1: mirror the composed frame title (map name + FWS_ADDTOTITLE) into the Qt
+	// main window, the visible top-level. Defined in src/WBQtChromeBridge.cpp.
+	virtual void OnUpdateFrameTitle(BOOL bAddToTitle);
 	// Tier 5: follow a live Windows light/dark switch while the Qt theme mode is System.
 	// Defined in src/WBQtHostBridge.cpp.
 	afx_msg void OnSettingChange(UINT uFlags, LPCTSTR lpszSection);

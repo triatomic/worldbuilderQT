@@ -19,10 +19,14 @@
 
 WBQtGlobalLightPanel *WBQtGlobalLightPanel::s_instance = NULL;
 
+// Defined in WBQtBridge.cpp: the main window when inverted, else an invisible
+// QWinWidget bridge rooted in the MFC frame. Never hide() the result.
+QWidget *WBQt_CreateOwnerBridgeWidget(void *frameHwnd);
+
 namespace
 {
-	// The window's owner bridge into the MFC frame (created on first open, like the panel host).
-	QWinWidget *s_owner = NULL;
+	// The window's owner (created on first open, like the panel host).
+	QWidget *s_owner = NULL;
 
 	QSpinBox *makeColorSpin(QWidget *parent)
 	{
@@ -313,8 +317,7 @@ extern "C" void WBQtGlobalLight_Open(void *frameHwnd)
 	}
 	if (s_owner == NULL)
 	{
-		s_owner = new QWinWidget(reinterpret_cast<HWND>(frameHwnd));
-		s_owner->hide();
+		s_owner = WBQt_CreateOwnerBridgeWidget(frameHwnd);
 	}
 	WBQtGlobalLightPanel *panel = WBQtGlobalLightPanel::instance();
 	if (panel == NULL)

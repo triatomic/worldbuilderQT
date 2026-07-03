@@ -15,9 +15,13 @@
 
 #include <qt_windows.h>
 
+// Defined in WBQtBridge.cpp: the main window when inverted, else an invisible
+// QWinWidget bridge rooted in the MFC frame. Never hide() the result.
+QWidget *WBQt_CreateOwnerBridgeWidget(void *frameHwnd);
+
 namespace
 {
-	QWinWidget *s_owner = NULL;	// owner bridge into the MFC frame (created on first open)
+	QWidget    *s_owner = NULL;	// owner for the floating window (created on first open)
 	QWidget    *s_window = NULL;	// the Qt tool window ("Minimap")
 	QWinHost   *s_winHost = NULL;	// hosts the adopted MFC dialog
 	HWND        s_minimap = NULL;	// the adopted MFC MinimapDialog HWND
@@ -31,8 +35,7 @@ extern "C" void WBQtMinimap_Open(void *frameHwnd, void *minimapHwnd)
 	}
 	if (s_owner == NULL)
 	{
-		s_owner = new QWinWidget(reinterpret_cast<HWND>(frameHwnd));
-		s_owner->hide();
+		s_owner = WBQt_CreateOwnerBridgeWidget(frameHwnd);
 	}
 	if (s_window == NULL)
 	{

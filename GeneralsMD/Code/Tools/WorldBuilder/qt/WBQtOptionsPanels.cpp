@@ -37,7 +37,11 @@
 
 #include <qt_windows.h>
 
-static QWinWidget *g_panelOwner = NULL;	// invisible owner bridge, rooted in the MFC frame
+// Defined in WBQtBridge.cpp: the main window when inverted, else an invisible
+// QWinWidget bridge rooted in the MFC frame. Never hide() the result.
+QWidget *WBQt_CreateOwnerBridgeWidget(void *frameHwnd);
+
+static QWidget    *g_panelOwner = NULL;	// owner for the floating option panels
 static QWidget    *g_currentPanel = NULL;
 static int         g_currentDialogID = 0;
 
@@ -244,7 +248,7 @@ extern "C" int WBQt_ShowOptionsPanel(void *frameHwnd, int dialogID, int x, int y
 
 	if (g_panelOwner == NULL)
 	{
-		g_panelOwner = new QWinWidget(reinterpret_cast<HWND>(frameHwnd));
+		g_panelOwner = WBQt_CreateOwnerBridgeWidget(frameHwnd);
 	}
 
 	QWidget *panel = wbQtPanelFor(dialogID, g_panelOwner);

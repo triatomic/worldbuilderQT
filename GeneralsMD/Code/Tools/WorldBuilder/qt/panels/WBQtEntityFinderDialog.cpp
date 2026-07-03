@@ -30,6 +30,10 @@
 
 #include "resource.h"		// IDB_PHLOGO (pure #defines; res is on the qt include path)
 
+// Defined in WBQtBridge.cpp: the Qt main window's HWND when inverted, else the passed
+// MFC frame HWND -- the native owner for standalone Qt top-levels.
+void *WBQt_EffectiveOwnerHwnd(void *frameHwnd);
+
 namespace
 {
 	const int kTextCap = 8192;
@@ -282,12 +286,13 @@ WBQtEntityFinderDialog::WBQtEntityFinderDialog(void *frameHwnd)
 
 	applyHotkeyPanelState(WBQtEntityFinderData_GetProfileInt("ShrinkHotkeyList", 0) == 0);
 
-	// Owned by the frame so it stacks above the main window without stealing its
-	// taskbar entry (== the MFC dialog's ownership).
+	// Owned by the visible top-level (the Qt main window when inverted, else the MFC
+	// frame) so it stacks above the main window without stealing its taskbar entry
+	// (== the MFC dialog's ownership).
 	if (frameHwnd != NULL)
 	{
 		::SetWindowLongPtr(reinterpret_cast<HWND>(winId()), GWLP_HWNDPARENT,
-			reinterpret_cast<LONG_PTR>(frameHwnd));
+			reinterpret_cast<LONG_PTR>(WBQt_EffectiveOwnerHwnd(frameHwnd)));
 	}
 
 	int top = WBQtEntityFinderData_GetProfileInt("Top", -1);

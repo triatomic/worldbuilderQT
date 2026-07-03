@@ -15,9 +15,13 @@
 
 WBQtLayersPanel *WBQtLayersPanel::s_instance = NULL;
 
+// Defined in WBQtBridge.cpp: the main window when inverted, else an invisible
+// QWinWidget bridge rooted in the MFC frame. Never hide() the result.
+QWidget *WBQt_CreateOwnerBridgeWidget(void *frameHwnd);
+
 namespace
 {
-	QWinWidget *s_owner = NULL;	// owner bridge into the MFC frame (created on first open)
+	QWidget *s_owner = NULL;	// owner for the floating panel (created on first open)
 
 	// The pre-rename layer name is stashed in this item-data role so onItemChanged can hand
 	// old + new to the rename call.
@@ -375,8 +379,7 @@ extern "C" void WBQtLayers_Open(void *frameHwnd)
 	}
 	if (s_owner == NULL)
 	{
-		s_owner = new QWinWidget(reinterpret_cast<HWND>(frameHwnd));
-		s_owner->hide();
+		s_owner = WBQt_CreateOwnerBridgeWidget(frameHwnd);
 	}
 	WBQtLayersPanel *panel = WBQtLayersPanel::instance();
 	if (panel == NULL)

@@ -16,6 +16,7 @@
 #include "qmfcapp.h"
 #include "qwinwidget.h"
 #include "qwinhost.h"
+#include "WBQtMainWindow.h"
 #include "WBQtTheme.h"
 
 #include <QApplication>
@@ -46,8 +47,149 @@ protected:
 
 // The Phase 2 host sandwich, owned for the process life:
 //   MFC frame -> g_wbViewportHost (QWinWidget) -> g_wbViewportPane (QWinHost) -> view.
+// Stage 1 inverted: g_wbViewportHost stays NULL; the pane is the QMainWindow's central
+// widget instead (QMainWindow -> g_wbViewportPane -> view).
 static QWinWidget    *g_wbViewportHost = NULL;
 static WbViewportHost *g_wbViewportPane = NULL;
+
+// Stage 1: the inversion is the default in Qt builds; it flips off only if the main
+// window cannot be created (then the legacy chrome-in-frame path runs).
+static bool g_inversionActive = true;
+static WBQtMainWindow *g_wbMainWindow = NULL;
+
+int WBQt_InversionActive(void)
+{
+	return g_inversionActive ? 1 : 0;
+}
+
+void WBQt_DisableInversion(void)
+{
+	g_inversionActive = false;
+}
+
+int WBQt_CreateMainWindow(void *frameHwnd, int x, int y, int w, int h)
+{
+	if (g_wbMainWindow != NULL)
+	{
+		return 1;
+	}
+	if (qApp == NULL || frameHwnd == NULL)
+	{
+		g_inversionActive = false;
+		return 0;
+	}
+	g_wbMainWindow = new WBQtMainWindow(frameHwnd);
+	if (w > 0 && h > 0)
+	{
+		g_wbMainWindow->move(x, y);
+		g_wbMainWindow->resize(w, h);
+	}
+	return 1;
+}
+
+void WBQt_ShowMainWindow(void)
+{
+	if (g_wbMainWindow != NULL)
+	{
+		g_wbMainWindow->show();
+	}
+}
+
+void *WBQt_MainWindowHwnd(void)
+{
+	return (g_wbMainWindow != NULL)
+		? reinterpret_cast<void *>(g_wbMainWindow->winId()) : NULL;
+}
+
+void WBQt_ActivateMainWindow(void)
+{
+	if (g_wbMainWindow != NULL && g_wbMainWindow->isVisible())
+	{
+		g_wbMainWindow->raise();
+		g_wbMainWindow->activateWindow();
+	}
+}
+
+void WBQt_ResizeMainWindow(int width, int height)
+{
+	if (g_wbMainWindow != NULL && width > 0 && height > 0 && !g_wbMainWindow->isFullScreen())
+	{
+		g_wbMainWindow->showNormal();		// a maximized window must leave that state first
+		g_wbMainWindow->resize(width, height);
+	}
+}
+
+void WBQt_MoveMainWindow(int x, int y)
+{
+	if (g_wbMainWindow != NULL)
+	{
+		g_wbMainWindow->showNormal();
+		g_wbMainWindow->move(x, y);
+	}
+}
+
+void WBQt_ToggleFullscreen(void)
+{
+	if (g_wbMainWindow != NULL)
+	{
+		g_wbMainWindow->toggleFullscreen();
+	}
+}
+
+int WBQt_IsFullscreen(void)
+{
+	return (g_wbMainWindow != NULL && g_wbMainWindow->fullscreenActive()) ? 1 : 0;
+}
+
+void WBQt_SetMainWindowTitle(const char *title)
+{
+	if (g_wbMainWindow != NULL && title != NULL)
+	{
+		g_wbMainWindow->setWindowTitle(QString::fromLocal8Bit(title));
+	}
+}
+
+void WBQt_FocusViewport(void)
+{
+	if (g_wbMainWindow != NULL)
+	{
+		g_wbMainWindow->activateWindow();
+	}
+	if (g_wbViewportPane != NULL)
+	{
+		// Qt focus lands on the QWinHost, whose focusInEvent forwards Win32 focus to the
+		// hosted view HWND -- hotkeys and the GetAsyncKeyState tools resume immediately.
+		g_wbViewportPane->setFocus();
+	}
+}
+
+// Qt-internal (not in the C facade): the owner/parent for floating Qt tool windows.
+// Inverted, that is the main window itself (Qt::Tool children float above their
+// top-level natively); legacy, an invisible QWinWidget bridge rooted in the MFC frame.
+// The caller caches the result either way and must NEVER hide() it (inverted it is the
+// visible main window).
+QWidget *WBQt_CreateOwnerBridgeWidget(void *frameHwnd)
+{
+	if (g_wbMainWindow != NULL)
+	{
+		return g_wbMainWindow;
+	}
+	if (frameHwnd == NULL)
+	{
+		return NULL;
+	}
+	QWinWidget *owner = new QWinWidget(reinterpret_cast<HWND>(frameHwnd));
+	owner->hide();
+	return owner;
+}
+
+// Qt-internal: the native owner HWND for standalone Qt top-levels (script window,
+// entity finder) -- the main window when inverted, else the MFC frame.
+void *WBQt_EffectiveOwnerHwnd(void *frameHwnd)
+{
+	void *mainWin = WBQt_MainWindowHwnd();
+	return (mainWin != NULL) ? mainWin : frameHwnd;
+}
 
 void WBQt_Startup(void)
 {
@@ -63,7 +205,10 @@ void WBQt_Startup(void)
 void WBQt_Shutdown(void)
 {
 	// The viewport host is detached+destroyed earlier (from the frame's OnDestroy). Here
-	// we only release Qt. Explicit because the app dtor _exit(0)s right after.
+	// we release the main window (already hidden by the unhost) and Qt itself. Explicit
+	// because the app dtor _exit(0)s right after.
+	delete g_wbMainWindow;
+	g_wbMainWindow = NULL;
 	delete qApp;
 }
 
@@ -96,25 +241,14 @@ void WBQt_OnOsThemeChanged(void)
 
 void *WBQt_HostViewport(void *frameHwnd, void *viewHwnd)
 {
-	if (g_wbViewportHost != NULL)
+	if (g_wbViewportPane != NULL)
 	{
-		return reinterpret_cast<void *>(g_wbViewportHost->winId());
+		return reinterpret_cast<void *>(g_wbViewportPane->winId());
 	}
 	if (frameHwnd == NULL || viewHwnd == NULL)
 	{
 		return NULL;
 	}
-
-	// A Qt widget rooted in the MFC frame's HWND (QWinWidget syncs Win32 activation).
-	g_wbViewportHost = new QWinWidget(reinterpret_cast<HWND>(frameHwnd));
-	g_wbViewportHost->setObjectName("wbViewportHost");
-
-	QVBoxLayout *box = new QVBoxLayout(g_wbViewportHost);
-	box->setContentsMargins(0, 0, 0, 0);
-	box->setSpacing(0);
-
-	g_wbViewportPane = new WbViewportHost(g_wbViewportHost);
-	box->addWidget(g_wbViewportPane);
 
 	// The MFC view carries the default CView WS_EX_CLIENTEDGE sunken border; Windows
 	// draws its highlight edge (right/bottom) in a light colour, which reads as an ugly
@@ -131,6 +265,28 @@ void *WBQt_HostViewport(void *frameHwnd, void *viewHwnd)
 		}
 	}
 
+	// Stage 1 inverted: the pane IS the QMainWindow's central widget -- no QWinWidget
+	// layer; the main window's layout sizes the pane, whose resizeEvent drives the device.
+	if (g_wbMainWindow != NULL)
+	{
+		g_wbViewportPane = new WbViewportHost(NULL);
+		g_wbMainWindow->setCentralWidget(g_wbViewportPane);
+		g_wbViewportPane->setWindow(reinterpret_cast<HWND>(viewHwnd));
+		return reinterpret_cast<void *>(g_wbViewportPane->winId());
+	}
+
+	// Legacy (non-inverted): a Qt widget rooted in the MFC frame's HWND (QWinWidget syncs
+	// Win32 activation).
+	g_wbViewportHost = new QWinWidget(reinterpret_cast<HWND>(frameHwnd));
+	g_wbViewportHost->setObjectName("wbViewportHost");
+
+	QVBoxLayout *box = new QVBoxLayout(g_wbViewportHost);
+	box->setContentsMargins(0, 0, 0, 0);
+	box->setSpacing(0);
+
+	g_wbViewportPane = new WbViewportHost(g_wbViewportHost);
+	box->addWidget(g_wbViewportPane);
+
 	// setWindow adopts the view as a child (SetParent), own_hwnd == false so ~QWinHost
 	// never DestroyWindow's it -- the view stays MFC-owned.
 	g_wbViewportPane->setWindow(reinterpret_cast<HWND>(viewHwnd));
@@ -139,10 +295,15 @@ void *WBQt_HostViewport(void *frameHwnd, void *viewHwnd)
 	return reinterpret_cast<void *>(g_wbViewportHost->winId());
 }
 
-// Tier 4a: the chrome (WBQtChrome.cpp) inserts the Qt menu bar into this host's layout,
-// turning the Phase-2 viewport host into the full chrome column.
+// Tier 4a: the widget the chrome (WBQtChrome.cpp) installs into. Inverted, that is the
+// QMainWindow itself (native menuBar/addToolBar/statusBar); legacy, the Phase-2 viewport
+// host column (QLayout::setMenuBar + row inserts).
 QWidget *WBQt_GetViewportHostWidget(void)
 {
+	if (g_wbMainWindow != NULL)
+	{
+		return g_wbMainWindow;
+	}
 	return g_wbViewportHost;
 }
 
@@ -177,6 +338,17 @@ void WBQt_UnhostViewport(void *frameHwnd, void *viewHwnd)
 		&& ::IsWindow(reinterpret_cast<HWND>(viewHwnd)))
 	{
 		::SetParent(reinterpret_cast<HWND>(viewHwnd), reinterpret_cast<HWND>(frameHwnd));
+	}
+
+	// Stage 1 inverted: the pane is the main window's central widget. Hide the (now
+	// viewport-less) main window so no dead top-level lingers through the MFC/engine
+	// teardown; the window itself is deleted in WBQt_Shutdown.
+	if (g_wbMainWindow != NULL)
+	{
+		g_wbMainWindow->hide();
+		delete g_wbViewportPane;	// ~QWinHost restores the view's AfxWndProc
+		g_wbViewportPane = NULL;
+		return;
 	}
 
 	delete g_wbViewportHost;		// deletes the QWinHost child too; view already detached

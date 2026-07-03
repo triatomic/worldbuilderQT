@@ -502,7 +502,13 @@ void CMainFrame::adjustWindowSize(Bool forcedResolution, Bool dynamicResolution)
 	// m_3dViewWidth current so the resolution-menu checkmark stays consistent.
 	if (m_qtViewportHost != NULL) {
 		if (forcedResolution) {
-			this->SetWindowPos(NULL, 0, 0, newWidth, newHeight, SWP_NOMOVE|SWP_NOZORDER);
+			if (WBQt_InversionActive()) {
+				// Stage 1: the Qt main window is the visible top-level; resize IT and let
+				// the central pane's resizeEvent drive the device from the real client area.
+				WBQt_ResizeMainWindow(newWidth, newHeight);
+			} else {
+				this->SetWindowPos(NULL, 0, 0, newWidth, newHeight, SWP_NOMOVE|SWP_NOZORDER);
+			}
 		}
 		m_3dViewWidth = newWidth;
 		return;
@@ -540,8 +546,19 @@ void CMainFrame::ResetWindowPositions(void)
 	int left = 50; 
 	
 	// Main Window
+#ifdef RTS_HAS_QT
+	if (WBQt_InversionActive()) {
+		// Stage 1: the visible top-level is the Qt main window; move that instead and
+		// keep the MFC frame hidden.
+		WBQt_MoveMainWindow(20, 20);
+	} else {
+		SetWindowPos(NULL, 20, 20, 0, 0, SWP_NOSIZE|SWP_NOZORDER);
+		ShowWindow(SW_SHOW);
+	}
+#else
 	SetWindowPos(NULL, 20, 20, 0, 0, SWP_NOSIZE|SWP_NOZORDER);
 	ShowWindow(SW_SHOW);
+#endif
 
 	// Tool Window
 	if (m_curOptions != NULL) {

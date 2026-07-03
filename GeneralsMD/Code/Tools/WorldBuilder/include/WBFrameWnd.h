@@ -80,6 +80,11 @@ public:
 	
 	void ExitFullScreen();
 	void EnterFullScreen();
+#ifdef RTS_HAS_QT
+	// Stage 1 inversion: InitialUpdateFrame calls ActivateFrame(SW_SHOW) on every doc
+	// open; keep the hidden frame hidden and activate the Qt main window instead.
+	virtual void ActivateFrame(int nCmdShow = -1);
+#endif
 	// ClassWizard generated virtual function overrides
 	//{{AFX_VIRTUAL(CWB3dFrameWnd)
 	public:

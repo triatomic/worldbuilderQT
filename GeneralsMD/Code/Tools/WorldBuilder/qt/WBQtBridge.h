@@ -20,6 +20,69 @@ void WBQt_Startup(void);
 // teardown never runs.
 void WBQt_Shutdown(void);
 
+// --- Stage 1 (full-Qt port): the QMainWindow inversion ---------------------------
+// A Qt QMainWindow becomes the visible top-level window (chrome + viewport); the MFC
+// frame stays alive but hidden as the command-routing hub.
+
+// True while the inversion is intended/active for this run (default in Qt builds).
+// MFC guards (ActivateFrame, F11, adjustWindowSize, ...) key off this. It flips to 0
+// only if WBQt_CreateMainWindow fails, after which the legacy chrome-in-frame path runs.
+int WBQt_InversionActive(void);
+
+// Explicitly fall back to the legacy chrome-in-frame path (called when InitInstance
+// cannot even attempt the inversion, e.g. no 3D view/frame yet).
+void WBQt_DisableInversion(void);
+
+// Create the top-level QMainWindow (not shown yet). x/y/w/h seed its geometry (the
+// [MainFrame] profile values; pass w/h <= 0 for defaults). Returns 1 on success, 0 on
+// failure (which also clears WBQt_InversionActive so the guards fall back).
+int WBQt_CreateMainWindow(void *frameHwnd, int x, int y, int w, int h);
+
+// Show the main window once chrome + viewport are in place (one clean layout pass).
+void WBQt_ShowMainWindow(void);
+
+// The QMainWindow's HWND (NULL when not inverted) -- the native owner for floating
+// tool windows and dialogs.
+void *WBQt_MainWindowHwnd(void);
+
+// Bring the main window to the foreground -- the inverted stand-in for
+// CFrameWnd::ActivateFrame (called on every doc open).
+void WBQt_ActivateMainWindow(void);
+
+// Resize the main window (an explicit View > resolution pick / Entity Finder combo);
+// the central pane's resizeEvent then drives the D3D device from the real client area.
+void WBQt_ResizeMainWindow(int width, int height);
+
+// Move the main window (the Reset Window Positions command).
+void WBQt_MoveMainWindow(int x, int y);
+
+// F11 / Esc fullscreen toggle on the main window; IsFullscreen for the Esc gate.
+void WBQt_ToggleFullscreen(void);
+int  WBQt_IsFullscreen(void);
+
+// Mirror of the MFC frame title (map name + modified marker) -- pushed from
+// CMainFrame::OnUpdateFrameTitle so the visible window tracks the document exactly.
+void WBQt_SetMainWindowTitle(const char *title);
+
+// Put keyboard focus back on the hosted 3D viewport (tool hotkeys + GetAsyncKeyState
+// tools resume without an extra click).
+void WBQt_FocusViewport(void);
+
+// Reverse callbacks, DEFINED on the MFC side (src/WBQtHostBridge.cpp), called from the
+// Qt main window. extern "C" so the Qt static lib resolves them against the exe.
+#ifdef __cplusplus
+extern "C" {
+#endif
+// Debounced [MainFrame] Top/Left/Width/Height writes (the hidden frame's OnMove no
+// longer fires, so the Qt window persists its own placement through the same INI keys).
+void WBQt_SaveMainWindowPlacement(int x, int y, int width, int height);
+// A .map dropped on the main window -> CWinApp::OpenDocumentFile (the frame's
+// OnDropFiles is unreachable while it is hidden).
+void WBQt_OpenMapFileFromShell(const char *path);
+#ifdef __cplusplus
+}
+#endif
+
 // --- Phase 2: in-place viewport hosting -----------------------------------------
 // Reparent the existing 3D viewport (an MFC CView HWND) into a Qt host that is a child
 // of the MFC frame, so it renders THROUGH Qt while the frame stays its Win32 ancestor

@@ -53,4 +53,25 @@ void CMainFrame::OnSettingChange(UINT uFlags, LPCTSTR lpszSection)
 		WBQt_OnOsThemeChanged();
 	}
 }
+
+// Stage 1: the Qt main window persists its placement through the same [MainFrame] keys
+// the MFC frame's OnMove/adjustWindowSize used, so the INI stays the single store for
+// both builds. Debounced Qt-side (WBQtMainWindow::savePlacement).
+extern "C" void WBQt_SaveMainWindowPlacement(int x, int y, int width, int height)
+{
+	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "Left", x);
+	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "Top", y);
+	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "Width", width);
+	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "Height", height);
+}
+
+// Stage 1: a .map dropped on the Qt main window -- the hidden frame's OnDropFiles is
+// unreachable, so the drop routes here into the same doc-template open.
+extern "C" void WBQt_OpenMapFileFromShell(const char *path)
+{
+	if (path != NULL && path[0] != 0)
+	{
+		AfxGetApp()->OpenDocumentFile(path);
+	}
+}
 #endif

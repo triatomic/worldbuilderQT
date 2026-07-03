@@ -24,10 +24,12 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QSizePolicy>
+#include <QMainWindow>
 #include <QMenu>
 #include <QMenuBar>
 #include <QPainter>
 #include <QPixmap>
+#include <QStatusBar>
 #include <QString>
 #include <QStyle>
 #include <QTimer>
@@ -106,12 +108,24 @@ WBQtChromeController::WBQtChromeController(QWidget *host, void *frameHwnd, void 
 	// update handlers, so these are ordinary command actions.
 	addThemeMenu();
 
-	// setMenuBar (not addWidget) so the bar gets menu-bar sizing above the layout's rows.
-	host->layout()->setMenuBar(m_menuBar);
+	QMainWindow *mainWin = qobject_cast<QMainWindow *>(host);
+	if (mainWin != NULL)
+	{
+		// Stage 1 inverted: the host IS the top-level QMainWindow -- native menu bar. Its
+		// caption is themed by the app-wide event filter like every Qt top-level, so no
+		// registerNativeTopLevel here.
+		mainWin->setMenuBar(m_menuBar);
+	}
+	else
+	{
+		// Legacy: setMenuBar (not addWidget) so the bar gets menu-bar sizing above the
+		// layout's rows.
+		host->layout()->setMenuBar(m_menuBar);
 
-	// Tier 4a-2: with the client chrome now Qt, theme the frame's native caption too
-	// (applied now and on every theme switch).
-	WBQtTheme::registerNativeTopLevel(frameHwnd);
+		// Tier 4a-2: with the client chrome now Qt, theme the frame's native caption too
+		// (applied now and on every theme switch).
+		WBQtTheme::registerNativeTopLevel(frameHwnd);
+	}
 }
 
 // Tier 4a-2: Alt+letter from the frame -- open the top-level menu whose '&' mnemonic
@@ -259,11 +273,20 @@ bool WBQtChromeController::installToolBar()
 		connect(action, SIGNAL(hovered()), this, SLOT(onToolActionHovered()));
 	}
 
-	// Above the viewport pane; the menu bar sits higher still (QLayout::setMenuBar).
-	QBoxLayout *box = qobject_cast<QBoxLayout *>(m_host->layout());
-	if (box != NULL)
+	// Inverted: a native QMainWindow toolbar row. Legacy: above the viewport pane; the
+	// menu bar sits higher still (QLayout::setMenuBar).
+	QMainWindow *mainWin = qobject_cast<QMainWindow *>(m_host);
+	if (mainWin != NULL)
 	{
-		box->insertWidget(0, m_toolBar);
+		mainWin->addToolBar(m_toolBar);
+	}
+	else
+	{
+		QBoxLayout *box = qobject_cast<QBoxLayout *>(m_host->layout());
+		if (box != NULL)
+		{
+			box->insertWidget(0, m_toolBar);
+		}
 	}
 
 	// The six standard file/edit buttons swap their dated strip images for Qt-native
@@ -424,6 +447,27 @@ bool WBQtChromeController::installStatusBar()
 	{
 		return true;
 	}
+	QMainWindow *mainWin = qobject_cast<QMainWindow *>(m_host);
+	if (mainWin != NULL)
+	{
+		// Inverted: the native QMainWindow status bar carries the same label set (message
+		// stretches left, key-lock indicators pinned right as permanent widgets). Keeping
+		// m_statusRow pointed at the QStatusBar (a QWidget) preserves the View > Status Bar
+		// visibility toggle unchanged.
+		QStatusBar *bar = mainWin->statusBar();
+		bar->setSizeGripEnabled(true);
+		m_statusRow = bar;
+		m_statusLabel = new QLabel(bar);
+		bar->addWidget(m_statusLabel, 1);
+		m_capsLabel = new QLabel("CAP", bar);
+		bar->addPermanentWidget(m_capsLabel);
+		m_numLabel = new QLabel("NUM", bar);
+		bar->addPermanentWidget(m_numLabel);
+		m_scrlLabel = new QLabel("SCRL", bar);
+		bar->addPermanentWidget(m_scrlLabel);
+	}
+	else
+	{
 	m_statusRow = new QWidget(m_host);
 	// Cap the row at its natural one-line height: the column's leftover vertical space
 	// must all go to the viewport pane, not get split with this row (which otherwise
@@ -445,6 +489,7 @@ bool WBQtChromeController::installStatusBar()
 	if (box != NULL)
 	{
 		box->addWidget(m_statusRow);	// below the viewport pane
+	}
 	}
 
 	// The indicators ride the sweep timer; create it here if the toolbar didn't.

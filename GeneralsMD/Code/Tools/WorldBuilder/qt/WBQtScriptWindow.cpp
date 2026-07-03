@@ -27,6 +27,10 @@
 
 #include <qt_windows.h>
 
+// Defined in WBQtBridge.cpp: the Qt main window's HWND when inverted, else the passed
+// MFC frame HWND -- the native owner for standalone Qt top-levels.
+void *WBQt_EffectiveOwnerHwnd(void *frameHwnd);
+
 WBQtScriptWindow *WBQtScriptWindow::s_instance = NULL;
 
 // The list index the tree stores per node is the packed ListType int (opaque to Qt).
@@ -728,12 +732,13 @@ extern "C" void WBQtScript_Open(void *frameHwnd, int x, int y)
 	}
 	win->resetForNewSession();
 
-	// Own the window by the WB frame, like the MFC modeless ScriptDialog: an owned window
-	// always stacks above its owner (the script window can never fall behind the main
-	// window) and minimizes with it. Native ownership only -- NOT a Qt parent, so the 9b
-	// standalone-top-level focus behavior is unchanged.
+	// Own the window by the visible top-level (the Qt main window when inverted, else the
+	// WB frame), like the MFC modeless ScriptDialog: an owned window always stacks above
+	// its owner (the script window can never fall behind the main window) and minimizes
+	// with it. Native ownership only -- NOT a Qt parent, so the 9b standalone-top-level
+	// focus behavior is unchanged.
 	::SetWindowLongPtr(reinterpret_cast<HWND>(win->winId()), GWLP_HWNDPARENT,
-		reinterpret_cast<LONG_PTR>(frameHwnd));
+		reinterpret_cast<LONG_PTR>(WBQt_EffectiveOwnerHwnd(frameHwnd)));
 
 	win->move(x, y);
 	win->show();

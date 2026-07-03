@@ -17,11 +17,14 @@
 
 WBQtTracingOverlayWindow *WBQtTracingOverlayWindow::s_instance = NULL;
 
+// Defined in WBQtBridge.cpp: the main window when inverted, else an invisible
+// QWinWidget bridge rooted in the MFC frame. Never hide() the result.
+QWidget *WBQt_CreateOwnerBridgeWidget(void *frameHwnd);
+
 namespace
 {
-	// The window's owner bridge into the MFC frame (created on first open, like the
-	// other Qt tool windows).
-	QWinWidget *s_ownerBridge = NULL;
+	// The window's owner (created on first open, like the other Qt tool windows).
+	QWidget *s_ownerBridge = NULL;
 }
 
 WBQtTracingOverlayWindow::WBQtTracingOverlayWindow(QWidget *owner)
@@ -164,8 +167,7 @@ extern "C" int WBQtTracingOverlay_Open(void *frameHwnd)
 	}
 	if (s_ownerBridge == NULL)
 	{
-		s_ownerBridge = new QWinWidget(reinterpret_cast<HWND>(frameHwnd));
-		s_ownerBridge->hide();
+		s_ownerBridge = WBQt_CreateOwnerBridgeWidget(frameHwnd);
 	}
 	WBQtTracingOverlayWindow *w = WBQtTracingOverlayWindow::instance();
 	if (w == NULL)

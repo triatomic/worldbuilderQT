@@ -28,6 +28,7 @@
 #include "wbview3d.h"
 #include "ToastDialog.h"
 #ifdef RTS_HAS_QT
+#include "qt/WBQtBridge.h"
 #include "qt/WBQtPanelBridge.h"
 #include "qt/panels/WBQtGlobalLightBridge.h"
 #include "qt/panels/WBQtCameraBridge.h"
@@ -146,6 +147,21 @@ BOOL CWB3dFrameWnd::LoadFrame(UINT nIDResource,
 	return(ret);
 }
 
+#ifdef RTS_HAS_QT
+void CWB3dFrameWnd::ActivateFrame(int nCmdShow)
+{
+	// Stage 1 inversion: the MFC frame is the hidden command hub; InitialUpdateFrame
+	// calls this with SW_SHOW on every doc open (startup, File>Open, MRU, drag-drop).
+	// Route the activation to the visible Qt main window instead.
+	if (WBQt_InversionActive())
+	{
+		WBQt_ActivateMainWindow();
+		return;
+	}
+	CMainFrame::ActivateFrame(nCmdShow);
+}
+#endif
+
 
 void CWB3dFrameWnd::OnMove(int x, int y) 
 {
@@ -199,6 +215,23 @@ BOOL CWB3dFrameWnd::PreTranslateMessage(MSG* pMsg)
 	}
 #endif
 	// DEBUG_LOG(("Clicked\n"));
+#ifdef RTS_HAS_QT
+	// Stage 1 inversion: fullscreen belongs to the Qt main window (the frame is hidden;
+	// its style-strip fullscreen below would act on an invisible window).
+	if (WBQt_InversionActive() && pMsg->message == WM_KEYDOWN)
+	{
+		if (pMsg->wParam == VK_F11)
+		{
+			WBQt_ToggleFullscreen();
+			return TRUE;
+		}
+		if (pMsg->wParam == VK_ESCAPE && WBQt_IsFullscreen())
+		{
+			WBQt_ToggleFullscreen();
+			return TRUE;
+		}
+	}
+#endif
     if (pMsg->message == WM_KEYDOWN)
     {
 		// DEBUG_LOG(("clicked \n"));

@@ -525,23 +525,71 @@ BOOL CWorldBuilderApp::InitInstance()
 
 	loadWindow.setProgress("Starting WorldBuilder...");
 
-	// The one and only window has been initialized, so show and update it.
+	// The one and only window has been initialized, so show and update it. Stage 1
+	// inversion: when the Qt main window takes over as the visible top-level, the MFC
+	// frame stays hidden -- the Qt block below shows it only on the legacy/fallback path.
+#ifdef RTS_HAS_QT
+	if (!WBQt_InversionActive())
+	{
+		m_pMainWnd->ShowWindow(SW_SHOW);
+		m_pMainWnd->UpdateWindow();
+	}
+#else
 	m_pMainWnd->ShowWindow(SW_SHOW);
 	m_pMainWnd->UpdateWindow();
+#endif
 
 #ifdef RTS_HAS_QT
 	// Bring up the Qt event loop now that the MFC main window exists. Qt is pumped from
 	// inside MFC's CWinApp::Run() (QMfcApp::pluginInstance), so MFC keeps owning the loop.
 	WBQt_Startup();
 
-	// Phase 2: host the live 3D viewport inside the Qt layer (in-place). The frame and 3D
-	// view exist now (created by ProcessShellCommand), so reparent the view HWND into a Qt
-	// host that is a child of the frame.
+	// Stage 1 inversion: a Qt QMainWindow becomes the visible top-level (native chrome +
+	// the viewport as its central widget); the MFC frame stays alive but HIDDEN as the
+	// command-routing hub (menu/toolbar actions still post WM_COMMAND to it). If the
+	// main window cannot be created, the legacy chrome-in-frame path below runs and
+	// shows the frame as before.
 	{
 		WbView3d *p3d = CWorldBuilderDoc::GetActive3DView();
 		CMainFrame *pFrame = CMainFrame::GetMainFrame();
+		Bool inverted = false;
 		if (p3d != NULL && pFrame != NULL)
 		{
+			Int mainLeft = GetProfileInt(MAIN_FRAME_SECTION, "Left", 100);
+			Int mainTop = GetProfileInt(MAIN_FRAME_SECTION, "Top", 100);
+			Int mainWidth = GetProfileInt(MAIN_FRAME_SECTION, "Width", THREE_D_VIEW_WIDTH);
+			Int mainHeight = GetProfileInt(MAIN_FRAME_SECTION, "Height", THREE_D_VIEW_HEIGHT);
+			if (WBQt_CreateMainWindow(pFrame->GetSafeHwnd(), mainLeft, mainTop, mainWidth, mainHeight))
+			{
+				// Chrome first (the menu/toolbar/status become native QMainWindow bars),
+				// then the viewport into the central pane, then ONE show so the window
+				// appears fully laid out (a single device-size cascade).
+				if (WBQtChrome_InstallMenuBar(pFrame->GetSafeHwnd(), ::GetMenu(pFrame->GetSafeHwnd())))
+				{
+					::SetMenu(pFrame->GetSafeHwnd(), NULL);
+					if (WBQtChrome_InstallToolBar())
+					{
+						WBQtChrome_SetMfcBarVisible(0, 0);
+					}
+					if (WBQtChrome_InstallStatusBar())
+					{
+						WBQtChrome_SetMfcBarVisible(1, 0);
+					}
+				}
+				pFrame->m_qtViewportHost = (HWND)WBQt_HostViewport(pFrame->GetSafeHwnd(), p3d->GetSafeHwnd());
+				WBQt_ShowMainWindow();
+				inverted = true;
+			}
+		}
+		if (!inverted)
+		{
+			// Legacy/fallback: the MFC frame stays the visible top-level -- show it now
+			// (the startup show above was skipped) and build the chrome column inside it.
+			WBQt_DisableInversion();
+			m_pMainWnd->ShowWindow(SW_SHOW);
+			m_pMainWnd->UpdateWindow();
+			if (p3d != NULL && pFrame != NULL)
+			{
 			pFrame->m_qtViewportHost = (HWND)WBQt_HostViewport(pFrame->GetSafeHwnd(), p3d->GetSafeHwnd());
 			pFrame->positionQtViewportHost();
 			// Tier 4a: the Qt menu bar replaces the MFC menu -- walk the live menu into
@@ -567,6 +615,7 @@ BOOL CWorldBuilderApp::InitInstance()
 			else
 			{
 			pFrame->addQtThemeMenu();
+			}
 			}
 		}
 	}

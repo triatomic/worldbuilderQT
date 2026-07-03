@@ -12,6 +12,7 @@
 #include "Lib/BaseType.h"
 #include "MainFrm.h"
 #include "WorldBuilder.h"
+#include "qt/WBQtBridge.h"
 #include "qt/WBQtChromeBridge.h"
 
 #ifdef RTS_HAS_QT
@@ -57,6 +58,19 @@ LRESULT CMainFrame::OnSetMessageString(WPARAM wParam, LPARAM lParam)
 		WBQtChrome_SetStatusText("");
 	}
 	return CFrameWnd::OnSetMessageString(wParam, lParam);
+}
+
+//----------------------------------------------------------------------------------------
+// CMainFrame::OnUpdateFrameTitle -- declared (guarded) in MainFrm.h. MFC composes the
+// frame title (doc name + FWS_ADDTOTITLE app name) on the hidden frame as before; mirror
+// the result onto the Qt main window, the visible top-level (stage 1 inversion).
+//----------------------------------------------------------------------------------------
+void CMainFrame::OnUpdateFrameTitle(BOOL bAddToTitle)
+{
+	CFrameWnd::OnUpdateFrameTitle(bAddToTitle);
+	CString title;
+	GetWindowText(title);
+	WBQt_SetMainWindowTitle((LPCTSTR)title);
 }
 
 //----------------------------------------------------------------------------------------
