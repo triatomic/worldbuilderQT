@@ -43,6 +43,7 @@ enum
 
 // WorldBuilder command ids (res/resource.h -- transcribed as literals so this TU stays
 // free of the MFC resource header; keep in sync with resource.h + the .rc accel table).
+#define WBID_EDIT_DELETE                32931
 #define WBID_EDIT_PICKANYTHING          33001
 #define WBID_EDIT_PICKSTRUCTS           32994
 #define WBID_EDIT_PICKINFANTRY          32995
@@ -289,12 +290,23 @@ extern "C" int WBQtShortcuts_TranslateKey(void *pMsgVoid)
 		}
 	}
 
-	// Bare keys the MFC view must keep owning -- never translate these (WbView::OnKeyDown
-	// handles Delete/Backspace object-delete and [ ] brush resize; arrows nudge). Only bare
-	// (no modifier) -- Shift+Del / Alt+Back above are real table rows and already matched.
+	// Bare Delete/Backspace = delete the selected object. Under the inversion the viewport's
+	// WM_KEYDOWN does not reliably reach WbView::OnKeyDown (the key is consumed in the Qt pump
+	// before MFC dispatch), so instead of deferring to OnKeyDown we post ID_EDIT_DELETE the same
+	// way a menu click does (unchecked -- its update probe reports disabled through the frame,
+	// which is why the gated post and the old OnKeyDown path both failed). Matches Edit>Delete.
+	if (mods == WBK_NONE && (vk == VK_DELETE || vk == VK_BACK))
+	{
+		WBQtShortcuts_PostCommandUnchecked(WBID_EDIT_DELETE);
+		return 1;
+	}
+
+	// The remaining bare keys the MFC view still owns via WbView::OnKeyDown ([ ] brush resize;
+	// arrows nudge) -- never translate these. Only bare (no modifier); Shift+Del / Alt+Back
+	// above are real table rows and already matched.
 	if (mods == WBK_NONE)
 	{
-		if (vk == VK_DELETE || vk == VK_BACK || vk == VK_OEM_4 || vk == VK_OEM_6
+		if (vk == VK_OEM_4 || vk == VK_OEM_6
 			|| vk == VK_LEFT || vk == VK_RIGHT || vk == VK_UP || vk == VK_DOWN)
 		{
 			return 0;

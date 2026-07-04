@@ -2,9 +2,14 @@
 #include "WBQtObjectPropsPanel.h"
 #include "WBQtObjectPropsBridge.h"
 #include "WBQtScrubSpinBox.h"
+#include "WBQtShortcuts.h"	// WBQtShortcuts_PostCommand -- post the delete command
 
 #include <QCheckBox>
+#include <QApplication>
+#include <QAbstractSpinBox>
+#include <QEvent>
 #include <QComboBox>
+#include <QKeyEvent>
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -288,6 +293,10 @@ WBQtObjectPropsPanel::WBQtObjectPropsPanel(QWidget *owner)
 	connect(m_maxRange, SIGNAL(editingFinished()), this, SLOT(onMaxRangeChanged()));
 	connect(m_upgrades, SIGNAL(itemSelectionChanged()), this, SLOT(onUpgradeSelectionChanged()));
 
+	// App-level filter so a bare Delete/Backspace anywhere in this panel deletes the object
+	// (see eventFilter). qApp outlives the panel; the panel is process-lived (one instance).
+	qApp->installEventFilter(this);
+
 	s_instance = this;
 }
 
@@ -309,6 +318,47 @@ void WBQtObjectPropsPanel::rebuildTeams()
 			m_team->addItem(QString());
 		}
 	}
+}
+
+// ID_EDIT_DELETE (resource.h) -- the MFC view command that deletes the selected object(s).
+#define WBID_EDIT_DELETE 32931
+
+// App-level filter: a bare Delete/Backspace pressed anywhere INSIDE this panel deletes the
+// selected map object. Installed on qApp (in the ctor) so it sees the key before the focused
+// child widget (a combo / list / checkbox) can consume it -- a plain keyPressEvent override on
+// the panel never fires because those children handle the key themselves. Gated so it only acts
+// when the focus is a descendant of this panel and not a text-editing widget.
+bool WBQtObjectPropsPanel::eventFilter(QObject *watched, QEvent *event)
+{
+	if (event->type() == QEvent::KeyPress)
+	{
+		QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
+		if ((keyEvent->key() == Qt::Key_Delete || keyEvent->key() == Qt::Key_Backspace)
+			&& keyEvent->modifiers() == Qt::NoModifier)
+		{
+			QWidget *f = QApplication::focusWidget();
+			// Only when the focus is this panel or one of its children.
+			if (f != NULL && (f == this || isAncestorOf(f)))
+			{
+				// A line edit / editable combo / spin box needs Delete/Backspace to edit text.
+				bool textField = qobject_cast<QLineEdit *>(f) != NULL
+					|| qobject_cast<QAbstractSpinBox *>(f) != NULL;
+				QComboBox *combo = qobject_cast<QComboBox *>(f);
+				if (combo != NULL && combo->isEditable())
+				{
+					textField = true;
+				}
+				if (!textField)
+				{
+					// Route to the MFC view's OnEditDelete like a menu click (unchecked: the
+					// gated post drops ID_EDIT_DELETE because its update probe reports disabled).
+					WBQtShortcuts_PostCommandUnchecked(WBID_EDIT_DELETE);
+					return true;	// consume it
+				}
+			}
+		}
+	}
+	return QWidget::eventFilter(watched, event);
 }
 
 void WBQtObjectPropsPanel::pushRefresh()

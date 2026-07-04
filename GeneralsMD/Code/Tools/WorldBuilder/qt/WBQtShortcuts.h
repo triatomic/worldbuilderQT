@@ -29,6 +29,12 @@ int WBQtShortcuts_TranslateKey(void *pMsg);
 // disabled command (returns without posting). Called by the translate function.
 void WBQtShortcuts_PostCommand(int commandId);
 
+// Same, but WITHOUT the CCmdUI enabled-check -- posts WM_COMMAND to the frame directly,
+// exactly like a Qt menu/toolbar click. Use for commands (e.g. ID_EDIT_DELETE) whose
+// CN_UPDATE_COMMAND_UI probe reports disabled through the frame even though the active
+// view has a live handler; the menu path never gates them either.
+void WBQtShortcuts_PostCommandUnchecked(int commandId);
+
 #ifdef __cplusplus
 }
 #endif

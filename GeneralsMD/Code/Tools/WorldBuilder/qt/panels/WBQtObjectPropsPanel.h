@@ -19,6 +19,8 @@ class QCheckBox;
 class QComboBox;
 class QGroupBox;
 class QLabel;
+class QEvent;
+class QKeyEvent;
 class QLineEdit;
 class QListWidget;
 class QPushButton;
@@ -35,6 +37,14 @@ public:
 	void pushRefresh();
 
 	static WBQtObjectPropsPanel *instance() { return s_instance; }
+
+protected:
+	// Bare Delete/Backspace anywhere in this panel deletes the selected map object (== the MFC
+	// view's OnEditDelete). The Qt inversion's focus gate only routes those keys when the
+	// viewport or main window owns focus, so with this panel focused they would otherwise be
+	// lost. An app-level event filter catches the key before whatever child widget has focus
+	// (a combo / list / checkbox) can swallow it.
+	bool eventFilter(QObject *watched, QEvent *event);
 
 private slots:
 	void onNameChanged();

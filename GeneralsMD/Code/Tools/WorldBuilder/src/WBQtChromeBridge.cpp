@@ -197,6 +197,20 @@ extern "C" void WBQtShortcuts_PostCommand(int commandId)
 	::PostMessage(pFrame->GetSafeHwnd(), WM_COMMAND, MAKEWPARAM(commandId, 0), 0);
 }
 
+extern "C" void WBQtShortcuts_PostCommandUnchecked(int commandId)
+{
+	// == the Qt menu/toolbar delivery (WBQtChrome onActionTriggered): a bare posted WM_COMMAND
+	// with no CCmdUI enable-gate. ID_EDIT_DELETE's update probe reports disabled through the
+	// frame (the view has an ON_COMMAND but no ON_UPDATE_COMMAND_UI), yet the command routes and
+	// runs fine -- which is why Edit>Delete works but the gated post did not.
+	CMainFrame *pFrame = CMainFrame::GetMainFrame();
+	if (pFrame == NULL || pFrame->GetSafeHwnd() == NULL)
+	{
+		return;
+	}
+	::PostMessage(pFrame->GetSafeHwnd(), WM_COMMAND, MAKEWPARAM(commandId, 0), 0);
+}
+
 extern "C" int WBQtChromeData_GetPrompt(int id, char *bufOut, int cap)
 {
 	if (bufOut == NULL || cap <= 0)
