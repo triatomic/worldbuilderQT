@@ -218,8 +218,14 @@ void OpenMap::qtMPopulateBigs(void)
 
 // == populatePackedMapList minus the listbox: archive walk + display-name extraction; the
 // paths stay parallel to m_fullMapList for the pick-time resolve.
-void OpenMap::qtMPopulateMapsInBig(const CString &bigPath)
+void OpenMap::qtMPopulateMapsInBig(const CString &bigPathRef)
 {
+	// bigPathRef often aliases an element of s_qtView (qtPick passes s_qtView[row] here). The
+	// RemoveAll()s below free that element's buffer, leaving the reference dangling -- the later
+	// m_currentBig = bigPath then copied freed memory, so the nested-map extract opened an EMPTY
+	// archive filename and crashed. Take a private copy up front so it survives the clears.
+	CString bigPath = bigPathRef;
+
 	ArchiveFile *pArchive = TheArchiveFileSystem
 		? TheArchiveFileSystem->openArchiveFile((const char *)bigPath) : NULL;
 	if (!pArchive)
