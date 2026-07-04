@@ -942,6 +942,7 @@
 #define IDC_FIND_WP_BUTTON              61493
 #define IDC_REFRESH_WP_BUTTON           61494
 #define IDB_WB_LOGO                     61495
+#define IDB_TOOLBAR_DARK                61700
 #define IDC_EXPAND                      61495
 #define IDC_TOGGLE_PREVIEW_SOUND        61496
 #define IDC_DECREASE                    61496

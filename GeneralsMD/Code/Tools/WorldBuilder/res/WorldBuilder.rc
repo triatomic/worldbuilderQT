@@ -81,6 +81,8 @@ IDI_Hide                ICON                    "IDI_Hide.ico"
 
 IDR_MAINFRAME           BITMAP                  "Toolbar.bmp"
 
+IDB_TOOLBAR_DARK        BITMAP                  "Toolbar_dark.bmp"
+
 IDR_TOOLBAR1            BITMAP                  "toolbar1.bmp"
 
 IDR_TOOLBAR2            BITMAP                  "toolbar2.bmp"

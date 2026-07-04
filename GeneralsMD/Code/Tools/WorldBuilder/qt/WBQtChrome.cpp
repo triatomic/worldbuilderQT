@@ -35,6 +35,7 @@
 #include <QStyle>
 #include <QTimer>
 #include <QToolBar>
+#include <QVariant>
 
 #include "resource.h"		// ID_QTTHEME_* (pure #defines; res is on the qt include path)
 #include "WBQtTheme.h"
@@ -197,52 +198,16 @@ bool WBQtChromeController::installToolBar()
 		return false;
 	}
 
-	// The strip, converted to 32bpp so the source depth doesn't matter. MFC's
-	// AfxLoadSysColorBitmap treats RGB(192,192,192) as the button face -- transparent here.
-	QImage strip;
+	// Dark mode gets a repainted strip (IDB_TOOLBAR_DARK); light mode keeps the original
+	// IDR_MAINFRAME strip. applyToolbarStrip() re-slices from whichever the theme wants and
+	// is re-run on paletteChanged, so the icons swap live on a theme toggle.
+	int stripIconW = 0;
+	int stripIconH = 0;
+	QImage strip = loadToolbarStrip(WBQtTheme::effectiveDark() ? IDB_TOOLBAR_DARK : IDR_MAINFRAME,
+		stripIconW, stripIconH);
+	if (strip.isNull())
 	{
-		HBITMAP hbm = (HBITMAP)::LoadImageA(inst, MAKEINTRESOURCEA(IDR_MAINFRAME),
-			IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION);
-		if (hbm == NULL)
-		{
-			return false;
-		}
-		BITMAP bm;
-		memset(&bm, 0, sizeof(bm));
-		::GetObjectA(hbm, sizeof(bm), &bm);
-		QImage img(bm.bmWidth, bm.bmHeight, QImage::Format_ARGB32);
-		BITMAPINFO bi;
-		memset(&bi, 0, sizeof(bi));
-		bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-		bi.bmiHeader.biWidth = bm.bmWidth;
-		bi.bmiHeader.biHeight = -bm.bmHeight;	// top-down rows, matching QImage
-		bi.bmiHeader.biPlanes = 1;
-		bi.bmiHeader.biBitCount = 32;
-		bi.bmiHeader.biCompression = BI_RGB;
-		HDC dc = ::GetDC(NULL);
-		int got = ::GetDIBits(dc, hbm, 0, bm.bmHeight, img.bits(), &bi, DIB_RGB_COLORS);
-		::ReleaseDC(NULL, dc);
-		::DeleteObject(hbm);
-		if (got != bm.bmHeight)
-		{
-			return false;
-		}
-		for (int y = 0; y < img.height(); y++)
-		{
-			QRgb *line = reinterpret_cast<QRgb *>(img.scanLine(y));
-			for (int x = 0; x < img.width(); x++)
-			{
-				if ((line[x] & 0x00FFFFFF) == 0x00C0C0C0)
-				{
-					line[x] = 0;
-				}
-				else
-				{
-					line[x] |= 0xFF000000;
-				}
-			}
-		}
-		strip = img;
+		return false;
 	}
 
 	m_toolBar = new QToolBar(m_host);
@@ -260,10 +225,11 @@ bool WBQtChromeController::installToolBar()
 			continue;
 		}
 		QIcon icon(QPixmap::fromImage(strip.copy(imageIndex * iconW, 0, iconW, iconH)));
-		imageIndex++;
 		QAction *action = m_toolBar->addAction(icon, QString());
 		action->setData(id);
 		action->setProperty("wbToolButton", true);
+		action->setProperty("wbCellIndex", imageIndex);	// so applyToolbarStrip can re-slice
+		imageIndex++;
 		char text[512];
 		text[0] = 0;
 		if (WBQtChromeData_GetTooltip(id, text, sizeof(text)))
@@ -302,6 +268,95 @@ bool WBQtChromeController::installToolBar()
 	connect(m_toolBarTimer, SIGNAL(timeout()), this, SLOT(onToolBarTick()));
 	m_toolBarTimer->start();
 	return true;
+}
+
+// Load a toolbar bitmap strip by resource id, converted to 32bpp with RGB(192,192,192) keyed
+// transparent (== MFC's AfxLoadSysColorBitmap button-face treatment). Returns a null QImage on
+// failure. outW/outH report the bitmap's pixel size (unused by callers -- cells are fixed by the
+// RT_TOOLBAR resource -- but kept for symmetry).
+QImage WBQtChromeController::loadToolbarStrip(int resId, int &outW, int &outH) const
+{
+	outW = 0;
+	outH = 0;
+	HINSTANCE inst = ::GetModuleHandleA(NULL);
+	HBITMAP hbm = (HBITMAP)::LoadImageA(inst, MAKEINTRESOURCEA(resId),
+		IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION);
+	if (hbm == NULL)
+	{
+		return QImage();
+	}
+	BITMAP bm;
+	memset(&bm, 0, sizeof(bm));
+	::GetObjectA(hbm, sizeof(bm), &bm);
+	QImage img(bm.bmWidth, bm.bmHeight, QImage::Format_ARGB32);
+	BITMAPINFO bi;
+	memset(&bi, 0, sizeof(bi));
+	bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+	bi.bmiHeader.biWidth = bm.bmWidth;
+	bi.bmiHeader.biHeight = -bm.bmHeight;	// top-down rows, matching QImage
+	bi.bmiHeader.biPlanes = 1;
+	bi.bmiHeader.biBitCount = 32;
+	bi.bmiHeader.biCompression = BI_RGB;
+	HDC dc = ::GetDC(NULL);
+	int got = ::GetDIBits(dc, hbm, 0, bm.bmHeight, img.bits(), &bi, DIB_RGB_COLORS);
+	::ReleaseDC(NULL, dc);
+	::DeleteObject(hbm);
+	if (got != bm.bmHeight)
+	{
+		return QImage();
+	}
+	for (int y = 0; y < img.height(); y++)
+	{
+		QRgb *line = reinterpret_cast<QRgb *>(img.scanLine(y));
+		for (int x = 0; x < img.width(); x++)
+		{
+			if ((line[x] & 0x00FFFFFF) == 0x00C0C0C0)
+			{
+				line[x] = 0;
+			}
+			else
+			{
+				line[x] |= 0xFF000000;
+			}
+		}
+	}
+	outW = bm.bmWidth;
+	outH = bm.bmHeight;
+	return img;
+}
+
+// Re-slice every tool button's icon from the theme's strip (dark -> IDB_TOOLBAR_DARK, light ->
+// IDR_MAINFRAME), then re-apply the six Qt-native standard icons on top so New/Open/Save/Cut/
+// Copy/Paste stay native in both themes. Called at install and on every paletteChanged.
+void WBQtChromeController::applyToolbarStrip()
+{
+	if (m_toolBar == NULL)
+	{
+		return;
+	}
+	int w = 0;
+	int h = 0;
+	QImage strip = loadToolbarStrip(WBQtTheme::effectiveDark() ? IDB_TOOLBAR_DARK : IDR_MAINFRAME, w, h);
+	if (strip.isNull())
+	{
+		return;
+	}
+	QSize iconSize = m_toolBar->iconSize();
+	int iconW = iconSize.width();
+	int iconH = iconSize.height();
+	QList<QAction *> actions = m_toolBar->actions();
+	for (int i = 0; i < actions.size(); i++)
+	{
+		QVariant cell = actions[i]->property("wbCellIndex");
+		if (!cell.isValid())
+		{
+			continue;
+		}
+		int idx = cell.toInt();
+		actions[i]->setIcon(QIcon(QPixmap::fromImage(strip.copy(idx * iconW, 0, iconW, iconH))));
+	}
+	// Keep the standard six Qt-native in both themes (== the light-mode behaviour).
+	applyStandardToolIcons();
 }
 
 // Qt-native icons for New/Open/Save/Cut/Copy/Paste. The first three come from the style's
@@ -390,7 +445,8 @@ void WBQtChromeController::applyStandardToolIcons()
 
 void WBQtChromeController::onPaletteChanged()
 {
-	applyStandardToolIcons();
+	// Swap the tool strip for the new theme (dark/light), then re-apply the standard six.
+	applyToolbarStrip();
 }
 
 void WBQtChromeController::onToolBarTick()

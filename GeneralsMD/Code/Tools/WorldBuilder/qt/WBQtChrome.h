@@ -7,6 +7,7 @@
 #define WB_QT_CHROME_H
 
 #include <QIcon>
+#include <QImage>
 #include <QList>
 #include <QObject>
 
@@ -56,6 +57,10 @@ private:
 	void addThemeMenu();
 	QIcon standardToolIcon(int id) const;
 	void applyStandardToolIcons();
+	// Tier 4b (dark-mode icons): load a 16x15-cell toolbar strip bitmap (RGB(192,192,192)
+	// keyed transparent) by resource id; re-slice the tool buttons from the theme's strip.
+	QImage loadToolbarStrip(int resId, int &iconW, int &iconH) const;
+	void applyToolbarStrip();
 	QAction *makeCommandAction(QMenu *menu, const QString &text, int commandId);
 	void refreshMenuState(QMenu *menu);
 	void rebuildMruSection();
