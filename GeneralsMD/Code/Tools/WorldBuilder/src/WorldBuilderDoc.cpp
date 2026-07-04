@@ -420,6 +420,11 @@ BEGIN_MESSAGE_MAP(CWorldBuilderDoc, CDocument)
 	ON_COMMAND(ID_TS_CANONICAL, OnTsCanonical)
 	ON_UPDATE_COMMAND_UI(ID_TS_CANONICAL, OnUpdateTsCanonical)
 	ON_COMMAND(ID_FILE_RESIZE, OnFileResize)
+#ifdef RTS_HAS_QT
+	// Intercept ID_FILE_CLOSE at the document (before CDocument's default close, which
+	// destroys the Qt-hosted 3D view and fails to recreate it -- "Command failed.").
+	ON_COMMAND(ID_FILE_CLOSE, OnFileClose)
+#endif
 	
 	ON_COMMAND(ID_FILE_GENERATE_MAPSTRNINI, OnGenerateMapStrAndIni)
 	ON_COMMAND(ID_FILE_WBSETTINGS, OnOpenWorldbuilderSettings)
@@ -1993,6 +1998,24 @@ void CWorldBuilderDoc::RefreshAndOptimizeHeightMap()
 void CWorldBuilderDoc::OnUpdateTsCanonical(CCmdUI* pCmdUI) 
 {
 }
+
+#ifdef RTS_HAS_QT
+// File>Close under the Qt inversion. CDocument's default close destroys the 3D view and
+// its frame, but that view is hosted inside the Qt main window, so Create3DView ->
+// CreateNewFrame fails to rebuild it and the command reports "Command failed." This is a
+// single-document app (the window IS the map), so Close has no distinct meaning from New;
+// route it to the File>New path, which REUSES the hosted view (OnNewDocument resets its
+// contents in place). The save-modified prompt still fires along the New path. Handled at
+// the document because MFC routes ID_FILE_CLOSE to the doc before the app.
+void CWorldBuilderDoc::OnFileClose()
+{
+	// Route Close to the File>New command (CN_COMMAND == 0) through the app's routing: it
+	// reuses the hosted view instead of destroying/recreating the frame. This is safe on the
+	// legacy/non-inverted path too (New always works), and avoids re-dispatching ID_FILE_CLOSE
+	// back into this same override.
+	AfxGetApp()->OnCmdMsg(ID_FILE_NEW, 0, NULL, NULL);
+}
+#endif
 
 void CWorldBuilderDoc::OnFileResize() 
 {

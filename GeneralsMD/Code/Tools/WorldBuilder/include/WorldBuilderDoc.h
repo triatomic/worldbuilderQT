@@ -196,6 +196,9 @@ protected:
 	afx_msg void OnTsCanonical();
 	afx_msg void OnUpdateTsCanonical(CCmdUI* pCmdUI);
 	afx_msg void OnFileResize();
+#ifdef RTS_HAS_QT
+	afx_msg void OnFileClose();
+#endif
 	afx_msg void OnGenerateMapStrAndIni();
 
 	afx_msg void OnJumpToMapFolderWBData();
