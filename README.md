@@ -1,3 +1,5 @@
+[![Download WorldBuilder ZH](https://img.shields.io/badge/DOWNLOAD_WORLDBUILDER_ZH-555?style=for-the-badge)](https://github.com/triatomic/worldbuilderQT/releases/latest)&nbsp;[![Latest release](https://img.shields.io/github/v/release/triatomic/worldbuilderQT?style=for-the-badge&label=&color=44cc11)](https://github.com/triatomic/worldbuilderQT/releases/latest)&nbsp;![Released](https://img.shields.io/github/release-date/triatomic/worldbuilderQT?style=for-the-badge&label=Released&labelColor=222&color=44cc11)
+
 # Qt WorldBuilder (Zero Hour)
 
 A modern **Qt** port of the *Command & Conquer: Generals — Zero Hour* **WorldBuilder** map editor:
