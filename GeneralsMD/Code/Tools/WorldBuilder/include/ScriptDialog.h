@@ -132,8 +132,8 @@ public:
 	// flag (== OnScriptActivate). The Qt window rebuilds after to pick up the new flags.
 	void qtVerify(void);
 	void qtToggleActive(void);
-	// 9d: fill the description (getUiText) + comment panels for the node at listTypeInt.
-	// Skips the expensive cross-script reference scan (the MFC 'Disable references' path).
+	// 9d: fill the description (getUiText) + comment panels for the node at listTypeInt,
+	// including the cross-script "[Referenced in]" tag ('Disable references' skips it).
 	void qtGetDetail(int listTypeInt, char *descOut, int descCap, char *commentOut, int commentCap);
 	// 9d option checkboxes (which == the WBQT_SCK_* ids) + remaining command buttons.
 	int  qtGetCheckbox(int which);
@@ -232,6 +232,7 @@ protected:
 
 	AsciiString incrementStringNumber(const AsciiString& input);
 	void applySmartCopyIncrement(Script* pScr);
+	AsciiString buildReferencedInTag(Script *pScript); ///< "[Referenced in] : ..." (empty if none/disabled)
 
 	virtual BOOL PreTranslateMessage(MSG* pMsg);
 
