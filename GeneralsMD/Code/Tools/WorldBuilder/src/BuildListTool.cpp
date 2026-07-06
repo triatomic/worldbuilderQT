@@ -30,6 +30,9 @@
 #include "ObjectTool.h"
 #include "PointerTool.h"
 #include "PickUnitDialog.h"
+#ifdef RTS_HAS_QT
+#include "qt/panels/WBQtPickUnitBridge.h"
+#endif
 #include "wbview3d.h"
 #include "WHeightMapEdit.h"
 #include "WorldBuilderDoc.h"
@@ -41,6 +44,37 @@
 
 Bool BuildListTool::m_isActive = false;
 PickUnitDialog* BuildListTool::m_static_pickBuildingDlg = NULL;
+
+#ifdef RTS_HAS_QT
+// The Qt inversion floats the native Qt pick panel instead of the MFC PickUnitDialog.
+// Decided once in createWindow (qApp is up well before the tool can activate); when Qt
+// is unavailable every path below falls back to the MFC panel.
+static Bool s_qtPickPanel = false;
+
+// Show the Qt panel (created on the first call at the saved profile position) without
+// activating. Returns false when Qt is not up.
+static Bool wbQtShowPickPanel(void)
+{
+	static const int allowable[1] = {ES_STRUCTURE};
+	int top = ::AfxGetApp()->GetProfileInt(BUILD_PICK_PANEL_SECTION, "Top", 0);
+	int left = ::AfxGetApp()->GetProfileInt(BUILD_PICK_PANEL_SECTION, "Left", 0);
+	return WBQtBuildPickPanel_Show(allowable, 1, 1, top, left) != 0;
+}
+#endif
+
+/// The currently picked buildable (the Qt panel's live selection under the inversion,
+/// else the MFC dialog's).
+static AsciiString getPickedBuilding(PickUnitDialog &mfcDlg)
+{
+#ifdef RTS_HAS_QT
+	if (s_qtPickPanel) {
+		char picked[256];
+		WBQtBuildPickPanel_GetPicked(picked, sizeof(picked));
+		return AsciiString(picked);
+	}
+#endif
+	return mfcDlg.getPickedUnit();
+}
 
 /// Constructor
 BuildListTool::BuildListTool(void) :
@@ -60,6 +94,14 @@ BuildListTool::~BuildListTool(void)
 
 void BuildListTool::createWindow(void)
 {
+#ifdef RTS_HAS_QT
+	// Qt inversion: float the native Qt pick panel; the MFC dialog below is the fallback.
+	if (wbQtShowPickPanel()) {
+		s_qtPickPanel = true;
+		m_created = true;
+		return;
+	}
+#endif
 	CRect frameRect;
 	frameRect.top = ::AfxGetApp()->GetProfileInt(BUILD_PICK_PANEL_SECTION, "Top", 0);
 	frameRect.left =::AfxGetApp()->GetProfileInt(BUILD_PICK_PANEL_SECTION, "Left", 0);
@@ -78,6 +120,17 @@ Bool BuildListTool::isDoingAdd(void)
 	if (!m_created) {
 		return false;
 	}
+#ifdef RTS_HAS_QT
+	if (s_qtPickPanel) {
+		if (!WBQtBuildPickPanel_IsVisible()) {
+			return false;
+		}
+		if (getPickedBuilding(m_pickBuildingDlg).isEmpty()) {
+			return false;
+		}
+		return true;
+	}
+#endif
 	if (!m_pickBuildingDlg.IsWindowVisible()) {
 		return false;
 	}
@@ -96,6 +149,12 @@ void BuildListTool::addBuilding()
 	//if (dlg.DoModal() == IDOK) {
 	//}
 	//CMainFrame::GetMainFrame()->showOptionsDialog(IDD_OBJECT_OPTIONS);
+#ifdef RTS_HAS_QT
+	if (s_qtPickPanel) {
+		wbQtShowPickPanel();
+		return;
+	}
+#endif
 	m_static_pickBuildingDlg->ShowWindow(SW_SHOWNA);
 }
 
@@ -116,6 +175,12 @@ void BuildListTool::activate()
 	if (!m_created) {
 		createWindow();
 	}
+#ifdef RTS_HAS_QT
+	if (s_qtPickPanel) {
+		wbQtShowPickPanel();
+		return;
+	}
+#endif
 	m_pickBuildingDlg.ShowWindow(SW_SHOWNA);
 }
 
@@ -129,6 +194,12 @@ void BuildListTool::deactivate()
 	p3View->setObjTracking(NULL, loc, 0, false);	// Turn off object cursor tracking.
 	p3View->resetRenderObjects();
 	p3View->invalObjectInView(NULL);
+#ifdef RTS_HAS_QT
+	if (s_qtPickPanel) {
+		WBQtBuildPickPanel_Hide();
+		return;
+	}
+#endif
 	m_pickBuildingDlg.ShowWindow(SW_HIDE);
 }
 
@@ -195,7 +266,7 @@ void BuildListTool::mouseMoved(TTrackingMode m, CPoint viewPt, WbView* pView, CW
 	WbView3d *p3View = pDoc->GetActive3DView();
 
 	if (isDoingAdd()) {
-		MapObject *pCur = ObjectOptions::getObjectNamed(m_pickBuildingDlg.getPickedUnit());
+		MapObject *pCur = ObjectOptions::getObjectNamed(getPickedBuilding(m_pickBuildingDlg));
 		if (!pCur) {
 			p3View->setObjTracking(NULL, cpt, 0, false);
 			return;
@@ -294,8 +365,9 @@ void BuildListTool::mouseUp(TTrackingMode m, CPoint viewPt, WbView* pView, CWorl
 	loc.z = ObjectOptions::getCurObjectHeight();
 	
 	Real angle = ObjectTool::calcAngle(m_downPt3d, cpt, pView); // always calc angle
-	if (!m_pickBuildingDlg.getPickedUnit().isEmpty()) {
-		BuildList::addBuilding(loc, angle, m_pickBuildingDlg.getPickedUnit());
+	AsciiString pickedUnit = getPickedBuilding(m_pickBuildingDlg);
+	if (!pickedUnit.isEmpty()) {
+		BuildList::addBuilding(loc, angle, pickedUnit);
 	}
 	//CMainFrame::GetMainFrame()->showOptionsDialog(IDD_BUILD_LIST_PANEL);
 }

@@ -3,7 +3,7 @@
 // (src/WBQtPickUnitBridge.cpp) supplies the filtered template catalog and the shared 128x128
 // preview render. The _Run entry points return -1 when Qt is not up yet (a map opened from the
 // command line validates its objects BEFORE WBQt_Startup) so callers fall back to the MFC
-// dialogs. BuildListTool's modeless pick panel stays MFC.
+// dialogs. BuildListTool's modeless pick panel runs through the _BuildPickPanel entry points.
 #ifndef WB_QT_PICKUNIT_BRIDGE_H
 #define WB_QT_PICKUNIT_BRIDGE_H
 
@@ -24,6 +24,21 @@ int WBQtPickUnit_Run(void *frameHwnd, const int *allowable, int allowCount, int 
 // 2 on "Continue without replacing..." (== IDIGNORE), 0 on cancel, -1 when Qt is unavailable.
 int WBQtReplaceUnit_Run(void *frameHwnd, const char *missingName, const int *allowable,
 	int allowCount, int factionOnly, char *nameOut, int nameCap);
+
+// ---- BuildListTool's modeless pick panel (== PickUnitDialog Create/SetupAsPanel) ----
+
+// Create (first call; allowable/factionOnly as in _Run, top/left = the saved
+// BUILD_PICK_PANEL_SECTION position) and show the floating panel without activating
+// (== ShowWindow(SW_SHOWNA)). Returns 1, or 0 when Qt is not up (fall back to the
+// MFC panel).
+int WBQtBuildPickPanel_Show(const int *allowable, int allowCount, int factionOnly,
+	int top, int left);
+void WBQtBuildPickPanel_Hide(void);
+int WBQtBuildPickPanel_IsVisible(void);
+// The LIVE tree selection (== getPickedUnit): empty when a folder/nothing is selected.
+void WBQtBuildPickPanel_GetPicked(char *nameOut, int nameCap);
+// == PickUnitDialog::ResetWindowPosition (View > Reset Window Positions).
+void WBQtBuildPickPanel_ResetPos(int top, int left);
 
 // ============ Qt -> MFC (implemented in src/WBQtPickUnitBridge.cpp) ============
 

@@ -42,6 +42,7 @@
 #include "qt/WBQtPanelBridge.h"
 #include "qt/panels/WBQtGlobalLightBridge.h"
 #include "qt/panels/WBQtCameraBridge.h"
+#include "qt/panels/WBQtPickUnitBridge.h"
 #endif
 #define ADJUST_VIEW_TIMER 6969
 #define COUNTDOWN_TIMER 6910
@@ -588,6 +589,9 @@ void CMainFrame::ResetWindowPositions(void)
 	::AfxGetApp()->WriteProfileInt(BUILD_PICK_PANEL_SECTION, "Top", top);
 	::AfxGetApp()->WriteProfileInt(BUILD_PICK_PANEL_SECTION, "Left", left + 20);
 	PickUnitDialog::ResetWindowPosition();
+#ifdef RTS_HAS_QT
+	WBQtBuildPickPanel_ResetPos(top, left + 20);
+#endif
 
 	CView *pView = CWorldBuilderDoc::GetActive2DView();
 	if (pView) {

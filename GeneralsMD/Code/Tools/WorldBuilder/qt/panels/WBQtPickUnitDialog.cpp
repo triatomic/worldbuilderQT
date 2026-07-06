@@ -37,9 +37,12 @@ namespace
 WBQtPickUnitDialog::WBQtPickUnitDialog(bool replaceMode, const QString &missingName, QWidget *parent)
 	: QDialog(parent),
 	m_replaceMode(replaceMode),
+	m_panelMode(false),
+	m_panelFactionOnly(0),
 	m_searchEdit(NULL),
 	m_tree(NULL),
-	m_preview(NULL)
+	m_preview(NULL),
+	m_cancelButton(NULL)
 {
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 	setWindowTitle(replaceMode ? "Replace Missing Unit" : "Pick A Unit");
@@ -78,6 +81,7 @@ WBQtPickUnitDialog::WBQtPickUnitDialog(bool replaceMode, const QString &missingN
 	okButton->setDefault(true);
 	QPushButton *cancelButton = new QPushButton("Cancel", this);
 	cancelButton->setAutoDefault(false);
+	m_cancelButton = cancelButton;
 	connect(okButton, SIGNAL(clicked()), this, SLOT(accept()));
 	connect(cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
 
@@ -129,6 +133,14 @@ WBQtPickUnitDialog::WBQtPickUnitDialog(bool replaceMode, const QString &missingN
 // contains it case-insensitively (== OnSearch's lowercase substring match).
 int WBQtPickUnitDialog::populate(const QString &filter)
 {
+	// The panel outlives any modal pick/replace dialog, and those rebuild the shared bridge
+	// catalog with THEIR filters -- re-Build with ours before every read (== the MFC panel
+	// snapshotting its own m_objectsList).
+	if (m_panelMode)
+	{
+		WBQtPickUnitData_Build(m_panelAllowable.constData(), m_panelAllowable.size(),
+			m_panelFactionOnly);
+	}
 	m_tree->clear();
 	QString lowerFilter = filter.toLower();
 	// == PickUnitDialog::addObject: [TEST/]side/editor-sorting/name, sorted at each level.
@@ -274,6 +286,41 @@ void WBQtPickUnitDialog::accept()
 	QDialog::accept();
 }
 
+// == PickUnitDialog::SetupAsPanel + the Create/ShowWindow(SW_SHOWNA) panel discipline:
+// Qt::Tool floats it above the main window like the other floating panels, and
+// WA_ShowWithoutActivating keeps show() from stealing activation from the 3D viewport.
+// OK/Escape just hide it (QDialog accept/reject on a modeless dialog); BuildListTool
+// re-shows it on the next activate.
+void WBQtPickUnitDialog::setupAsPanel(const int *allowable, int allowCount, int factionOnly)
+{
+	m_panelMode = true;
+	m_panelAllowable.clear();
+	for (int i = 0; i < allowCount; i++)
+	{
+		m_panelAllowable.append(allowable[i]);
+	}
+	m_panelFactionOnly = factionOnly;
+	setWindowFlags((windowFlags() & ~Qt::WindowContextHelpButtonHint) | Qt::Tool);
+	setAttribute(Qt::WA_ShowWithoutActivating, true);
+	if (m_cancelButton != NULL)
+	{
+		m_cancelButton->hide();	// == SetupAsPanel hiding IDCANCEL
+	}
+	populate(QString());
+}
+
+// The live selection (== the MFC panel's getPickedUnit): a leaf yields its template name,
+// a folder or nothing yields empty. BuildListTool polls this on every hover/click.
+QString WBQtPickUnitDialog::currentLeafName() const
+{
+	QTreeWidgetItem *item = m_tree->currentItem();
+	if (item != NULL && item->data(0, kLeafRole).toInt() == 1)
+	{
+		return item->text(0);
+	}
+	return QString();
+}
+
 void WBQtPickUnitDialog::moveEvent(QMoveEvent *event)
 {
 	QDialog::moveEvent(event);
@@ -348,4 +395,67 @@ extern "C" int WBQtReplaceUnit_Run(void *frameHwnd, const char *missingName, con
 		return 2;	// == IDIGNORE ("Continue without replacing...")
 	}
 	return (rc == QDialog::Accepted) ? 1 : 0;
+}
+
+// ===================== BuildListTool's modeless pick panel =====================
+
+namespace
+{
+	// Created once per session on the first Show (== BuildListTool::createWindow's
+	// once-per-session Create) and kept for reuse; hidden, never destroyed.
+	WBQtPickUnitDialog *g_buildPickPanel = NULL;
+}
+
+extern "C" int WBQtBuildPickPanel_Show(const int *allowable, int allowCount, int factionOnly,
+	int top, int left)
+{
+	if (qApp == NULL)
+	{
+		return 0;	// Qt not up -- BuildListTool falls back to the MFC panel
+	}
+	if (g_buildPickPanel == NULL)
+	{
+		WBQtPickUnitData_Build(allowable, allowCount, factionOnly);
+		g_buildPickPanel = new WBQtPickUnitDialog(false, QString(), WBQt_DialogParent());
+		g_buildPickPanel->setupAsPanel(allowable, allowCount, factionOnly);
+		// Seed the saved BUILD_PICK_PANEL_SECTION position once; later shows keep
+		// whatever the user dragged it to (moveEvent writes the drags back).
+		g_buildPickPanel->move(left, top);
+	}
+	g_buildPickPanel->show();
+	g_buildPickPanel->raise();
+	return 1;
+}
+
+extern "C" void WBQtBuildPickPanel_Hide(void)
+{
+	if (g_buildPickPanel != NULL)
+	{
+		g_buildPickPanel->hide();
+	}
+}
+
+extern "C" int WBQtBuildPickPanel_IsVisible(void)
+{
+	return (g_buildPickPanel != NULL && g_buildPickPanel->isVisible()) ? 1 : 0;
+}
+
+extern "C" void WBQtBuildPickPanel_GetPicked(char *nameOut, int nameCap)
+{
+	if (nameOut != NULL && nameCap > 0)
+	{
+		nameOut[0] = 0;
+	}
+	if (g_buildPickPanel != NULL)
+	{
+		copyName(g_buildPickPanel->currentLeafName(), nameOut, nameCap);
+	}
+}
+
+extern "C" void WBQtBuildPickPanel_ResetPos(int top, int left)
+{
+	if (g_buildPickPanel != NULL)
+	{
+		g_buildPickPanel->move(left, top);
+	}
 }
