@@ -123,7 +123,6 @@ WBQtObjectPropsPanel::WBQtObjectPropsPanel(QWidget *owner)
 	m_recruitableAI  = new QCheckBox("AI Recruitable", m_logicalBox);
 	m_powered        = new QCheckBox("Powered", m_logicalBox);
 	m_selectable     = new QCheckBox("Selectable", m_logicalBox);
-	m_selectable->setTristate(true);
 	flagCol->addWidget(m_enabled);
 	flagCol->addWidget(m_unsellable);
 	flagCol->addWidget(m_targetable);
@@ -206,9 +205,10 @@ WBQtObjectPropsPanel::WBQtObjectPropsPanel(QWidget *owner)
 	// far wider than the MFC dialog. Cap the field width; the popup can still be wide.
 	m_sound->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
 	m_sound->setMinimumContentsLength(12);
-	sndGrid->addWidget(m_sound, 0, 1);
+	m_sound->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+	sndGrid->addWidget(m_sound, 0, 1, 1, 2);
 	m_listen = new QPushButton("Listen", m_soundBox);
-	sndGrid->addWidget(m_listen, 0, 2);
+	sndGrid->addWidget(m_listen, 0, 3);
 
 	QHBoxLayout *sndFlagsRow = new QHBoxLayout();
 	m_customize = new QCheckBox("Customize", m_soundBox);
@@ -465,10 +465,12 @@ void WBQtObjectPropsPanel::pushRefresh()
 	m_targetable->setChecked(WBQtObjectProps_GetFlag(WBQT_OBJPROP_FLAG_TARGETABLE) != 0);
 	m_powered->setChecked(WBQtObjectProps_GetFlag(WBQT_OBJPROP_FLAG_POWERED) != 0);
 	m_recruitableAI->setChecked(WBQtObjectProps_GetFlag(WBQT_OBJPROP_FLAG_RECRUITABLEAI) != 0);
-	// Selectable is tri-state: 2 == the "default" (key absent) partial state.
+	// Selectable: 2 == the "default" (key absent) state, and objects default to selectable,
+	// so show it checked. Two-state on the Qt side -- the tri-state 'default' wrote an empty
+	// dict through the bridge (_SelectableToDict's remove-the-key path) and hit the
+	// unknown-dict-key assert; a toggle now always writes an explicit bool.
 	int sel = WBQtObjectProps_GetFlag(WBQT_OBJPROP_FLAG_SELECTABLE);
-	m_selectable->setCheckState(sel == 2 ? Qt::PartiallyChecked
-		: (sel == 1 ? Qt::Checked : Qt::Unchecked));
+	m_selectable->setChecked(sel != 0);
 
 	// Distance box. "Targeting" is the vision/visual range; blank when unset (0), like the MFC edits.
 	int targeting = WBQtObjectProps_GetVisionDistance();
@@ -777,11 +779,7 @@ void WBQtObjectPropsPanel::onVeterancyChanged(int index)
 void WBQtObjectPropsPanel::applyFlag(int flagId, QCheckBox *box)
 {
 	int state = 0;
-	if (box->checkState() == Qt::PartiallyChecked)
-	{
-		state = 2;	// Selectable's tri-state "default"
-	}
-	else if (box->checkState() == Qt::Checked)
+	if (box->checkState() == Qt::Checked)
 	{
 		state = 1;
 	}
