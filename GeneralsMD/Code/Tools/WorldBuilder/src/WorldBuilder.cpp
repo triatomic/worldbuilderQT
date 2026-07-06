@@ -652,12 +652,18 @@ BOOL CWorldBuilderApp::InitInstance()
 
 	selectPointerTool();   
 
+	// WB_BUILD_COMMIT is the short git hash captured at configure time (see CMakeLists.txt);
+	// falls back to "unknown" for a non-CMake build. The message is HTML so the report link is
+	// clickable in the Qt message box (WBQtMessageBox enables rich-text link handling).
+#ifndef WB_BUILD_COMMIT
+#define WB_BUILD_COMMIT "unknown"
+#endif
 	AfxMessageBox(
-		"WARNING: This build of WorldBuilder is a work in progress.\n"
-		"Unauthorized use or distribution without notifying Adriane [Deathscythe] is discouraged.\n\n"
-		"This version is still in testing and may corrupt or break your map, so please make a backup before using it.\n\n"
-		"Build Version: 1428b8848\n"
-		"If you find a bug or do want to suggest a feature, please report it on our WorldBuilder Discord server:\nhttps://discord.gg/tJ6zyGb",
+		"WARNING: This build of WorldBuilder is a work in progress.<br><br>"
+		"This version is still in testing and may corrupt or break your map, so please make a backup before using it.<br><br>"
+		"Build Version: " WB_BUILD_COMMIT "<br>"
+		"If you find a bug or want to suggest a feature, please report it on our GitHub:<br>"
+		"<a href=\"https://github.com/triatomic/worldbuilderQT/issues\">github.com/triatomic/worldbuilderQT/issues</a>",
 		MB_ICONEXCLAMATION | MB_OK
 	);
 

@@ -32,6 +32,12 @@ extern "C" int WBQtMessageBox_Show(const char *text, const char *caption, unsign
 	box.setWindowTitle(QString::fromLocal8Bit((caption != NULL && caption[0] != 0)
 		? caption : "WorldBuilder"));
 
+	// Let callers embed clickable <a href> links in the text (e.g. the startup WARNING box's
+	// GitHub link). Auto-detected rich text stays visually identical for plain messages, and
+	// enabling the browser interaction flags makes any hyperlink open in the default browser.
+	box.setTextFormat(Qt::AutoText);
+	box.setTextInteractionFlags(Qt::TextBrowserInteraction);
+
 	// Icon (MB_ICON* occupies bits 4-7).
 	switch (mbType & MB_ICONMASK)
 	{

@@ -246,9 +246,28 @@ set(WORLDBUILDER_SRC
     "include/WorldBuilderView.h"
 )
 
+# Capture the short git commit hash at configure time so the startup WARNING box
+# can show the exact build it came from (WB_BUILD_COMMIT). Falls back to "unknown"
+# outside a git checkout.
+set(WB_BUILD_COMMIT "unknown")
+find_package(Git QUIET)
+if(GIT_FOUND)
+    execute_process(
+        COMMAND "${GIT_EXECUTABLE}" rev-parse --short HEAD
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        OUTPUT_VARIABLE WB_GIT_COMMIT
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET)
+    if(WB_GIT_COMMIT)
+        set(WB_BUILD_COMMIT "${WB_GIT_COMMIT}")
+    endif()
+endif()
+
 add_executable(z_worldbuilder WIN32)
 
 target_sources(z_worldbuilder PRIVATE ${WORLDBUILDER_SRC})
+
+target_compile_definitions(z_worldbuilder PRIVATE WB_BUILD_COMMIT="${WB_BUILD_COMMIT}")
 
 target_include_directories(z_worldbuilder PRIVATE
     .
