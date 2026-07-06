@@ -567,7 +567,8 @@ BOOL CWorldBuilderApp::InitInstance()
 			Int mainTop = GetProfileInt(MAIN_FRAME_SECTION, "Top", 100);
 			Int mainWidth = GetProfileInt(MAIN_FRAME_SECTION, "Width", THREE_D_VIEW_WIDTH);
 			Int mainHeight = GetProfileInt(MAIN_FRAME_SECTION, "Height", THREE_D_VIEW_HEIGHT);
-			if (WBQt_CreateMainWindow(pFrame->GetSafeHwnd(), mainLeft, mainTop, mainWidth, mainHeight))
+			Int mainMaximized = GetProfileInt(MAIN_FRAME_SECTION, "Maximized", 0);
+			if (WBQt_CreateMainWindow(pFrame->GetSafeHwnd(), mainLeft, mainTop, mainWidth, mainHeight, mainMaximized))
 			{
 				// Chrome first (the menu/toolbar/status become native QMainWindow bars),
 				// then the viewport into the central pane, then ONE show so the window

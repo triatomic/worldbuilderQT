@@ -34,9 +34,10 @@ int WBQt_InversionActive(void);
 void WBQt_DisableInversion(void);
 
 // Create the top-level QMainWindow (not shown yet). x/y/w/h seed its geometry (the
-// [MainFrame] profile values; pass w/h <= 0 for defaults). Returns 1 on success, 0 on
-// failure (which also clears WBQt_InversionActive so the guards fall back).
-int WBQt_CreateMainWindow(void *frameHwnd, int x, int y, int w, int h);
+// [MainFrame] profile values; pass w/h <= 0 for defaults); maximized non-zero makes
+// WBQt_ShowMainWindow open it maximized like the last session. Returns 1 on success, 0
+// on failure (which also clears WBQt_InversionActive so the guards fall back).
+int WBQt_CreateMainWindow(void *frameHwnd, int x, int y, int w, int h, int maximized);
 
 // Show the main window once chrome + viewport are in place (one clean layout pass).
 void WBQt_ShowMainWindow(void);
@@ -76,6 +77,8 @@ extern "C" {
 // Debounced [MainFrame] Top/Left/Width/Height writes (the hidden frame's OnMove no
 // longer fires, so the Qt window persists its own placement through the same INI keys).
 void WBQt_SaveMainWindowPlacement(int x, int y, int width, int height);
+// The [MainFrame] Maximized flag, saved alongside the placement and read back at launch.
+void WBQt_SaveMainWindowMaximized(int maximized);
 // A .map dropped on the main window -> CWinApp::OpenDocumentFile (the frame's
 // OnDropFiles is unreachable while it is hidden).
 void WBQt_OpenMapFileFromShell(const char *path);

@@ -132,7 +132,10 @@ static void wbClampToAvailableScreen(int &x, int &y, int &w, int &h)
 	}
 }
 
-int WBQt_CreateMainWindow(void *frameHwnd, int x, int y, int w, int h)
+// Show maximized like the last session (set at create, consumed by WBQt_ShowMainWindow).
+static bool g_wbMainWindowStartMaximized = false;
+
+int WBQt_CreateMainWindow(void *frameHwnd, int x, int y, int w, int h, int maximized)
 {
 	if (g_wbMainWindow != NULL)
 	{
@@ -150,6 +153,7 @@ int WBQt_CreateMainWindow(void *frameHwnd, int x, int y, int w, int h)
 		g_wbMainWindow->move(x, y);
 		g_wbMainWindow->resize(w, h);
 	}
+	g_wbMainWindowStartMaximized = (maximized != 0);
 	return 1;
 }
 
@@ -157,7 +161,16 @@ void WBQt_ShowMainWindow(void)
 {
 	if (g_wbMainWindow != NULL)
 	{
-		g_wbMainWindow->show();
+		// Maximized restore keeps the normal geometry set at create as the un-maximize
+		// target, exactly like a native window.
+		if (g_wbMainWindowStartMaximized)
+		{
+			g_wbMainWindow->showMaximized();
+		}
+		else
+		{
+			g_wbMainWindow->show();
+		}
 	}
 }
 

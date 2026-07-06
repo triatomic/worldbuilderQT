@@ -53,6 +53,13 @@ void WBQtMainWindow::toggleFullscreen()
 
 void WBQtMainWindow::closeEvent(QCloseEvent *e)
 {
+	// Flush the placement store now -- a move/resize/maximize inside the 500ms debounce
+	// window would otherwise be lost on exit.
+	if (m_placementTimer != NULL)
+	{
+		m_placementTimer->stop();
+	}
+	savePlacement();
 	// Never close directly: the hidden MFC frame owns the document lifecycle. POST (not
 	// send) so the close runs from the message loop, not from inside Qt event delivery.
 	e->ignore();
@@ -82,7 +89,14 @@ void WBQtMainWindow::resizeEvent(QResizeEvent *e)
 
 void WBQtMainWindow::savePlacement()
 {
-	if (isFullScreen() || isMaximized() || isMinimized() || !isVisible())
+	if (isFullScreen() || isMinimized() || !isVisible())
+	{
+		return;
+	}
+	// The maximized flag persists separately; while maximized keep the stored NORMAL
+	// geometry (it is what un-maximize and the next non-maximized launch restore to).
+	WBQt_SaveMainWindowMaximized(isMaximized() ? 1 : 0);
+	if (isMaximized())
 	{
 		return;
 	}

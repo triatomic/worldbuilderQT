@@ -132,6 +132,11 @@ extern "C" void WBQt_SaveMainWindowPlacement(int x, int y, int width, int height
 	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "Height", height);
 }
 
+extern "C" void WBQt_SaveMainWindowMaximized(int maximized)
+{
+	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "Maximized", maximized);
+}
+
 // Stage 1: a .map dropped on the Qt main window -- the hidden frame's OnDropFiles is
 // unreachable, so the drop routes here into the same doc-template open.
 extern "C" void WBQt_OpenMapFileFromShell(const char *path)
