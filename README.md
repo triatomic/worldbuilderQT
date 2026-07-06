@@ -4,11 +4,11 @@ A modern **Qt** port of the *Command & Conquer: Generals — Zero Hour* **WorldB
 a full MFC→Qt inversion of the original tool, keeping the classic workflow while replacing the
 aging MFC UI with a native Qt front end.
 
-> ### ⬇️ [**Download the latest release**](https://github.com/triatomic/worldbuilderQT/releases/latest)
->
-> Grab `WorldBuilderZH-Qt-*.zip` from the [releases page](https://github.com/triatomic/worldbuilderQT/releases/latest),
-> unzip it, and run **`WorldBuilderZH.exe`** from inside a Zero Hour install. The Qt runtime is
-> bundled — no separate Qt install is required to run it.
+### ⬇️ [**Download the latest release**](https://github.com/triatomic/worldbuilderQT/releases/latest)
+
+Grab `WorldBuilderZH-Qt-*.zip` from the [releases page](https://github.com/triatomic/worldbuilderQT/releases/latest),
+unzip it, and run **`WorldBuilderZH.exe`** from inside a Zero Hour install. The Qt runtime is
+bundled — no separate Qt install is required to run it.
 
 ## Running
 
