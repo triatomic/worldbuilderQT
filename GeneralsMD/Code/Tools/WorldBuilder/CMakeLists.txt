@@ -247,13 +247,14 @@ set(WORLDBUILDER_SRC
 )
 
 # Stamp the current git short commit hash into a generated header (WBBuildStamp.h) so the startup
-# WARNING box can show the exact build it came from (WB_BUILD_COMMIT). This runs at BUILD time -- a
-# custom command that always fires re-checks the hash on every build, and GitCommitStamp.cmake only
-# rewrites the header when the hash actually changes, so unchanged commits don't force a recompile.
+# WARNING box can show the exact build it came from (WB_BUILD_COMMIT). A custom TARGET (not a
+# custom command keyed on an output file) runs its COMMAND on every build, so the hash is always
+# re-checked; GitCommitStamp.cmake only rewrites the header when the hash actually changes, so an
+# unchanged commit leaves the header's mtime untouched and does not force a recompile.
 find_package(Git QUIET)
 set(WB_BUILD_STAMP "${CMAKE_CURRENT_BINARY_DIR}/WBBuildStamp.h")
-add_custom_command(
-    OUTPUT "${WB_BUILD_STAMP}"
+add_custom_target(z_worldbuilder_buildstamp
+    BYPRODUCTS "${WB_BUILD_STAMP}"
     COMMAND "${CMAKE_COMMAND}"
         -DGIT_EXECUTABLE=${GIT_EXECUTABLE}
         -DSRC_DIR=${CMAKE_CURRENT_SOURCE_DIR}
