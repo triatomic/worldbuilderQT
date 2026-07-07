@@ -22,7 +22,100 @@
 #include "qt/panels/WBQtScriptEditBridge.h"	// WBQtScriptEdit_Run (new/edit script sheet)
 #include "qt/panels/WBQtParamBridge.h"		// WBQtEditGroup_Run (edit folder dialog)
 
+#include <vector>
+
 #ifdef RTS_HAS_QT
+
+//----------------------------------------------------------------------------------------
+// Editor-local undo/redo: snapshots of the working copy (m_sides), taken by each mutating
+// qtM* command right before it changes the model. This is the same copy idiom the session
+// already uses (open: m_sides = *TheSidesList; commit: one SidesListUndoable) -- undo here
+// never touches the document, only the uncommitted working copy. TU-statics are safe: the
+// dialog is a singleton (qtInstance) and the stacks are cleared on every qtOpenModelOnly.
+namespace
+{
+	const int kQtScriptUndoDepth = 32;
+	std::vector<SidesList *> s_qtScriptUndo;
+	std::vector<SidesList *> s_qtScriptRedo;
+
+	void qtFreeSnapshots(std::vector<SidesList *> &stack)
+	{
+		for (size_t i = 0; i < stack.size(); i++)
+		{
+			delete stack[i];
+		}
+		stack.clear();
+	}
+}
+
+void ScriptDialog::qtPushUndoSnapshot(void)
+{
+	SidesList *snap = new SidesList;
+	*snap = m_sides;
+	s_qtScriptUndo.push_back(snap);
+	if ((int)s_qtScriptUndo.size() > kQtScriptUndoDepth)
+	{
+		delete s_qtScriptUndo.front();
+		s_qtScriptUndo.erase(s_qtScriptUndo.begin());
+	}
+	// A new edit invalidates the redo trail, like any linear undo stack.
+	qtFreeSnapshots(s_qtScriptRedo);
+}
+
+void ScriptDialog::qtDropLastUndoSnapshot(void)
+{
+	if (!s_qtScriptUndo.empty())
+	{
+		delete s_qtScriptUndo.back();
+		s_qtScriptUndo.pop_back();
+	}
+}
+
+void ScriptDialog::qtClearUndoHistory(void)
+{
+	qtFreeSnapshots(s_qtScriptUndo);
+	qtFreeSnapshots(s_qtScriptRedo);
+}
+
+int ScriptDialog::qtMUndo(void)
+{
+	if (s_qtScriptUndo.empty())
+	{
+		return 0;
+	}
+	SidesList *cur = new SidesList;
+	*cur = m_sides;
+	s_qtScriptRedo.push_back(cur);
+	SidesList *snap = s_qtScriptUndo.back();
+	s_qtScriptUndo.pop_back();
+	m_sides = *snap;
+	delete snap;
+	// The old selection's indices may not exist in the restored state; fall back to the
+	// player row (the Qt window rebuilds its tree and re-pushes selection on the next click).
+	m_curSelection.m_objType = ListType::PLAYER_TYPE;
+	m_curSelection.m_groupIndex = 0;
+	m_curSelection.m_scriptIndex = 0;
+	return 1;
+}
+
+int ScriptDialog::qtMRedo(void)
+{
+	if (s_qtScriptRedo.empty())
+	{
+		return 0;
+	}
+	SidesList *cur = new SidesList;
+	*cur = m_sides;
+	s_qtScriptUndo.push_back(cur);
+	SidesList *snap = s_qtScriptRedo.back();
+	s_qtScriptRedo.pop_back();
+	m_sides = *snap;
+	delete snap;
+	m_curSelection.m_objType = ListType::PLAYER_TYPE;
+	m_curSelection.m_groupIndex = 0;
+	m_curSelection.m_scriptIndex = 0;
+	return 1;
+}
 
 //----------------------------------------------------------------------------------------
 // De-bridged (windowless) ScriptDialog members -- branch qt-debridge. In Qt mode the
@@ -40,6 +133,8 @@
 void ScriptDialog::qtOpenModelOnly(void)
 {
 	mTree = NULL;	// the ctor leaves it uninitialized; nothing here may ever use it
+
+	qtClearUndoHistory();	// snapshots belong to one editing session
 
 	m_bSmartCopyEnabled = ::AfxGetApp()->GetProfileInt(SCRIPT_DIALOG_SECTION, "SmartCopy", 0);
 	m_bAutoMergeScripts = ::AfxGetApp()->GetProfileInt(SCRIPT_DIALOG_SECTION, "AutoMergeScripts", 0);
@@ -218,6 +313,7 @@ void ScriptDialog::qtMNewFolder(void)
 				pNewGroup->deleteInstance();
 				return;
 			}
+			qtPushUndoSnapshot();
 			pSL->addGroup(pNewGroup, ndx);
 			savSel.m_groupIndex = ndx;
 			savSel.m_objType = ListType::GROUP_TYPE;
@@ -262,6 +358,7 @@ void ScriptDialog::qtMNewScript(void)
 			pNewScript->deleteInstance();
 			return;
 		}
+		qtPushUndoSnapshot();
 		qtMInsertScript(pNewScript);
 	}
 	else
@@ -280,9 +377,16 @@ void ScriptDialog::qtMEditScript(void)
 	{
 		if (pGroup)
 		{
+			// The group dialog edits pGroup in place, so snapshot first and discard the
+			// snapshot if the dialog is cancelled (no mutation happened).
+			qtPushUndoSnapshot();
 			if (WBQtEditGroup_Run(pGroup, ::AfxGetMainWnd()->GetSafeHwnd()) != 0)
 			{
 				updateWarnings();
+			}
+			else
+			{
+				qtDropLastUndoSnapshot();
 			}
 		}
 		return;
@@ -291,6 +395,7 @@ void ScriptDialog::qtMEditScript(void)
 	Script *pDup = pScript->duplicate();
 	if (WBQtScriptEdit_Run(pDup, ::AfxGetMainWnd()->GetSafeHwnd()) != 0)
 	{
+		qtPushUndoSnapshot();
 		pScript->updateFrom(pDup);
 		pScript->setDirty(true);
 		updateWarnings();
@@ -317,6 +422,7 @@ void ScriptDialog::qtMCopyScript(void)
 			newName.concat(" C");
 		}
 		pDup->setName(newName);
+		qtPushUndoSnapshot();
 		qtMInsertScript(pDup);
 		return;
 	}
@@ -345,6 +451,7 @@ void ScriptDialog::qtMCopyScript(void)
 		if (pSL)
 		{
 			Int insertIndex = m_curSelection.m_groupIndex + 1;
+			qtPushUndoSnapshot();
 			pSL->addGroup(pNewGroup, insertIndex);
 		}
 	}
@@ -357,6 +464,7 @@ void ScriptDialog::qtMDelete(void)
 	ScriptList *pSL = m_sides.getSideInfo(m_curSelection.m_playerIndex)->getScriptList();
 	if (pSL)
 	{
+		qtPushUndoSnapshot();
 		Bool inGroup = m_curSelection.m_objType != ListType::SCRIPT_IN_PLAYER_TYPE;
 		if (inGroup)
 		{
@@ -404,6 +512,7 @@ void ScriptDialog::qtMAddDebug(void)
 		return;
 	}
 
+	qtPushUndoSnapshot();
 	ScriptAction *debugAction = newInstance(ScriptAction)(ScriptAction::SHOW_MILITARY_CAPTION);
 
 	AsciiString debugText = "[Debug] ";
@@ -453,6 +562,7 @@ void ScriptDialog::qtMRemoveDebug(void)
 		return;
 	}
 
+	qtPushUndoSnapshot();
 	ScriptAction *currentAction = pScript->getAction();
 	ScriptAction *prevAction = NULL;
 	int removedCount = 0;
@@ -506,6 +616,7 @@ void ScriptDialog::qtMRemoveDebug(void)
 	}
 	else
 	{
+		qtDropLastUndoSnapshot();	// nothing was removed; the snapshot is a no-op
 		AfxMessageBox("No debug actions found in this script.", MB_OK | MB_ICONINFORMATION);
 	}
 }
@@ -523,6 +634,7 @@ void ScriptDialog::qtMPatchGC(void)
 	);
 	if (result == IDYES)
 	{
+		qtPushUndoSnapshot();
 		checkParametersForGC();
 	}
 }
@@ -532,11 +644,13 @@ void ScriptDialog::qtMToggleActive(void)
 {
 	if (getCurScript() != NULL)
 	{
+		qtPushUndoSnapshot();
 		Bool active = getCurScript()->isActive();
 		getCurScript()->setActive(!active);
 	}
 	else if (getCurGroup() != NULL)
 	{
+		qtPushUndoSnapshot();
 		Bool active = getCurGroup()->isActive();
 		getCurGroup()->setActive(!active);
 	}
@@ -574,6 +688,8 @@ void ScriptDialog::qtMDropOn(int dragListType, int targetListType)
 	{
 		return;
 	}
+
+	qtPushUndoSnapshot();
 
 	if (pScript)
 	{
@@ -929,6 +1045,9 @@ void ScriptDialog::qtMImportScripts(void)
 		pDoc->AddAndDoUndoable(pUndo);
 		REF_PTR_RELEASE(pUndo); // belongs to pDoc now.
 		m_sides = *TheSidesList;
+		// The import committed app-level and re-seeded the working copy; editor-local
+		// snapshots from before it would desync the two, so drop them.
+		qtClearUndoHistory();
 
 		if (m_firstReadObject)
 		{
@@ -1104,6 +1223,18 @@ void WBQtScript_Delete(void)
 	{
 		dlg->qtMDelete();
 	}
+}
+
+int WBQtScript_Undo(void)
+{
+	ScriptDialog *dlg = ScriptDialog::qtInstance();
+	return (dlg != NULL) ? dlg->qtMUndo() : 0;
+}
+
+int WBQtScript_Redo(void)
+{
+	ScriptDialog *dlg = ScriptDialog::qtInstance();
+	return (dlg != NULL) ? dlg->qtMRedo() : 0;
 }
 
 void WBQtScript_Commit(void)

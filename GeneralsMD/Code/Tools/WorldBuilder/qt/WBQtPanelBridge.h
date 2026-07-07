@@ -255,11 +255,20 @@ void WBQtScript_ExportScripts(void);
 void WBQtScript_ImportScripts(void);
 void WBQtScript_SaveNow(void);
 
+// Editor-local undo/redo over the uncommitted working copy (snapshots taken by every
+// mutating command). Returns 1 when a state was restored (the Qt window then rebuilds
+// its tree), 0 when the stack is empty.
+int  WBQtScript_Undo(void);
+int  WBQtScript_Redo(void);
+
 // Forward (Qt-side, WBQtScriptWindow): open/close the Qt Script window. WBQtScript_Open is
 // called from CMainFrame::onEditScripts after the hidden MFC dialog is created; it builds
-// the window rooted in frameHwnd. WBQtScript_Close tears it down.
+// the window rooted in frameHwnd. WBQtScript_Close tears it down. IsOpen/Focus let
+// onEditScripts re-focus an already-open editor instead of recreating the session.
 void WBQtScript_Open(void *frameHwnd, int x, int y);
 void WBQtScript_Close(void);
+int  WBQtScript_IsOpen(void);
+void WBQtScript_Focus(void);
 
 #ifdef __cplusplus
 }

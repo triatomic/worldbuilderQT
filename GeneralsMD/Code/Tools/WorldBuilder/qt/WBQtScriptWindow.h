@@ -58,6 +58,9 @@ private slots:
 	void onEditScript();
 	void onCopyScript();
 	void onDelete();
+	void onDeleteShortcut();
+	void onUndo();
+	void onRedo();
 	void onVerify();
 	void onToggleActive();
 	void onAddDebug();

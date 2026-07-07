@@ -168,6 +168,13 @@ public:
 	void qtMVerify(void);
 	void qtMSetCheckbox(int which, int checked);
 	void qtMImportScripts(void);
+	// Editor-local undo/redo over the working copy (m_sides snapshots). Cleared per
+	// session (qtOpenModelOnly) and on import (which self-commits app-level).
+	void qtPushUndoSnapshot(void);
+	void qtDropLastUndoSnapshot(void);
+	void qtClearUndoHistory(void);
+	int  qtMUndo(void);
+	int  qtMRedo(void);
 #endif
 
 protected:

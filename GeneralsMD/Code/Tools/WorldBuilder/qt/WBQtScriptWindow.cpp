@@ -225,6 +225,22 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	QShortcut *saveSc = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_S), this);
 	connect(saveSc, SIGNAL(activated()), this, SLOT(onSaveNow()));
 
+	// Tree-scoped editing keys. WidgetShortcut = active only while the tree itself has
+	// focus, so Delete / Ctrl+Z keep their text-editing meaning inside the search and
+	// rename line edits.
+	QShortcut *delSc = new QShortcut(QKeySequence(Qt::Key_Delete), m_tree);
+	delSc->setContext(Qt::WidgetShortcut);
+	connect(delSc, SIGNAL(activated()), this, SLOT(onDeleteShortcut()));
+	QShortcut *undoSc = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_Z), m_tree);
+	undoSc->setContext(Qt::WidgetShortcut);
+	connect(undoSc, SIGNAL(activated()), this, SLOT(onUndo()));
+	QShortcut *redoSc = new QShortcut(QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_Z), m_tree);
+	redoSc->setContext(Qt::WidgetShortcut);
+	connect(redoSc, SIGNAL(activated()), this, SLOT(onRedo()));
+	QShortcut *redoSc2 = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_Y), m_tree);
+	redoSc2->setContext(Qt::WidgetShortcut);
+	connect(redoSc2, SIGNAL(activated()), this, SLOT(onRedo()));
+
 	connect(m_ckCompress, SIGNAL(clicked()), this, SLOT(onCheckboxToggled()));
 	connect(m_ckNewIcons, SIGNAL(clicked()), this, SLOT(onCheckboxToggled()));
 	connect(m_ckCleanName, SIGNAL(clicked()), this, SLOT(onCheckboxToggled()));
@@ -541,6 +557,35 @@ void WBQtScriptWindow::onDelete()
 	updateDetail();
 }
 
+void WBQtScriptWindow::onDeleteShortcut()
+{
+	// Mirrors the Delete button's enable state (a script or folder is selected).
+	if (m_delete->isEnabled())
+	{
+		onDelete();
+	}
+}
+
+void WBQtScriptWindow::onUndo()
+{
+	if (WBQtScript_Undo())
+	{
+		rebuildTree();
+		updateButtonStates();
+		updateDetail();
+	}
+}
+
+void WBQtScriptWindow::onRedo()
+{
+	if (WBQtScript_Redo())
+	{
+		rebuildTree();
+		updateButtonStates();
+		updateDetail();
+	}
+}
+
 void WBQtScriptWindow::onVerify()
 {
 	WBQtScript_Verify();
@@ -762,6 +807,29 @@ extern "C" void WBQtScript_Open(void *frameHwnd, int x, int y)
 
 	win->move(x, y);
 	win->show();
+	win->raise();
+	win->activateWindow();
+	HWND h = reinterpret_cast<HWND>(win->winId());
+	::SetForegroundWindow(h);
+	::SetFocus(h);
+	win->setFocus(Qt::ActiveWindowFocusReason);
+}
+
+extern "C" int WBQtScript_IsOpen(void)
+{
+	WBQtScriptWindow *win = WBQtScriptWindow::instance();
+	return (win != NULL && win->isVisible()) ? 1 : 0;
+}
+
+// Bring the already-open editor to the front and give it keyboard focus (F4 / menu while
+// it is open re-focuses instead of recreating the session).
+extern "C" void WBQtScript_Focus(void)
+{
+	WBQtScriptWindow *win = WBQtScriptWindow::instance();
+	if (win == NULL || !win->isVisible())
+	{
+		return;
+	}
 	win->raise();
 	win->activateWindow();
 	HWND h = reinterpret_cast<HWND>(win->winId());

@@ -727,6 +727,15 @@ void CMainFrame::closeScriptDialog()
 
 void CMainFrame::onEditScripts()
 {
+#ifdef RTS_HAS_QT
+	// F4 / menu while the editor is already open: bring it to the front and give it
+	// keyboard focus instead of recreating the session (the recreate path below reseeds
+	// m_sides from TheSidesList, which would silently discard uncommitted script edits).
+	if (m_scriptDialog != NULL && WBQtScript_IsOpen()) {
+		WBQtScript_Focus();
+		return;
+	}
+#endif
 	if (m_scriptDialog) {
 		// Delete the old one since it is no longer valid.
 		delete m_scriptDialog;
