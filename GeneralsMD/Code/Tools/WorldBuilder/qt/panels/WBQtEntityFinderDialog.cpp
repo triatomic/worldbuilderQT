@@ -23,6 +23,7 @@
 #include <QTextCursor>
 #include <QUrl>
 #include <QVBoxLayout>
+#include <QWindow>
 
 #include <qt_windows.h>
 
@@ -33,6 +34,8 @@
 // Defined in WBQtBridge.cpp: the Qt main window's HWND when inverted, else the passed
 // MFC frame HWND -- the native owner for standalone Qt top-levels.
 void *WBQt_EffectiveOwnerHwnd(void *frameHwnd);
+// Defined in WBQtBridge.cpp: the Qt main window as a QWidget* (NULL when not inverted).
+QWidget *WBQt_MainWindowWidget(void);
 
 namespace
 {
@@ -288,8 +291,18 @@ WBQtEntityFinderDialog::WBQtEntityFinderDialog(void *frameHwnd)
 
 	// Owned by the visible top-level (the Qt main window when inverted, else the MFC
 	// frame) so it stacks above the main window without stealing its taskbar entry
-	// (== the MFC dialog's ownership).
-	if (frameHwnd != NULL)
+	// (== the MFC dialog's ownership). The ownership must go through the QWindow
+	// transient parent: the Windows QPA maintains GWLP_HWNDPARENT from that property and
+	// resets a raw SetWindowLongPtr write back to 0 on its next internal update (same
+	// fix as the Script Editor).
+	QWidget *mainWidget = WBQt_MainWindowWidget();
+	if (mainWidget != NULL)
+	{
+		winId();				// force the QWindow to exist before setting its owner
+		mainWidget->winId();
+		windowHandle()->setTransientParent(mainWidget->windowHandle());
+	}
+	else if (frameHwnd != NULL)
 	{
 		::SetWindowLongPtr(reinterpret_cast<HWND>(winId()), GWLP_HWNDPARENT,
 			reinterpret_cast<LONG_PTR>(WBQt_EffectiveOwnerHwnd(frameHwnd)));
