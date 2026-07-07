@@ -668,9 +668,8 @@ BOOL CWorldBuilderApp::InitInstance()
 	AfxMessageBox(
 		"WARNING: This build of WorldBuilder is a work in progress.<br><br>"
 		"This version is still in testing and may corrupt or break your map, so please make a backup before using it.<br><br>"
-		"Build Version: " WB_BUILD_COMMIT "<br>"
-		"If you find a bug or want to suggest a feature, please report it on our GitHub:<br>"
-		"<a href=\"https://github.com/triatomic/worldbuilderQT/issues\">github.com/triatomic/worldbuilderQT/issues</a>",
+		"Build Version: <a href=\"https://github.com/triatomic/worldbuilderQT/blob/" WB_BUILD_COMMIT "\">" WB_BUILD_COMMIT "<br>"
+		"If you find a bug or want to suggest a feature, please report it on our <a href=\"https://github.com/triatomic/worldbuilderQT/issues\">GitHub</a><br>",
 		MB_ICONEXCLAMATION | MB_OK
 	);
 
