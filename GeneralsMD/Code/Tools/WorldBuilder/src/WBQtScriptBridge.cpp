@@ -145,6 +145,12 @@ int ScriptDialog::qtMUndo(void)
 	m_curSelection.m_objType = ListType::PLAYER_TYPE;
 	m_curSelection.m_groupIndex = 0;
 	m_curSelection.m_scriptIndex = 0;
+	// The SidesList copy does not carry the computed per-script warning flags (same as the
+	// session-open copy), so recompute them or every red label/icon goes white after undo.
+	if (m_autoUpdateWarnings)
+	{
+		updateWarnings(true);
+	}
 	return 1;
 }
 
@@ -164,6 +170,10 @@ int ScriptDialog::qtMRedo(void)
 	m_curSelection.m_objType = ListType::PLAYER_TYPE;
 	m_curSelection.m_groupIndex = 0;
 	m_curSelection.m_scriptIndex = 0;
+	if (m_autoUpdateWarnings)
+	{
+		updateWarnings(true);
+	}
 	return 1;
 }
 
