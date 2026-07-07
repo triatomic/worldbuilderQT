@@ -106,6 +106,7 @@
 #include "qt/panels/WBQtMinimapBridge.h"
 #include "qt/panels/WBQtMiscModalsBridge.h"
 #include "qt/panels/WBQtTracingOverlayBridge.h"
+#include "qt/WBQtToast.h"
 #endif
 #include "MinimapDialog.h"
 #include "ImpassableOptions.h"
@@ -5741,6 +5742,13 @@ void WbView3d::OnResetDevice()
 #ifdef RTS_HAS_QT
 	m_deviceResetFailed =
 		(WW3D::Set_Device_Resolution(m_actualWinSize.x, m_actualWinSize.y, true) != WW3D_ERROR_OK);
+	// A successful reset re-renders the same scene, so it is visually silent -- confirm it
+	// ran (the failure toast also tells the user the retry loop is now waiting on the device).
+	if (m_deviceResetFailed) {
+		WBQtToast_Show("D3D device reset FAILED (device still lost) - retrying every frame", 5000, 0);
+	} else {
+		WBQtToast_Show("D3D device reset", 2500, 0);
+	}
 #else
 	WW3D::Set_Device_Resolution(m_actualWinSize.x, m_actualWinSize.y, true);
 #endif
