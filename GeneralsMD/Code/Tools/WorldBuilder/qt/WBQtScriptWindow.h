@@ -33,6 +33,7 @@ public:
 
 protected:
 	virtual void dropEvent(QDropEvent *event);
+	virtual void mousePressEvent(QMouseEvent *event);
 
 private:
 	WBQtScriptWindow *m_owner;

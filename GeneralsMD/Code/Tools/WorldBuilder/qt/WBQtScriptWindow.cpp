@@ -16,6 +16,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QPixmap>
 #include <QPlainTextEdit>
@@ -51,6 +52,25 @@ WBQtScriptTree::WBQtScriptTree(WBQtScriptWindow *owner)
 	: QTreeWidget(owner),
 	  m_owner(owner)
 {
+}
+
+// Qt reserves Ctrl+press for selection toggling and enters drag-SELECT mode on the move,
+// so a Ctrl-held drag never starts a drag-and-drop -- the Script Merge gesture (hold Ctrl,
+// drag a script onto another) could never even begin. Strip Ctrl before the base press:
+// this tree is SingleSelection, so Ctrl-toggle has no other meaning here, and qtMDropOn
+// reads the physical Ctrl state at drop time for the merge decision.
+void WBQtScriptTree::mousePressEvent(QMouseEvent *event)
+{
+	if ((event->modifiers() & Qt::ControlModifier) && event->button() == Qt::LeftButton)
+	{
+		QMouseEvent plain(event->type(), event->localPos(), event->windowPos(),
+			event->screenPos(), event->button(), event->buttons(),
+			event->modifiers() & ~Qt::ControlModifier);
+		QTreeWidget::mousePressEvent(&plain);
+		event->setAccepted(plain.isAccepted());
+		return;
+	}
+	QTreeWidget::mousePressEvent(event);
 }
 
 void WBQtScriptTree::dropEvent(QDropEvent *event)
