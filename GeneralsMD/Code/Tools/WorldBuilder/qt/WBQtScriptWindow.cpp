@@ -107,6 +107,19 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	m_ckScriptMerge = new QCheckBox("Script Merge", optBox);
 	m_ckRefByParam = new QCheckBox("Detect References via picked Parameters", optBox);
 	m_ckDisableRef = new QCheckBox("Disable references (reduces input lag)", optBox);
+
+	// Hover help. Kept to what each box actually does in the handlers (qtMSetCheckbox /
+	// formatScriptLabel / buildReferencedInTag / the warning-cache load).
+	m_ckCompress->setToolTip("Save scripts compressed in the map file (smaller maps).");
+	m_ckNewIcons->setToolTip("Modern tree icons. Always on in the Qt editor.");
+	m_ckCleanName->setToolTip("Hide the [E N H] difficulty tag on scripts that run on all three difficulties.");
+	m_ckAutoVerify->setToolTip("Re-check scripts for warnings (red) automatically after every edit.");
+	m_ckSmartCopy->setToolTip("Copy auto-increments numbers in the script's parameters (Counter01 → Counter02).");
+	m_ckFastLoad->setToolTip("Open the editor faster on big script sets by skipping the deep warning-hint scan.");
+	m_ckScriptMerge->setToolTip("Ctrl+drag a script or folder onto another to merge them. Plain drag still moves.");
+	m_ckRefByParam->setToolTip("Find [Referenced in] by scanning actual script parameters instead of plain text.");
+	m_ckDisableRef->setToolTip("Skip the [Referenced in] scan on selection. Faster on huge script sets.");
+
 	optGrid->addWidget(m_ckCompress, 0, 0);
 	optGrid->addWidget(m_ckNewIcons, 0, 1);
 	optGrid->addWidget(m_ckCleanName, 0, 2);
