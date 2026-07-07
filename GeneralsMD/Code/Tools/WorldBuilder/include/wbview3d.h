@@ -225,6 +225,7 @@ protected:
 	afx_msg void OnUpdateMSAA2X(CCmdUI* pCmdUI);
 	afx_msg void OnUpdateMSAA4X(CCmdUI* pCmdUI);
 	afx_msg void OnUpdateMSAA8X(CCmdUI* pCmdUI);
+	afx_msg void OnResetDevice();
 	afx_msg void OnTexFilterDefault();
 	afx_msg void OnTexFilterAniso16X();
 	afx_msg void OnUpdateTexFilterDefault(CCmdUI* pCmdUI);

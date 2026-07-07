@@ -3277,6 +3277,7 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_UPDATE_COMMAND_UI(ID_MSAA_4X, OnUpdateMSAA4X)
 	ON_COMMAND(ID_MSAA_8X, OnMSAA8X)
 	ON_UPDATE_COMMAND_UI(ID_MSAA_8X, OnUpdateMSAA8X)
+	ON_COMMAND(ID_VIEW_RESETDEVICE, OnResetDevice)
 	ON_COMMAND(ID_TEXFILTER_DEFAULT, OnTexFilterDefault)
 	ON_UPDATE_COMMAND_UI(ID_TEXFILTER_DEFAULT, OnUpdateTexFilterDefault)
 	ON_COMMAND(ID_TEXFILTER_ANISO16X, OnTexFilterAniso16X)
@@ -5725,6 +5726,25 @@ void WbView3d::OnWindowLODMode3()
 void WbView3d::OnUpdateOnWindowLODMode3(CCmdUI* pCmdUI)
 {
     pCmdUI->SetCheck(m_lod == 3);
+}
+
+// Shift+F5: manual device reset/reload for when the 3D viewport dies (device lost after
+// sleep / lock / another app grabbing exclusive mode) and the automatic retry never
+// recovers it. Same guarded reset as reset3dEngineDisplaySize/redraw: a failed reset
+// leaves every DX8 resource released without re-acquiring, so remember the failure and
+// let redraw() keep retrying instead of rendering freed buffers.
+void WbView3d::OnResetDevice()
+{
+	if (!m_ww3dInited) {
+		return;
+	}
+#ifdef RTS_HAS_QT
+	m_deviceResetFailed =
+		(WW3D::Set_Device_Resolution(m_actualWinSize.x, m_actualWinSize.y, true) != WW3D_ERROR_OK);
+#else
+	WW3D::Set_Device_Resolution(m_actualWinSize.x, m_actualWinSize.y, true);
+#endif
+	Invalidate(false);
 }
 
 void WbView3d::setMSAA(D3DMULTISAMPLE_TYPE type)

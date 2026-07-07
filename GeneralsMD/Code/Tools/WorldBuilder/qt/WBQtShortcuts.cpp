@@ -106,6 +106,7 @@ enum
 #define WBID_VIEW_WEAPONRANGES          33010
 #define WBID_VIEW_SHOWMAPBOUNDARIES     33331
 #define WBID_VIEW_FIXEDCOLOREDWAYPOINTS 32980
+#define WBID_VIEW_RESETDEVICE           33397
 
 struct WBAccel
 {
@@ -315,6 +316,17 @@ extern "C" int WBQtShortcuts_TranslateKey(void *pMsgVoid)
 		{
 			return 0;
 		}
+	}
+
+	// Shift+F5 = reset/reload the D3D device (recover a dead 3D viewport). Qt-only extra,
+	// not in the RC accel table. Unchecked post: ID_VIEW_RESETDEVICE has ON_COMMAND but no
+	// ON_UPDATE_COMMAND_UI, so the gated post's update probe would report it disabled and
+	// silently drop it (same reason as Delete below).
+	if (mods == WBK_SHIFT && vk == VK_F5)
+	{
+		WBQT_DBGLOG("TranslateKey: Shift+F5 -> post ID_VIEW_RESETDEVICE (unchecked)");
+		WBQtShortcuts_PostCommandUnchecked(WBID_VIEW_RESETDEVICE);
+		return 1;
 	}
 
 	// Bare Delete/Backspace = delete the selected object. Under the inversion the viewport's
