@@ -883,6 +883,16 @@ void WBQtTerrainMaterialPanel::refreshFromState()
 	m_updating = true;
 	rebuildTextureTree(m_search->text().trimmed());
 	rebuildFavoritesTree();
+	m_updating = false;
+	refreshToolState();
+}
+
+// Everything except the tree/favorites rebuild. setToolOptions runs on every tool activation
+// (including the transient Ctrl/Alt tool swaps and mouse-move re-activations), so its push must
+// stay O(controls), never O(texture classes).
+void WBQtTerrainMaterialPanel::refreshToolState()
+{
+	m_updating = true;
 	refreshSwatches();
 	refreshName();
 	setWidthRow(WBQtTerrainMaterial_GetWidth());
@@ -958,5 +968,13 @@ extern "C" void WBQtTerrainMaterial_PushSelection(void)
 	if (WBQtTerrainMaterialPanel::instance() != NULL)
 	{
 		WBQtTerrainMaterialPanel::instance()->refreshSelectionFromState();
+	}
+}
+
+extern "C" void WBQtTerrainMaterial_PushToolState(void)
+{
+	if (WBQtTerrainMaterialPanel::instance() != NULL)
+	{
+		WBQtTerrainMaterialPanel::instance()->refreshToolState();
 	}
 }

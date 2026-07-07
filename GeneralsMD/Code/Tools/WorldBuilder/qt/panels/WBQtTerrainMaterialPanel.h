@@ -45,6 +45,12 @@ public:
 	// (eyedropper pick) -- re-select the tree item and refresh the swatches/name, no tree rebuild.
 	void refreshSelectionFromState();
 
+	// Light push (WBQtTerrainMaterial_PushToolState): everything EXCEPT the tree/favorites
+	// rebuild -- swatches, name, sliders, toggles, enable state. setToolOptions runs on every
+	// tool activation (including transient Ctrl/Alt swaps), so it must not rebuild the tree:
+	// that is per-activation O(N) work and resets the user's scroll position.
+	void refreshToolState();
+
 	static WBQtTerrainMaterialPanel *instance() { return s_instance; }
 
 private slots:

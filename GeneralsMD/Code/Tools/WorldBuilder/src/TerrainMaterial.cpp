@@ -297,7 +297,11 @@ void TerrainMaterial::setToolOptions(Bool singleCell, Bool floodfill)
 		m_staticThis->m_updating = false;
 	}
 #ifdef RTS_HAS_QT
-	qtRefreshPanel();	// keep the Qt panel enable-state in sync with single/multi tool
+	// Light push only: setToolOptions runs on EVERY tool activation (incl. transient Ctrl/Alt
+	// swaps and mouse-move re-activations), so it must not rebuild the Qt texture tree -- that
+	// is per-activation O(N) work and resets the user's scroll position. The full qtRefreshPanel
+	// stays in updateTextures (map load), where the texture list actually changes.
+	qtRefreshToolState();
 #endif
 }
 
@@ -1390,6 +1394,7 @@ void TerrainMaterial::OnToggleNoMixing()
 // so we do not have to pull in the Qt panel header (which drags in Qt) from this MFC TU.
 extern "C" void WBQtTerrainMaterial_PushRefresh(void);
 extern "C" void WBQtTerrainMaterial_PushSelection(void);
+extern "C" void WBQtTerrainMaterial_PushToolState(void);
 
 void TerrainMaterial::qtRefreshPanel(void)
 {
@@ -1399,6 +1404,11 @@ void TerrainMaterial::qtRefreshPanel(void)
 void TerrainMaterial::qtRefreshSelection(void)
 {
 	WBQtTerrainMaterial_PushSelection();
+}
+
+void TerrainMaterial::qtRefreshToolState(void)
+{
+	WBQtTerrainMaterial_PushToolState();
 }
 
 int TerrainMaterial::qtIsSingleCell(void)
