@@ -20,6 +20,7 @@
 #include <QPixmap>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QSet>
 #include <QShortcut>
 #include <QSplitter>
 #include <QStringList>
@@ -348,6 +349,24 @@ void WBQtScriptWindow::seedCheckboxes()
 void WBQtScriptWindow::rebuildTree()
 {
 	m_updating = true;
+
+	// Preserve the user's expand/collapse state across model rebuilds (every command
+	// triggers one; expandAll() here used to blow the state away and reopen every folder).
+	// On the first build of a window there is no state yet: players start expanded so the
+	// scripts/folders are visible, folders start collapsed.
+	const bool firstBuild = (m_tree->topLevelItemCount() == 0);
+	QSet<int> expanded;
+	if (!firstBuild)
+	{
+		for (QTreeWidgetItemIterator it(m_tree); *it; ++it)
+		{
+			if ((*it)->isExpanded())
+			{
+				expanded.insert((*it)->data(0, kListTypeRole).toInt());
+			}
+		}
+	}
+
 	m_tree->clear();
 
 	QTreeWidgetItem *lastAtDepth[3] = { NULL, NULL, NULL };
@@ -417,9 +436,17 @@ void WBQtScriptWindow::rebuildTree()
 		{
 			lastAtDepth[d] = NULL;
 		}
+
+		if (firstBuild)
+		{
+			item->setExpanded(depth == 0);
+		}
+		else
+		{
+			item->setExpanded(expanded.contains(listType));
+		}
 	}
 
-	m_tree->expandAll();
 	m_updating = false;
 }
 
