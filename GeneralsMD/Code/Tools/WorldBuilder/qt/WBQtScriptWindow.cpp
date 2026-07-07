@@ -22,8 +22,11 @@
 #include <QPushButton>
 #include <QShortcut>
 #include <QSplitter>
+#include <QStringList>
 #include <QStyle>
+#include <QTextBrowser>
 #include <QTreeWidgetItemIterator>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <QWindow>
 
@@ -143,8 +146,10 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	detailLay->setContentsMargins(0, 0, 0, 0);
 	m_description = new QPlainTextEdit(detailPane);
 	m_description->setReadOnly(true);
-	m_comment = new QPlainTextEdit(detailPane);
-	m_comment->setReadOnly(true);
+	// Browser (not edit) so the "[Referenced in]" script names render as clickable links
+	// that jump the tree to the referencing script. Read-only by default.
+	m_comment = new QTextBrowser(detailPane);
+	m_comment->setOpenLinks(false);
 	m_comment->setMaximumHeight(140);
 	detailLay->addWidget(m_description, 1);
 	detailLay->addWidget(m_comment);
@@ -218,6 +223,7 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 		this, SLOT(onTreeContextMenu(const QPoint &)));
 	connect(m_tree, SIGNAL(itemDoubleClicked(QTreeWidgetItem *, int)),
 		this, SLOT(onTreeDoubleClicked(QTreeWidgetItem *, int)));
+	connect(m_comment, SIGNAL(anchorClicked(QUrl)), this, SLOT(onReferenceClicked(QUrl)));
 	connect(m_ok, SIGNAL(clicked()), this, SLOT(onOk()));
 	connect(m_cancel, SIGNAL(clicked()), this, SLOT(onCancel()));
 
@@ -474,6 +480,37 @@ void WBQtScriptWindow::updateButtonStates()
 	m_removeDebug->setEnabled(hasScript);
 }
 
+// Escape the comment text for rich text and turn each script name after the
+// "[Referenced in] : " marker (the names run to the end -- the tag is appended last)
+// into a wbref: link, so the detail pane can jump to the referencing script.
+static QString wbLinkifyReferences(const QString &comment)
+{
+	const QString marker = "[Referenced in] : ";
+	const int at = comment.indexOf(marker);
+	QString html;
+	if (at == -1)
+	{
+		html = comment.toHtmlEscaped();
+	}
+	else
+	{
+		html = comment.left(at + marker.size()).toHtmlEscaped();
+		const QStringList names = comment.mid(at + marker.size()).split(", ");
+		for (int i = 0; i < names.size(); ++i)
+		{
+			if (i > 0)
+			{
+				html += ", ";
+			}
+			html += "<a href=\"wbref:"
+				+ QString::fromLatin1(QUrl::toPercentEncoding(names.at(i)))
+				+ "\">" + names.at(i).toHtmlEscaped() + "</a>";
+		}
+	}
+	html.replace("\n", "<br>");
+	return html;
+}
+
 void WBQtScriptWindow::updateDetail()
 {
 	int lt = selectedListType();
@@ -490,7 +527,28 @@ void WBQtScriptWindow::updateDetail()
 	commentBuf[0] = 0;
 	WBQtScript_GetDetail(lt, descBuf, cap, commentBuf, cap);
 	m_description->setPlainText(QString::fromLatin1(descBuf));
-	m_comment->setPlainText(QString::fromLatin1(commentBuf));
+	m_comment->setHtml(wbLinkifyReferences(QString::fromLatin1(commentBuf)));
+}
+
+void WBQtScriptWindow::onReferenceClicked(const QUrl &url)
+{
+	if (url.scheme() != QLatin1String("wbref"))
+	{
+		return;
+	}
+	// path() decodes the percent-encoding wbLinkifyReferences applied.
+	QByteArray name = url.path().toLatin1();
+	int lt = WBQtScript_FindScriptByName(name.constData());
+	if (lt == -1)
+	{
+		QApplication::beep();
+		return;
+	}
+	// Same jump sequence as onFind: select, push to the dialog, refresh the panes.
+	selectByListType(lt);
+	WBQtScript_SetSelection(lt);
+	updateButtonStates();
+	updateDetail();
 }
 
 void WBQtScriptWindow::onTreeSelectionChanged()

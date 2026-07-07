@@ -168,6 +168,9 @@ public:
 	void qtMVerify(void);
 	void qtMSetCheckbox(int which, int checked);
 	void qtMImportScripts(void);
+	// Exact-name script lookup for the detail pane's clickable "[Referenced in]" links:
+	// returns the packed ListType int, or -1 when no script has that name.
+	int  qtFindScriptByName(const char *name);
 	// Editor-local undo/redo over the working copy (m_sides snapshots). Cleared per
 	// session (qtOpenModelOnly) and on import (which self-commits app-level).
 	void qtPushUndoSnapshot(void);

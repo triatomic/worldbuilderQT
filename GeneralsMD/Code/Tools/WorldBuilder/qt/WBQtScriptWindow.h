@@ -18,6 +18,8 @@ class QCheckBox;
 class QLineEdit;
 class QPlainTextEdit;
 class QPushButton;
+class QTextBrowser;
+class QUrl;
 class WBQtScriptWindow;
 
 // A QTreeWidget that reports internal drops back to the window instead of moving items itself
@@ -73,6 +75,7 @@ private slots:
 	void onFind();
 	void onTreeContextMenu(const QPoint &pos);
 	void onTreeDoubleClicked(QTreeWidgetItem *item, int column);
+	void onReferenceClicked(const QUrl &url);
 	void onOk();
 	void onCancel();
 
@@ -88,7 +91,7 @@ private:
 
 	WBQtScriptTree *m_tree;
 	QPlainTextEdit *m_description;
-	QPlainTextEdit *m_comment;
+	QTextBrowser *m_comment;	// browser, not edit: the "[Referenced in]" names are links
 	QLineEdit   *m_search;
 	QPushButton *m_findBtn;
 

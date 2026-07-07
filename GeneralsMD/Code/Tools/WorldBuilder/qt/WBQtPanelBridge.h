@@ -261,6 +261,10 @@ void WBQtScript_SaveNow(void);
 int  WBQtScript_Undo(void);
 int  WBQtScript_Redo(void);
 
+// Exact-name script lookup (the detail pane's clickable "[Referenced in]" links):
+// returns the packed ListType int, or -1 when no script has that name.
+int  WBQtScript_FindScriptByName(const char *name);
+
 // Forward (Qt-side, WBQtScriptWindow): open/close the Qt Script window. WBQtScript_Open is
 // called from CMainFrame::onEditScripts after the hidden MFC dialog is created; it builds
 // the window rooted in frameHwnd. WBQtScript_Close tears it down. IsOpen/Focus let

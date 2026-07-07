@@ -48,6 +48,56 @@ namespace
 	}
 }
 
+// Exact-name lookup for the detail pane's clickable "[Referenced in]" links. Walks the
+// working copy with the same player/group/script indices the Qt tree was built from, so
+// the returned packed ListType matches the tree item's stored one.
+int ScriptDialog::qtFindScriptByName(const char *name)
+{
+	if (name == NULL || name[0] == 0)
+	{
+		return -1;
+	}
+	AsciiString target(name);
+	for (Int i = 0; i < m_sides.getNumSides(); i++)
+	{
+		ScriptList *pSL = m_sides.getSideInfo(i)->getScriptList();
+		if (!pSL)
+		{
+			continue;
+		}
+		ListType lt;
+		lt.m_playerIndex = (unsigned char)i;
+		Int ndx;
+		Script *s;
+		for (s = pSL->getScript(), ndx = 0; s; s = s->getNext(), ndx++)
+		{
+			if (s->getName() == target)
+			{
+				lt.m_objType = ListType::SCRIPT_IN_PLAYER_TYPE;
+				lt.m_groupIndex = 0;
+				lt.m_scriptIndex = (unsigned short)ndx;
+				return lt.ListToInt();
+			}
+		}
+		Int groupNdx;
+		ScriptGroup *g;
+		for (g = pSL->getScriptGroup(), groupNdx = 0; g; g = g->getNext(), groupNdx++)
+		{
+			for (s = g->getScript(), ndx = 0; s; s = s->getNext(), ndx++)
+			{
+				if (s->getName() == target)
+				{
+					lt.m_objType = ListType::SCRIPT_IN_GROUP_TYPE;
+					lt.m_groupIndex = (unsigned short)groupNdx;
+					lt.m_scriptIndex = (unsigned short)ndx;
+					return lt.ListToInt();
+				}
+			}
+		}
+	}
+	return -1;
+}
+
 void ScriptDialog::qtPushUndoSnapshot(void)
 {
 	SidesList *snap = new SidesList;
@@ -1223,6 +1273,12 @@ void WBQtScript_Delete(void)
 	{
 		dlg->qtMDelete();
 	}
+}
+
+int WBQtScript_FindScriptByName(const char *name)
+{
+	ScriptDialog *dlg = ScriptDialog::qtInstance();
+	return (dlg != NULL) ? dlg->qtFindScriptByName(name) : -1;
 }
 
 int WBQtScript_Undo(void)
