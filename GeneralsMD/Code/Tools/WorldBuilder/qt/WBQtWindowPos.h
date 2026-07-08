@@ -8,6 +8,11 @@
 //
 // The store is the same WorldBuilder.ini every other window uses (via the MFC-side bridge
 // WBQtWindowPos_Save/Get in src/WBQtHostBridge.cpp), so positions all live in one file.
+//
+// Tracked windows are also kept reachable: a WM_MOVING clamp stops title-bar drags at the
+// screen edges (downward the window may hang into/below the taskbar, but the title bar
+// always stays visible above it), and a stale stored position (monitor unplugged,
+// resolution change) is clamped back into view on restore.
 #ifndef WB_QT_WINDOW_POS_H
 #define WB_QT_WINDOW_POS_H
 

@@ -7,6 +7,8 @@
 // window's tracking name.
 #include "WBQtWindowPos.h"
 
+#include <qt_windows.h>
+#include <commctrl.h>
 #include <QEvent>
 #include <QMoveEvent>
 #include <QRect>
@@ -22,6 +24,70 @@ namespace
 {
 	// A property stamped on a tracked window so a second Track() call is a no-op.
 	const char *const kTrackedProp = "wbPosTracked";
+
+	// Shift the rect (size preserved) so the window stays reachable on the nearest monitor:
+	// fully inside the work area horizontally and at the top, but downward it may hang into
+	// or below the taskbar as long as the whole title bar stays visible above it -- enough
+	// to always grab the window back. Used for the live drag clamp and the restore clamp.
+	void clampRectToNearestWorkArea(RECT *r)
+	{
+		HMONITOR monitor = ::MonitorFromRect(r, MONITOR_DEFAULTTONEAREST);
+		MONITORINFO mi;
+		mi.cbSize = sizeof(mi);
+		if (monitor == NULL || !::GetMonitorInfo(monitor, &mi))
+		{
+			return;
+		}
+		LONG dx = 0;
+		LONG dy = 0;
+		if (r->right > mi.rcWork.right)
+		{
+			dx = mi.rcWork.right - r->right;
+		}
+		if (r->left + dx < mi.rcWork.left)
+		{
+			dx = mi.rcWork.left - r->left;
+		}
+		// The full standard caption height covers a tool window's smaller caption too.
+		const LONG minVisibleY =
+			::GetSystemMetrics(SM_CYCAPTION) + ::GetSystemMetrics(SM_CYSIZEFRAME);
+		if (r->top > mi.rcWork.bottom - minVisibleY)
+		{
+			dy = mi.rcWork.bottom - minVisibleY - r->top;
+		}
+		if (r->top + dy < mi.rcWork.top)
+		{
+			dy = mi.rcWork.top - r->top;
+		}
+		::OffsetRect(r, dx, dy);
+	}
+
+	// Live drag clamp: adjust the WM_MOVING rect so the user cannot drag a tracked window
+	// outside the monitor work area -- the window just stops at the edge. Clamping the
+	// proposed rect (instead of move()-ing back afterwards) is jitter-free because the OS
+	// itself places the window at the adjusted spot. Crossing to another monitor still
+	// works: once most of the proposed rect overlaps the other monitor, MonitorFromRect
+	// picks that one and the window snaps fully onto it.
+	//
+	// This must be a Win32 subclass (SetWindowSubclass), NOT a QAbstractNativeEventFilter:
+	// WM_MOVING is not one of the messages Qt's window proc translates, so it never reaches
+	// the app-level native filters -- only a real wndproc-chain hook sees it.
+	LRESULT CALLBACK wbPosSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam,
+		UINT_PTR subclassId, DWORD_PTR refData)
+	{
+		Q_UNUSED(refData);
+		if (msg == WM_MOVING)
+		{
+			::DefSubclassProc(hwnd, msg, wParam, lParam);
+			clampRectToNearestWorkArea(reinterpret_cast<RECT *>(lParam));
+			return TRUE;
+		}
+		if (msg == WM_NCDESTROY)
+		{
+			::RemoveWindowSubclass(hwnd, wbPosSubclassProc, subclassId);
+		}
+		return ::DefSubclassProc(hwnd, msg, wParam, lParam);
+	}
 
 	class WBQtWindowPosTracker : public QObject
 	{
@@ -40,6 +106,14 @@ namespace
 		{
 			if (obj == m_window)
 			{
+				if (event->type() == QEvent::Show)
+				{
+					// (Re)install the drag clamp. The native window can be recreated behind
+					// the widget, and re-subclassing with the same id/proc is a cheap no-op,
+					// so doing it on every Show keeps the hook alive.
+					::SetWindowSubclass(reinterpret_cast<HWND>(m_window->winId()),
+						wbPosSubclassProc, 1, 0);
+				}
 				if (event->type() == QEvent::Show && !m_restored)
 				{
 					m_restored = true;
@@ -47,8 +121,13 @@ namespace
 					int left = 0;
 					if (WBQtWindowPos_Get(m_name.constData(), &top, &left))
 					{
+						// Clamp the stored position back on screen first -- it can be stale
+						// (monitor unplugged, resolution lowered) or from a pre-clamp build.
+						const QRect frame = m_window->frameGeometry();
+						RECT r = { left, top, left + frame.width(), top + frame.height() };
+						clampRectToNearestWorkArea(&r);
 						// move() targets the frame corner, matching the saved frameGeometry.
-						m_window->move(left, top);
+						m_window->move(r.left, r.top);
 					}
 				}
 				else if (event->type() == QEvent::Move)

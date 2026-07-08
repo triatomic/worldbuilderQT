@@ -472,7 +472,8 @@ if(RTS_ENABLE_WORLDBUILDER_QT)
     # dwmapi: DwmSetWindowAttribute for the dark title bar (WBQtTheme).
     # Qt5::GuiPrivate: qwinwidget.cpp uses the qpa platform-native-interface (a Qt private
     # header) to resolve a QWindow's HWND for MFC embedding.
-    target_link_libraries(z_worldbuilder_qt PUBLIC Qt5::Widgets PRIVATE Qt5::GuiPrivate dwmapi)
+    # comctl32: SetWindowSubclass for the on-screen clamp of tracked windows (WBQtWindowPos).
+    target_link_libraries(z_worldbuilder_qt PUBLIC Qt5::Widgets PRIVATE Qt5::GuiPrivate dwmapi comctl32)
 
     # Link the Qt lib into the exe and turn on the guarded bootstrap in WorldBuilder.cpp.
     target_link_libraries(z_worldbuilder PRIVATE z_worldbuilder_qt)
