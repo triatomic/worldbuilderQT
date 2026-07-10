@@ -62,6 +62,7 @@ WBQtParamDialog::WBQtParamDialog(void *parameter, const char *unitName, QWidget 
 	if (m_kind == WB_QT_PARAM_KIND_EDIT || m_kind == WB_QT_PARAM_KIND_COMBO)
 	{
 		m_edit = new QLineEdit(box);
+		connect(m_edit, SIGNAL(textChanged(QString)), this, SLOT(onEditTextChanged(QString)));
 		boxLay->addWidget(m_edit);
 	}
 	if (m_kind == WB_QT_PARAM_KIND_COMBO || m_kind == WB_QT_PARAM_KIND_LIST)
@@ -175,6 +176,26 @@ void WBQtParamDialog::onTextEdited(const QString &text)
 			m_updating = false;
 			break;
 		}
+	}
+}
+
+void WBQtParamDialog::onEditTextChanged(const QString &text)
+{
+	// The MFC dialog's single-line edit dropped everything from the first CR/LF when text
+	// was pasted; QLineEdit keeps the newline characters, so a string key pasted with a
+	// trailing newline ended up stored in the script. Match the Win32 edit control.
+	int cut = -1;
+	for (int i = 0; i < text.length(); i++)
+	{
+		if (text[i] == QLatin1Char('\r') || text[i] == QLatin1Char('\n'))
+		{
+			cut = i;
+			break;
+		}
+	}
+	if (cut >= 0)
+	{
+		m_edit->setText(text.left(cut));
 	}
 }
 

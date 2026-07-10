@@ -28,6 +28,7 @@ public:
 private slots:
 	void onRowChanged(int row);
 	void onTextEdited(const QString &text);
+	void onEditTextChanged(const QString &text);
 	void onPreviewSound();
 
 private:
