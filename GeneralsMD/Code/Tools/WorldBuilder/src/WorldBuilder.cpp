@@ -436,6 +436,15 @@ BOOL CWorldBuilderApp::InitInstance()
 	m_pszProfileName = (const char *)malloc(strlen(buf)+2);
 	strcpy((char*)m_pszProfileName, buf);
 
+#ifdef DEBUG_CRASHING
+	// Troubleshooting > Show Assertion Dialogs: apply the persisted choice now that
+	// m_pszProfileName points at WorldBuilder.ini (reading it any earlier would hit
+	// the wrong profile). Default = show, same as the fixed 'false' above.
+	if (GetProfileInt(MAIN_FRAME_SECTION, "ShowAssertDialogs", 1) == 0) {
+		TheWritableGlobalData->m_debugIgnoreAsserts = true;
+	}
+#endif
+
 	// ensure the user maps dir exists
 	sprintf(buf, "%sMaps\\", TheGlobalData->getPath_UserData().str());
 	CreateDirectory(buf, NULL);

@@ -67,6 +67,8 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWnd)
 	ON_COMMAND(ID_EDIT_CAMERAOPTIONS, OnEditCameraoptions)
 	ON_WM_DROPFILES()  
 	//}}AFX_MSG_MAP
+	ON_COMMAND(ID_SHOW_ASSERT_DIALOGS, OnShowAssertDialogs)
+	ON_UPDATE_COMMAND_UI(ID_SHOW_ASSERT_DIALOGS, OnUpdateShowAssertDialogs)
 #ifdef RTS_HAS_QT
 	ON_COMMAND_RANGE(ID_QTTHEME_SYSTEM, ID_QTTHEME_LIGHT, OnQtTheme)
 	ON_UPDATE_COMMAND_UI_RANGE(ID_QTTHEME_SYSTEM, ID_QTTHEME_LIGHT, OnUpdateQtTheme)
@@ -826,6 +828,31 @@ void CMainFrame::OnViewBrushfeedback()
 void CMainFrame::OnUpdateViewBrushfeedback(CCmdUI* pCmdUI) 
 {
 	pCmdUI->SetCheck(DrawObject::isFeedbackEnabled()?1:0);
+}
+
+// Troubleshooting > Show Assertion Dialogs: debug/internal builds pop a message box for
+// every failed assert (DEBUG_CRASH). Unchecking sets the engine's ignore-asserts flag (the
+// same one the game's -ignoreAsserts option sets), so asserts only log; persisted in
+// WorldBuilder.ini and re-applied at startup (CWorldBuilderApp::InitInstance).
+void CMainFrame::OnShowAssertDialogs() 
+{
+	if (TheWritableGlobalData) {
+		TheWritableGlobalData->m_debugIgnoreAsserts = !TheGlobalData->m_debugIgnoreAsserts;
+		::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "ShowAssertDialogs",
+			TheGlobalData->m_debugIgnoreAsserts ? 0 : 1);
+	}
+}
+
+void CMainFrame::OnUpdateShowAssertDialogs(CCmdUI* pCmdUI) 
+{
+#ifdef DEBUG_CRASHING
+	pCmdUI->Enable(TRUE);
+	pCmdUI->SetCheck((TheGlobalData && !TheGlobalData->m_debugIgnoreAsserts) ? 1 : 0);
+#else
+	// this build never shows assert dialogs -- gray the item out
+	pCmdUI->Enable(FALSE);
+	pCmdUI->SetCheck(0);
+#endif
 }
 
 #ifdef RTS_HAS_QT

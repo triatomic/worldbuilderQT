@@ -207,6 +207,8 @@ protected:
 	afx_msg void OnEditCameraoptions();
 	afx_msg void OnDropFiles(HDROP hDropInfo);
 	//}}AFX_MSG
+	afx_msg void OnShowAssertDialogs();
+	afx_msg void OnUpdateShowAssertDialogs(CCmdUI* pCmdUI);
 	DECLARE_MESSAGE_MAP()
 };
 
