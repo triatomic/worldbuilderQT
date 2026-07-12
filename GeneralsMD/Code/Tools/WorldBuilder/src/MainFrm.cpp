@@ -866,6 +866,21 @@ void CMainFrame::OnClose()
 	// host it again.
 	if (WBQt_InversionActive() && m_qtViewportHost != NULL)
 	{
+		// Ask about unsaved changes FIRST, while the Qt main window is still fully
+		// assembled -- unhosting hides the whole app window, so the old order made the
+		// main window vanish and left the save prompt floating alone (and Cancel had to
+		// rebuild the hosting). Cancel now returns before anything is torn down.
+		CWorldBuilderDoc *pCloseDoc = CWorldBuilderDoc::GetActiveDoc();
+		if (pCloseDoc != NULL)
+		{
+			if (!pCloseDoc->SaveModified())
+			{
+				return;	// user canceled the close; nothing was hidden
+			}
+			// Saved or discarded: clear the flag so CFrameWnd::OnClose (SaveAllModified)
+			// does not pop the same prompt a second time.
+			pCloseDoc->SetModifiedFlag(FALSE);
+		}
 		WbView3d *p3d = CWorldBuilderDoc::GetActive3DView();
 		WBQt_UnhostViewport(GetSafeHwnd(), p3d ? p3d->GetSafeHwnd() : NULL);
 		m_qtViewportHost = NULL;
