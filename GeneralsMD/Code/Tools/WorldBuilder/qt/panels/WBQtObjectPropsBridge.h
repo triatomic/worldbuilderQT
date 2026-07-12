@@ -89,6 +89,10 @@ int    WBQtObjectProps_GetPosition(char *out, int cap);
 void   WBQtObjectProps_SetPosition(const char *text);
 double WBQtObjectProps_GetZOffset(void);
 void   WBQtObjectProps_SetZOffset(double z);
+// Scrub batching: between Begin and End, SetZOffset/SetAngle mutate one undoable
+// (== the MFC pop-slider), so a whole scrub drag is a single undo step.
+void   WBQtObjectProps_BeginPosScrub(void);
+void   WBQtObjectProps_EndPosScrub(void);
 double WBQtObjectProps_GetAngle(void);
 void   WBQtObjectProps_SetAngle(double deg);
 

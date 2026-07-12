@@ -464,6 +464,26 @@ void MapObjectProps::qtMSetPosition(const char *text)
 	}
 }
 
+// Scrub batching == the MFC PopSliderChanged/PopSliderFinished pair: while a scrub
+// drag is active, the setters below reuse the panel m_posUndoable (created lazily
+// on the first real change) so the whole drag is ONE undo step.
+static Bool s_qtPosScrubActive = false;
+
+void MapObjectProps::qtMBeginPosScrub(void)
+{
+	s_qtPosScrubActive = true;
+}
+
+void MapObjectProps::qtMEndPosScrub(void)
+{
+	s_qtPosScrubActive = false;
+	if (TheMapObjectProps != NULL && TheMapObjectProps->m_posUndoable != NULL)
+	{
+		REF_PTR_RELEASE(TheMapObjectProps->m_posUndoable);	// belongs to pDoc now.
+		TheMapObjectProps->m_posUndoable = NULL;
+	}
+}
+
 // == SetZOffset minus the edit read (no change detection, like the original).
 void MapObjectProps::qtMSetZOffset(double z)
 {
@@ -476,10 +496,22 @@ void MapObjectProps::qtMSetZOffset(double z)
 	CWorldBuilderDoc* pDoc = CWorldBuilderDoc::GetActiveDoc();
 	if ( pDoc )
 	{
-		ModifyObjectUndoable *pUndo = new ModifyObjectUndoable(pDoc);
-		pDoc->AddAndDoUndoable(pUndo);
-		pUndo->SetZOffset((Real)z);
-		REF_PTR_RELEASE(pUndo); // belongs to pDoc now.
+		if (s_qtPosScrubActive)
+		{
+			if (TheMapObjectProps->m_posUndoable == NULL)
+			{
+				TheMapObjectProps->m_posUndoable = new ModifyObjectUndoable(pDoc);
+				pDoc->AddAndDoUndoable(TheMapObjectProps->m_posUndoable);
+			}
+			TheMapObjectProps->m_posUndoable->SetZOffset((Real)z);
+		}
+		else
+		{
+			ModifyObjectUndoable *pUndo = new ModifyObjectUndoable(pDoc);
+			pDoc->AddAndDoUndoable(pUndo);
+			pUndo->SetZOffset((Real)z);
+			REF_PTR_RELEASE(pUndo); // belongs to pDoc now.
+		}
 	}
 }
 
@@ -508,10 +540,22 @@ void MapObjectProps::qtMSetAngle(double deg)
 		CWorldBuilderDoc* pDoc = CWorldBuilderDoc::GetActiveDoc();
 		if ( pDoc )
 		{
-			ModifyObjectUndoable *pUndo = new ModifyObjectUndoable(pDoc);
-			pDoc->AddAndDoUndoable(pUndo);
-			pUndo->RotateTo((Real)deg * PI / 180);
-			REF_PTR_RELEASE(pUndo); // belongs to pDoc now.
+			if (s_qtPosScrubActive)
+			{
+				if (TheMapObjectProps->m_posUndoable == NULL)
+				{
+					TheMapObjectProps->m_posUndoable = new ModifyObjectUndoable(pDoc);
+					pDoc->AddAndDoUndoable(TheMapObjectProps->m_posUndoable);
+				}
+				TheMapObjectProps->m_posUndoable->RotateTo((Real)deg * PI / 180);
+			}
+			else
+			{
+				ModifyObjectUndoable *pUndo = new ModifyObjectUndoable(pDoc);
+				pDoc->AddAndDoUndoable(pUndo);
+				pUndo->RotateTo((Real)deg * PI / 180);
+				REF_PTR_RELEASE(pUndo); // belongs to pDoc now.
+			}
 		}
 	}
 }
@@ -1549,6 +1593,16 @@ extern "C" double WBQtObjectProps_GetZOffset(void)
 extern "C" void WBQtObjectProps_SetZOffset(double z)
 {
 	MapObjectProps::qtMSetZOffset(z);
+}
+
+extern "C" void WBQtObjectProps_BeginPosScrub(void)
+{
+	MapObjectProps::qtMBeginPosScrub();
+}
+
+extern "C" void WBQtObjectProps_EndPosScrub(void)
+{
+	MapObjectProps::qtMEndPosScrub();
 }
 
 extern "C" double WBQtObjectProps_GetAngle(void)

@@ -60,6 +60,7 @@ bool WBQtScrubSpinBox::eventFilter(QObject *watched, QEvent *event)
 						lineEdit()->setCursor(m_vertical ? Qt::SizeVerCursor : Qt::SizeHorCursor);
 						// Drop any text selection the initial press started.
 						lineEdit()->deselect();
+						emit scrubStarted();
 					}
 					if (m_dragged)
 					{
@@ -80,6 +81,7 @@ bool WBQtScrubSpinBox::eventFilter(QObject *watched, QEvent *event)
 				lineEdit()->unsetCursor();
 				if (wasDrag)
 				{
+					emit scrubFinished();
 					return true;	// consume the release that ended a scrub
 				}
 				break;	// a plain click: let the line edit finish normally

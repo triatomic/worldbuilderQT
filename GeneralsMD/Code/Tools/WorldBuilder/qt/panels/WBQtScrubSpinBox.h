@@ -19,6 +19,7 @@ class QEvent;
 
 class WBQtScrubSpinBox : public QDoubleSpinBox
 {
+	Q_OBJECT
 public:
 	// axisVertical: false (default) scrubs on horizontal drag (right = increase); true scrubs on
 	// vertical drag (up = increase), which suits a height/elevation field like Z.
@@ -26,6 +27,12 @@ public:
 
 	// Value change per pixel of drag (defaults to singleStep()).
 	void setScrubStep(double perPixel) { m_scrubStep = perPixel; }
+
+signals:
+	// A drag crossed the scrub threshold / a scrub drag ended. Lets a panel batch the
+	// whole drag into ONE undoable, like the MFC pop-slider Changed/Finished pair.
+	void scrubStarted();
+	void scrubFinished();
 
 protected:
 	virtual bool eventFilter(QObject *watched, QEvent *event);

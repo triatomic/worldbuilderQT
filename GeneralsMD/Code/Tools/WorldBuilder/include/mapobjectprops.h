@@ -306,6 +306,10 @@ public:
 	static void qtMSetPosition(const char *text);
 	static void qtMSetZOffset(double z);
 	static void qtMSetAngle(double deg);
+	// Scrub batching (== the MFC pop-slider lazy m_posUndoable): between Begin and
+	// End, qtMSetZOffset/qtMSetAngle mutate ONE undoable instead of one per tick.
+	static void qtMBeginPosScrub(void);
+	static void qtMEndPosScrub(void);
 	// Sound sub-panel: the combo catalog and all customize/looping/none gating derive
 	// from the dict + AudioEventInfo defaults instead of the seeded hidden controls.
 	static void qtMSoundEnsureCatalog(void);

@@ -65,6 +65,8 @@ private slots:
 	void onPositionChanged();
 	void onZChanged();
 	void onAngleChanged();
+	void onPosScrubStarted();
+	void onPosScrubFinished();
 	// Sound section.
 	void onSoundChanged(int index);
 	void onListenClicked();

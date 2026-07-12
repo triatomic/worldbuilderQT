@@ -280,6 +280,11 @@ WBQtObjectPropsPanel::WBQtObjectPropsPanel(QWidget *owner)
 	connect(m_xyPos, SIGNAL(editingFinished()), this, SLOT(onPositionChanged()));
 	connect(m_zOffset, SIGNAL(valueChanged(double)), this, SLOT(onZChanged()));
 	connect(m_angle, SIGNAL(valueChanged(double)), this, SLOT(onAngleChanged()));
+	// Batch a whole scrub drag into one undoable (== the MFC pop-slider behavior).
+	connect(m_zOffset, SIGNAL(scrubStarted()), this, SLOT(onPosScrubStarted()));
+	connect(m_zOffset, SIGNAL(scrubFinished()), this, SLOT(onPosScrubFinished()));
+	connect(m_angle, SIGNAL(scrubStarted()), this, SLOT(onPosScrubStarted()));
+	connect(m_angle, SIGNAL(scrubFinished()), this, SLOT(onPosScrubFinished()));
 	connect(m_sound, SIGNAL(currentIndexChanged(int)), this, SLOT(onSoundChanged(int)));
 	connect(m_listen, SIGNAL(clicked()), this, SLOT(onListenClicked()));
 	connect(m_customize, SIGNAL(clicked()), this, SLOT(onSoundFlagToggled()));
@@ -881,6 +886,16 @@ void WBQtObjectPropsPanel::onZChanged()
 		return;
 	}
 	WBQtObjectProps_SetZOffset(m_zOffset->value());
+}
+
+void WBQtObjectPropsPanel::onPosScrubStarted()
+{
+	WBQtObjectProps_BeginPosScrub();
+}
+
+void WBQtObjectPropsPanel::onPosScrubFinished()
+{
+	WBQtObjectProps_EndPosScrub();
 }
 
 void WBQtObjectPropsPanel::onAngleChanged()
