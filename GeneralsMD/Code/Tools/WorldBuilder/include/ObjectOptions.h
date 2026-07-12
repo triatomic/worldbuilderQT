@@ -83,6 +83,7 @@ protected:
 	static Int				m_currentObjectIndex;
 	static char				m_currentObjectName[NAME_MAX_LEN];
 	static AsciiString	m_curOwnerName;
+	static Bool				m_placeAllInCategory;
 	CFont m_treeFont;
 
 	Bool m_isObjectOptsWindowOpen;
@@ -118,6 +119,11 @@ public:
 	static void update();
 	static AsciiString getCurGdfName(void);
 	static void reprocessObjectList();
+	// Place-all-in-category (Object Options checkbox): one click places every template
+	// in the current object's tree category (side + editor sorting) as one undoable grid.
+	static Bool isPlaceAllInCategory(void) {return m_placeAllInCategory;};
+	static void setPlaceAllInCategory(Bool on);
+	static MapObject *duplicateCategoryMapObjectsForPlace(const Coord3D* loc, Real angle);
 #ifdef RTS_HAS_QT
 	// Qt panel support (WBQtObjectBridge): let the Qt Object panel mirror the template
 	// list and drive the same selection statics the placement tools read. Defined in

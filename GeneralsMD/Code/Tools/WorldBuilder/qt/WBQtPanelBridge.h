@@ -196,6 +196,11 @@ int  WBQtObject_GetPreviewBuildZone(void);
 void WBQtObject_SetUseWaterHeight(int on);
 int  WBQtObject_GetUseWaterHeight(void);
 
+// Place-all-in-category: one click places the whole tree category (side + editor
+// sorting) of the selected object as a single undoable grid (ObjectTool reads it).
+void WBQtObject_SetPlaceAll(int on);
+int  WBQtObject_GetPlaceAll(void);
+
 // Forward (Qt-side): WB calls ObjectOptions::update()/selectObject() on selection changes;
 // a guarded WBQtObject_PushFromSelection() re-seeds the Qt panel (label/team/preview) and
 // WBQtObject_PushSelectIndex() moves the tree selection to match a programmatic selectObject.

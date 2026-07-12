@@ -385,5 +385,16 @@ int WBQtObject_GetUseWaterHeight(void)
 	return ::AfxGetApp()->GetProfileInt("ObjectOptionPanel", "UseWaterHeight", 1);
 }
 
+// Place-all-in-category: the checkbox drives the ObjectOptions static that ObjectTool
+// reads on mouse-up; the setter persists it (same profile section as the other toggles).
+void WBQtObject_SetPlaceAll(int on)
+{
+	ObjectOptions::setPlaceAllInCategory(on != 0);
+}
+int WBQtObject_GetPlaceAll(void)
+{
+	return ObjectOptions::isPlaceAllInCategory() ? 1 : 0;
+}
+
 }
 #endif

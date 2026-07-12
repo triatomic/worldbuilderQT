@@ -57,6 +57,7 @@ Bool ObjectOptions::m_updating = false;
 char ObjectOptions::m_currentObjectName[NAME_MAX_LEN];
 Int ObjectOptions::m_currentObjectIndex=-1;
 AsciiString ObjectOptions::m_curOwnerName;
+Bool ObjectOptions::m_placeAllInCategory = false;
 
 /////////////////////////////////////////////////////////////////////////////
 // ObjectOptions dialog
@@ -114,6 +115,12 @@ void ObjectOptions::OnUseWaterHeight()
 	CButton *pButton = (CButton*)GetDlgItem(IDC_TOGGLE_WATER_HEIGHT);
 	m_bUseWaterHeight = (pButton->GetCheck() == 1);
 	::AfxGetApp()->WriteProfileInt(OBJECT_OPTION_PANEL, "UseWaterHeight", m_bUseWaterHeight ? 1 : 0);
+}
+
+/*static*/ void ObjectOptions::setPlaceAllInCategory(Bool on)
+{
+	m_placeAllInCategory = on;
+	::AfxGetApp()->WriteProfileInt(OBJECT_OPTION_PANEL, "PlaceAllInCategory", on ? 1 : 0);
 }
 
 void ObjectOptions::OnPreviewBuildZone()
@@ -457,6 +464,8 @@ BOOL ObjectOptions::OnInitDialog()
 	m_bUseWaterHeight=::AfxGetApp()->GetProfileInt(OBJECT_OPTION_PANEL, "UseWaterHeight", 1);
 	pButton->SetCheck(m_bUseWaterHeight ? 1:0);
 	OnUseWaterHeight();
+
+	m_placeAllInCategory = ::AfxGetApp()->GetProfileInt(OBJECT_OPTION_PANEL, "PlaceAllInCategory", 0) != 0;
 
 	m_staticThis = this;
 	m_updating = false;
@@ -874,6 +883,74 @@ MapObject *ObjectOptions::duplicateCurMapObjectForPlace(const Coord3D* loc, Real
 	}
 	AfxMessageBox("Unable to add object.");
 	return(NULL);
+}
+
+/** Place-all-in-category: build a chained list of new map objects covering every
+template in the same tree category (side + editor sorting) as the current object,
+laid out in a grid anchored at loc. The current object goes first (at loc, with the
+passed angle); the others use their own placement view angles. The caller owns the
+chain -- AddObjectUndoable takes chained lists, so one Undo removes the whole batch. */
+MapObject *ObjectOptions::duplicateCategoryMapObjectsForPlace(const Coord3D* loc, Real angle)
+{
+	MapObject *pSelected = getCurMapObject();
+	const ThingTemplate *selTemplate = pSelected ? pSelected->getThingTemplate() : NULL;
+
+	// The selected object goes through the normal path, so the owning-team lookup (and
+	// the add-player prompt if its side has no player yet) runs once for the whole batch.
+	MapObject *pFirst = duplicateCurMapObjectForPlace(loc, angle, true);
+	if (pFirst == NULL || selTemplate == NULL) {
+		return pFirst;	// legacy/test entries have no category; place just the one object
+	}
+
+	// Collect the rest of the category, tracking its largest footprint for the spacing.
+	std::list<MapObject*> members;
+	Real maxRadius = selTemplate->getTemplateGeometryInfo().getMajorRadius();
+	MapObject *pObj = m_staticThis ? m_staticThis->m_objectsList : NULL;
+	for (; pObj; pObj = pObj->getNext()) {
+		const ThingTemplate *tt = pObj->getThingTemplate();
+		if (tt == NULL || pObj == pSelected) {
+			continue;
+		}
+		if (!(tt->getDefaultOwningSide() == selTemplate->getDefaultOwningSide())) {
+			continue;
+		}
+		if (tt->getEditorSorting() != selTemplate->getEditorSorting()) {
+			continue;
+		}
+		members.push_back(pObj);
+		Real radius = tt->getTemplateGeometryInfo().getMajorRadius();
+		if (radius > maxRadius) {
+			maxRadius = radius;
+		}
+	}
+
+	// Grid: the selected object sits on the clicked spot, the others fill a roughly
+	// square grid growing east/north from it.
+	Real spacing = 2.0f * maxRadius;
+	if (spacing < 20.0f) {
+		spacing = 20.0f;
+	}
+	Int columns = 1;
+	while (columns * columns < (Int)members.size() + 1) {
+		columns++;
+	}
+	Int cell = 1;	// cell 0 is the selected object
+	MapObject *pTail = pFirst;
+	for (std::list<MapObject*>::iterator it = members.begin(); it != members.end(); ++it, ++cell) {
+		MapObject *pSrc = *it;
+		Coord3D pt = *loc;
+		pt.x += (cell % columns) * spacing;
+		pt.y += (cell / columns) * spacing;
+		MapObject *pNew = newInstance(MapObject)( pt, pSrc->getName(),
+																			 pSrc->getThingTemplate()->getPlacementViewAngle(),
+																			 pSrc->getFlags(), pSrc->getProperties(),
+																			 pSrc->getThingTemplate() );
+		pNew->getProperties()->setAsciiString(TheKey_originalOwner, m_curOwnerName);
+		pNew->setColor(pSrc->getColor());
+		pTail->setNextMap(pNew);
+		pTail = pNew;
+	}
+	return pFirst;
 }
 
 Real ObjectOptions::getCurObjectHeight(void)

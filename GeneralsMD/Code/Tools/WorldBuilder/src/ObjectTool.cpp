@@ -293,7 +293,13 @@ void ObjectTool::mouseUp(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBu
 		}
 	}
 
-	MapObject *pNew = ObjectOptions::duplicateCurMapObjectForPlace(&loc, angle, true);
+	MapObject *pNew;
+	if (ObjectOptions::isPlaceAllInCategory()) {
+		// One click places the whole tree category as a single undoable grid.
+		pNew = ObjectOptions::duplicateCategoryMapObjectsForPlace(&loc, angle);
+	} else {
+		pNew = ObjectOptions::duplicateCurMapObjectForPlace(&loc, angle, true);
+	}
 	if (pNew) {
 		if (justAClick && pNew->getThingTemplate()) {
 			angle = pNew->getThingTemplate()->getPlacementViewAngle();

@@ -81,6 +81,12 @@ WBQtObjectPanel::WBQtObjectPanel(QWidget *owner)
 	m_height->setValue(WBQtObject_GetHeight());
 	heightRow->addWidget(m_height, 1);
 	placeLay->addLayout(heightRow);
+
+	m_placeAll = new QCheckBox("Place all objects in category", placeBox);
+	m_placeAll->setToolTip("One click places every object from the selected object's\n"
+		"tree category (e.g. GLA > VEHICLE) in a grid. A single Undo\n"
+		"removes the whole batch.");
+	placeLay->addWidget(m_placeAll);
 	root->addWidget(placeBox);
 
 	// Preview toggles.
@@ -100,6 +106,7 @@ WBQtObjectPanel::WBQtObjectPanel(QWidget *owner)
 	m_previewSound->setChecked(WBQtObject_GetPreviewSound() != 0);
 	m_previewBuildZone->setChecked(WBQtObject_GetPreviewBuildZone() != 0);
 	m_useWaterHeight->setChecked(WBQtObject_GetUseWaterHeight() != 0);
+	m_placeAll->setChecked(WBQtObject_GetPlaceAll() != 0);
 	refreshTeamCombo();
 	m_updating = false;
 
@@ -112,6 +119,7 @@ WBQtObjectPanel::WBQtObjectPanel(QWidget *owner)
 	connect(m_previewSound, SIGNAL(clicked()), this, SLOT(onPreviewSoundToggled()));
 	connect(m_previewBuildZone, SIGNAL(clicked()), this, SLOT(onPreviewBuildZoneToggled()));
 	connect(m_useWaterHeight, SIGNAL(clicked()), this, SLOT(onUseWaterHeightToggled()));
+	connect(m_placeAll, SIGNAL(clicked()), this, SLOT(onPlaceAllToggled()));
 
 	s_instance = this;
 }
@@ -320,6 +328,11 @@ void WBQtObjectPanel::onPreviewBuildZoneToggled()
 void WBQtObjectPanel::onUseWaterHeightToggled()
 {
 	WBQtObject_SetUseWaterHeight(m_useWaterHeight->isChecked() ? 1 : 0);
+}
+
+void WBQtObjectPanel::onPlaceAllToggled()
+{
+	WBQtObject_SetPlaceAll(m_placeAll->isChecked() ? 1 : 0);
 }
 
 void WBQtObjectPanel::pushFromSelection()
