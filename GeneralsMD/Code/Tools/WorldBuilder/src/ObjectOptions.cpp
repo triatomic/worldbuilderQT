@@ -803,10 +803,12 @@ MapObject *ObjectOptions::duplicateCurMapObjectForPlace(const Coord3D* loc, Real
 		const ThingTemplate* tt = pCur->getThingTemplate();
 		if (checkPlayers) 
 		{
-			AsciiString defaultTeam("team");
-			
+			// Accept the neutral team ("team") like any other explicit team choice. The
+			// old != defaultTeam gate here forced the default-side lookup (and the
+			// add-player prompt) even when the user explicitly picked (neutral), so
+			// placement failed on maps without that side's player.
 			AsciiString objectTeamName = m_curOwnerName;
-			if (objectTeamName != defaultTeam) {
+			if (!objectTeamName.isEmpty()) {
 				TeamsInfo *teamInfo = TheSidesList->findTeamInfo(objectTeamName);
 				if (teamInfo) {
 					AsciiString teamOwner = teamInfo->getDict()->getAsciiString(TheKey_teamOwner);
