@@ -2231,11 +2231,46 @@ Bool WbView3d::getViewFrustumGroundCorners(Coord3D corners[4])
 		return FALSE;
 
 	// Cast a ray from the camera through each viewport corner (normalized device
-	// space, -1..1) and intersect the ground plane z = groundZ. groundZ is the actual
-	// terrain height under the camera center, cached by setupCamera. (Do NOT use
-	// m_centerPt.Z here -- it is permanently 0, which intersected a flat z=0 plane and
-	// drifted the box off the camera on non-flat / non-square maps, worst along +Y.)
-	const Real groundZ = m_cameraGroundZ;
+	// space, -1..1) and intersect the ground plane z = groundZ, like the game radar's
+	// view box (W3DRadar::reconstructViewBox projects the screen corners onto the plane
+	// z = terrain average height). Averaging over the playable area matches the game's
+	// Radar::newMap sampling, so the box dimensions agree with the in-game radar; the
+	// height under the camera center (m_cameraGroundZ) stays as the fallback for maps
+	// with no heightmap. (Do NOT use m_centerPt.Z -- it is permanently 0, which
+	// intersected a flat z=0 plane and drifted the box, worst along +Y.)
+	Real groundZ = m_cameraGroundZ;
+	{
+		WorldHeightMapEdit *pAvgMap = WbDoc() ? WbDoc()->GetHeightMap() : NULL;
+		if (pAvgMap) {
+			Int border = pAvgMap->getBorderSize();
+			Int x0 = border;
+			Int y0 = border;
+			Int x1 = pAvgMap->getXExtent() - border;
+			Int y1 = pAvgMap->getYExtent() - border;
+			if (x1 > x0 && y1 > y0) {
+				// == the radar's every-second-cell sample grid (~64x64 samples).
+				Int stepX = (x1 - x0) / 64;
+				if (stepX < 1) {
+					stepX = 1;
+				}
+				Int stepY = (y1 - y0) / 64;
+				if (stepY < 1) {
+					stepY = 1;
+				}
+				Real sum = 0.0f;
+				Int samples = 0;
+				for (Int y = y0; y < y1; y += stepY) {
+					for (Int x = x0; x < x1; x += stepX) {
+						sum += pAvgMap->getHeight(x, y) * MAP_HEIGHT_SCALE;
+						samples++;
+					}
+				}
+				if (samples > 0) {
+					groundZ = sum / samples;
+				}
+			}
+		}
+	}
 	const Vector3 eye = m_camera->Get_Position();
 
 	// NDC corners in view order: top-left, top-right, bottom-right, bottom-left.
