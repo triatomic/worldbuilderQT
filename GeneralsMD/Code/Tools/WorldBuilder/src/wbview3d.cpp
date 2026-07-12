@@ -2306,8 +2306,13 @@ Bool WbView3d::getViewFrustumGroundCorners(Coord3D corners[4])
 		// corners match MapObject::getLocation() -- the space the minimap dots, terrain,
 		// and the isInViewFrustum cull all use. Without this the box and cull are shifted
 		// by border*MAP_XY_FACTOR (the box lands over the wrong part of the map).
-		corners[i].x = hit.X - m_cameraBorderWorld;
-		corners[i].y = hit.Y - m_cameraBorderWorld;
+		// The camera lives in the SAME border-relative world as terrain and
+		// MapObject::getLocation() (setupCamera: pos = m_centerPt * MAP_XY_FACTOR,
+		// verified live against object blips), so the ground hits already are object-
+		// world coordinates. Subtracting m_cameraBorderWorld here shifted the minimap
+		// view box (and the blip cull) south-west by exactly the border.
+		corners[i].x = hit.X;
+		corners[i].y = hit.Y;
 		corners[i].z = hit.Z;
 	}
 	return TRUE;

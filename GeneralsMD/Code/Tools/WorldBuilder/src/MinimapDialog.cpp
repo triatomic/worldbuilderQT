@@ -547,9 +547,9 @@ void MinimapDialog::centerViewAtClient(CPoint point)
 	if (!pDoc)
 		return;
 
-	// minimapToWorld returns the camera center in heightmap CELL units (index +
-	// border). setCenterInView expects exactly that: it constrains against the map
-	// extent and setupCamera multiplies by MAP_XY_FACTOR to get the world position.
+	// minimapToWorld returns the camera center in BORDER-RELATIVE heightmap cell
+	// units -- the space setCenterInView/m_centerPt use: setupCamera multiplies by
+	// MAP_XY_FACTOR to get the camera world position in object world.
 	// (Do NOT pre-multiply by MAP_XY_FACTOR here, or the camera flies off the map
 	// and the viewport shows only the gray clear color.)
 	// Use the deferred variant so the 3D view renders from its own paint loop rather
@@ -603,16 +603,18 @@ Bool MinimapDialog::minimapToWorld(Int mx, Int my, Real *worldX, Real *worldY)
 	if (!pMap)
 		return FALSE;
 
-	// minimapToWorld returns a heightmap cell index (border included) for
-	// setCenterInView. Pixel i maps to cell i * span/res + originCell, so a click
-	// anywhere the minimap covers centers the camera there (the full-extent mode adds
-	// the border margin; playable-only mode restores the original interior framing).
+	// Pixel i maps to ABSOLUTE heightmap cell i * span/res + originCell; subtracting
+	// the border converts to the BORDER-RELATIVE cells setCenterInView/m_centerPt
+	// actually use (the camera lives in the same border-relative world as objects
+	// and terrain -- verified live: the old +border cell sent the camera north-east
+	// of the clicked blip by exactly the border).
 	Real xSpan, ySpan, originCell;
 	if (!mapSpans(&xSpan, &ySpan, &originCell))
 		return FALSE;
 
-	*worldX = mx * xSpan / (Real)m_resolution + originCell;
-	*worldY = my * ySpan / (Real)m_resolution + originCell;
+	Int border = pMap->getBorderSize();
+	*worldX = mx * xSpan / (Real)m_resolution + originCell - border;
+	*worldY = my * ySpan / (Real)m_resolution + originCell - border;
 	return TRUE;
 }
 
