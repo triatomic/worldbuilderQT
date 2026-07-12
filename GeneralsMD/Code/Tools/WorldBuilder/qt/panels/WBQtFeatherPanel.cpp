@@ -19,7 +19,9 @@ WBQtFeatherPanel *WBQtFeatherPanel::s_instance = NULL;
 namespace
 {
 	// Build one labelled "slider + spinbox" row (kept in lockstep by the owner's slots).
-	void makeRow(QWidget *parent, const char *caption, int lo, int hi,
+	// typedHi: the spin box accepts typed values past the slider cap (the vanilla WB
+	// pop-slider stopped at hi, but its edit box parsed any int); the slider just pegs.
+	void makeRow(QWidget *parent, const char *caption, int lo, int hi, int typedHi,
 		QSlider **outSlider, QSpinBox **outSpin, QBoxLayout *into)
 	{
 		QHBoxLayout *row = new QHBoxLayout();
@@ -27,7 +29,7 @@ namespace
 		QSlider *s = new QSlider(Qt::Horizontal, parent);
 		s->setRange(lo, hi);
 		QSpinBox *b = new QSpinBox(parent);
-		b->setRange(lo, hi);
+		b->setRange(lo, (typedHi > hi) ? typedHi : hi);
 		row->addWidget(s, 1);
 		row->addWidget(b);
 		into->addLayout(row);
@@ -47,7 +49,7 @@ WBQtFeatherPanel::WBQtFeatherPanel(QWidget *owner)
 	// Brush width (the editable "feather/size" row) with a live "FEET" label.
 	QGroupBox *sizeBox = new QGroupBox("Brush width", this);
 	QVBoxLayout *sizeLay = new QVBoxLayout(sizeBox);
-	makeRow(this, "Size in cells:", 2, 51, &m_featherSlider, &m_featherSpin, sizeLay);
+	makeRow(this, "Size in cells:", 2, 51, 999, &m_featherSlider, &m_featherSpin, sizeLay);
 	m_feetLabel = new QLabel("0.0 FEET.", sizeBox);
 	sizeLay->addWidget(m_feetLabel);
 	root->addWidget(sizeBox);
@@ -55,14 +57,14 @@ WBQtFeatherPanel::WBQtFeatherPanel(QWidget *owner)
 	// Filter radius.
 	QGroupBox *radiusBox = new QGroupBox("Filter Radius", this);
 	QVBoxLayout *radiusLay = new QVBoxLayout(radiusBox);
-	makeRow(this, "Radius:", 1, 5, &m_radiusSlider, &m_radiusSpin, radiusLay);
+	makeRow(this, "Radius:", 1, 5, 999, &m_radiusSlider, &m_radiusSpin, radiusLay);
 	radiusLay->addWidget(new QLabel("A large value tends to flatten more of the terrain.", radiusBox));
 	root->addWidget(radiusBox);
 
 	// Feather rate.
 	QGroupBox *rateBox = new QGroupBox("Feather Rate", this);
 	QVBoxLayout *rateLay = new QVBoxLayout(rateBox);
-	makeRow(this, "Rate:", 1, 10, &m_rateSlider, &m_rateSpin, rateLay);
+	makeRow(this, "Rate:", 1, 10, 999, &m_rateSlider, &m_rateSpin, rateLay);
 	rateLay->addWidget(new QLabel("A high value flattens faster.", rateBox));
 	root->addWidget(rateBox);
 
@@ -111,16 +113,19 @@ WBQtFeatherPanel::WBQtFeatherPanel(QWidget *owner)
 
 void WBQtFeatherPanel::setRow(QSlider *slider, QSpinBox *spin, int v)
 {
-	// Caller has set m_updating. Clamp to range to avoid Qt warnings.
-	if (v < slider->minimum())
+	// Caller has set m_updating. Only the slider position is clamped -- the spin box
+	// keeps the full typed value (its own wider range clamps it), like the vanilla
+	// edit box next to the capped pop-slider.
+	int sliderV = v;
+	if (sliderV < slider->minimum())
 	{
-		v = slider->minimum();
+		sliderV = slider->minimum();
 	}
-	if (v > slider->maximum())
+	if (sliderV > slider->maximum())
 	{
-		v = slider->maximum();
+		sliderV = slider->maximum();
 	}
-	slider->setValue(v);
+	slider->setValue(sliderV);
 	spin->setValue(v);
 }
 

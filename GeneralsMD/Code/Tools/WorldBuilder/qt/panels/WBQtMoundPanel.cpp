@@ -21,7 +21,9 @@ WBQtMoundPanel *WBQtMoundPanel::s_instance = NULL;
 namespace
 {
 	// Build one labelled "slider + spinbox" row (kept in lockstep by the owner's slots).
-	void makeRow(QWidget *parent, const char *caption, int lo, int hi,
+	// typedHi: the spin box accepts typed values past the slider cap (the vanilla WB
+	// pop-slider stopped at hi, but its edit box parsed any int); the slider just pegs.
+	void makeRow(QWidget *parent, const char *caption, int lo, int hi, int typedHi,
 		QSlider **outSlider, QSpinBox **outSpin, QBoxLayout *into)
 	{
 		QHBoxLayout *row = new QHBoxLayout();
@@ -29,7 +31,7 @@ namespace
 		QSlider *s = new QSlider(Qt::Horizontal, parent);
 		s->setRange(lo, hi);
 		QSpinBox *b = new QSpinBox(parent);
-		b->setRange(lo, hi);
+		b->setRange(lo, (typedHi > hi) ? typedHi : hi);
 		row->addWidget(s, 1);
 		row->addWidget(b);
 		into->addLayout(row);
@@ -49,7 +51,7 @@ WBQtMoundPanel::WBQtMoundPanel(QWidget *owner)
 	// Brush width, with a live "FEET" label (value x MAP_XY_FACTOR). Range MIN/MAX_BRUSH_SIZE.
 	QGroupBox *widthBox = new QGroupBox("Brush Width", this);
 	QVBoxLayout *widthLay = new QVBoxLayout(widthBox);
-	makeRow(this, "Size in cells:", 1, 51, &m_widthSlider, &m_widthSpin, widthLay);
+	makeRow(this, "Size in cells:", 1, 51, 999, &m_widthSlider, &m_widthSpin, widthLay);
 	m_widthLabel = new QLabel("0.0 FEET.", widthBox);
 	widthLay->addWidget(m_widthLabel);
 	root->addWidget(widthBox);
@@ -57,7 +59,7 @@ WBQtMoundPanel::WBQtMoundPanel(QWidget *owner)
 	// Feather width (value x MAP_XY_FACTOR). Range MIN/MAX_FEATHER.
 	QGroupBox *featherBox = new QGroupBox("Feather Width", this);
 	QVBoxLayout *featherLay = new QVBoxLayout(featherBox);
-	makeRow(this, "Size in cells:", 0, 20, &m_featherSlider, &m_featherSpin, featherLay);
+	makeRow(this, "Size in cells:", 0, 20, 999, &m_featherSlider, &m_featherSpin, featherLay);
 	m_featherLabel = new QLabel("0.0 FEET.", featherBox);
 	featherLay->addWidget(m_featherLabel);
 	root->addWidget(featherBox);
@@ -65,7 +67,7 @@ WBQtMoundPanel::WBQtMoundPanel(QWidget *owner)
 	// Mound height (value x MAP_HEIGHT_SCALE). Range MIN/MAX_MOUND_HEIGHT.
 	QGroupBox *heightBox = new QGroupBox("Mound Height", this);
 	QVBoxLayout *heightLay = new QVBoxLayout(heightBox);
-	makeRow(this, "Height:", 1, 21, &m_heightSlider, &m_heightSpin, heightLay);
+	makeRow(this, "Height:", 1, 21, 255, &m_heightSlider, &m_heightSpin, heightLay);
 	m_heightLabel = new QLabel("0.0 FEET.", heightBox);
 	heightLay->addWidget(m_heightLabel);
 	root->addWidget(heightBox);
@@ -117,16 +119,19 @@ WBQtMoundPanel::WBQtMoundPanel(QWidget *owner)
 
 void WBQtMoundPanel::setRow(QSlider *slider, QSpinBox *spin, int v)
 {
-	// Caller has set m_updating. Clamp to range to avoid Qt warnings.
-	if (v < slider->minimum())
+	// Caller has set m_updating. Only the slider position is clamped -- the spin box
+	// keeps the full typed value (its own wider range clamps it), like the vanilla
+	// edit box next to the capped pop-slider.
+	int sliderV = v;
+	if (sliderV < slider->minimum())
 	{
-		v = slider->minimum();
+		sliderV = slider->minimum();
 	}
-	if (v > slider->maximum())
+	if (sliderV > slider->maximum())
 	{
-		v = slider->maximum();
+		sliderV = slider->maximum();
 	}
-	slider->setValue(v);
+	slider->setValue(sliderV);
 	spin->setValue(v);
 }
 
