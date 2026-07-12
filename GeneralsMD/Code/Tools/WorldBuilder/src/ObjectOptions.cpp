@@ -803,12 +803,10 @@ MapObject *ObjectOptions::duplicateCurMapObjectForPlace(const Coord3D* loc, Real
 		const ThingTemplate* tt = pCur->getThingTemplate();
 		if (checkPlayers) 
 		{
-			// Accept the neutral team ("team") like any other explicit team choice. The
-			// old != defaultTeam gate here forced the default-side lookup (and the
-			// add-player prompt) even when the user explicitly picked (neutral), so
-			// placement failed on maps without that side's player.
+			AsciiString defaultTeam("team");
+			
 			AsciiString objectTeamName = m_curOwnerName;
-			if (!objectTeamName.isEmpty()) {
+			if (objectTeamName != defaultTeam) {
 				TeamsInfo *teamInfo = TheSidesList->findTeamInfo(objectTeamName);
 				if (teamInfo) {
 					AsciiString teamOwner = teamInfo->getDict()->getAsciiString(TheKey_teamOwner);
@@ -877,6 +875,12 @@ MapObject *ObjectOptions::duplicateCurMapObjectForPlace(const Coord3D* loc, Real
 					m_curOwnerName.set("team");
 					found = true;
 				}
+			}
+			// If the user explicitly picked (neutral), placement must still succeed even
+			// when the object's default faction has no player on the map and the Add Player
+			// prompt above was declined -- fall back to neutral ownership instead of failing.
+			if (!found && m_curOwnerName == AsciiString("team")) {
+				found = true;
 			}
 		} else {
 			found = true;
