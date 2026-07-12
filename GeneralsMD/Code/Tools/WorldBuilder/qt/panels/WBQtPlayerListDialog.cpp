@@ -491,9 +491,13 @@ extern "C" int WBQtAddPlayer_Run(void * /*frameHwnd*/, const char *onlySide, cha
 		QString::fromLocal8Bit((onlySide != NULL) ? onlySide : ""));
 	dlg.setWindowModality(Qt::ApplicationModal);
 	int rc = dlg.exec();
-	if (rc != QDialog::Accepted || dlg.addedTemplate().isEmpty())
+	if (rc != QDialog::Accepted)
 	{
-		return 0;
+		return 0;	// cancelled
+	}
+	if (dlg.addedTemplate().isEmpty())
+	{
+		return 1;	// OK, but nothing could be added (empty addedOut; caller decides)
 	}
 	QByteArray added = dlg.addedTemplate().toLocal8Bit();
 	if (addedOut != NULL && cap > 0)

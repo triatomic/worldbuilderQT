@@ -830,7 +830,16 @@ MapObject *ObjectOptions::duplicateCurMapObjectForPlace(const Coord3D* loc, Real
 					int qtRc = WBQtAddPlayer_Run(::AfxGetMainWnd() ? ::AfxGetMainWnd()->GetSafeHwnd() : NULL, defPlayerSide.str(), qtAdded, sizeof(qtAdded));
 					if (qtRc >= 0)
 					{
-						if (qtRc == 1)
+						if (qtRc == 1 && qtAdded[0] == 0)
+						{
+							// OK, but no player template exists to add for this side; an
+							// explicitly picked (neutral) still places the object. A Cancel
+							// (qtRc == 0) leaves found false, so nothing gets placed.
+							if (m_curOwnerName == AsciiString("team")) {
+								found = true;
+							}
+						}
+						else if (qtRc == 1)
 						{
 							for (int qi = 0; qi < TheSidesList->getNumSides(); qi++)
 							{
@@ -875,12 +884,6 @@ MapObject *ObjectOptions::duplicateCurMapObjectForPlace(const Coord3D* loc, Real
 					m_curOwnerName.set("team");
 					found = true;
 				}
-			}
-			// If the user explicitly picked (neutral), placement must still succeed even
-			// when the object's default faction has no player on the map and the Add Player
-			// prompt above was declined -- fall back to neutral ownership instead of failing.
-			if (!found && m_curOwnerName == AsciiString("team")) {
-				found = true;
 			}
 		} else {
 			found = true;
