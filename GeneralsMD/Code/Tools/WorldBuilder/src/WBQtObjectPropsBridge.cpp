@@ -144,7 +144,14 @@ double MapObjectProps::qtMGetAngle(void)
 	{
 		return 0.0;
 	}
-	TheMapObjectProps->m_angle = pObj->getAngle() * 180 / PI;
+	// The engine stores angles normalized to -180..180; the panel (and the original
+	// WB angle slider) shows a 0..360 compass heading, so lift negatives by a turn --
+	// otherwise the 0..360 spin box clamps a negative reading to 0.
+	Real deg = pObj->getAngle() * 180 / PI;
+	if (deg < 0.0f) {
+		deg += 360.0f;
+	}
+	TheMapObjectProps->m_angle = deg;
 	return TheMapObjectProps->m_angle;
 }
 
@@ -489,7 +496,12 @@ void MapObjectProps::qtMSetAngle(double deg)
 	{
 		return;
 	}
+	// Compare in the same 0..360 space the panel edits (the engine reading is
+	// -180..180), so unchanged headings over 180 degrees don't re-trigger an edit.
 	Real prev = pObj->getAngle() * 180 / PI;
+	if (prev < 0.0f) {
+		prev += 360.0f;
+	}
 	if (prev != (Real)deg)
 	{
 		TheMapObjectProps->m_angle = (Real)deg;
