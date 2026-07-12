@@ -395,6 +395,14 @@ int WBQtObject_GetPlaceAll(void)
 {
 	return ObjectOptions::isPlaceAllInCategory() ? 1 : 0;
 }
+void WBQtObject_SetPlaceAllYSpacing(int spacing)
+{
+	ObjectOptions::setPlaceAllYSpacing(spacing);
+}
+int WBQtObject_GetPlaceAllYSpacing(void)
+{
+	return ObjectOptions::getPlaceAllYSpacing();
+}
 
 }
 #endif

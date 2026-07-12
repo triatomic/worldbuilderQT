@@ -200,6 +200,8 @@ int  WBQtObject_GetUseWaterHeight(void);
 // sorting) of the selected object as a single undoable grid (ObjectTool reads it).
 void WBQtObject_SetPlaceAll(int on);
 int  WBQtObject_GetPlaceAll(void);
+void WBQtObject_SetPlaceAllYSpacing(int spacing);	// world units; 0 = automatic
+int  WBQtObject_GetPlaceAllYSpacing(void);
 
 // Forward (Qt-side): WB calls ObjectOptions::update()/selectObject() on selection changes;
 // a guarded WBQtObject_PushFromSelection() re-seeds the Qt panel (label/team/preview) and

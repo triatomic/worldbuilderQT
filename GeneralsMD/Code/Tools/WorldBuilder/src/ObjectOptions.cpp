@@ -58,6 +58,7 @@ char ObjectOptions::m_currentObjectName[NAME_MAX_LEN];
 Int ObjectOptions::m_currentObjectIndex=-1;
 AsciiString ObjectOptions::m_curOwnerName;
 Bool ObjectOptions::m_placeAllInCategory = false;
+Int ObjectOptions::m_placeAllYSpacing = 0;
 
 /////////////////////////////////////////////////////////////////////////////
 // ObjectOptions dialog
@@ -121,6 +122,12 @@ void ObjectOptions::OnUseWaterHeight()
 {
 	m_placeAllInCategory = on;
 	::AfxGetApp()->WriteProfileInt(OBJECT_OPTION_PANEL, "PlaceAllInCategory", on ? 1 : 0);
+}
+
+/*static*/ void ObjectOptions::setPlaceAllYSpacing(Int spacing)
+{
+	m_placeAllYSpacing = spacing;
+	::AfxGetApp()->WriteProfileInt(OBJECT_OPTION_PANEL, "PlaceAllYSpacing", spacing);
 }
 
 void ObjectOptions::OnPreviewBuildZone()
@@ -466,6 +473,7 @@ BOOL ObjectOptions::OnInitDialog()
 	OnUseWaterHeight();
 
 	m_placeAllInCategory = ::AfxGetApp()->GetProfileInt(OBJECT_OPTION_PANEL, "PlaceAllInCategory", 0) != 0;
+	m_placeAllYSpacing = ::AfxGetApp()->GetProfileInt(OBJECT_OPTION_PANEL, "PlaceAllYSpacing", 0);
 
 	m_staticThis = this;
 	m_updating = false;
@@ -925,11 +933,13 @@ MapObject *ObjectOptions::duplicateCategoryMapObjectsForPlace(const Coord3D* loc
 	}
 
 	// Grid: the selected object sits on the clicked spot, the others fill a roughly
-	// square grid growing east/north from it.
+	// square grid growing east/north from it. Row (Y) spacing can be overridden by
+	// the panel's manual value; 0 keeps the automatic footprint-based spacing.
 	Real spacing = 2.0f * maxRadius;
 	if (spacing < 20.0f) {
 		spacing = 20.0f;
 	}
+	Real ySpacing = (m_placeAllYSpacing > 0) ? (Real)m_placeAllYSpacing : spacing;
 	Int columns = 1;
 	while (columns * columns < (Int)members.size() + 1) {
 		columns++;
@@ -940,7 +950,7 @@ MapObject *ObjectOptions::duplicateCategoryMapObjectsForPlace(const Coord3D* loc
 		MapObject *pSrc = *it;
 		Coord3D pt = *loc;
 		pt.x += (cell % columns) * spacing;
-		pt.y += (cell / columns) * spacing;
+		pt.y += (cell / columns) * ySpacing;
 		MapObject *pNew = newInstance(MapObject)( pt, pSrc->getName(),
 																			 pSrc->getThingTemplate()->getPlacementViewAngle(),
 																			 pSrc->getFlags(), pSrc->getProperties(),

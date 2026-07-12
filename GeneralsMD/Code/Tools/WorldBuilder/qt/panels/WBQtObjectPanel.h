@@ -44,6 +44,7 @@ private slots:
 	void onPreviewBuildZoneToggled();
 	void onUseWaterHeightToggled();
 	void onPlaceAllToggled();
+	void onPlaceAllYSpacingChanged(int v);
 
 private:
 	void rebuildTree(const QString &filter);	// filter empty => full list
@@ -61,6 +62,7 @@ private:
 	QCheckBox   *m_previewBuildZone;
 	QCheckBox   *m_useWaterHeight;
 	QCheckBox   *m_placeAll;
+	QSpinBox    *m_placeAllYSpacing;
 
 	bool m_updating;	// re-entrancy guard while seeding controls
 

@@ -84,6 +84,7 @@ protected:
 	static char				m_currentObjectName[NAME_MAX_LEN];
 	static AsciiString	m_curOwnerName;
 	static Bool				m_placeAllInCategory;
+	static Int					m_placeAllYSpacing;
 	CFont m_treeFont;
 
 	Bool m_isObjectOptsWindowOpen;
@@ -123,6 +124,8 @@ public:
 	// in the current object's tree category (side + editor sorting) as one undoable grid.
 	static Bool isPlaceAllInCategory(void) {return m_placeAllInCategory;};
 	static void setPlaceAllInCategory(Bool on);
+	static Int getPlaceAllYSpacing(void) {return m_placeAllYSpacing;};
+	static void setPlaceAllYSpacing(Int spacing);
 	static MapObject *duplicateCategoryMapObjectsForPlace(const Coord3D* loc, Real angle);
 #ifdef RTS_HAS_QT
 	// Qt panel support (WBQtObjectBridge): let the Qt Object panel mirror the template

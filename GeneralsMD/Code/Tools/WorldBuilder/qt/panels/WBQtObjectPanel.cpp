@@ -87,6 +87,15 @@ WBQtObjectPanel::WBQtObjectPanel(QWidget *owner)
 		"tree category (e.g. GLA > VEHICLE) in a grid. A single Undo\n"
 		"removes the whole batch.");
 	placeLay->addWidget(m_placeAll);
+
+	QHBoxLayout *ySpacingRow = new QHBoxLayout();
+	ySpacingRow->addWidget(new QLabel("Y spacing (0 = auto):", placeBox));
+	m_placeAllYSpacing = new QSpinBox(placeBox);
+	m_placeAllYSpacing->setRange(0, 10000);
+	m_placeAllYSpacing->setToolTip("Row spacing (world units) between the placed objects.\n"
+		"0 uses the automatic footprint-based spacing.");
+	ySpacingRow->addWidget(m_placeAllYSpacing, 1);
+	placeLay->addLayout(ySpacingRow);
 	root->addWidget(placeBox);
 
 	// Preview toggles.
@@ -107,6 +116,7 @@ WBQtObjectPanel::WBQtObjectPanel(QWidget *owner)
 	m_previewBuildZone->setChecked(WBQtObject_GetPreviewBuildZone() != 0);
 	m_useWaterHeight->setChecked(WBQtObject_GetUseWaterHeight() != 0);
 	m_placeAll->setChecked(WBQtObject_GetPlaceAll() != 0);
+	m_placeAllYSpacing->setValue(WBQtObject_GetPlaceAllYSpacing());
 	refreshTeamCombo();
 	m_updating = false;
 
@@ -120,6 +130,7 @@ WBQtObjectPanel::WBQtObjectPanel(QWidget *owner)
 	connect(m_previewBuildZone, SIGNAL(clicked()), this, SLOT(onPreviewBuildZoneToggled()));
 	connect(m_useWaterHeight, SIGNAL(clicked()), this, SLOT(onUseWaterHeightToggled()));
 	connect(m_placeAll, SIGNAL(clicked()), this, SLOT(onPlaceAllToggled()));
+	connect(m_placeAllYSpacing, SIGNAL(valueChanged(int)), this, SLOT(onPlaceAllYSpacingChanged(int)));
 
 	s_instance = this;
 }
@@ -333,6 +344,15 @@ void WBQtObjectPanel::onUseWaterHeightToggled()
 void WBQtObjectPanel::onPlaceAllToggled()
 {
 	WBQtObject_SetPlaceAll(m_placeAll->isChecked() ? 1 : 0);
+}
+
+void WBQtObjectPanel::onPlaceAllYSpacingChanged(int v)
+{
+	if (m_updating)
+	{
+		return;
+	}
+	WBQtObject_SetPlaceAllYSpacing(v);
 }
 
 void WBQtObjectPanel::pushFromSelection()
