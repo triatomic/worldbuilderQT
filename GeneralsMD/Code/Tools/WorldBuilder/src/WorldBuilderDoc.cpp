@@ -471,7 +471,7 @@ END_MESSAGE_MAP()
 CWorldBuilderDoc::CWorldBuilderDoc() :
 	m_heightMap(NULL),
 	m_undoList(NULL),
-	m_maxUndos(MAX_UNDOS),		/// @todo: get from pref?
+	m_maxUndos(MAX_UNDOS),
 	m_curRedo(0),
 	m_needAutosave(false),
 	m_curWaypointID(0),
@@ -480,6 +480,10 @@ CWorldBuilderDoc::CWorldBuilderDoc() :
 	m_linkCenters(true),
 	m_disableMapPrevGeneration(false)
 {
+	// The old @todo "get from pref": undo depth is a setting now (Entity Finder >
+	// Visual Settings), persisted as [MainFrame] MaxUndos.
+	setMaxUndos(::AfxGetApp()->GetProfileInt("MainFrame", "MaxUndos", MAX_UNDOS));
+
     // Attempt to read AdrianeMapSettings.ini here
     if (!m_strPathName.IsEmpty()) {
         char folderPath[_MAX_PATH];
@@ -1849,12 +1853,23 @@ void CWorldBuilderDoc::AddAndDoUndoable(Undoable *pUndo)
 	count = 0;
 	while (pCurUndo) {
 		count++;
-		if (count >= MAX_UNDOS) {
+		if (count >= m_maxUndos) {
 			pCurUndo->LinkNext(NULL);
 			break;
 		}
 		pCurUndo = pCurUndo->GetNext();
 	}
+}
+
+void CWorldBuilderDoc::setMaxUndos(Int count)
+{
+	if (count < 1) {
+		count = 1;
+	}
+	if (count > 999) {
+		count = 999;
+	}
+	m_maxUndos = count;
 }
 
 void CWorldBuilderDoc::OnEditRedo() 

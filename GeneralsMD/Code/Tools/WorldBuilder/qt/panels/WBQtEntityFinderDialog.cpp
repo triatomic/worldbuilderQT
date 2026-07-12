@@ -20,6 +20,7 @@
 #include <QPixmap>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QTextCursor>
 #include <QUrl>
 #include <QVBoxLayout>
@@ -239,6 +240,15 @@ WBQtEntityFinderDialog::WBQtEntityFinderDialog(void *frameHwnd)
 	resolutionRow->addWidget(m_resolutionCombo, 1);
 	resolutionRow->addWidget(new QLabel("Viewport resolution", visual));
 	visualLay->addLayout(resolutionRow);
+	QHBoxLayout *undoRow = new QHBoxLayout();
+	m_undoSpin = new QSpinBox(visual);
+	m_undoSpin->setRange(1, 999);
+	m_undoSpin->setToolTip("How many editor actions can be undone (Ctrl+Z). Applies immediately.\n"
+		"Every terrain edit keeps a heightmap snapshot in the history, so very\n"
+		"high values can cost a lot of memory on large maps.");
+	undoRow->addWidget(m_undoSpin, 1);
+	undoRow->addWidget(new QLabel("Undo history depth", visual));
+	visualLay->addLayout(undoRow);
 	left->addWidget(visual);
 
 	left->addStretch(1);
@@ -282,6 +292,11 @@ WBQtEntityFinderDialog::WBQtEntityFinderDialog(void *frameHwnd)
 	m_launchCheck->blockSignals(true);
 	m_launchCheck->setChecked(WBQtEntityFinderData_GetProfileInt("LaunchOnStartUp", 1) != 0);
 	m_launchCheck->blockSignals(false);
+
+	m_undoSpin->blockSignals(true);
+	m_undoSpin->setValue(WBQtEntityFinderData_GetMaxUndos());
+	m_undoSpin->blockSignals(false);
+	connect(m_undoSpin, SIGNAL(valueChanged(int)), this, SLOT(onMaxUndosChanged(int)));
 
 	populateFonts();
 	populateResolutions();
@@ -522,6 +537,11 @@ void WBQtEntityFinderDialog::onOpenDiscord()
 void WBQtEntityFinderDialog::onLaunchOnStartupToggled(bool on)
 {
 	WBQtEntityFinder_SetProfileInt("LaunchOnStartUp", on ? 1 : 0);
+}
+
+void WBQtEntityFinderDialog::onMaxUndosChanged(int value)
+{
+	WBQtEntityFinder_SetMaxUndos(value);
 }
 
 void WBQtEntityFinderDialog::onFontChanged(int index)

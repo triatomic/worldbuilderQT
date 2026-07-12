@@ -349,4 +349,23 @@ extern "C" void WBQtEntityFinder_SetProfileInt(const char *key, int value)
 	}
 }
 
+//----------------------------------------------------------------------------------------
+// Undo history depth ([MainFrame] MaxUndos): persisted, and applied to the open
+// document immediately (new adds trim the list to the new cap).
+//----------------------------------------------------------------------------------------
+extern "C" int WBQtEntityFinderData_GetMaxUndos(void)
+{
+	return ::AfxGetApp()->GetProfileInt("MainFrame", "MaxUndos", MAX_UNDOS);
+}
+
+extern "C" void WBQtEntityFinder_SetMaxUndos(int count)
+{
+	::AfxGetApp()->WriteProfileInt("MainFrame", "MaxUndos", count);
+	CWorldBuilderDoc *pDoc = CWorldBuilderDoc::GetActiveDoc();
+	if (pDoc != NULL)
+	{
+		pDoc->setMaxUndos(count);
+	}
+}
+
 #endif // RTS_HAS_QT

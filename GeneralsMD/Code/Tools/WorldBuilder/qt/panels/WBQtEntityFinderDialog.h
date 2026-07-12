@@ -12,6 +12,7 @@ class QComboBox;
 class QLineEdit;
 class QPlainTextEdit;
 class QPushButton;
+class QSpinBox;
 
 class WBQtEntityFinderDialog : public QWidget
 {
@@ -38,6 +39,7 @@ private slots:
 	void onLaunchOnStartupToggled(bool on);
 	void onFontChanged(int index);
 	void onResolutionChanged(int index);
+	void onMaxUndosChanged(int value);
 	void onToggleHotkeyPanel();
 
 private:
@@ -51,6 +53,7 @@ private:
 	QComboBox *m_waypointCombo;
 	QComboBox *m_fontCombo;
 	QComboBox *m_resolutionCombo;
+	QSpinBox  *m_undoSpin;
 	QCheckBox *m_launchCheck;
 	QPushButton *m_toggleButton;
 	QWidget *m_hotkeyPanel;

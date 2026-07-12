@@ -49,6 +49,10 @@ void WBQtEntityFinder_SetResolution(int w, int h);
 int  WBQtEntityFinderData_GetProfileInt(const char *key, int def);
 void WBQtEntityFinder_SetProfileInt(const char *key, int value);
 
+// Undo history depth (clamped 1..999 by the doc; default 64).
+int  WBQtEntityFinderData_GetMaxUndos(void);
+void WBQtEntityFinder_SetMaxUndos(int count);
+
 #ifdef __cplusplus
 }
 #endif

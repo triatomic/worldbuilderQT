@@ -38,7 +38,7 @@ class Undoable;
 class DataChunkInput;
 struct DataChunkInfo;
 
-#define MAX_UNDOS 15
+#define MAX_UNDOS 64
 
 #define MIN_CELL_SIZE 1
 #define MAX_CELL_SIZE 64
@@ -185,6 +185,9 @@ public:
 	virtual void Dump(CDumpContext& dc) const;
 #endif
 	void AddAndDoUndoable(Undoable *pUndo);
+	// Undo history depth: persisted setting ([MainFrame] MaxUndos, Entity Finder UI);
+	// clamped 1..999 -- terrain undos hold heightmap snapshots, so keep it sane.
+	void setMaxUndos(Int count);
 // Generated message map functions
 protected:
 	//{{AFX_MSG(CWorldBuilderDoc)
