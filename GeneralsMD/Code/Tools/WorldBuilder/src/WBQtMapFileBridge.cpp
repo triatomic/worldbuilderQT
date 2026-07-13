@@ -327,6 +327,68 @@ void OpenMap::qtItemPreviewPath(int i, char *buf, int cap)
 	copyOut((LPCTSTR)path, buf, cap);
 }
 
+// Packed rows: the <MapName>.tga sits next to the .map INSIDE the archive; read its
+// bytes directly (same openFile/read pattern as extractPackedMap, no disk writes).
+int OpenMap::qtItemPreviewData(int i, unsigned char *buf, int cap)
+{
+	if (buf == NULL || cap <= 0)
+	{
+		return 0;
+	}
+	if (m_packedMode != PM_LIST_MAPS_IN_BIG || i < 0 || i >= (int)s_qtView.GetSize())
+	{
+		return 0;
+	}
+
+	// Resolve the archive-internal .map path by display name (parallel arrays, same
+	// as qtPick), then swap the extension for the preview.
+	CString selName = s_qtView[i];
+	CString archiveMapPath;
+	for (int k = 0; k < m_fullMapList.GetSize(); ++k)
+	{
+		if (m_fullMapList[k].CompareNoCase(selName) == 0)
+		{
+			archiveMapPath = m_packedMapPaths[k];
+			break;
+		}
+	}
+	if (archiveMapPath.IsEmpty())
+	{
+		return 0;
+	}
+	int dot = archiveMapPath.ReverseFind('.');
+	if (dot <= 0)
+	{
+		return 0;
+	}
+	CString tgaPath = archiveMapPath.Left(dot) + ".tga";
+
+	ArchiveFile *pArchive = TheArchiveFileSystem
+		? TheArchiveFileSystem->openArchiveFile((const char *)m_currentBig) : NULL;
+	if (!pArchive)
+	{
+		return 0;
+	}
+	int got = 0;
+	File *pf = pArchive->openFile((const char *)tgaPath, File::READ | File::BINARY);
+	if (pf)
+	{
+		Int sz = pf->size();
+		if (sz > 0 && sz <= cap)
+		{
+			got = pf->read(buf, sz);
+			if (got < 0)
+			{
+				got = 0;
+			}
+		}
+		pf->close();
+	}
+	pArchive->close();
+	delete pArchive;
+	return got;
+}
+
 int OpenMap::qtListCurSel(void)
 {
 	if (s_qtViewSel < 0 || s_qtViewSel >= (int)s_qtView.GetSize())
@@ -550,6 +612,12 @@ extern "C" void WBQtOpenMapData_ItemPreviewPath(int i, char *buf, int cap)
 	{
 		dlg->qtItemPreviewPath(i, buf, cap);
 	}
+}
+
+extern "C" int WBQtOpenMapData_ItemPreviewData(int i, unsigned char *buf, int cap)
+{
+	OpenMap *dlg = OpenMap::qtInstance();
+	return (dlg != NULL) ? dlg->qtItemPreviewData(i, buf, cap) : 0;
 }
 
 extern "C" void WBQtOpenMapData_ListItem(int i, char *buf, int cap)

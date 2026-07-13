@@ -44,6 +44,8 @@ int  WBQtOpenMapData_ListCount(void);
 void WBQtOpenMapData_ListItem(int i, char *buf, int cap);
 // Preview thumbnail path (<mapdir>/<name>/<name>.tga); empty for packed rows.
 void WBQtOpenMapData_ItemPreviewPath(int i, char *buf, int cap);
+// Packed rows: the .tga bytes read straight from the .big; returns the byte count.
+int  WBQtOpenMapData_ItemPreviewData(int i, unsigned char *buf, int cap);
 int  WBQtOpenMapData_ListCurSel(void);
 int  WBQtOpenMapData_OkEnabled(void);
 int  WBQtOpenMapData_GetMode(void);

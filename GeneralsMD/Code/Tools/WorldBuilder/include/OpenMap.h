@@ -85,6 +85,9 @@ public:
 	// Full path of the map's preview thumbnail (<mapdir>\<name>\<name>.tga); empty
 	// for packed/.big rows, which have no folder on disk.
 	void qtItemPreviewPath(int i, char *buf, int cap);
+	// Packed rows: read the map's .tga bytes straight out of the .big (no extraction).
+	// Returns the byte count, or 0 (no preview / buffer too small).
+	int  qtItemPreviewData(int i, unsigned char *buf, int cap);
 	int  qtListCurSel(void);
 	int  qtOkEnabled(void);
 	int  qtGetMode(void);

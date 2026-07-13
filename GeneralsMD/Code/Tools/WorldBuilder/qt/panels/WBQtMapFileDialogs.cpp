@@ -178,6 +178,24 @@ void WBQtOpenMapDialog::updatePreview()
 			return;
 		}
 	}
+	else
+	{
+		// Packed rows: the .tga bytes come straight out of the .big. TGA has no magic
+		// header, so pass the format explicitly.
+		QByteArray raw(1024 * 1024, 0);
+		int n = WBQtOpenMapData_ItemPreviewData(m_list->currentRow(),
+			reinterpret_cast<unsigned char *>(raw.data()), raw.size());
+		if (n > 0)
+		{
+			QImage img = QImage::fromData(reinterpret_cast<const uchar *>(raw.constData()), n, "TGA");
+			if (!img.isNull())
+			{
+				m_preview->setPixmap(QPixmap::fromImage(img).scaled(m_preview->size(),
+					Qt::KeepAspectRatio, Qt::SmoothTransformation));
+				return;
+			}
+		}
+	}
 	m_preview->setPixmap(QPixmap());
 	m_preview->setText("(no preview)");
 }
