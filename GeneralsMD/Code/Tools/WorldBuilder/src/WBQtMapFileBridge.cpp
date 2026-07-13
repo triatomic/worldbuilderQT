@@ -297,6 +297,36 @@ void OpenMap::qtListItem(int i, char *buf, int cap)
 	}
 }
 
+// The preview .tga sits next to the .map inside the map's own folder -- the same
+// path construction qtPick uses for the .map, with the extension swapped.
+void OpenMap::qtItemPreviewPath(int i, char *buf, int cap)
+{
+	if (buf != NULL && cap > 0)
+	{
+		buf[0] = 0;
+	}
+	if (i < 0 || i >= (int)s_qtView.GetSize())
+	{
+		return;
+	}
+	if (m_packedMode != PM_OFF)
+	{
+		return;	// archive rows have no folder on disk
+	}
+	CString name = s_qtView[i];
+	CString path;
+	if (m_usingSystemDir)
+	{
+		path = ".\\Maps\\" + name + "\\" + name + ".tga";
+	}
+	else
+	{
+		path = TheGlobalData->getPath_UserData().str();
+		path = path + "Maps\\" + name + "\\" + name + ".tga";
+	}
+	copyOut((LPCTSTR)path, buf, cap);
+}
+
 int OpenMap::qtListCurSel(void)
 {
 	if (s_qtViewSel < 0 || s_qtViewSel >= (int)s_qtView.GetSize())
@@ -507,6 +537,19 @@ extern "C" int WBQtOpenMapData_ListCount(void)
 {
 	OpenMap *dlg = OpenMap::qtInstance();
 	return (dlg != NULL) ? dlg->qtListCount() : 0;
+}
+
+extern "C" void WBQtOpenMapData_ItemPreviewPath(int i, char *buf, int cap)
+{
+	if (buf != NULL && cap > 0)
+	{
+		buf[0] = 0;
+	}
+	OpenMap *dlg = OpenMap::qtInstance();
+	if (dlg != NULL)
+	{
+		dlg->qtItemPreviewPath(i, buf, cap);
+	}
 }
 
 extern "C" void WBQtOpenMapData_ListItem(int i, char *buf, int cap)

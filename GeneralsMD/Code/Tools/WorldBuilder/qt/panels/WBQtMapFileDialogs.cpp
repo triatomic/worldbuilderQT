@@ -3,8 +3,11 @@
 #include "WBQtMapFileDialogs.h"
 #include "WBQtMapFileBridge.h"
 
+#include <QFrame>
 #include <QHBoxLayout>
+#include <QImage>
 #include <QLabel>
+#include <QPixmap>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
@@ -82,8 +85,18 @@ WBQtOpenMapDialog::WBQtOpenMapDialog(QWidget *parent)
 	searchRow->addWidget(resetButton);
 	root->addLayout(searchRow);
 
+	// Map list + the preview thumbnail (the <name>.tga next to the .map in the map's
+	// folder, the same image the game lobby shows).
+	QHBoxLayout *listRow = new QHBoxLayout();
 	m_list = new QListWidget(this);
-	root->addWidget(m_list, 1);
+	listRow->addWidget(m_list, 1);
+	m_preview = new QLabel(this);
+	m_preview->setFixedSize(220, 220);
+	m_preview->setAlignment(Qt::AlignCenter);
+	m_preview->setFrameShape(QFrame::Box);
+	m_preview->setText("(no preview)");
+	listRow->addWidget(m_preview, 0, Qt::AlignTop);
+	root->addLayout(listRow, 1);
 
 	QHBoxLayout *buttons = new QHBoxLayout();
 	QPushButton *browseButton = new QPushButton("Browse...", this);
@@ -105,11 +118,12 @@ WBQtOpenMapDialog::WBQtOpenMapDialog(QWidget *parent)
 	connect(resetButton, SIGNAL(clicked()), this, SLOT(onReset()));
 	connect(browseButton, SIGNAL(clicked()), this, SLOT(onBrowse()));
 	connect(m_list, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(onDoubleClicked()));
+	connect(m_list, SIGNAL(currentRowChanged(int)), this, SLOT(onSelectionChanged()));
 	connect(m_okButton, SIGNAL(clicked()), this, SLOT(accept()));
 	connect(cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
 
 	reload();
-	resize(460, 480);
+	resize(700, 480);
 }
 
 void WBQtOpenMapDialog::reload()
@@ -136,6 +150,36 @@ void WBQtOpenMapDialog::reload()
 	}
 	m_okButton->setEnabled(WBQtOpenMapData_OkEnabled() != 0);
 	m_updating = false;
+	updatePreview();
+}
+
+void WBQtOpenMapDialog::onSelectionChanged()
+{
+	if (m_updating)
+	{
+		return;	// reload() refreshes the preview itself after reseeding the list
+	}
+	updatePreview();
+}
+
+void WBQtOpenMapDialog::updatePreview()
+{
+	char buf[kPathCap];
+	buf[0] = 0;
+	WBQtOpenMapData_ItemPreviewPath(m_list->currentRow(), buf, sizeof(buf));
+	if (buf[0] != 0)
+	{
+		// Qt's qtga imageformats plugin (deployed with the app) reads the map .tga.
+		QImage img(QString::fromLocal8Bit(buf));
+		if (!img.isNull())
+		{
+			m_preview->setPixmap(QPixmap::fromImage(img).scaled(m_preview->size(),
+				Qt::KeepAspectRatio, Qt::SmoothTransformation));
+			return;
+		}
+	}
+	m_preview->setPixmap(QPixmap());
+	m_preview->setText("(no preview)");
 }
 
 void WBQtOpenMapDialog::onModeClicked()

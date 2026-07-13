@@ -7,6 +7,7 @@
 
 #include <QDialog>
 
+class QLabel;
 class QLineEdit;
 class QListWidget;
 class QPushButton;
@@ -25,9 +26,11 @@ private slots:
 	void onReset();
 	void onBrowse();
 	void onDoubleClicked();
+	void onSelectionChanged();
 
 private:
 	void reload();
+	void updatePreview();
 
 	bool m_updating;
 	QPushButton *m_packedButton;
@@ -35,6 +38,7 @@ private:
 	QPushButton *m_systemButton;
 	QLineEdit *m_searchEdit;
 	QListWidget *m_list;
+	QLabel *m_preview;
 	QPushButton *m_okButton;
 };
 

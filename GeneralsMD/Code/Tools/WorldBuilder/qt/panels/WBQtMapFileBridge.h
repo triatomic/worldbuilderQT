@@ -42,6 +42,8 @@ void WBQtOpenMapData_Open(void);
 void WBQtOpenMapData_Close(void);
 int  WBQtOpenMapData_ListCount(void);
 void WBQtOpenMapData_ListItem(int i, char *buf, int cap);
+// Preview thumbnail path (<mapdir>/<name>/<name>.tga); empty for packed rows.
+void WBQtOpenMapData_ItemPreviewPath(int i, char *buf, int cap);
 int  WBQtOpenMapData_ListCurSel(void);
 int  WBQtOpenMapData_OkEnabled(void);
 int  WBQtOpenMapData_GetMode(void);

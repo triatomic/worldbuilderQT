@@ -82,6 +82,9 @@ public:
 	static OpenMap *qtInstance(void);
 	int  qtListCount(void);
 	void qtListItem(int i, char *buf, int cap);
+	// Full path of the map's preview thumbnail (<mapdir>\<name>\<name>.tga); empty
+	// for packed/.big rows, which have no folder on disk.
+	void qtItemPreviewPath(int i, char *buf, int cap);
 	int  qtListCurSel(void);
 	int  qtOkEnabled(void);
 	int  qtGetMode(void);
