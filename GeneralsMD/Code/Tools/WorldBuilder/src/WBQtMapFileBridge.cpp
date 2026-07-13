@@ -439,7 +439,10 @@ namespace
 	int qtGenerateHeightPreviewTga(const CString &mapPath, unsigned char *buf, int cap)
 	{
 		enum { PREV_W = 128, PREV_H = 128 };	// == MAP_PREVIEW_WIDTH/HEIGHT
-		const int tgaSize = 18 + PREV_W * PREV_H * 3;
+		// Header + pixels + the 26-byte TGA v2 footer: TGA has no leading magic, so
+		// Qt's qtga plugin validates files by the TRUEVISION-XFILE footer -- without
+		// it QImage::fromData rejects the bytes even with the explicit format hint.
+		const int tgaSize = 18 + PREV_W * PREV_H * 3 + 26;
 		if (buf == NULL || cap < tgaSize)
 		{
 			return 0;
@@ -525,6 +528,8 @@ namespace
 				*px++ = (unsigned char)REAL_TO_INT(r * 255.0f);
 			}
 		}
+		memset(px, 0, 8);	// extension + developer directory offsets: none
+		memcpy(px + 8, "TRUEVISION-XFILE.", 18);	// 17 chars + the terminating NUL
 		return tgaSize;
 	}
 }
