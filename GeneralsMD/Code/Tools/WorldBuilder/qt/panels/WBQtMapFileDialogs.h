@@ -5,6 +5,7 @@
 #ifndef WB_QT_MAPFILE_DIALOGS_H
 #define WB_QT_MAPFILE_DIALOGS_H
 
+#include <QByteArray>
 #include <QDialog>
 
 class QLabel;
@@ -39,6 +40,7 @@ private:
 	QLineEdit *m_searchEdit;
 	QListWidget *m_list;
 	QLabel *m_preview;
+	QByteArray m_previewBuf;	// reused across selections (no per-click 1MB alloc)
 	QPushButton *m_okButton;
 };
 

@@ -2,6 +2,7 @@
 // IDD_SAVE_MAP (the push-like mode strip on top, the map list, search / name row).
 #include "WBQtMapFileDialogs.h"
 #include "WBQtMapFileBridge.h"
+#include "WBQtPreviewImage.h"
 
 #include <QFrame>
 #include <QHBoxLayout>
@@ -164,36 +165,23 @@ void WBQtOpenMapDialog::onSelectionChanged()
 
 void WBQtOpenMapDialog::updatePreview()
 {
-	char buf[kPathCap];
-	buf[0] = 0;
-	WBQtOpenMapData_ItemPreviewPath(m_list->currentRow(), buf, sizeof(buf));
-	if (buf[0] != 0)
+	// One bridge call for every mode (disk or packed) -- the bridge owns the storage
+	// knowledge, like the other panels' _RenderPreview bridges. TGA has no magic
+	// header, so the format is passed to the (deployed) qtga plugin explicitly.
+	if (m_previewBuf.isEmpty())
 	{
-		// Qt's qtga imageformats plugin (deployed with the app) reads the map .tga.
-		QImage img(QString::fromLocal8Bit(buf));
+		m_previewBuf.resize(1024 * 1024);	// previews are ~100KB; one-time buffer
+	}
+	int n = WBQtOpenMapData_ItemPreviewData(m_list->currentRow(),
+		reinterpret_cast<unsigned char *>(m_previewBuf.data()), m_previewBuf.size());
+	if (n > 0)
+	{
+		QImage img = QImage::fromData(
+			reinterpret_cast<const uchar *>(m_previewBuf.constData()), n, "TGA");
 		if (!img.isNull())
 		{
-			m_preview->setPixmap(QPixmap::fromImage(img).scaled(m_preview->size(),
-				Qt::KeepAspectRatio, Qt::SmoothTransformation));
+			m_preview->setPixmap(WBQtPreviewImage::toLabelPixmap(img, m_preview->size()));
 			return;
-		}
-	}
-	else
-	{
-		// Packed rows: the .tga bytes come straight out of the .big. TGA has no magic
-		// header, so pass the format explicitly.
-		QByteArray raw(1024 * 1024, 0);
-		int n = WBQtOpenMapData_ItemPreviewData(m_list->currentRow(),
-			reinterpret_cast<unsigned char *>(raw.data()), raw.size());
-		if (n > 0)
-		{
-			QImage img = QImage::fromData(reinterpret_cast<const uchar *>(raw.constData()), n, "TGA");
-			if (!img.isNull())
-			{
-				m_preview->setPixmap(QPixmap::fromImage(img).scaled(m_preview->size(),
-					Qt::KeepAspectRatio, Qt::SmoothTransformation));
-				return;
-			}
 		}
 	}
 	m_preview->setPixmap(QPixmap());

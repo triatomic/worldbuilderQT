@@ -82,12 +82,14 @@ public:
 	static OpenMap *qtInstance(void);
 	int  qtListCount(void);
 	void qtListItem(int i, char *buf, int cap);
-	// Full path of the map's preview thumbnail (<mapdir>\<name>\<name>.tga); empty
-	// for packed/.big rows, which have no folder on disk.
-	void qtItemPreviewPath(int i, char *buf, int cap);
-	// Packed rows: read the map's .tga bytes straight out of the .big (no extraction).
+	// Preview thumbnail bytes (<name>.tga next to the .map) for row i -- read from disk
+	// in the system/user modes, or straight out of the current .big in packed mode.
 	// Returns the byte count, or 0 (no preview / buffer too small).
 	int  qtItemPreviewData(int i, unsigned char *buf, int cap);
+	// Shared bits of the pick/preview paths: the system-vs-user map file path policy,
+	// and the packed display-name -> archive-internal .map path resolve.
+	CString qtMapFilePath(const CString &name, const char *ext);
+	CString qtResolveArchiveMapPath(const CString &selName);
 	int  qtListCurSel(void);
 	int  qtOkEnabled(void);
 	int  qtGetMode(void);

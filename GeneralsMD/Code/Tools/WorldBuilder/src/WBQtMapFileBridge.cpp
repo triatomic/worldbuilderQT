@@ -83,8 +83,11 @@ OpenMap *OpenMap::qtOpen(void)
 	return s_qtOpenMap;
 }
 
+static void qtFreePreviewArchive(void);	// defined with the preview cache below
+
 void OpenMap::qtClose(void)
 {
+	qtFreePreviewArchive();
 	if (s_qtOpenMap != NULL)
 	{
 		s_qtOpenMap->DestroyWindow();	// harmless no-op: the window was never Create()d
@@ -297,61 +300,87 @@ void OpenMap::qtListItem(int i, char *buf, int cap)
 	}
 }
 
-// The preview .tga sits next to the .map inside the map's own folder -- the same
-// path construction qtPick uses for the .map, with the extension swapped.
-void OpenMap::qtItemPreviewPath(int i, char *buf, int cap)
+// Preview archive cache: opening a .big re-parses its whole directory (thousands of
+// 1-byte reads in Win32BIGFileSystem), so doing it per selection change made arrow-key
+// scrolling pay a full re-parse per step. Keep one parsed handle for the current
+// archive; freed in qtClose and whenever a different .big is opened.
+static ArchiveFile *s_qtPreviewArchive = NULL;
+static CString s_qtPreviewArchiveBig;
+
+static void qtFreePreviewArchive(void)
 {
-	if (buf != NULL && cap > 0)
+	if (s_qtPreviewArchive != NULL)
 	{
-		buf[0] = 0;
+		s_qtPreviewArchive->close();
+		delete s_qtPreviewArchive;
+		s_qtPreviewArchive = NULL;
 	}
-	if (i < 0 || i >= (int)s_qtView.GetSize())
-	{
-		return;
-	}
-	if (m_packedMode != PM_OFF)
-	{
-		return;	// archive rows have no folder on disk
-	}
-	CString name = s_qtView[i];
+	s_qtPreviewArchiveBig = "";
+}
+
+// The system-vs-user map file path policy (".\Maps\<name>\<name><ext>" vs
+// "<UserData>Maps\<name>\<name><ext>") in ONE place -- qtPick and the preview both
+// call this instead of keeping their own copies.
+CString OpenMap::qtMapFilePath(const CString &name, const char *ext)
+{
 	CString path;
 	if (m_usingSystemDir)
 	{
-		path = ".\\Maps\\" + name + "\\" + name + ".tga";
+		path = ".\\Maps\\" + name + "\\" + name + ext;
 	}
 	else
 	{
 		path = TheGlobalData->getPath_UserData().str();
-		path = path + "Maps\\" + name + "\\" + name + ".tga";
+		path = path + "Maps\\" + name + "\\" + name + ext;
 	}
-	copyOut((LPCTSTR)path, buf, cap);
+	return path;
 }
 
-// Packed rows: the <MapName>.tga sits next to the .map INSIDE the archive; read its
-// bytes directly (same openFile/read pattern as extractPackedMap, no disk writes).
-int OpenMap::qtItemPreviewData(int i, unsigned char *buf, int cap)
+// Resolve a packed row's display name to its archive-internal .map path (parallel
+// arrays in enumeration order; the view is filtered/sorted independently of them).
+CString OpenMap::qtResolveArchiveMapPath(const CString &selName)
 {
-	if (buf == NULL || cap <= 0)
-	{
-		return 0;
-	}
-	if (m_packedMode != PM_LIST_MAPS_IN_BIG || i < 0 || i >= (int)s_qtView.GetSize())
-	{
-		return 0;
-	}
-
-	// Resolve the archive-internal .map path by display name (parallel arrays, same
-	// as qtPick), then swap the extension for the preview.
-	CString selName = s_qtView[i];
-	CString archiveMapPath;
 	for (int k = 0; k < m_fullMapList.GetSize(); ++k)
 	{
 		if (m_fullMapList[k].CompareNoCase(selName) == 0)
 		{
-			archiveMapPath = m_packedMapPaths[k];
-			break;
+			return m_packedMapPaths[k];
 		}
 	}
+	return CString();
+}
+
+// Preview bytes for row i: the <name>.tga next to the .map, read from disk in the
+// system/user modes or straight out of the current .big in packed mode (no extraction).
+// One entry point for every mode, like the other panels' _RenderPreview bridges, so the
+// Qt dialog needs no storage knowledge.
+int OpenMap::qtItemPreviewData(int i, unsigned char *buf, int cap)
+{
+	if (buf == NULL || cap <= 0 || i < 0 || i >= (int)s_qtView.GetSize())
+	{
+		return 0;
+	}
+
+	if (m_packedMode == PM_OFF)
+	{
+		CString tgaPath = qtMapFilePath(s_qtView[i], ".tga");
+		FILE *fp = ::fopen((LPCTSTR)tgaPath, "rb");
+		if (!fp)
+		{
+			return 0;
+		}
+		int got = (int)::fread(buf, 1, cap, fp);
+		Bool complete = (::feof(fp) != 0);	// a cap-sized read that didn't hit EOF = truncated
+		::fclose(fp);
+		return complete ? got : 0;
+	}
+
+	if (m_packedMode != PM_LIST_MAPS_IN_BIG)
+	{
+		return 0;	// the archive-list rows are .bigs, not maps
+	}
+
+	CString archiveMapPath = qtResolveArchiveMapPath(s_qtView[i]);
 	if (archiveMapPath.IsEmpty())
 	{
 		return 0;
@@ -363,14 +392,19 @@ int OpenMap::qtItemPreviewData(int i, unsigned char *buf, int cap)
 	}
 	CString tgaPath = archiveMapPath.Left(dot) + ".tga";
 
-	ArchiveFile *pArchive = TheArchiveFileSystem
-		? TheArchiveFileSystem->openArchiveFile((const char *)m_currentBig) : NULL;
-	if (!pArchive)
+	if (s_qtPreviewArchive == NULL || s_qtPreviewArchiveBig.CompareNoCase(m_currentBig) != 0)
 	{
-		return 0;
+		qtFreePreviewArchive();
+		s_qtPreviewArchive = TheArchiveFileSystem
+			? TheArchiveFileSystem->openArchiveFile((const char *)m_currentBig) : NULL;
+		if (s_qtPreviewArchive == NULL)
+		{
+			return 0;
+		}
+		s_qtPreviewArchiveBig = m_currentBig;
 	}
 	int got = 0;
-	File *pf = pArchive->openFile((const char *)tgaPath, File::READ | File::BINARY);
+	File *pf = s_qtPreviewArchive->openFile((const char *)tgaPath, File::READ | File::BINARY);
 	if (pf)
 	{
 		Int sz = pf->size();
@@ -384,8 +418,6 @@ int OpenMap::qtItemPreviewData(int i, unsigned char *buf, int cap)
 		}
 		pf->close();
 	}
-	pArchive->close();
-	delete pArchive;
 	return got;
 }
 
@@ -505,19 +537,7 @@ int OpenMap::qtPick(int row)
 	{
 		if (rowValid)
 		{
-			// The view is filtered/sorted independently of m_packedMapPaths, so resolve the
-			// archive path by matching the display name against m_fullMapList (parallel
-			// arrays in archive-enumeration order) -- same as OnOK.
-			CString selName = s_qtView[row];
-			CString archiveMapPath;
-			for (int i = 0; i < m_fullMapList.GetSize(); ++i)
-			{
-				if (m_fullMapList[i].CompareNoCase(selName) == 0)
-				{
-					archiveMapPath = m_packedMapPaths[i];
-					break;
-				}
-			}
+			CString archiveMapPath = qtResolveArchiveMapPath(s_qtView[row]);
 			if (archiveMapPath.IsEmpty())
 			{
 				::AfxMessageBox("Could not resolve the selected packed map.");
@@ -544,16 +564,7 @@ int OpenMap::qtPick(int row)
 		}
 		else
 		{
-			CString newName = s_qtView[row];
-			if (m_usingSystemDir)
-			{
-				m_pInfo->filename = ".\\Maps\\" + newName + "\\" + newName + ".map";
-			}
-			else
-			{
-				m_pInfo->filename = TheGlobalData->getPath_UserData().str();
-				m_pInfo->filename = m_pInfo->filename + "Maps\\" + newName + "\\" + newName + ".map";
-			}
+			m_pInfo->filename = qtMapFilePath(s_qtView[row], ".map");
 		}
 	}
 	return (s_qtOpenInfo.browse || !s_qtOpenInfo.filename.IsEmpty()) ? 1 : 0;
@@ -599,19 +610,6 @@ extern "C" int WBQtOpenMapData_ListCount(void)
 {
 	OpenMap *dlg = OpenMap::qtInstance();
 	return (dlg != NULL) ? dlg->qtListCount() : 0;
-}
-
-extern "C" void WBQtOpenMapData_ItemPreviewPath(int i, char *buf, int cap)
-{
-	if (buf != NULL && cap > 0)
-	{
-		buf[0] = 0;
-	}
-	OpenMap *dlg = OpenMap::qtInstance();
-	if (dlg != NULL)
-	{
-		dlg->qtItemPreviewPath(i, buf, cap);
-	}
 }
 
 extern "C" int WBQtOpenMapData_ItemPreviewData(int i, unsigned char *buf, int cap)
