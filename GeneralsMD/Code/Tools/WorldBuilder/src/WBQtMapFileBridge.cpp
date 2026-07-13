@@ -13,8 +13,10 @@
 #include "Common/GlobalData.h"
 #include "Common/ArchiveFile.h"
 #include "Common/ArchiveFileSystem.h"
+#include "Common/DataChunk.h"
 #include "Common/File.h"
 #include "Common/FileSystem.h"
+#include "Common/MapReaderWriterInfo.h"
 #include "qt/panels/WBQtMapFileBridge.h"
 #include <vector>
 
@@ -350,6 +352,183 @@ CString OpenMap::qtResolveArchiveMapPath(const CString &selName)
 	return CString();
 }
 
+// ---------------------------------------------------------------------------------
+// Fallback preview generation: maps saved before WB generated previews (or with
+// disableMapPreview set) have no .tga. Parse JUST the HeightMapData chunk out of the
+// .map with a local parser -- unlike the WorldHeightMap logicalDataOnly constructor,
+// this touches no globals (that one frees the open document's map-object list) --
+// and render a height-shaded 128x128 preview as in-memory TGA bytes. Terrain-texture
+// and water tinting need a full graphical map load, so the fallback shades height
+// only (the same brighten-above/darken-below-average ramp the minimap uses).
+
+namespace
+{
+	struct QtPreviewHeights
+	{
+		Int width;
+		Int height;
+		Int border;
+		UnsignedByte *data;
+		QtPreviewHeights() : width(0), height(0), border(0), data(NULL) {}
+		~QtPreviewHeights() { delete [] data; }
+	};
+
+	Bool qtParseHeightMapChunk(DataChunkInput &file, DataChunkInfo *info, void *userData)
+	{
+		QtPreviewHeights *out = (QtPreviewHeights *)userData;
+		out->width = file.readInt();
+		out->height = file.readInt();
+		out->border = (info->version >= 3) ? file.readInt() : 0;	// K_HEIGHT_MAP_VERSION_3
+		if (info->version >= 4)	// K_HEIGHT_MAP_VERSION_4: per-player boundaries, unused here
+		{
+			Int numBorders = file.readInt();
+			for (Int k = 0; k < numBorders; k++)
+			{
+				file.readInt();
+				file.readInt();
+			}
+		}
+		Int dataSize = file.readInt();
+		if (dataSize <= 0 || dataSize != out->width * out->height)
+		{
+			return false;
+		}
+		out->data = new UnsignedByte[dataSize];
+		file.readArrayOfBytes((char *)out->data, dataSize);
+		// (Version-1 half-res maps predate Zero Hour; not worth handling in a fallback.)
+		return true;
+	}
+
+	// == interpolateColorForHeight (MapPreview/minimap): brighten above the average
+	// height, darken below, scaled by distance to the min/max.
+	void qtShadeForHeight(Real *r, Real *g, Real *b, Real h, Real hiZ, Real midZ, Real loZ)
+	{
+		const Real howBright = 0.30f;
+		const Real howDark = 0.60f;
+		if (hiZ <= midZ)
+		{
+			hiZ = midZ + 0.1f;
+		}
+		if (loZ >= midZ)
+		{
+			loZ = midZ - 0.1f;
+		}
+		Real t;
+		Real tr, tg, tb;
+		if (h >= midZ)
+		{
+			t = (h - midZ) / (hiZ - midZ);
+			tr = *r + (1.0f - *r) * howBright;
+			tg = *g + (1.0f - *g) * howBright;
+			tb = *b + (1.0f - *b) * howBright;
+		}
+		else
+		{
+			t = (midZ - h) / (midZ - loZ);
+			tr = *r * (1.0f - howDark);
+			tg = *g * (1.0f - howDark);
+			tb = *b * (1.0f - howDark);
+		}
+		*r += (tr - *r) * t;
+		*g += (tg - *g) * t;
+		*b += (tb - *b) * t;
+	}
+
+	// Render the fallback into caller-owned TGA bytes (18-byte header + 24-bit BGR,
+	// bottom-up like the real previews). Returns the byte count, 0 on any failure.
+	int qtGenerateHeightPreviewTga(const CString &mapPath, unsigned char *buf, int cap)
+	{
+		enum { PREV_W = 128, PREV_H = 128 };	// == MAP_PREVIEW_WIDTH/HEIGHT
+		const int tgaSize = 18 + PREV_W * PREV_H * 3;
+		if (buf == NULL || cap < tgaSize)
+		{
+			return 0;
+		}
+
+		QtPreviewHeights hm;
+		try
+		{
+			CachedFileInputStream strm;
+			if (!strm.open(AsciiString((const char *)mapPath)))
+			{
+				return 0;
+			}
+			DataChunkInput file(&strm);
+			file.registerParser(AsciiString("HeightMapData"), AsciiString::TheEmptyString,
+				qtParseHeightMapChunk);
+			if (!file.parse(&hm))
+			{
+				return 0;
+			}
+		}
+		catch (...)
+		{
+			return 0;	// unreadable/corrupt map: just no preview
+		}
+		if (hm.data == NULL || hm.width <= 0 || hm.height <= 0)
+		{
+			return 0;
+		}
+
+		// Sample the playable interior, like the saved previews do.
+		Int border = hm.border;
+		Int playW = hm.width - 2 * border;
+		Int playH = hm.height - 2 * border;
+		if (playW <= 0 || playH <= 0)
+		{
+			border = 0;
+			playW = hm.width;
+			playH = hm.height;
+		}
+
+		Real minH = 255.0f;
+		Real maxH = 0.0f;
+		Real avgH = 0.0f;
+		for (Int cy = border; cy < border + playH; cy++)
+		{
+			for (Int cx = border; cx < border + playW; cx++)
+			{
+				Real h = hm.data[cy * hm.width + cx];
+				if (h < minH)
+				{
+					minH = h;
+				}
+				if (h > maxH)
+				{
+					maxH = h;
+				}
+				avgH += h;
+			}
+		}
+		avgH /= (Real)(playW * playH);
+
+		memset(buf, 0, 18);
+		buf[2] = 2;		// uncompressed truecolor
+		buf[12] = (unsigned char)(PREV_W & 0xff);
+		buf[13] = (unsigned char)(PREV_W >> 8);
+		buf[14] = (unsigned char)(PREV_H & 0xff);
+		buf[15] = (unsigned char)(PREV_H >> 8);
+		buf[16] = 24;	// bits per pixel
+		unsigned char *px = buf + 18;
+		for (Int py = 0; py < PREV_H; py++)	// TGA default origin: first row = image bottom = world south
+		{
+			Int cy = border + (py * playH) / PREV_H;
+			for (Int pxi = 0; pxi < PREV_W; pxi++)
+			{
+				Int cx = border + (pxi * playW) / PREV_W;
+				Real r = 0.35f;	// base terrain green, radar-ish
+				Real g = 0.48f;
+				Real b = 0.24f;
+				qtShadeForHeight(&r, &g, &b, hm.data[cy * hm.width + cx], maxH, avgH, minH);
+				*px++ = (unsigned char)REAL_TO_INT(b * 255.0f);
+				*px++ = (unsigned char)REAL_TO_INT(g * 255.0f);
+				*px++ = (unsigned char)REAL_TO_INT(r * 255.0f);
+			}
+		}
+		return tgaSize;
+	}
+}
+
 // Preview bytes for row i: the <name>.tga next to the .map, read from disk in the
 // system/user modes or straight out of the current .big in packed mode (no extraction).
 // One entry point for every mode, like the other panels' _RenderPreview bridges, so the
@@ -367,7 +546,9 @@ int OpenMap::qtItemPreviewData(int i, unsigned char *buf, int cap)
 		FILE *fp = ::fopen((LPCTSTR)tgaPath, "rb");
 		if (!fp)
 		{
-			return 0;
+			// No saved preview (pre-preview-era map, or disableMapPreview): generate a
+			// height-shaded one from the map's own heightmap chunk on the fly.
+			return qtGenerateHeightPreviewTga(qtMapFilePath(s_qtView[i], ".map"), buf, cap);
 		}
 		int got = (int)::fread(buf, 1, cap, fp);
 		Bool complete = (::feof(fp) != 0);	// a cap-sized read that didn't hit EOF = truncated
