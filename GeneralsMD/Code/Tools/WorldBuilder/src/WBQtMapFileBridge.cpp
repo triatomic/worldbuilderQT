@@ -17,6 +17,7 @@
 #include "Common/File.h"
 #include "Common/FileSystem.h"
 #include "Common/MapReaderWriterInfo.h"
+#include "WWLib/TARGA.H"	// TGA2_SIGNATURE / TGA2Footer for the generated fallback preview
 #include "qt/panels/WBQtMapFileBridge.h"
 #include <vector>
 
@@ -363,10 +364,17 @@ CString OpenMap::qtResolveArchiveMapPath(const CString &selName)
 
 namespace
 {
+	struct QtPoint
+	{
+		Real x;
+		Real y;
+	};
+
 	struct QtWaterArea
 	{
 		Real waterZ;				// water surface z (world units) = the polygon's first point
-		std::vector<Int> xy;		// x0,y0,x1,y1,... polygon points in world units
+		Real minX, minY, maxX, maxY;	// bounding box, filled during parse
+		std::vector<QtPoint> pts;	// polygon points in world units
 	};
 
 	struct QtPreviewHeights
@@ -435,10 +443,13 @@ namespace
 			Int numPoints = file.readInt();
 			QtWaterArea area;
 			area.waterZ = 0.0f;
+			area.minX = area.minY = 1.0e30f;
+			area.maxX = area.maxY = -1.0e30f;
 			for (Int p = 0; p < numPoints; p++)
 			{
-				Int px = file.readInt();
-				Int py = file.readInt();
+				QtPoint pt;
+				pt.x = (Real)file.readInt();
+				pt.y = (Real)file.readInt();
 				Int pz = file.readInt();
 				if (isWater)
 				{
@@ -446,11 +457,26 @@ namespace
 					{
 						area.waterZ = (Real)pz;
 					}
-					area.xy.push_back(px);
-					area.xy.push_back(py);
+					if (pt.x < area.minX)
+					{
+						area.minX = pt.x;
+					}
+					if (pt.x > area.maxX)
+					{
+						area.maxX = pt.x;
+					}
+					if (pt.y < area.minY)
+					{
+						area.minY = pt.y;
+					}
+					if (pt.y > area.maxY)
+					{
+						area.maxY = pt.y;
+					}
+					area.pts.push_back(pt);
 				}
 			}
-			if (isWater && area.xy.size() >= 6)	// need at least a triangle
+			if (isWater && area.pts.size() >= 3)	// need at least a triangle
 			{
 				out->water.push_back(area);
 			}
@@ -459,17 +485,20 @@ namespace
 	}
 
 	// Even-odd ray cast, world-unit coordinates (== PolygonTrigger::pointInTrigger's job).
+	// The bounding box rejects most pixels with four compares before the vertex walk.
 	Bool qtPointInWaterArea(const QtWaterArea &a, Real x, Real y)
 	{
+		if (x < a.minX || x > a.maxX || y < a.minY || y > a.maxY)
+		{
+			return false;
+		}
 		Bool in = false;
-		Int n = (Int)a.xy.size() / 2;
+		Int n = (Int)a.pts.size();
 		for (Int i = 0, j = n - 1; i < n; j = i++)
 		{
-			Real xi = (Real)a.xy[i * 2];
-			Real yi = (Real)a.xy[i * 2 + 1];
-			Real xj = (Real)a.xy[j * 2];
-			Real yj = (Real)a.xy[j * 2 + 1];
-			if (((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi))
+			const QtPoint &pi = a.pts[i];
+			const QtPoint &pj = a.pts[j];
+			if (((pi.y > y) != (pj.y > y)) && (x < (pj.x - pi.x) * (y - pi.y) / (pj.y - pi.y) + pi.x))
 			{
 				in = !in;
 			}
@@ -517,10 +546,10 @@ namespace
 	int qtGenerateHeightPreviewTga(const CString &mapPath, unsigned char *buf, int cap)
 	{
 		enum { PREV_W = 128, PREV_H = 128 };	// == MAP_PREVIEW_WIDTH/HEIGHT
-		// Header + pixels + the 26-byte TGA v2 footer: TGA has no leading magic, so
-		// Qt's qtga plugin validates files by the TRUEVISION-XFILE footer -- without
-		// it QImage::fromData rejects the bytes even with the explicit format hint.
-		const int tgaSize = 18 + PREV_W * PREV_H * 3 + 26;
+		// Header + pixels + the TGA v2 footer: TGA has no leading magic, so Qt's qtga
+		// plugin validates files by the TRUEVISION-XFILE footer -- without it
+		// QImage::fromData rejects the bytes even with the explicit format hint.
+		const int tgaSize = 18 + PREV_W * PREV_H * 3 + sizeof(TGA2Footer);
 		if (buf == NULL || cap < tgaSize)
 		{
 			return 0;
@@ -630,8 +659,11 @@ namespace
 				*px++ = (unsigned char)REAL_TO_INT(r * 255.0f);
 			}
 		}
-		memset(px, 0, 8);	// extension + developer directory offsets: none
-		memcpy(px + 8, "TRUEVISION-XFILE.", 18);	// 17 chars + the terminating NUL
+		TGA2Footer footer;
+		memset(&footer, 0, sizeof(footer));	// no extension / developer areas
+		memcpy(footer.Signature, TGA2_SIGNATURE, sizeof(footer.Signature));
+		footer.RsvdChar = '.';
+		memcpy(px, &footer, sizeof(footer));
 		return tgaSize;
 	}
 }
@@ -654,8 +686,28 @@ int OpenMap::qtItemPreviewData(int i, unsigned char *buf, int cap)
 		if (!fp)
 		{
 			// No saved preview (pre-preview-era map, or disableMapPreview): generate a
-			// height-shaded one from the map's own heightmap chunk on the fly.
-			return qtGenerateHeightPreviewTga(qtMapFilePath(s_qtView[i], ".map"), buf, cap);
+			// height-shaded one from the map's own heightmap chunk. Remember the last
+			// result -- generating decompresses and chunk-walks the whole .map, so
+			// re-selecting the same row (arrow keys, re-clicks) must not redo it.
+			static CString s_lastGenPath;
+			static std::vector<unsigned char> s_lastGenTga;
+			CString mapPath = qtMapFilePath(s_qtView[i], ".map");
+			if (mapPath == s_lastGenPath && !s_lastGenTga.empty())
+			{
+				if ((int)s_lastGenTga.size() > cap)
+				{
+					return 0;
+				}
+				memcpy(buf, &s_lastGenTga[0], s_lastGenTga.size());
+				return (int)s_lastGenTga.size();
+			}
+			int made = qtGenerateHeightPreviewTga(mapPath, buf, cap);
+			if (made > 0)
+			{
+				s_lastGenPath = mapPath;
+				s_lastGenTga.assign(buf, buf + made);
+			}
+			return made;
 		}
 		int got = (int)::fread(buf, 1, cap, fp);
 		Bool complete = (::feof(fp) != 0);	// a cap-sized read that didn't hit EOF = truncated
