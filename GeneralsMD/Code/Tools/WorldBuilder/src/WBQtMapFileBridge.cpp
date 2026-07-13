@@ -363,12 +363,19 @@ CString OpenMap::qtResolveArchiveMapPath(const CString &selName)
 
 namespace
 {
+	struct QtWaterArea
+	{
+		Real waterZ;				// water surface z (world units) = the polygon's first point
+		std::vector<Int> xy;		// x0,y0,x1,y1,... polygon points in world units
+	};
+
 	struct QtPreviewHeights
 	{
 		Int width;
 		Int height;
 		Int border;
 		UnsignedByte *data;
+		std::vector<QtWaterArea> water;
 		QtPreviewHeights() : width(0), height(0), border(0), data(NULL) {}
 		~QtPreviewHeights() { delete [] data; }
 	};
@@ -397,6 +404,77 @@ namespace
 		file.readArrayOfBytes((char *)out->data, dataSize);
 		// (Version-1 half-res maps predate Zero Hour; not worth handling in a fallback.)
 		return true;
+	}
+
+	// Local read of the PolygonTriggers chunk, keeping ONLY the water areas -- the
+	// engine's PolygonTrigger::ParsePolygonTriggersDataChunk writes into the global
+	// trigger list, which must not be touched while a map is open in the editor.
+	Bool qtParseTriggersChunk(DataChunkInput &file, DataChunkInfo *info, void *userData)
+	{
+		QtPreviewHeights *out = (QtPreviewHeights *)userData;
+		Int count = file.readInt();
+		while (count > 0)
+		{
+			count--;
+			file.readAsciiString();	// trigger name
+			if (info->version >= K_TRIGGERS_VERSION_4)
+			{
+				file.readAsciiString();	// layer name
+			}
+			file.readInt();	// trigger id
+			Bool isWater = false;
+			if (info->version >= K_TRIGGERS_VERSION_2)
+			{
+				isWater = file.readByte();
+			}
+			if (info->version >= K_TRIGGERS_VERSION_3)
+			{
+				file.readByte();	// isRiver
+				file.readInt();		// riverStart
+			}
+			Int numPoints = file.readInt();
+			QtWaterArea area;
+			area.waterZ = 0.0f;
+			for (Int p = 0; p < numPoints; p++)
+			{
+				Int px = file.readInt();
+				Int py = file.readInt();
+				Int pz = file.readInt();
+				if (isWater)
+				{
+					if (p == 0)
+					{
+						area.waterZ = (Real)pz;
+					}
+					area.xy.push_back(px);
+					area.xy.push_back(py);
+				}
+			}
+			if (isWater && area.xy.size() >= 6)	// need at least a triangle
+			{
+				out->water.push_back(area);
+			}
+		}
+		return true;
+	}
+
+	// Even-odd ray cast, world-unit coordinates (== PolygonTrigger::pointInTrigger's job).
+	Bool qtPointInWaterArea(const QtWaterArea &a, Real x, Real y)
+	{
+		Bool in = false;
+		Int n = (Int)a.xy.size() / 2;
+		for (Int i = 0, j = n - 1; i < n; j = i++)
+		{
+			Real xi = (Real)a.xy[i * 2];
+			Real yi = (Real)a.xy[i * 2 + 1];
+			Real xj = (Real)a.xy[j * 2];
+			Real yj = (Real)a.xy[j * 2 + 1];
+			if (((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi))
+			{
+				in = !in;
+			}
+		}
+		return in;
 	}
 
 	// == interpolateColorForHeight (MapPreview/minimap): brighten above the average
@@ -459,6 +537,8 @@ namespace
 			DataChunkInput file(&strm);
 			file.registerParser(AsciiString("HeightMapData"), AsciiString::TheEmptyString,
 				qtParseHeightMapChunk);
+			file.registerParser(AsciiString("PolygonTriggers"), AsciiString::TheEmptyString,
+				qtParseTriggersChunk);
 			if (!file.parse(&hm))
 			{
 				return 0;
@@ -519,10 +599,32 @@ namespace
 			for (Int pxi = 0; pxi < PREV_W; pxi++)
 			{
 				Int cx = border + (pxi * playW) / PREV_W;
+				Real cellH = hm.data[cy * hm.width + cx];
 				Real r = 0.35f;	// base terrain green, radar-ish
 				Real g = 0.48f;
 				Real b = 0.24f;
-				qtShadeForHeight(&r, &g, &b, hm.data[cy * hm.width + cx], maxH, avgH, minH);
+				if (!hm.water.empty())
+				{
+					// Water = inside a water-area polygon AND ground below its surface
+					// (== localIsUnderwater). Polygon points are border-relative world
+					// units; terrain height bytes scale by MAP_HEIGHT_SCALE.
+					Real wx = (Real)(cx - border) * MAP_XY_FACTOR;
+					Real wy = (Real)(cy - border) * MAP_XY_FACTOR;
+					for (size_t w = 0; w < hm.water.size(); w++)
+					{
+						if (qtPointInWaterArea(hm.water[w], wx, wy))
+						{
+							if (cellH * MAP_HEIGHT_SCALE < hm.water[w].waterZ)
+							{
+								r = 0.55f;	// == MapPreview's waterColor
+								g = 0.55f;
+								b = 1.0f;
+							}
+							break;
+						}
+					}
+				}
+				qtShadeForHeight(&r, &g, &b, cellH, maxH, avgH, minH);
 				*px++ = (unsigned char)REAL_TO_INT(b * 255.0f);
 				*px++ = (unsigned char)REAL_TO_INT(g * 255.0f);
 				*px++ = (unsigned char)REAL_TO_INT(r * 255.0f);
