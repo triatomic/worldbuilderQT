@@ -113,6 +113,12 @@ QCheckBox *WBQtTeamSheetDialog::bindCheck(int page, int ctrlId, const QString &l
 QComboBox *WBQtTeamSheetDialog::bindCombo(int page, int ctrlId, const QStringList &items, QWidget *parent, int notify)
 {
 	QComboBox *combo = new QComboBox(parent);
+	// A QComboBox defaults to sizing itself to its WIDEST item, measuring every entry on
+	// first show -- the seven template-catalog combos plus 22 script combos here made
+	// opening the sheet crawl compared to the MFC original (which never measures). Cap
+	// the width like the Object Properties combos.
+	combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+	combo->setMinimumContentsLength(24);
 	combo->addItems(items);
 	seedComboCurrent(combo, pageText(page, ctrlId));
 	connect(combo, static_cast<void (QComboBox::*)(int)>(&QComboBox::activated), combo,
