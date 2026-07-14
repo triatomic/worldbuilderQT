@@ -77,6 +77,11 @@ void WBQtTeams_ImportTeams(void);
 int  WBQtTeamSheet_Open(void);
 void WBQtTeamSheet_Close(void);
 
+// Window-size persistence ([QtWindowSize] in WorldBuilder.ini; keys prefixed per
+// window, e.g. TeamSheetWidth -- shared home for any Qt dialog that saves its size).
+int  WBQtTeamSheet_GetProfileInt(const char *key, int def);
+void WBQtTeamSheet_SetProfileInt(const char *key, int value);
+
 void WBQtTeamPage_GetText(int page, int ctrlId, char *buf, int cap);
 void WBQtTeamPage_SetText(int page, int ctrlId, const char *text, int notify);
 int  WBQtTeamPage_GetCheck(int page, int ctrlId);

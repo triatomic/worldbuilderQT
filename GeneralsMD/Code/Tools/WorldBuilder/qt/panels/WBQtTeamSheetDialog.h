@@ -21,6 +21,9 @@ class WBQtTeamSheetDialog : public QDialog
 public:
 	explicit WBQtTeamSheetDialog(QWidget *parent = 0);
 
+	// Persist the window size on ANY close path (OK, Esc, the X button all funnel here).
+	virtual void done(int r);
+
 private:
 	QWidget *buildIdentityTab();
 	QWidget *buildReinforcementTab();

@@ -1262,6 +1262,21 @@ extern "C" int WBQtTeamSheet_Open(void)
 	return 1;
 }
 
+// ---- Qt window sizes ([QtWindowSize] section, keys prefixed per window, e.g.
+// TeamSheetWidth) -- shared home for any Qt dialog that persists its size. ----
+extern "C" int WBQtTeamSheet_GetProfileInt(const char *key, int def)
+{
+	return (key != NULL) ? ::AfxGetApp()->GetProfileInt("QtWindowSize", key, def) : def;
+}
+
+extern "C" void WBQtTeamSheet_SetProfileInt(const char *key, int value)
+{
+	if (key != NULL)
+	{
+		::AfxGetApp()->WriteProfileInt("QtWindowSize", key, value);
+	}
+}
+
 extern "C" void WBQtTeamSheet_Close(void)
 {
 	// Page edits already landed in the working copy live (the MFC sheet behaved the same:

@@ -64,7 +64,18 @@ WBQtTeamSheetDialog::WBQtTeamSheetDialog(QWidget *parent)
 	root->addLayout(buttons);
 	connect(okButton, SIGNAL(clicked()), this, SLOT(accept()));
 
-	resize(760, 620);
+	// Restore the last session's size (persisted in done()); layout minimums keep a
+	// nonsense stored value from collapsing the sheet.
+	resize(WBQtTeamSheet_GetProfileInt("TeamSheetWidth", 760),
+		WBQtTeamSheet_GetProfileInt("TeamSheetHeight", 620));
+}
+
+void WBQtTeamSheetDialog::done(int r)
+{
+	// One write per close (not per resize tick -- profile writes hit WorldBuilder.ini).
+	WBQtTeamSheet_SetProfileInt("TeamSheetWidth", width());
+	WBQtTeamSheet_SetProfileInt("TeamSheetHeight", height());
+	QDialog::done(r);
 }
 
 QStringList WBQtTeamSheetDialog::readComboItems(int page, int ctrlId) const
