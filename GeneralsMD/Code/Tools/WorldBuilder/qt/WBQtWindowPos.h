@@ -22,4 +22,9 @@ class QWidget;
 // a stable ASCII name. Safe to call more than once for the same window (later calls no-op).
 void WBQtWindowPos_Track(QWidget *window, const char *name);
 
+// Reset Window Positions: wipe the saved [QtWindowPositions]/[QtWindowSize] store and
+// cascade every live tracked window back near the top-left (visible ones re-save their
+// fresh spot through the normal move tracking).
+void WBQtWindowPos_ResetAll(void);
+
 #endif // WB_QT_WINDOW_POS_H

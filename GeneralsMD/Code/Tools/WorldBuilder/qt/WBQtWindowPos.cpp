@@ -9,6 +9,7 @@
 
 #include <qt_windows.h>
 #include <commctrl.h>
+#include <QApplication>
 #include <QEvent>
 #include <QMoveEvent>
 #include <QRect>
@@ -19,6 +20,7 @@
 // 1 and fills *top/*left when a saved value exists, 0 otherwise.
 extern "C" int  WBQtWindowPos_Get(const char *name, int *topOut, int *leftOut);
 extern "C" void WBQtWindowPos_Save(const char *name, int top, int left);
+extern "C" void WBQtWindowPos_ClearSaved(void);
 
 namespace
 {
@@ -165,4 +167,24 @@ void WBQtWindowPos_Track(QWidget *window, const char *name)
 	}
 	window->setProperty(kTrackedProp, true);
 	new WBQtWindowPosTracker(window, QByteArray(name));
+}
+
+void WBQtWindowPos_ResetAll(void)
+{
+	// Wipe the saved store first, then cascade the live tracked windows -- a visible
+	// window's Move event re-saves its fresh spot through the normal tracking, and a
+	// hidden one just keeps the new position for its next show.
+	WBQtWindowPos_ClearSaved();
+	int placed = 0;
+	QWidgetList tops = QApplication::topLevelWidgets();
+	for (int i = 0; i < tops.size(); i++)
+	{
+		QWidget *w = tops.at(i);
+		if (!w->property(kTrackedProp).toBool())
+		{
+			continue;
+		}
+		w->move(60 + (placed % 8) * 30, 60 + (placed % 8) * 30);
+		placed++;
+	}
 }

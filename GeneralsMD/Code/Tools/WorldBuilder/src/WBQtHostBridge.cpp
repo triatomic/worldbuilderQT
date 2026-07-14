@@ -109,6 +109,14 @@ extern "C" void WBQtWindowPos_Save(const char *name, int top, int left)
 	::AfxGetApp()->WriteProfileInt(WB_QT_WINDOW_POS_SECTION, leftKey, left);
 }
 
+extern "C" void WBQtWindowPos_ClearSaved(void)
+{
+	// Reset Window Positions: drop the whole saved sections (WriteProfileString with a
+	// NULL entry deletes a section from WorldBuilder.ini); window sizes reset too.
+	::AfxGetApp()->WriteProfileString(WB_QT_WINDOW_POS_SECTION, NULL, NULL);
+	::AfxGetApp()->WriteProfileString("QtWindowSize", NULL, NULL);
+}
+
 // Tier 5: follow a live Windows light/dark switch. The Settings app broadcasts
 // WM_SETTINGCHANGE with "ImmersiveColorSet" after flipping the app theme; forward it so
 // the Qt side re-applies when the theme mode is System. Declared in MainFrm.h.

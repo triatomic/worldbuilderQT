@@ -57,6 +57,10 @@ void WBQt_ResizeMainWindow(int width, int height);
 // Move the main window (the Reset Window Positions command).
 void WBQt_MoveMainWindow(int x, int y);
 
+// Reset Window Positions for the Qt tool windows: wipe the saved
+// [QtWindowPositions]/[QtWindowSize] store and cascade the live tracked windows.
+void WBQtWindowPos_ResetAll(void);
+
 // F11 / Esc fullscreen toggle on the main window; IsFullscreen for the Esc gate.
 void WBQt_ToggleFullscreen(void);
 int  WBQt_IsFullscreen(void);

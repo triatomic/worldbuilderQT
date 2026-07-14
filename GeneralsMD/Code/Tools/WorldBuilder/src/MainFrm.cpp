@@ -564,6 +564,13 @@ void CMainFrame::ResetWindowPositions(void)
 	ShowWindow(SW_SHOW);
 #endif
 
+#ifdef RTS_HAS_QT
+	// The visible tool windows are the Qt panels (the MFC ones below are the hidden /
+	// OFF-build fallbacks): wipe their saved [QtWindowPositions]/[QtWindowSize] store
+	// and cascade the live ones -- without this the command looked like a no-op.
+	WBQtWindowPos_ResetAll();
+#endif
+
 	// Tool Window
 	if (m_curOptions != NULL) {
 		// m_curOptions = &m_brushOptions;
