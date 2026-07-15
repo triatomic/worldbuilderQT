@@ -3,6 +3,9 @@
 #include "WBQtRoadBridge.h"
 #include "WBQtTreeStyle.h"
 
+// NewSearch toggle (WBQtObjectBridge.cpp): live-filter search when on.
+extern "C" int WBQtConfig_GetNewSearch(void);
+
 #include <QButtonGroup>
 #include <QCheckBox>
 #include <QDoubleSpinBox>
@@ -125,6 +128,11 @@ WBQtRoadPanel::WBQtRoadPanel(QWidget *owner)
 	connect(searchBtn, SIGNAL(clicked()), this, SLOT(onSearch()));
 	connect(resetBtn, SIGNAL(clicked()), this, SLOT(onReset()));
 	connect(m_search, SIGNAL(returnPressed()), this, SLOT(onSearch()));
+	if (WBQtConfig_GetNewSearch() != 0)
+	{
+		// NewSearch: filter live as the user types (the Search button still works).
+		connect(m_search, SIGNAL(textChanged(QString)), this, SLOT(onSearch()));
+	}
 
 	s_instance = this;
 }

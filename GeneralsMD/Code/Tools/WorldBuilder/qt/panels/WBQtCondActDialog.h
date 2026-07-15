@@ -29,6 +29,7 @@ protected:
 	bool eventFilter(QObject *watched, QEvent *event);
 
 private slots:
+	void onSearchLive(const QString &text);	// NewSearch: live filter, no beep / no message box
 	void onCurrentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
 	void onLinkClicked(const QUrl &url);
 	void onSearch();
@@ -37,6 +38,7 @@ private slots:
 
 private:
 	void populateTree();
+	void applyFilter(const QString &searchText, bool announce);	// shared by onSearch/onSearchLive
 	void selectCurrentType(QTreeWidgetItem *leaf);
 	void renderSentence();
 	void updateWarnings();

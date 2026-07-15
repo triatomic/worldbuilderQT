@@ -4,6 +4,9 @@
 #include "WBQtScrubSpinBox.h"
 #include "WBQtTreeStyle.h"
 
+// NewSearch toggle (WBQtObjectBridge.cpp): live-filter search when on.
+extern "C" int WBQtConfig_GetNewSearch(void);
+
 #include <QButtonGroup>
 #include <QCheckBox>
 #include <QComboBox>
@@ -280,6 +283,11 @@ WBQtTerrainMaterialPanel::WBQtTerrainMaterialPanel(QWidget *owner)
 	connect(m_searchBtn, SIGNAL(clicked()), this, SLOT(onSearch()));
 	connect(m_resetBtn, SIGNAL(clicked()), this, SLOT(onReset()));
 	connect(m_search, SIGNAL(returnPressed()), this, SLOT(onSearch()));
+	if (WBQtConfig_GetNewSearch() != 0)
+	{
+		// NewSearch: filter live as the user types (the Search button still works).
+		connect(m_search, SIGNAL(textChanged(QString)), this, SLOT(onSearch()));
+	}
 	connect(m_swapBtn, SIGNAL(clicked()), this, SLOT(onSwap()));
 	connect(m_favTree, SIGNAL(itemSelectionChanged()), this, SLOT(onFavoriteSelectionChanged()));
 	connect(m_setFavBtn, SIGNAL(clicked()), this, SLOT(onSetFavorite()));

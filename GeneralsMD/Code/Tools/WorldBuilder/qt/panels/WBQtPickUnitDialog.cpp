@@ -6,6 +6,9 @@
 #include "WBQtPreviewImage.h"
 #include "WBQtTreeStyle.h"
 
+// NewSearch toggle (WBQtObjectBridge.cpp): live-filter search when on.
+extern "C" int WBQtConfig_GetNewSearch(void);
+
 // Stage 1 phase 3: modal-dialog parent (active modal if nested, else main window). WBQtBridge.cpp.
 QWidget *WBQt_DialogParent(void);
 
@@ -68,6 +71,11 @@ WBQtPickUnitDialog::WBQtPickUnitDialog(bool replaceMode, const QString &missingN
 		root->addLayout(searchRow);
 		connect(findButton, SIGNAL(clicked()), this, SLOT(onSearch()));
 		connect(resetButton, SIGNAL(clicked()), this, SLOT(onReset()));
+		if (WBQtConfig_GetNewSearch() != 0)
+		{
+			// NewSearch: filter live as the user types (Find button still works).
+			connect(m_searchEdit, SIGNAL(textChanged(QString)), this, SLOT(onSearchLive(QString)));
+		}
 	}
 
 	m_tree = new QTreeWidget(this);
@@ -218,6 +226,21 @@ void WBQtPickUnitDialog::onSearch()
 		QMessageBox::information(this, "Search", "No matches found.");
 	}
 	else
+	{
+		m_tree->expandAll();
+	}
+}
+
+// NewSearch: filter live as the user types -- empty box restores the full list, no beep
+// and no "No matches" box (both are jarring on every keystroke). Matches expand.
+void WBQtPickUnitDialog::onSearchLive(const QString &text)
+{
+	if (text.trimmed().isEmpty())
+	{
+		populate(QString());
+		return;
+	}
+	if (populate(text) > 0)
 	{
 		m_tree->expandAll();
 	}

@@ -404,5 +404,15 @@ int WBQtObject_GetPlaceAllYSpacing(void)
 	return ObjectOptions::getPlaceAllYSpacing();
 }
 
+// NewSearch toggle ([QtSearch] NewSearch): live-filter search in the tree pickers.
+int WBQtConfig_GetNewSearch(void)
+{
+	return ::AfxGetApp()->GetProfileInt("QtSearch", "NewSearch", 0);
+}
+void WBQtConfig_SetNewSearch(int on)
+{
+	::AfxGetApp()->WriteProfileInt("QtSearch", "NewSearch", on ? 1 : 0);
+}
+
 }
 #endif

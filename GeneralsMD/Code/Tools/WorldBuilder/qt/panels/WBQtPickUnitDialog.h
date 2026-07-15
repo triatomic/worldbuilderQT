@@ -39,6 +39,7 @@ protected:
 
 private slots:
 	void onSearch();
+	void onSearchLive(const QString &text);	// NewSearch: live filter, no beep / no message box
 	void onReset();
 	void onIgnore();
 	void onCurrentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);

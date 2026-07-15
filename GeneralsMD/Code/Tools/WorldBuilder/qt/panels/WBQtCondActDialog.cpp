@@ -7,6 +7,9 @@
 #include "WBQtCondActBridge.h"
 #include "WBQtTreeStyle.h"
 
+// NewSearch toggle (WBQtObjectBridge.cpp): live-filter search when on.
+extern "C" int WBQtConfig_GetNewSearch(void);
+
 #include <QApplication>
 #include <QCheckBox>
 #include <QEvent>
@@ -131,6 +134,11 @@ WBQtCondActDialog::WBQtCondActDialog(void *item, bool isAction, QWidget *parent)
 	connect(m_sentence, SIGNAL(anchorClicked(QUrl)), this, SLOT(onLinkClicked(QUrl)));
 	connect(findButton, SIGNAL(clicked()), this, SLOT(onSearch()));
 	connect(resetButton, SIGNAL(clicked()), this, SLOT(onReset()));
+	if (WBQtConfig_GetNewSearch() != 0)
+	{
+		// NewSearch: filter live as the user types (Find button still works).
+		connect(m_searchEdit, SIGNAL(textChanged(QString)), this, SLOT(onSearchLive(QString)));
+	}
 	connect(m_compressCheck, SIGNAL(toggled(bool)), this, SLOT(onCompressToggled(bool)));
 	connect(okButton, SIGNAL(clicked()), this, SLOT(accept()));
 	connect(cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
@@ -349,6 +357,18 @@ void WBQtCondActDialog::onLinkClicked(const QUrl &url)
 	renderSentence();
 }
 
+// NewSearch: filter live as the user types -- empty box restores the full tree, no
+// beep and no "No matches" box (both are jarring on every keystroke).
+void WBQtCondActDialog::onSearchLive(const QString &text)
+{
+	if (text.trimmed().isEmpty())
+	{
+		populateTree();
+		return;
+	}
+	applyFilter(text.toLower(), false);
+}
+
 void WBQtCondActDialog::onSearch()
 {
 	// == the MFC OnSearch: flatten the catalog to full-path leaves matching the search text
@@ -360,7 +380,11 @@ void WBQtCondActDialog::onSearch()
 		onReset();
 		return;
 	}
+	applyFilter(searchText, true);
+}
 
+void WBQtCondActDialog::applyFilter(const QString &searchText, bool announce)
+{
 	m_updating = true;
 	m_tree->clear();
 	QTreeWidgetItem *selLeaf = NULL;
@@ -388,7 +412,10 @@ void WBQtCondActDialog::onSearch()
 
 	if (matchCount == 0)
 	{
-		QMessageBox::information(this, "Search", "No matches found.");
+		if (announce)
+		{
+			QMessageBox::information(this, "Search", "No matches found.");
+		}
 	}
 	else
 	{

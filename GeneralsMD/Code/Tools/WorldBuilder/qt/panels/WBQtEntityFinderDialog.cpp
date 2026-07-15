@@ -6,6 +6,10 @@
 #include "WBQtEntityFinderDialog.h"
 #include "WBQtEntityFinderBridge.h"
 
+// NewSearch toggle (WBQtObjectBridge.cpp): live-filter search in the tree pickers.
+extern "C" int  WBQtConfig_GetNewSearch(void);
+extern "C" void WBQtConfig_SetNewSearch(int on);
+
 #include <QApplication>
 #include <QCheckBox>
 #include <QCloseEvent>
@@ -249,6 +253,12 @@ WBQtEntityFinderDialog::WBQtEntityFinderDialog(void *frameHwnd)
 	undoRow->addWidget(m_undoSpin, 1);
 	undoRow->addWidget(new QLabel("Undo history depth", visual));
 	visualLay->addLayout(undoRow);
+
+	m_newSearchCheck = new QCheckBox("Live search in the tree pickers (NewSearch)", visual);
+	m_newSearchCheck->setToolTip("When on, the object/fence/road/texture panels and the Edit\n"
+		"Action / Pick Unit dialogs filter as you type instead of needing a\n"
+		"Search/Find click. Applies to windows opened after this is changed.");
+	visualLay->addWidget(m_newSearchCheck);
 	left->addWidget(visual);
 
 	left->addStretch(1);
@@ -297,6 +307,11 @@ WBQtEntityFinderDialog::WBQtEntityFinderDialog(void *frameHwnd)
 	m_undoSpin->setValue(WBQtEntityFinderData_GetMaxUndos());
 	m_undoSpin->blockSignals(false);
 	connect(m_undoSpin, SIGNAL(valueChanged(int)), this, SLOT(onMaxUndosChanged(int)));
+
+	m_newSearchCheck->blockSignals(true);
+	m_newSearchCheck->setChecked(WBQtConfig_GetNewSearch() != 0);
+	m_newSearchCheck->blockSignals(false);
+	connect(m_newSearchCheck, SIGNAL(toggled(bool)), this, SLOT(onNewSearchToggled(bool)));
 
 	populateFonts();
 	populateResolutions();
@@ -542,6 +557,12 @@ void WBQtEntityFinderDialog::onLaunchOnStartupToggled(bool on)
 void WBQtEntityFinderDialog::onMaxUndosChanged(int value)
 {
 	WBQtEntityFinder_SetMaxUndos(value);
+}
+
+void WBQtEntityFinderDialog::onNewSearchToggled(bool on)
+{
+	// Persisted; the tree pickers read it when they are next opened.
+	WBQtConfig_SetNewSearch(on ? 1 : 0);
 }
 
 void WBQtEntityFinderDialog::onFontChanged(int index)

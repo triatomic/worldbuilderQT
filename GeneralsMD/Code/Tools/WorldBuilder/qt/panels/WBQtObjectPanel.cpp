@@ -126,6 +126,11 @@ WBQtObjectPanel::WBQtObjectPanel(QWidget *owner)
 	connect(searchBtn, SIGNAL(clicked()), this, SLOT(onSearch()));
 	connect(resetBtn, SIGNAL(clicked()), this, SLOT(onReset()));
 	connect(m_search, SIGNAL(returnPressed()), this, SLOT(onSearch()));
+	if (WBQtConfig_GetNewSearch() != 0)
+	{
+		// NewSearch: filter live as the user types (the Search button still works).
+		connect(m_search, SIGNAL(textChanged(QString)), this, SLOT(onSearch()));
+	}
 	connect(m_previewSound, SIGNAL(clicked()), this, SLOT(onPreviewSoundToggled()));
 	connect(m_previewBuildZone, SIGNAL(clicked()), this, SLOT(onPreviewBuildZoneToggled()));
 	connect(m_useWaterHeight, SIGNAL(clicked()), this, SLOT(onUseWaterHeightToggled()));

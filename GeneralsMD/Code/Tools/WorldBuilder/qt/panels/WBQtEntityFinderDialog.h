@@ -40,6 +40,7 @@ private slots:
 	void onFontChanged(int index);
 	void onResolutionChanged(int index);
 	void onMaxUndosChanged(int value);
+	void onNewSearchToggled(bool on);
 	void onToggleHotkeyPanel();
 
 private:
@@ -55,6 +56,7 @@ private:
 	QComboBox *m_resolutionCombo;
 	QSpinBox  *m_undoSpin;
 	QCheckBox *m_launchCheck;
+	QCheckBox *m_newSearchCheck;
 	QPushButton *m_toggleButton;
 	QWidget *m_hotkeyPanel;
 	QLineEdit *m_searchEdit;

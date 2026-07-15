@@ -203,6 +203,12 @@ int  WBQtObject_GetPlaceAll(void);
 void WBQtObject_SetPlaceAllYSpacing(int spacing);	// world units; 0 = automatic
 int  WBQtObject_GetPlaceAllYSpacing(void);
 
+// NewSearch ([QtSearch] NewSearch in WorldBuilder.ini, default off): when on, the
+// tree pickers (object/fence/road/terrain + the Edit Action / Pick Unit modals) filter
+// live as you type instead of needing a Search/Find click. Off = the old behavior.
+int  WBQtConfig_GetNewSearch(void);
+void WBQtConfig_SetNewSearch(int on);
+
 // Forward (Qt-side): WB calls ObjectOptions::update()/selectObject() on selection changes;
 // a guarded WBQtObject_PushFromSelection() re-seeds the Qt panel (label/team/preview) and
 // WBQtObject_PushSelectIndex() moves the tree selection to match a programmatic selectObject.
