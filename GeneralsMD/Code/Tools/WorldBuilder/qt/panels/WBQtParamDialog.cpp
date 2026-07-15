@@ -299,6 +299,20 @@ void WBQtParamDialog::accept()
 			{
 				sel = row;
 			}
+			else if (!text.isEmpty())
+			{
+				// The user typed a filter (e.g. "a2") without arrowing onto a row: if the
+				// text is a partial match of the highlighted (visible) row, commit that
+				// entry -- OK should use what the list is showing, not the raw search text.
+				// Genuine free text that matches no row is left as-is (these fields allow
+				// arbitrary values), so only adopt a row the text is actually a substring of.
+				if (row >= 0 && !m_list->item(row)->isHidden()
+					&& m_list->item(row)->text().contains(text, Qt::CaseInsensitive))
+				{
+					text = m_list->item(row)->text();
+					sel = row;
+				}
+			}
 		}
 	}
 	QByteArray textBytes = text.toLocal8Bit();
