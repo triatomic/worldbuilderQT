@@ -400,6 +400,9 @@ void WBQtScriptWindow::rebuildTree()
 	// On the first build of a window there is no state yet: everything starts collapsed.
 	const bool firstBuild = (m_tree->topLevelItemCount() == 0);
 	QSet<int> expanded;
+	// Also remember the current selection: rebuild clears the tree, so opening/editing a
+	// script (which rebuilds) used to drop the selection -- capture it and restore it below.
+	const int selectedType = firstBuild ? -1 : selectedListType();
 	if (!firstBuild)
 	{
 		for (QTreeWidgetItemIterator it(m_tree); *it; ++it)
@@ -488,6 +491,13 @@ void WBQtScriptWindow::rebuildTree()
 	}
 
 	m_updating = false;
+
+	// Re-select the node that was selected before the rebuild (it keeps the same listType),
+	// so closing the Edit dialog leaves the just-edited script highlighted.
+	if (selectedType != -1)
+	{
+		selectByListType(selectedType);
+	}
 }
 
 void WBQtScriptWindow::resetForNewSession()
