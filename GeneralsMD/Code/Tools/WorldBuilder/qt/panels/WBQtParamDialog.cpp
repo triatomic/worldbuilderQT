@@ -160,23 +160,32 @@ void WBQtParamDialog::onRowChanged(int row)
 
 void WBQtParamDialog::onTextEdited(const QString &text)
 {
-	if (m_updating || m_list == NULL || text.isEmpty())
+	if (m_updating || m_list == NULL)
 	{
 		return;
 	}
-	// == the combo's prefix matching: typing scrolls to (and highlights) the first match
-	// without overwriting what was typed.
+	// Filter the list to case-insensitive substring matches: non-matching rows are
+	// hidden (empty text shows everything), and the first surviving row is selected +
+	// scrolled into view without overwriting what the user typed. Any character is fine
+	// -- there is no format restriction on the edit, so the whole catalog is searchable.
+	m_updating = true;
+	QListWidgetItem *firstShown = NULL;
 	for (int i = 0; i < m_list->count(); i++)
 	{
-		if (m_list->item(i)->text().startsWith(text, Qt::CaseInsensitive))
+		QListWidgetItem *item = m_list->item(i);
+		bool match = text.isEmpty() || item->text().contains(text, Qt::CaseInsensitive);
+		item->setHidden(!match);
+		if (match && firstShown == NULL)
 		{
-			m_updating = true;
-			m_list->setCurrentRow(i);
-			m_list->scrollToItem(m_list->item(i), QAbstractItemView::PositionAtTop);
-			m_updating = false;
-			break;
+			firstShown = item;
 		}
 	}
+	if (firstShown != NULL)
+	{
+		m_list->setCurrentItem(firstShown);
+		m_list->scrollToItem(firstShown, QAbstractItemView::PositionAtTop);
+	}
+	m_updating = false;
 }
 
 void WBQtParamDialog::onEditTextChanged(const QString &text)
