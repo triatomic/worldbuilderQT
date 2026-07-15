@@ -25,6 +25,11 @@ public:
 
 	void accept();	// == OnOK: validate + write back; beep and stay open on bad input
 
+protected:
+	// Up/Down/PageUp/PageDown in the filter edit walk the visible list rows (== a combo
+	// box), copying the highlighted row's text into the edit without leaving the field.
+	virtual bool eventFilter(QObject *watched, QEvent *event);
+
 private slots:
 	void onRowChanged(int row);
 	void onTextEdited(const QString &text);

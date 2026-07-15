@@ -15,6 +15,8 @@ QWidget *WBQt_DialogParent(void);
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHash>
+#include <QItemSelectionModel>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -63,6 +65,7 @@ WBQtParamDialog::WBQtParamDialog(void *parameter, const char *unitName, QWidget 
 	{
 		m_edit = new QLineEdit(box);
 		connect(m_edit, SIGNAL(textChanged(QString)), this, SLOT(onEditTextChanged(QString)));
+		m_edit->installEventFilter(this);	// arrow keys walk the filtered list
 		boxLay->addWidget(m_edit);
 	}
 	if (m_kind == WB_QT_PARAM_KIND_COMBO || m_kind == WB_QT_PARAM_KIND_LIST)
@@ -182,10 +185,65 @@ void WBQtParamDialog::onTextEdited(const QString &text)
 	}
 	if (firstShown != NULL)
 	{
-		m_list->setCurrentItem(firstShown);
+		// Highlight the first match so it reads as selected and Up/Down have a starting
+		// point; clearSelection first so the row shows selected even while the edit keeps
+		// keyboard focus.
+		m_list->setCurrentItem(firstShown, QItemSelectionModel::ClearAndSelect);
 		m_list->scrollToItem(firstShown, QAbstractItemView::PositionAtTop);
 	}
+	else
+	{
+		m_list->setCurrentItem(NULL);
+	}
 	m_updating = false;
+}
+
+bool WBQtParamDialog::eventFilter(QObject *watched, QEvent *event)
+{
+	if (watched == m_edit && m_list != NULL && event->type() == QEvent::KeyPress)
+	{
+		QKeyEvent *key = static_cast<QKeyEvent *>(event);
+		int step = 0;
+		switch (key->key())
+		{
+			case Qt::Key_Down:		step = 1;	break;
+			case Qt::Key_Up:		step = -1;	break;
+			case Qt::Key_PageDown:	step = 10;	break;
+			case Qt::Key_PageUp:	step = -10;	break;
+			default:				return QDialog::eventFilter(watched, event);
+		}
+		// Walk to the next VISIBLE row in the step direction (skip filtered-out rows),
+		// then mirror its text into the edit -- so arrows pick from the filtered list
+		// while typing keeps working.
+		int row = m_list->currentRow();
+		int dir = (step > 0) ? 1 : -1;
+		int remaining = (step > 0) ? step : -step;
+		int candidate = row;
+		while (remaining > 0)
+		{
+			int next = candidate + dir;
+			if (next < 0 || next >= m_list->count())
+			{
+				break;
+			}
+			candidate = next;
+			if (!m_list->item(candidate)->isHidden())
+			{
+				remaining--;
+			}
+		}
+		if (candidate >= 0 && candidate != row && !m_list->item(candidate)->isHidden())
+		{
+			m_list->setCurrentRow(candidate, QItemSelectionModel::ClearAndSelect);
+			m_list->scrollToItem(m_list->item(candidate));
+			m_updating = true;
+			m_edit->setText(m_list->item(candidate)->text());
+			m_edit->selectAll();
+			m_updating = false;
+		}
+		return true;	// consume: the edit must not move the caret on Up/Down
+	}
+	return QDialog::eventFilter(watched, event);
 }
 
 void WBQtParamDialog::onEditTextChanged(const QString &text)
