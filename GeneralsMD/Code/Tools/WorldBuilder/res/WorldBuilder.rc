@@ -218,6 +218,13 @@ BEGIN
         MENUITEM SEPARATOR
         MENUITEM "Dump Map To File",            ID_FILE_DUMPTOFILE
         MENUITEM "Generate Map INI and STR Template", ID_FILE_GENERATE_MAPSTRNINI
+        POPUP "Map.ini"
+        BEGIN
+            MENUITEM "Reload map.ini",              ID_FILE_RELOAD_MAPINI
+            MENUITEM "Check map.ini",               ID_FILE_CHECK_MAPINI
+            MENUITEM "Auto-reload map.ini on change", ID_FILE_WATCH_MAPINI
+            MENUITEM "Verbose report (per-object module detail)", ID_FILE_VERBOSE_MAPINI
+        END
         MENUITEM SEPARATOR
         MENUITEM "Recent File",                 ID_FILE_MRU_FILE1, GRAYED
         MENUITEM SEPARATOR

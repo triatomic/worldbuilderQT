@@ -61,6 +61,8 @@ protected:
  	Bool								m_needAutosave;			///< True if changes have been made since last autosave.
 	Int									m_curWaypointID;
 	Bool							    m_disableMapPrevGeneration;
+	Bool								m_watchMapIni;			///< auto-reload map.ini when the file changes
+	FILETIME							m_mapIniLastWrite;		///< last-seen map.ini mtime for the watch
 
 protected:
 	std::vector<ICoord2D> m_boundaries;
@@ -203,6 +205,18 @@ protected:
 	afx_msg void OnFileClose();
 #endif
 	afx_msg void OnGenerateMapStrAndIni();
+
+	// Map.ini loader commands (File > Map.ini submenu).
+	afx_msg void OnReloadMapIni();
+	afx_msg void OnCheckMapIni();
+	afx_msg void OnToggleWatchMapIni();
+	afx_msg void OnUpdateWatchMapIni(CCmdUI* pCmdUI);
+	afx_msg void OnToggleVerboseMapIni();
+	afx_msg void OnUpdateVerboseMapIni(CCmdUI* pCmdUI);
+public:
+	// Called from CMainFrame's timer while auto-reload is on: reload if map.ini changed.
+	void pollMapIniWatch();
+protected:
 
 	afx_msg void OnJumpToMapFolderWBData();
 	afx_msg void OnJumpToMapFolder();

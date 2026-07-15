@@ -40,6 +40,8 @@
 // the WB INI type table in INI.cpp + the game's own between-match reset()).
 #include "Common/SpecialPower.h"
 #include "Common/Science.h"
+#include "Common/ModuleFactory.h"
+#include "Common/Module.h"
 #include "GameLogic/Weapon.h"
 #include "GameLogic/Armor.h"
 #include "GameLogic/ObjectCreationList.h"
@@ -175,23 +177,105 @@ static Bool templateHasModuleTag(const ThingTemplate *tmpl, const char *tag)
 	return false;
 }
 
-// Returns the path loadWB should read: iniPath itself when nothing had to be
-// stripped, else a temp copy with the offending lines blanked. Blanked lines are
-// kept as empty lines so parser error line numbers still match the real map.ini.
-// skippedOut collects one description per stripped directive.
-static AsciiString sanitizeMapIni(const AsciiString &iniPath, std::vector<AsciiString> &skippedOut)
+// Map a module block header keyword to the ModuleType the engine parser uses, so we
+// can ask TheModuleFactory whether the named module exists in this install. "Body" and
+// "ClientBehavior" resolve to BEHAVIOR (see ThingTemplate::parseModuleName). Returns
+// false for keywords that are not module headers.
+static Bool isModuleHeader(const char *keyword, ModuleType *typeOut)
 {
+	if (strcmp(keyword, "Behavior") == 0 || strcmp(keyword, "Body") == 0 ||
+		strcmp(keyword, "ClientBehavior") == 0)
+	{
+		*typeOut = MODULETYPE_BEHAVIOR;
+		return true;
+	}
+	if (strcmp(keyword, "Draw") == 0)
+	{
+		*typeOut = MODULETYPE_DRAW;
+		return true;
+	}
+	if (strcmp(keyword, "ClientUpdate") == 0)
+	{
+		*typeOut = MODULETYPE_CLIENT_UPDATE;
+		return true;
+	}
+	return false;
+}
+
+// Results of the map.ini pre-scan: the sanitized path to actually load, the list of
+// neutralized directives, the override/new/module counts for the post-load summary, and
+// whether the file touches stores whose overrides cannot be cleanly torn down at runtime
+// (FXList / OCL / Armor / ParticleSystem) -- Reload warns about those.
+// One object's block in the scan, with the per-module edits under it (for verbose output).
+struct MapIniObjectDetail
+{
+	AsciiString name;
+	Bool isNew;								// defined by the map.ini vs. overriding an existing template
+	std::vector<AsciiString> moduleLines;	// e.g. "Add Behavior FooUpdate (ModuleTag_Foo)"
+	MapIniObjectDetail() : isNew(false) {}
+};
+
+struct MapIniScanResult
+{
+	AsciiString loadPath;						// iniPath, or a sanitized temp copy
+	std::vector<AsciiString> skipped;			// one per neutralized directive
+	std::vector<AsciiString> overriddenNames;	// existing objects the map.ini overrides
+	std::vector<AsciiString> newNames;			// brand-new objects the map.ini defines
+	std::vector<MapIniObjectDetail> objects;	// per-object detail, in file order (verbose)
+	std::vector<std::pair<AsciiString, Int> > storeCounts;	// non-Object block type -> count
+	Int moduleEdits;							// Add/Remove/Replace module directives seen
+	Bool hasUntearableOverrides;				// FXList/OCL/Armor/ParticleSystem block present
+
+	MapIniScanResult() : moduleEdits(0), hasUntearableOverrides(false) {}
+
+	// Convenience: derive counts from the name lists (kept identical to the old fields).
+	Int objectsOverridden() const { return (Int)overriddenNames.size(); }
+	Int objectsNew() const { return (Int)newNames.size(); }
+
+	// Tally a top-level non-Object block ("FXList", "Weapon", ...) for the per-store breakdown.
+	void tallyStore(const char *type)
+	{
+		for (size_t i = 0; i < storeCounts.size(); ++i)
+		{
+			if (storeCounts[i].first == type)
+			{
+				storeCounts[i].second++;
+				return;
+			}
+		}
+		storeCounts.push_back(std::make_pair(AsciiString(type), 1));
+	}
+};
+
+// Map.ini pre-scan. Returns a temp copy with fatal-on-mismatch directives blanked (kept
+// as empty lines so parser error line numbers still match the real map.ini), plus the
+// summary/skip data. Neutralized directives (all throw INI_INVALID_DATA in the engine
+// parser on a data/install mismatch, which would abort the whole load):
+//   - RemoveModule <tag>  : tag not present on the template
+//   - ReplaceModule <tag> : tag not present on the template
+//   - a module block (Behavior/Draw/Body/ClientUpdate/ClientBehavior = <Name> <Tag>)
+//     naming a module <Name> this build's ModuleFactory doesn't know -- the whole block
+//     (header through its matching End) is blanked.
+static void sanitizeMapIni(const AsciiString &iniPath, MapIniScanResult &result)
+{
+	result.loadPath = iniPath;
+
 	FILE *fp = fopen(iniPath.str(), "rt");
 	if (fp == NULL)
-		return iniPath;	// let the real loader produce the error
+		return;	// let the real loader produce the error
 
 	std::string output;
 	Bool modified = false;
 
 	const ThingTemplate *curTemplate = NULL;
 	AsciiString curObjName;
+	Int curObjectIndex = -1;				// index into result.objects, or -1 (no object block)
 	std::vector<AsciiString> tagsAdded;		// tags introduced inside this block (AddModule headers)
-	std::vector<AsciiString> tagsRemoved;	// tags consumed by an earlier RemoveModule in this block
+	std::vector<AsciiString> tagsRemoved;	// tags consumed by an earlier Remove/Replace in this block
+
+	// When >0 we are inside a module block being blanked; blank lines through its End.
+	Int blankingModuleDepth = 0;
+	ModuleType curModuleType = MODULETYPE_BEHAVIOR;	// filled by isModuleHeader per line
 
 	char line[4096];
 	Int lineNum = 0;
@@ -214,23 +298,51 @@ static AsciiString sanitizeMapIni(const AsciiString &iniPath, std::vector<AsciiS
 		const char *tok3 = tok2 ? strtok(NULL, seps) : NULL;
 
 		Bool keep = true;
-		if (tok1 && tok2 && !hasEquals && strcmp(tok1, "Object") == 0)
+
+		// Blanking a doomed module block: swallow everything up to and including its End.
+		if (blankingModuleDepth > 0)
+		{
+			keep = false;
+			if (tok1 && strcmp(tok1, "End") == 0)
+				--blankingModuleDepth;
+		}
+		else if (tok1 && tok2 && !hasEquals && strcmp(tok1, "Object") == 0)
 		{
 			// block header ("Object <name>"; "Object = <name>" is a field elsewhere)
 			curObjName = tok2;
 			curTemplate = TheThingFactory ? TheThingFactory->findTemplate(curObjName, FALSE) : NULL;
-			if (curTemplate == NULL && TheThingFactory)
+			MapIniObjectDetail detail;
+			detail.name = curObjName;
+			detail.isNew = (curTemplate == NULL);
+			if (curTemplate != NULL)
 			{
-				// object defined by the map.ini itself: ThingFactory::newTemplate seeds it
-				// as a copy of DefaultThingTemplate, so those are the module tags a
-				// RemoveModule will actually see (ModuleTag_DefaultInactiveBody etc.)
-				curTemplate = TheThingFactory->findTemplate(AsciiString("DefaultThingTemplate"), FALSE);
+				result.overriddenNames.push_back(curObjName);
 			}
+			else
+			{
+				result.newNames.push_back(curObjName);
+				if (TheThingFactory)
+				{
+					// object defined by the map.ini itself: ThingFactory::newTemplate seeds it
+					// as a copy of DefaultThingTemplate, so those are the module tags a
+					// Remove/Replace will actually see (ModuleTag_DefaultInactiveBody etc.)
+					curTemplate = TheThingFactory->findTemplate(AsciiString("DefaultThingTemplate"), FALSE);
+				}
+			}
+			result.objects.push_back(detail);
+			curObjectIndex = (Int)result.objects.size() - 1;
 			tagsAdded.clear();
 			tagsRemoved.clear();
 		}
-		else if (tok1 && tok2 && strcmp(tok1, "RemoveModule") == 0)
+		else if (tok1 && tok2 &&
+				 (strcmp(tok1, "RemoveModule") == 0 || strcmp(tok1, "ReplaceModule") == 0))
 		{
+			++result.moduleEdits;
+			if (curObjectIndex >= 0) {
+				AsciiString ml;
+				ml.format("%s %s", tok1, tok2);
+				result.objects[curObjectIndex].moduleLines.push_back(ml);
+			}
 			AsciiString tag(tok2);
 			Bool present = false;
 			if (std::find(tagsRemoved.begin(), tagsRemoved.end(), tag) == tagsRemoved.end())
@@ -240,6 +352,10 @@ static AsciiString sanitizeMapIni(const AsciiString &iniPath, std::vector<AsciiS
 				else if (std::find(tagsAdded.begin(), tagsAdded.end(), tag) != tagsAdded.end())
 					present = true;
 			}
+			// ReplaceModule keeps a body (its replacement block follows through an End); if we
+			// drop the header we must also drop that body, so treat a doomed ReplaceModule as a
+			// module block to blank. RemoveModule is a single line.
+			Bool isReplace = (strcmp(tok1, "ReplaceModule") == 0);
 			if (present)
 			{
 				tagsRemoved.push_back(tag);
@@ -247,19 +363,74 @@ static AsciiString sanitizeMapIni(const AsciiString &iniPath, std::vector<AsciiS
 			else
 			{
 				keep = false;
+				if (isReplace)
+					blankingModuleDepth = 1;	// swallow the replacement body too
 				AsciiString warn;
-				warn.format("line %d: RemoveModule %s -- '%s' has no such module", lineNum, tok2,
+				warn.format("line %d: %s %s -- '%s' has no such module", lineNum, tok1, tok2,
 					curObjName.isEmpty() ? "(no object)" : curObjName.str());
-				skippedOut.push_back(warn);
+				result.skipped.push_back(warn);
+				// Mark the detail line we just recorded as skipped.
+				if (curObjectIndex >= 0 && !result.objects[curObjectIndex].moduleLines.empty()) {
+					AsciiString &last = result.objects[curObjectIndex].moduleLines.back();
+					last.concat(" [SKIPPED: no such module]");
+				}
 			}
 		}
-		else if (tok1 && tok3 &&
-				 (strcmp(tok1, "Behavior") == 0 || strcmp(tok1, "Draw") == 0 ||
-				  strcmp(tok1, "Body") == 0 || strcmp(tok1, "ClientUpdate") == 0 ||
-				  strcmp(tok1, "ClientBehavior") == 0))
+		else if (tok1 && tok3 && !hasEquals && isModuleHeader(tok1, &curModuleType))
 		{
-			// module header (e.g. under AddModule): its tag now exists for this block
-			tagsAdded.push_back(AsciiString(tok3));
+			// module header "Behavior <ModuleName> <Tag>" etc. (the "=" form is a field elsewhere).
+			++result.moduleEdits;
+			// Unknown module for this build -> the parser throws; blank the whole block.
+			if (TheModuleFactory && TheModuleFactory->findModuleInterfaceMask(AsciiString(tok2), curModuleType) == 0)
+			{
+				keep = false;
+				blankingModuleDepth = 1;
+				AsciiString warn;
+				warn.format("line %d: %s %s -- module type unknown to this build", lineNum, tok1, tok2);
+				result.skipped.push_back(warn);
+				if (curObjectIndex >= 0) {
+					AsciiString ml;
+					ml.format("Add %s %s (%s) [SKIPPED: unknown module]", tok1, tok2, tok3);
+					result.objects[curObjectIndex].moduleLines.push_back(ml);
+				}
+			}
+			else
+			{
+				tagsAdded.push_back(AsciiString(tok3));
+				if (curObjectIndex >= 0) {
+					AsciiString ml;
+					ml.format("Add %s %s (%s)", tok1, tok2, tok3);
+					result.objects[curObjectIndex].moduleLines.push_back(ml);
+				}
+			}
+		}
+		else if (tok1 && tok2 && !hasEquals && blankingModuleDepth == 0)
+		{
+			// Any other top-level "<Type> <Name>" block header -> tally it by store type for
+			// the summary breakdown (Weapon / Science / SpecialPower / FXList / Upgrade / ...).
+			// The module-header case above already consumed Behavior/Draw/etc., so what
+			// reaches here is a store block, not a nested module.
+			static const char *kStoreTypes[] = {
+				"Weapon", "Armor", "Science", "SpecialPower", "Upgrade", "FXList",
+				"ObjectCreationList", "ParticleSystem", "Locomotor", "DamageFX",
+				"CommandButton", "CommandSet", "WeatherData", "Water"
+			};
+			for (int s = 0; s < (int)(sizeof(kStoreTypes)/sizeof(kStoreTypes[0])); ++s)
+			{
+				if (strcmp(tok1, kStoreTypes[s]) == 0)
+				{
+					curObjectIndex = -1;	// left the Object block; module edits below aren't its
+					result.tallyStore(tok1);
+					// Overrides to these stores can't be cleanly torn down at runtime (see
+					// unloadMapIniOverrides); flag it so Reload can warn.
+					if (strcmp(tok1, "FXList") == 0 || strcmp(tok1, "ObjectCreationList") == 0 ||
+						strcmp(tok1, "Armor") == 0 || strcmp(tok1, "ParticleSystem") == 0)
+					{
+						result.hasUntearableOverrides = true;
+					}
+					break;
+				}
+			}
 		}
 
 		if (keep)
@@ -275,7 +446,7 @@ static AsciiString sanitizeMapIni(const AsciiString &iniPath, std::vector<AsciiS
 	fclose(fp);
 
 	if (!modified)
-		return iniPath;
+		return;
 
 	char tempDir[MAX_PATH];
 	::GetTempPathA(MAX_PATH, tempDir);
@@ -284,10 +455,10 @@ static AsciiString sanitizeMapIni(const AsciiString &iniPath, std::vector<AsciiS
 
 	FILE *out = fopen(tempPath.str(), "wt");
 	if (out == NULL)
-		return iniPath;	// can't write the temp copy; let the loader fail loudly
+		return;	// can't write the temp copy; let the loader fail loudly (loadPath stays iniPath)
 	fwrite(output.data(), 1, output.size(), out);
 	fclose(out);
-	return tempPath;
+	result.loadPath = tempPath;
 }
 
 // ----------------------------------------------------------------------------
@@ -299,16 +470,34 @@ static const WORD SCROLL_LOG_EDIT_ID = 1001;
 
 static INT_PTR CALLBACK scrollableInfoDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 {
+	static HFONT s_monoFont = NULL;
 	switch (msg)
 	{
 	case WM_INITDIALOG:
-		::SetDlgItemTextA(hDlg, SCROLL_LOG_EDIT_ID, (const char *)lParam);
+		{
+			// Monospace so the INI-formatted report (aligned "Object <name> ; tag" columns)
+			// lines up. Kept static and freed on WM_DESTROY.
+			s_monoFont = ::CreateFontA(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+				DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
+				FIXED_PITCH | FF_MODERN, "Consolas");
+			HWND edit = ::GetDlgItem(hDlg, SCROLL_LOG_EDIT_ID);
+			if (s_monoFont != NULL && edit != NULL)
+				::SendMessage(edit, WM_SETFONT, (WPARAM)s_monoFont, TRUE);
+			::SetDlgItemTextA(hDlg, SCROLL_LOG_EDIT_ID, (const char *)lParam);
+		}
 		return TRUE;
 	case WM_COMMAND:
 		if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
 		{
 			::EndDialog(hDlg, IDOK);
 			return TRUE;
+		}
+		break;
+	case WM_DESTROY:
+		if (s_monoFont != NULL)
+		{
+			::DeleteObject(s_monoFont);
+			s_monoFont = NULL;
 		}
 		break;
 	}
@@ -337,7 +526,7 @@ static void dlgAlign4(std::vector<BYTE> &buf)
 static void showScrollableInfoDialog(const char *title, const char *text)
 {
 	// fixed size in dialog units (~570x500 px at 8pt) -- fits any usable screen
-	const short DLG_W = 380, DLG_H = 250;
+	const short DLG_W = 520, DLG_H = 360;
 
 	std::vector<BYTE> buf;
 	buf.reserve(512);
@@ -397,6 +586,170 @@ static void showScrollableInfoDialog(const char *title, const char *text)
 		scrollableInfoDlgProc, (LPARAM)text);
 }
 
+// Per-map "load map.ini" preference, stored in the map folder's AdrianeMapSettings.ini
+// under [MapSettings] loadMapIni = ask|always|never (default ask). mapFilePath is the
+// full path to the .map; the setting file sits beside it.
+static AsciiString mapSettingsPathFor(const char *mapFilePath)
+{
+	char folder[_MAX_PATH];
+	strcpy(folder, mapFilePath ? mapFilePath : "");
+	char *lastSlash = strrchr(folder, '\\');
+	if (lastSlash)
+		*lastSlash = '\0';
+	AsciiString p;
+	p.format("%s\\AdrianeMapSettings.ini", folder);
+	return p;
+}
+
+static AsciiString readMapIniChoice(const char *mapFilePath)
+{
+	AsciiString settings = mapSettingsPathFor(mapFilePath);
+	char buffer[16] = {0};
+	GetPrivateProfileString("MapSettings", "loadMapIni", "ask", buffer, sizeof(buffer), settings.str());
+	return AsciiString(buffer);
+}
+
+static void writeMapIniChoice(const char *mapFilePath, const char *choice)
+{
+	AsciiString settings = mapSettingsPathFor(mapFilePath);
+	WritePrivateProfileString("MapSettings", "loadMapIni", choice, settings.str());
+}
+
+// Append a section of "Object <name>" lines under an INI-style ';' comment header,
+// mirroring map.ini's own syntax so the report reads like the file it came from. Each
+// line gets a trailing "; <tag>" note. Nothing is appended for an empty list.
+static void appendIniObjectSection(CString &msg, const char *header,
+	const std::vector<AsciiString> &names, const char *tag)
+{
+	if (names.empty())
+		return;
+	CString line;
+	line.Format("\r\n; %s (%d)\r\n", header, (Int)names.size());
+	msg += line;
+	for (size_t i = 0; i < names.size(); ++i) {
+		line.Format("Object %-40s ; %s\r\n", names[i].str(), tag);
+		msg += line;
+	}
+}
+
+// Load (or, for a dry-run "Check", parse-then-immediately-unload) a map.ini through the
+// sanitize + engine-parser pipeline. Shared by map-open, Reload and Check. On success
+// with installOverrides==true the overrides stay live and the WB object tree is rebuilt;
+// with installOverrides==false nothing sticks. reportOut is filled with a human summary
+// (counts + skipped directives, or the error) for the caller's info dialog. Returns true
+// if the map.ini parsed (even if directives were skipped), false on a hard parse error.
+static bool doLoadMapIni(const AsciiString &iniPath, bool installOverrides, CString &reportOut)
+{
+	MapIniScanResult scan;
+	sanitizeMapIni(iniPath, scan);
+
+	bool ok = false;
+	reportOut.Empty();
+
+	try {
+		INI ini;
+		ini.loadWB(scan.loadPath, INI_LOAD_CREATE_OVERRIDES, NULL);
+		g_mapiniloaded = true;	// overrides now exist; teardown paths must run
+
+		if (installOverrides) {
+			ObjectOptions::reprocessObjectList();
+			// The objects already placed in the map still hold render objects built from the
+			// OLD template data. Drop and rebuild them so the new map.ini overrides show in
+			// the viewport (== Troubleshooting > Refresh Scene Objects). Otherwise a Reload
+			// updates the object catalog but the map looks unchanged.
+			WbView3d *p3d = CWorldBuilderDoc::GetActive3DView();
+			if (p3d != NULL) {
+				p3d->resetRenderObjects();		// == OnRefreshSceneObjects
+				p3d->invalObjectInView(NULL);
+			}
+		} else {
+			// Dry run (Check): drop everything we just created.
+			unloadMapIniOverrides();
+		}
+		ok = true;
+
+		// The report is rendered in map.ini's own syntax: ';' comment headers with the
+		// touched objects/stores listed as they'd appear in the file.
+		CString msg;
+		msg.Format(
+			"; ==============================================================\r\n"
+			"; %s\r\n"
+			"; %d object(s) overridden, %d new object(s) defined, %d module edit(s)\r\n"
+			"; ==============================================================\r\n",
+			installOverrides ? "map.ini loaded" : "map.ini parses cleanly (no changes applied)",
+			scan.objectsOverridden(), scan.objectsNew(), scan.moduleEdits);
+
+		// Per-store breakdown of the non-Object data blocks touched, as commented lines.
+		if (!scan.storeCounts.empty()) {
+			msg += "\r\n; Data stores touched\r\n";
+			for (size_t i = 0; i < scan.storeCounts.size(); ++i) {
+				CString line;
+				line.Format(";   %-20s %d block(s)\r\n",
+					scan.storeCounts[i].first.str(), scan.storeCounts[i].second);
+				msg += line;
+			}
+		}
+
+		// Verbose (File > Map.ini > Verbose report): show each object as an INI block with
+		// its per-module edits inside it, mirroring how the change reads in the file itself.
+		const bool verbose = (::AfxGetApp()->GetProfileInt("MapIni", "VerboseReport", 0) != 0);
+		if (verbose) {
+			for (size_t i = 0; i < scan.objects.size(); ++i) {
+				const MapIniObjectDetail &o = scan.objects[i];
+				CString hdr;
+				hdr.Format("\r\nObject %s   ; %s\r\n", o.name.str(), o.isNew ? "new" : "overridden");
+				msg += hdr;
+				for (size_t m = 0; m < o.moduleLines.size(); ++m) {
+					msg += "    ";
+					msg += o.moduleLines[m].str();
+					msg += "\r\n";
+				}
+				msg += "End\r\n";
+			}
+		} else {
+			// The objects, as "Object <name>" lines like the file itself.
+			appendIniObjectSection(msg, "Objects overridden", scan.overriddenNames, "overridden");
+			appendIniObjectSection(msg, "New objects defined", scan.newNames, "new");
+		}
+
+		if (!scan.skipped.empty()) {
+			msg += "\r\n; ----- Skipped (don't match the installed game data) -----\r\n";
+			for (size_t i = 0; i < scan.skipped.size(); ++i) {
+				msg += ";   ";
+				msg += scan.skipped[i].str();
+				msg += "\r\n";
+			}
+			msg += "; (The game itself would refuse to load this map.ini.)\r\n";
+		}
+		if (installOverrides && scan.hasUntearableOverrides) {
+			msg += "\r\n; Note: this map.ini overrides FXList / ObjectCreationList / Armor /\r\n"
+				"; ParticleSystem data. Those can't be cleanly reloaded -- reopen the map\r\n"
+				"; to fully reset them.\r\n";
+		}
+		reportOut = msg;
+	}
+	catch (const INIException &e) {
+		// A hard parse error must not take down the editor: strip any partial overrides.
+		g_mapiniloaded = true;	// so the teardown actually runs
+		unloadMapIniOverrides();
+		reportOut.Format("The map.ini could not be loaded and has been skipped:\r\n\r\n%s\r\n"
+			"The map will open without its map.ini overrides.",
+			e.mFailureMessage ? e.mFailureMessage : "Unknown INI error.");
+	}
+	catch (...) {
+		g_mapiniloaded = true;
+		unloadMapIniOverrides();
+		reportOut = "The map.ini could not be loaded and has been skipped (unknown INI error).\r\n"
+			"The map will open without its map.ini overrides.";
+	}
+
+	// Clean up the sanitized temp copy, if one was made.
+	if (strcmp(scan.loadPath.str(), iniPath.str()) != 0)
+		::DeleteFileA(scan.loadPath.str());
+
+	return ok;
+}
+
 static bool secondGreaterThan(const std::pair<AsciiString, Int>& __t1, const std::pair<AsciiString, Int>& __t2)
 {
 	return __t1.second > __t2.second;
@@ -427,6 +780,12 @@ BEGIN_MESSAGE_MAP(CWorldBuilderDoc, CDocument)
 #endif
 	
 	ON_COMMAND(ID_FILE_GENERATE_MAPSTRNINI, OnGenerateMapStrAndIni)
+	ON_COMMAND(ID_FILE_RELOAD_MAPINI, OnReloadMapIni)
+	ON_COMMAND(ID_FILE_CHECK_MAPINI, OnCheckMapIni)
+	ON_COMMAND(ID_FILE_WATCH_MAPINI, OnToggleWatchMapIni)
+	ON_UPDATE_COMMAND_UI(ID_FILE_WATCH_MAPINI, OnUpdateWatchMapIni)
+	ON_COMMAND(ID_FILE_VERBOSE_MAPINI, OnToggleVerboseMapIni)
+	ON_UPDATE_COMMAND_UI(ID_FILE_VERBOSE_MAPINI, OnUpdateVerboseMapIni)
 	ON_COMMAND(ID_FILE_WBSETTINGS, OnOpenWorldbuilderSettings)
 	ON_COMMAND(ID_FILE_AUTOSAVEFOLDER, OnJumpToAutoSaveFolder)
 	ON_COMMAND(ID_FILE_JUMPTOFOLDER, OnJumpToMapFolder)
@@ -478,11 +837,17 @@ CWorldBuilderDoc::CWorldBuilderDoc() :
 	m_numWaypointLinks(0),
 	m_waypointTableNeedsUpdate(true),
 	m_linkCenters(true),
-	m_disableMapPrevGeneration(false)
+	m_disableMapPrevGeneration(false),
+	m_watchMapIni(false)
 {
+	memset(&m_mapIniLastWrite, 0, sizeof(m_mapIniLastWrite));
+
 	// The old @todo "get from pref": undo depth is a setting now (Entity Finder >
 	// Visual Settings), persisted as [MainFrame] MaxUndos.
 	setMaxUndos(::AfxGetApp()->GetProfileInt("MainFrame", "MaxUndos", MAX_UNDOS));
+
+	// Auto-reload map.ini watch: app-global toggle in WorldBuilder.ini.
+	m_watchMapIni = (::AfxGetApp()->GetProfileInt("MapIni", "AutoWatch", 0) != 0);
 
     // Attempt to read AdrianeMapSettings.ini here
     if (!m_strPathName.IsEmpty()) {
@@ -1184,6 +1549,124 @@ void CWorldBuilderDoc::validate(void)
 	if (needToFixTeams) {
 		AfxMessageBox(IDS_NEED_TO_FIX_TEAMS, MB_OK|MB_ICONERROR);
 	}
+}
+
+// Build "<map folder>\map.ini" from the current document path; empty if no map is open.
+static AsciiString currentMapIniPath(const CString &mapPathName)
+{
+	if (mapPathName.IsEmpty())
+		return AsciiString::TheEmptyString;
+	AsciiString iniPath = (LPCTSTR)mapPathName;
+	while (iniPath.getLength() && iniPath.getCharAt(iniPath.getLength()-1) != '\\')
+		iniPath.removeLastChar();
+	iniPath.concat("map.ini");
+	return iniPath;
+}
+
+// File > Map.ini > Reload map.ini: unload the current overrides and re-run the loader,
+// without reopening the map. Object/Weapon/Science/SpecialPower/Water reload cleanly;
+// the report warns if the file also touches stores that can't be cleanly torn down.
+void CWorldBuilderDoc::OnReloadMapIni()
+{
+	AsciiString iniPath = currentMapIniPath(m_strPathName);
+	if (iniPath.isEmpty()) {
+		AfxMessageBox("Save or open a map first.", MB_ICONEXCLAMATION | MB_OK);
+		return;
+	}
+	if (!TheFileSystem->doesFileExist(iniPath.str())) {
+		AfxMessageBox("This map has no map.ini file to reload.", MB_ICONINFORMATION | MB_OK);
+		return;
+	}
+	unloadMapIniOverrides();
+	CString report;
+	doLoadMapIni(iniPath, /*installOverrides=*/true, report);
+	if (!report.IsEmpty())
+		showScrollableInfoDialog("Reload map.ini", report);
+}
+
+// File > Map.ini > Check map.ini: parse the map.ini and report validity + a summary,
+// WITHOUT installing any overrides (dry run) -- lets a mapper vet a file before loading.
+void CWorldBuilderDoc::OnCheckMapIni()
+{
+	AsciiString iniPath = currentMapIniPath(m_strPathName);
+	if (iniPath.isEmpty()) {
+		AfxMessageBox("Save or open a map first.", MB_ICONEXCLAMATION | MB_OK);
+		return;
+	}
+	if (!TheFileSystem->doesFileExist(iniPath.str())) {
+		AfxMessageBox("This map has no map.ini file to check.", MB_ICONINFORMATION | MB_OK);
+		return;
+	}
+	// Overrides may already be live from the open-time load; drop them so the dry run
+	// starts clean and leaves nothing changed afterward.
+	unloadMapIniOverrides();
+	CString report;
+	doLoadMapIni(iniPath, /*installOverrides=*/false, report);
+	showScrollableInfoDialog("Check map.ini", report);
+}
+
+// Read <map folder>\map.ini's last-write time into out; false if it can't be stat'd.
+static bool getMapIniWriteTime(const AsciiString &iniPath, FILETIME *out)
+{
+	WIN32_FILE_ATTRIBUTE_DATA fad;
+	if (!::GetFileAttributesExA(iniPath.str(), GetFileExInfoStandard, &fad))
+		return false;
+	*out = fad.ftLastWriteTime;
+	return true;
+}
+
+// File > Map.ini > Auto-reload map.ini on change: toggle the watch. When turned on we
+// snapshot the current mtime so only real edits (not the enabling click) trigger a reload.
+// Persisted in WorldBuilder.ini [MapIni] AutoWatch. CMainFrame's timer calls pollMapIniWatch.
+void CWorldBuilderDoc::OnToggleWatchMapIni()
+{
+	m_watchMapIni = !m_watchMapIni;
+	::AfxGetApp()->WriteProfileInt("MapIni", "AutoWatch", m_watchMapIni ? 1 : 0);
+	if (m_watchMapIni) {
+		AsciiString iniPath = currentMapIniPath(m_strPathName);
+		if (!iniPath.isEmpty())
+			getMapIniWriteTime(iniPath, &m_mapIniLastWrite);
+	}
+}
+
+void CWorldBuilderDoc::OnUpdateWatchMapIni(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(m_watchMapIni ? 1 : 0);
+}
+
+// File > Map.ini > Verbose report: when on, the load/check report lists each object as an
+// INI block with its per-module edits inside. App-global toggle in WorldBuilder.ini.
+void CWorldBuilderDoc::OnToggleVerboseMapIni()
+{
+	int now = ::AfxGetApp()->GetProfileInt("MapIni", "VerboseReport", 0) ? 0 : 1;
+	::AfxGetApp()->WriteProfileInt("MapIni", "VerboseReport", now);
+}
+
+void CWorldBuilderDoc::OnUpdateVerboseMapIni(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(::AfxGetApp()->GetProfileInt("MapIni", "VerboseReport", 0) ? 1 : 0);
+}
+
+// Called from CMainFrame's timer. When watching, reload the moment map.ini's mtime
+// advances (external editor saved it). Silent on success; only surfaces errors.
+void CWorldBuilderDoc::pollMapIniWatch()
+{
+	if (!m_watchMapIni)
+		return;
+	AsciiString iniPath = currentMapIniPath(m_strPathName);
+	if (iniPath.isEmpty() || !TheFileSystem->doesFileExist(iniPath.str()))
+		return;
+	FILETIME now;
+	if (!getMapIniWriteTime(iniPath, &now))
+		return;
+	if (::CompareFileTime(&now, &m_mapIniLastWrite) == 0)
+		return;	// unchanged
+	m_mapIniLastWrite = now;
+	unloadMapIniOverrides();
+	CString report;
+	bool ok = doLoadMapIni(iniPath, /*installOverrides=*/true, report);
+	if (!ok)	// only interrupt the mapper on a hard error
+		showScrollableInfoDialog("Auto-reload map.ini", report);
 }
 
 void CWorldBuilderDoc::OnJumpToMapFolder()
@@ -2493,76 +2976,48 @@ BOOL CWorldBuilderDoc::OnOpenDocument(LPCTSTR lpszPathName)
 	if (TheFileSystem->doesFileExist(iniPath.str())) {
 		DEBUG_LOG(("Map.ini file detected at [%s]\n", iniPath.str()));
 
-		MessageBeep(MB_ICONWARNING);
-		
-		int res = MessageBox(
-			NULL,
-			"A Map.ini file has been detected!\n\n"
-			"Do you want to load it?\n\n"
-			"Warning: This feature is currently in beta. The parser logic is taken directly from the game, "
-			"which may contain its own bugs. The loaded data will remain in memory until World Builder is restarted.",
-			"Map.ini Loader (Beta)",
-			MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON1
-		);
+		// Per-map remembered choice ([MapSettings] loadMapIni = ask|always|never in the
+		// map folder's AdrianeMapSettings.ini). Default "ask" preserves the beta prompt.
+		AsciiString choice = readMapIniChoice(lpszPathName);
 
-		if (res == IDYES) {
-			DEBUG_LOG(("Loading map.ini from [%s]\n", iniPath.str()));
-
-			// strip RemoveModule directives that don't match the installed game data
-			// (they are fatal in the engine parser) and load the rest
-			std::vector<AsciiString> skippedDirectives;
-			AsciiString loadPath = sanitizeMapIni(iniPath, skippedDirectives);
-
-			try {
-				INI ini;
-				// ini.loadObjectsOnly(iniPath, NULL);
-				ini.loadWB(loadPath, INI_LOAD_CREATE_OVERRIDES, NULL);
-
-				ObjectOptions::reprocessObjectList();
-
-				g_mapiniloaded = true;
-
-				if (!skippedDirectives.empty()) {
-					CString msg =
-						"map.ini loaded, but some directives don't match the installed game data "
-						"and were skipped:\r\n\r\n";
-					for (size_t i = 0; i < skippedDirectives.size(); ++i) {
-						msg += skippedDirectives[i].str();
-						msg += "\r\n";
-					}
-					msg += "\r\n(The game itself would refuse to load this map.ini.)";
-					showScrollableInfoDialog("Map.ini Loader (Beta)", msg);
+		bool doLoad = false;
+		if (choice == "always") {
+			doLoad = true;
+		} else if (choice == "never") {
+			DEBUG_LOG(("map.ini load skipped (remembered 'never' for this map)\n"));
+		} else {
+			MessageBeep(MB_ICONWARNING);
+			int res = MessageBox(
+				NULL,
+				"A Map.ini file has been detected!\n\n"
+				"Do you want to load it?\n\n"
+				"Warning: This feature is currently in beta. The parser logic is taken directly from the game, "
+				"which may contain its own bugs. The loaded data will remain in memory until World Builder is restarted.",
+				"Map.ini Loader (Beta)",
+				MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON1
+			);
+			doLoad = (res == IDYES);
+			if (doLoad) {
+				// Offer to remember the choice for this map so the prompt stops nagging.
+				if (::MessageBox(NULL,
+						"Always load this map's map.ini from now on (no prompt)?",
+						"Map.ini Loader (Beta)", MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) == IDYES) {
+					writeMapIniChoice(lpszPathName, "always");
 				}
 			}
-			catch (const INIException &e) {
-				// A bad map.ini (e.g. RemoveModule for a tag the local game data doesn't
-				// have) must not take down the editor. Strip whatever overrides were
-				// created before the error and open the map without map.ini.
-				g_mapiniloaded = true;	// so the teardown below actually runs
-				unloadMapIniOverrides();
-
-				CString msg;
-				msg.Format("The map.ini could not be loaded and has been skipped:\n\n%s\n"
-					"The map will open without its map.ini overrides.",
-					e.mFailureMessage ? e.mFailureMessage : "Unknown INI error.");
-				::MessageBox(NULL, msg, "Map.ini Loader (Beta)", MB_OK | MB_ICONWARNING);
-			}
-			catch (...) {
-				g_mapiniloaded = true;	// so the teardown below actually runs
-				unloadMapIniOverrides();
-
-				::MessageBox(NULL,
-					"The map.ini could not be loaded and has been skipped (unknown INI error).\n"
-					"The map will open without its map.ini overrides.",
-					"Map.ini Loader (Beta)", MB_OK | MB_ICONWARNING);
-			}
-
-			if (strcmp(loadPath.str(), iniPath.str()) != 0)
-				::DeleteFileA(loadPath.str());
 		}
-		else {
-			DEBUG_LOG(("User chose not to load map.ini\n"));
+
+		if (doLoad) {
+			DEBUG_LOG(("Loading map.ini from [%s]\n", iniPath.str()));
+			CString report;
+			doLoadMapIni(iniPath, /*installOverrides=*/true, report);
+			if (!report.IsEmpty())
+				showScrollableInfoDialog("Map.ini Loader (Beta)", report);
 		}
+
+		// Baseline the watch mtime whether or not we loaded, so a later external edit is
+		// detected relative to the file as it is now.
+		getMapIniWriteTime(iniPath, &m_mapIniLastWrite);
 	}
 
 	WbApp()->setCurrentDirectory(AsciiString(buf));

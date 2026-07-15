@@ -993,6 +993,14 @@ void CMainFrame::OnTimer(UINT nIDEvent)
     }
 	if (nIDEvent == COUNTDOWN_TIMER) // UI update timer
 	{
+		// Auto-reload map.ini watch (File > Map.ini > Auto-reload): reloads when the file
+		// changes on disk. No-op unless the toggle is on; the 1s tick is fine here.
+		{
+			CWorldBuilderDoc* pWatchDoc = CWorldBuilderDoc::GetActiveDoc();
+			if (pWatchDoc)
+				pWatchDoc->pollMapIniWatch();
+		}
+
 		CTime currentTime = CTime::GetCurrentTime();
 		CTimeSpan diff = m_nextAutoSaveTime - currentTime;
 		double secondsRemaining = diff.GetTotalSeconds();
