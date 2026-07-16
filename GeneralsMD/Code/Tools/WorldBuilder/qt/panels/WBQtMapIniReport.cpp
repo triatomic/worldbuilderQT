@@ -17,6 +17,8 @@
 #include <QTreeWidgetItem>
 #include <QVBoxLayout>
 
+#include "WBQtTreeStyle.h"
+
 // Stage 1 phase 3: the parent for a modal Qt dialog (active modal if nested, else the
 // main window). Defined in WBQtBridge.cpp.
 QWidget *WBQt_DialogParent(void);
@@ -28,8 +30,11 @@ QWidget *WBQt_DialogParent(void);
 
 namespace
 {
-	// A ';' comment line that names a section (not the ==== banner rule, not an indented
-	// detail comment). These become the collapsible top-level nodes.
+	// A ';' comment line that names a section (not the ==== banner rule, not a detail
+	// comment). These become the collapsible top-level nodes. The producer (doLoadMapIni)
+	// writes section headers as "; Text" (a single space after the ';') and detail /
+	// continuation comments as ";   text" (two or more spaces), so the space run after
+	// the ';' is the discriminator.
 	bool isSectionHeader(const QString &line)
 	{
 		QString t = line.trimmed();
@@ -37,17 +42,19 @@ namespace
 		{
 			return false;
 		}
-		// Drop the leading ';' and surrounding space/dashes.
-		QString body = t.mid(1).trimmed();
+		QString rest = t.mid(1);		// after the ';', spacing intact
+		QString body = rest.trimmed();
 		if (body.isEmpty())
 		{
 			return false;
 		}
-		// The banner rule is all '='; an indented store/skip line starts lower-case-ish
-		// detail. Treat a comment that begins with an uppercase word or "-----" as a header.
 		if (body.startsWith('='))
 		{
 			return false;	// banner rule
+		}
+		if (rest.startsWith(QLatin1String("  ")))
+		{
+			return false;	// ";   detail" line -> child of the current section
 		}
 		return true;
 	}
@@ -87,6 +94,7 @@ WBQtMapIniReportDialog::WBQtMapIniReportDialog(const QString &title, const QStri
 	m_tree->setSelectionMode(QAbstractItemView::ExtendedSelection);
 	QFont mono = QFontDatabase::systemFont(QFontDatabase::FixedFont);
 	m_tree->setFont(mono);
+	WBQtTreeStyle::applyTreeLines(m_tree);	// MFC-style branch lines, like every other WB tree
 	root->addWidget(m_tree, 1);
 
 	buildTree(text);
@@ -212,13 +220,17 @@ static bool filterItem(QTreeWidgetItem *item, const QString &needle, bool forced
 	for (int c = 0; c < item->childCount(); ++c)
 	{
 		if (filterItem(item->child(c), needle, selfMatch))
+		{
 			anyChildShown = true;
+		}
 	}
 
 	bool visible = selfMatch || anyChildShown;
 	item->setHidden(!visible);
 	if (!needle.isEmpty() && anyChildShown)
+	{
 		item->setExpanded(true);
+	}
 	return visible;
 }
 
@@ -226,7 +238,9 @@ void WBQtMapIniReportDialog::onFilterChanged(const QString &text)
 {
 	QString needle = text.trimmed();
 	for (int s = 0; s < m_tree->topLevelItemCount(); ++s)
+	{
 		filterItem(m_tree->topLevelItem(s), needle, false);
+	}
 }
 
 void WBQtMapIniReportDialog::onExpandAll()

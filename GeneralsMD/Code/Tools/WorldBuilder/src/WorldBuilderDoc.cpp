@@ -533,8 +533,9 @@ static int showScrollableInfoDialog(const char *title, const char *text, bool ap
 	// Prefer the native Qt report viewer (resizable, filter, collapsible sections, Copy,
 	// and OK/Cancel in apply mode). Falls through to the MFC path only when Qt is not up.
 	int qrc = WBQtMapIniReport_Show(title, text, applyMode ? 1 : 0);
-	if (qrc != 0)
+	if (qrc != 0) {
 		return qrc;	// 2 = accepted, 1 = cancelled
+	}
 #endif
 
 	// MFC fallback: an apply-mode report can't host OK/Cancel in the read-only viewer, so
@@ -600,8 +601,9 @@ static int showScrollableInfoDialog(const char *title, const char *text, bool ap
 		scrollableInfoDlgProc, (LPARAM)text);
 
 	if (applyMode) {
-		// The MFC viewer has no OK/Cancel; confirm with a follow-up prompt.
-		int res = ::MessageBox(NULL, "Load this map.ini's overrides?", "Map.ini Loader",
+		// The MFC viewer has no OK/Cancel; confirm with a follow-up prompt. AfxMessageBox
+		// parents to the main window (and routes through the Qt bridge when Qt is up).
+		int res = AfxMessageBox("Load this map.ini's overrides?",
 			MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON1);
 		return (res == IDYES) ? 2 : 1;
 	}
@@ -614,37 +616,63 @@ static int showScrollableInfoDialog(const char *title, const char *text, bool ap
 // AdrianeMapSettings.ini file, and no "never" state -- unlisted simply means "ask".)
 #define MAPLOADER_SECTION "MapLoaderIni"
 
-// Is mapFilePath in the always-load list? Scans AlwaysLoad1.. until the first gap.
+// The list has no removal UI, so revoking an entry means hand-editing WorldBuilder.ini --
+// which easily leaves numbering gaps. Tolerate them: keep scanning past empty slots and
+// only stop after this many empties in a row.
+#define MAPLOADER_GAP_RUN 20
+
+// Is mapFilePath in the always-load list?
 static bool isMapIniAlwaysLoad(const char *mapFilePath)
 {
-	if (mapFilePath == NULL || *mapFilePath == 0)
+	if (mapFilePath == NULL || *mapFilePath == 0) {
 		return false;
+	}
 	CString want(mapFilePath);
-	for (int i = 1; ; ++i) {
+	int emptyRun = 0;
+	for (int i = 1; emptyRun < MAPLOADER_GAP_RUN; ++i) {
 		CString key;
 		key.Format("AlwaysLoad%d", i);
 		CString val = ::AfxGetApp()->GetProfileString(MAPLOADER_SECTION, key, "");
-		if (val.IsEmpty())
-			return false;	// first gap -> end of list
-		if (val.CompareNoCase(want) == 0)
+		if (val.IsEmpty()) {
+			++emptyRun;	// gap (hand-edited entry removed); keep scanning a while
+			continue;
+		}
+		emptyRun = 0;
+		if (val.CompareNoCase(want) == 0) {
 			return true;
+		}
 	}
+	return false;
 }
 
-// Append mapFilePath to the always-load list (no-op if already present).
+// Append mapFilePath to the always-load list (no-op if already present). One walk does
+// both jobs: the duplicate check and finding the first free slot to write into.
 static void addMapIniAlwaysLoad(const char *mapFilePath)
 {
-	if (mapFilePath == NULL || *mapFilePath == 0 || isMapIniAlwaysLoad(mapFilePath))
+	if (mapFilePath == NULL || *mapFilePath == 0) {
 		return;
-	int slot = 1;
-	for (; ; ++slot) {
+	}
+	CString want(mapFilePath);
+	int firstFree = 0;
+	int emptyRun = 0;
+	for (int i = 1; emptyRun < MAPLOADER_GAP_RUN; ++i) {
 		CString key;
-		key.Format("AlwaysLoad%d", slot);
-		if (::AfxGetApp()->GetProfileString(MAPLOADER_SECTION, key, "").IsEmpty())
-			break;	// first free slot
+		key.Format("AlwaysLoad%d", i);
+		CString val = ::AfxGetApp()->GetProfileString(MAPLOADER_SECTION, key, "");
+		if (val.IsEmpty()) {
+			if (firstFree == 0) {
+				firstFree = i;	// remember the first free slot while we scan
+			}
+			++emptyRun;
+			continue;
+		}
+		emptyRun = 0;
+		if (val.CompareNoCase(want) == 0) {
+			return;	// already listed
+		}
 	}
 	CString key;
-	key.Format("AlwaysLoad%d", slot);
+	key.Format("AlwaysLoad%d", firstFree);	// the loop can only end on an empty run
 	::AfxGetApp()->WriteProfileString(MAPLOADER_SECTION, key, mapFilePath);
 }
 
@@ -716,14 +744,19 @@ static bool doLoadMapIni(const AsciiString &iniPath, MapIniLoadMode mode, CStrin
 		ok = true;
 
 		// The report is rendered in map.ini's own syntax: ';' comment headers with the
-		// touched objects/stores listed as they'd appear in the file.
+		// touched objects/stores listed as they'd appear in the file. Convention shared
+		// with the Qt viewer: "; Text" = a section header, ";   text" = a detail line.
+		const char *banner =
+			(mode == MAPINI_DRYRUN)  ? "map.ini parses cleanly (no changes applied)" :
+			(mode == MAPINI_CONFIRM) ? "map.ini preview -- OK applies it, Cancel discards it" :
+									   "map.ini loaded";
 		CString msg;
 		msg.Format(
 			"; ==============================================================\r\n"
 			"; %s\r\n"
 			"; %d object(s) overridden, %d new object(s) defined, %d module edit(s)\r\n"
 			"; ==============================================================\r\n",
-			installOverrides ? "map.ini loaded" : "map.ini parses cleanly (no changes applied)",
+			banner,
 			scan.objectsOverridden(), scan.objectsNew(), scan.moduleEdits);
 
 		// Per-store breakdown of the non-Object data blocks touched, as commented lines.
@@ -766,12 +799,11 @@ static bool doLoadMapIni(const AsciiString &iniPath, MapIniLoadMode mode, CStrin
 				msg += scan.skipped[i].str();
 				msg += "\r\n";
 			}
-			msg += "; (The game itself would refuse to load this map.ini.)\r\n";
+			msg += ";   (The game itself would refuse to load this map.ini.)\r\n";
 		}
 		if (installOverrides && scan.hasUntearableOverrides) {
-			msg += "\r\n; Note: this map.ini overrides FXList / ObjectCreationList / Armor /\r\n"
-				"; ParticleSystem data. Those can't be cleanly reloaded -- reopen the map\r\n"
-				"; to fully reset them.\r\n";
+			msg += "\r\n; Note: FXList / ObjectCreationList / Armor / ParticleSystem overrides\r\n"
+				";   can't be cleanly reloaded -- reopen the map to fully reset them.\r\n";
 		}
 		reportOut = msg;
 	}
@@ -797,16 +829,66 @@ static bool doLoadMapIni(const AsciiString &iniPath, MapIniLoadMode mode, CStrin
 	return ok;
 }
 
+// True while a map.ini prompt/preview flow is on the stack. Its modal dialogs pump
+// messages, which dispatches CMainFrame's timer -- pollMapIniWatch must not swap the
+// override state underneath a pending confirm (see the guard there).
+static bool s_mapIniPromptPending = false;
+
+// Sets s_mapIniPromptPending for the enclosing scope (safe across every return), and
+// restores the previous value on exit so nested scopes (OnOpenDocument wraps
+// confirmAndLoadMapIni) don't clear the flag early.
+struct MapIniPromptScope
+{
+	bool m_prev;
+	MapIniPromptScope() : m_prev(s_mapIniPromptPending) { s_mapIniPromptPending = true; }
+	~MapIniPromptScope() { s_mapIniPromptPending = m_prev; }
+};
+
 // Parse the map.ini, show its report with OK/Cancel, and apply the overrides only if the
 // user clicks OK. On Cancel (or a hard parse error) nothing is left installed. Used by
 // map-open and Reload. Returns true if the overrides were applied.
 static bool confirmAndLoadMapIni(const AsciiString &iniPath, const char *title)
 {
+	MapIniPromptScope promptScope;
+
+	// FXList / OCL / Armor / ParticleSystem overrides can't be torn down once parsed
+	// (see unloadMapIniOverrides), so a preview's Cancel could not fully undo them.
+	// For a file touching those stores, ask BEFORE parsing -- declining must leave the
+	// engine stores completely untouched.
+	{
+		MapIniScanResult probe;
+		sanitizeMapIni(iniPath, probe);
+		if (strcmp(probe.loadPath.str(), iniPath.str()) != 0) {
+			::DeleteFileA(probe.loadPath.str());	// probe only; doLoadMapIni re-sanitizes
+		}
+		if (probe.hasUntearableOverrides) {
+			int res = AfxMessageBox(
+				"This map.ini overrides FXList / ObjectCreationList / Armor /\n"
+				"ParticleSystem data, which can't be undone without reopening the map,\n"
+				"so it can't be previewed first.\n\nLoad this map.ini?",
+				MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON1);
+			if (res != IDYES) {
+				// Never parsed. Refresh anyway: Reload dropped the old overrides first.
+				refreshMapIniViewport();
+				return false;
+			}
+			CString report;
+			bool ok = doLoadMapIni(iniPath, MAPINI_INSTALL, report);
+			showScrollableInfoDialog(title, report, /*applyMode=*/false);
+			if (!ok) {
+				refreshMapIniViewport();
+			}
+			return ok;
+		}
+	}
+
 	CString report;
 	bool parsed = doLoadMapIni(iniPath, MAPINI_CONFIRM, report);
 	if (!parsed) {
-		// Hard error: doLoadMapIni already unloaded the partial overrides. Just show why.
+		// Hard error: doLoadMapIni already unloaded the partial overrides. Show why, and
+		// re-sync the catalog/viewport with the reverted stores.
 		showScrollableInfoDialog(title, report, /*applyMode=*/false);
+		refreshMapIniViewport();
 		return false;
 	}
 	// Overrides are installed but the viewport hasn't refreshed yet. Let the user decide.
@@ -816,6 +898,7 @@ static bool confirmAndLoadMapIni(const AsciiString &iniPath, const char *title)
 		return true;
 	}
 	unloadMapIniOverrides();		// cancel: discard everything the parse created
+	refreshMapIniViewport();		// ...and re-sync the catalog/viewport with the reverted stores
 	return false;
 }
 
@@ -849,6 +932,7 @@ BEGIN_MESSAGE_MAP(CWorldBuilderDoc, CDocument)
 #endif
 	
 	ON_COMMAND(ID_FILE_GENERATE_MAPSTRNINI, OnGenerateMapStrAndIni)
+	ON_COMMAND(ID_FILE_OPEN_MAPINI, OnOpenMapIni)
 	ON_COMMAND(ID_FILE_RELOAD_MAPINI, OnReloadMapIni)
 	ON_COMMAND(ID_FILE_CHECK_MAPINI, OnCheckMapIni)
 	ON_COMMAND(ID_FILE_WATCH_MAPINI, OnToggleWatchMapIni)
@@ -1632,6 +1716,32 @@ static AsciiString currentMapIniPath(const CString &mapPathName)
 	return iniPath;
 }
 
+// File > Map.ini > Open map.ini: open the map's map.ini in whatever program Windows has
+// registered for .ini files (pairs with Auto-reload for an edit-save-see loop). Offers to
+// create an empty map.ini first if the map doesn't have one yet.
+void CWorldBuilderDoc::OnOpenMapIni()
+{
+	AsciiString iniPath = currentMapIniPath(m_strPathName);
+	if (iniPath.isEmpty()) {
+		AfxMessageBox("Save or open a map first.", MB_ICONEXCLAMATION | MB_OK);
+		return;
+	}
+	if (!TheFileSystem->doesFileExist(iniPath.str())) {
+		if (AfxMessageBox("This map has no map.ini yet. Create an empty one and open it?",
+				MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON1) != IDYES) {
+			return;
+		}
+		FILE *fp = fopen(iniPath.str(), "wt");
+		if (fp == NULL) {
+			AfxMessageBox("Couldn't create the map.ini file (is the map folder writable?).",
+				MB_ICONEXCLAMATION | MB_OK);
+			return;
+		}
+		fclose(fp);
+	}
+	::ShellExecute(NULL, "open", iniPath.str(), NULL, NULL, SW_SHOW);
+}
+
 // File > Map.ini > Reload map.ini: unload the current overrides and re-run the loader,
 // without reopening the map. Object/Weapon/Science/SpecialPower/Water reload cleanly;
 // the report warns if the file also touches stores that can't be cleanly torn down.
@@ -1718,24 +1828,35 @@ void CWorldBuilderDoc::OnUpdateVerboseMapIni(CCmdUI* pCmdUI)
 // advances (external editor saved it). Silent on success; only surfaces errors.
 void CWorldBuilderDoc::pollMapIniWatch()
 {
-	if (!m_watchMapIni)
+	if (!m_watchMapIni) {
 		return;
+	}
+	if (s_mapIniPromptPending) {
+		// A map.ini prompt/preview is pumping messages right now (its modal loop
+		// dispatches this timer). Don't swap the override state underneath it -- the
+		// mtime stays un-baselined, so the edit is picked up on the next tick instead.
+		return;
+	}
 	AsciiString iniPath = currentMapIniPath(m_strPathName);
-	if (iniPath.isEmpty() || !TheFileSystem->doesFileExist(iniPath.str()))
+	if (iniPath.isEmpty() || !TheFileSystem->doesFileExist(iniPath.str())) {
 		return;
+	}
 	FILETIME now;
-	if (!getMapIniWriteTime(iniPath, &now))
+	if (!getMapIniWriteTime(iniPath, &now)) {
 		return;
-	if (::CompareFileTime(&now, &m_mapIniLastWrite) == 0)
+	}
+	if (::CompareFileTime(&now, &m_mapIniLastWrite) == 0) {
 		return;	// unchanged
+	}
 	m_mapIniLastWrite = now;
 	// Auto-reload applies straight away (no confirm dialog -- the mapper's own save is the
 	// intent); only interrupt them on a hard parse error.
 	unloadMapIniOverrides();
 	CString report;
 	bool ok = doLoadMapIni(iniPath, MAPINI_INSTALL, report);
-	if (!ok)
+	if (!ok) {
 		showScrollableInfoDialog("Auto-reload map.ini", report, /*applyMode=*/false);
+	}
 }
 
 void CWorldBuilderDoc::OnJumpToMapFolder()
@@ -3045,14 +3166,19 @@ BOOL CWorldBuilderDoc::OnOpenDocument(LPCTSTR lpszPathName)
 	if (TheFileSystem->doesFileExist(iniPath.str())) {
 		DEBUG_LOG(("Map.ini file detected at [%s]\n", iniPath.str()));
 
+		// The whole block runs before MFC's SetPathName, so m_strPathName still holds the
+		// PREVIOUS map -- keep pollMapIniWatch out while our dialogs pump messages.
+		MapIniPromptScope promptScope;
+
 		// Global always-load list ([MapLoaderIni] in WorldBuilder.ini). A listed map loads
 		// silently; any other map is previewed in the report dialog first.
 		if (isMapIniAlwaysLoad(lpszPathName)) {
 			DEBUG_LOG(("Loading map.ini from [%s] (in the always-load list)\n", iniPath.str()));
 			CString report;
 			bool ok = doLoadMapIni(iniPath, MAPINI_INSTALL, report);
-			if (!ok)	// only surface a hard error
+			if (!ok) {	// only surface a hard error
 				showScrollableInfoDialog("Map.ini Loader (Beta)", report, /*applyMode=*/false);
+			}
 		} else {
 			// Preview the map.ini in the report dialog; OK loads, Cancel skips.
 			DEBUG_LOG(("Previewing map.ini from [%s]\n", iniPath.str()));
@@ -3060,9 +3186,8 @@ BOOL CWorldBuilderDoc::OnOpenDocument(LPCTSTR lpszPathName)
 			bool applied = confirmAndLoadMapIni(iniPath, "Map.ini Loader (Beta)");
 			if (applied) {
 				// Offer to always load this map's map.ini silently from now on.
-				if (::MessageBox(NULL,
-						"Always load this map's map.ini from now on (no prompt)?",
-						"Map.ini Loader (Beta)", MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) == IDYES) {
+				if (AfxMessageBox("Always load this map's map.ini from now on (no prompt)?",
+						MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) == IDYES) {
 					addMapIniAlwaysLoad(lpszPathName);
 				}
 			}

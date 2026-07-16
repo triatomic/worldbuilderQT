@@ -897,6 +897,7 @@
 #define ID_FILE_WATCH_MAPINI            33400
 #define ID_FILE_CHECK_MAPINI            33401
 #define ID_FILE_VERBOSE_MAPINI          33402
+#define ID_FILE_OPEN_MAPINI             33403
 #define IDS_NEW                         61446
 #define IDS_RESIZE                      61447
 #define IDS_REMOVING_INUSE_TEAM         61448
@@ -973,7 +974,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_3D_CONTROLS                     1
 #define _APS_NEXT_RESOURCE_VALUE        247
-#define _APS_NEXT_COMMAND_VALUE         33403
+#define _APS_NEXT_COMMAND_VALUE         33404
 #define _APS_NEXT_CONTROL_VALUE         1393
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

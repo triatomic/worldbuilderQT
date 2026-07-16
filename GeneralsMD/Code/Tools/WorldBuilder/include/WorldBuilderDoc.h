@@ -207,6 +207,7 @@ protected:
 	afx_msg void OnGenerateMapStrAndIni();
 
 	// Map.ini loader commands (File > Map.ini submenu).
+	afx_msg void OnOpenMapIni();
 	afx_msg void OnReloadMapIni();
 	afx_msg void OnCheckMapIni();
 	afx_msg void OnToggleWatchMapIni();
