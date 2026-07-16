@@ -33,6 +33,11 @@ See **[QT-BUILD.md](QT-BUILD.md)** for the full step-by-step setup, the Qt insta
 CMake preset commands, runtime deployment (`windeployqt`), and the optional keyboard/focus debug
 facility.
 
+The dialogs' layouts live in Qt Designer `.ui` files — see
+**[qt/UI_FILES.md](GeneralsMD/Code/Tools/WorldBuilder/qt/UI_FILES.md)** for how they're split from
+the C++ logic, which dialogs are only partly editable in Designer and why, and the gotchas to know
+before editing one.
+
 Quick version (inside an x86 MSVC environment, `vcvarsall.bat x86`):
 
 ```
