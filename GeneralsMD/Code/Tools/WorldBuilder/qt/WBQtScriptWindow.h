@@ -22,6 +22,8 @@ class QTextBrowser;
 class QUrl;
 class WBQtScriptWindow;
 
+namespace Ui { class WBQtScriptWindow; }	// generated from WBQtScriptWindow.ui
+
 // A QTreeWidget that reports internal drops back to the window instead of moving items itself
 // (the model rebuild does the actual move). Drag is enabled per-item in the window.
 class WBQtScriptTree : public QTreeWidget
@@ -45,6 +47,7 @@ class WBQtScriptWindow : public QWidget
 
 public:
 	explicit WBQtScriptWindow(QWidget *owner);
+	virtual ~WBQtScriptWindow();
 
 	void rebuildTree();
 	// Clear per-session UI state (search text + find cursor) before a fresh dialog session.
@@ -89,6 +92,8 @@ private:
 	QIcon nodeIcon(int listType, int flags) const;	// pick the icon for a node's type + state
 	int  selectedListType() const;		// -1 if nothing selected
 	void selectByListType(int listType);
+
+	Ui::WBQtScriptWindow *m_ui;	// owns the static widget tree (WBQtScriptWindow.ui)
 
 	WBQtScriptTree *m_tree;
 	QPlainTextEdit *m_description;

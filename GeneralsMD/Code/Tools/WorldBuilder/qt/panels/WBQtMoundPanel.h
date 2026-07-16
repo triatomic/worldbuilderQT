@@ -17,12 +17,15 @@ class QSpinBox;
 class QLabel;
 class QCheckBox;
 
+namespace Ui { class WBQtMoundPanel; }	// generated from WBQtMoundPanel.ui
+
 class WBQtMoundPanel : public QWidget
 {
 	Q_OBJECT
 
 public:
 	explicit WBQtMoundPanel(QWidget *owner);
+	virtual ~WBQtMoundPanel();
 
 	// Tool -> widget display push (called by the free WBQtMound_Push* functions).
 	void pushWidth(int v);
@@ -42,6 +45,8 @@ private slots:
 
 private:
 	void setRow(QSlider *slider, QSpinBox *spin, int v);	// set both without re-entry
+
+	Ui::WBQtMoundPanel *m_ui;	// owns the static widget tree (WBQtMoundPanel.ui)
 
 	QSlider   *m_widthSlider;
 	QSpinBox  *m_widthSpin;

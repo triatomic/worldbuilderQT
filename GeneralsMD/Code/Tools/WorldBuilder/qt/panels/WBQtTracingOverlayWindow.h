@@ -12,11 +12,14 @@ class QComboBox;
 class QLabel;
 class QSlider;
 
+namespace Ui { class WBQtTracingOverlayWindow; }	// generated from WBQtTracingOverlayWindow.ui
+
 class WBQtTracingOverlayWindow : public QWidget
 {
 	Q_OBJECT
 public:
 	explicit WBQtTracingOverlayWindow(QWidget *owner);
+	virtual ~WBQtTracingOverlayWindow();
 
 	static WBQtTracingOverlayWindow *instance() { return s_instance; }
 
@@ -38,6 +41,8 @@ private slots:
 
 private:
 	void updateOpacityLabel(int pct);
+
+	Ui::WBQtTracingOverlayWindow *m_ui;	// owns the static widget tree (WBQtTracingOverlayWindow.ui)
 
 	QSlider   *m_opacitySlider;
 	QLabel    *m_opacityLabel;

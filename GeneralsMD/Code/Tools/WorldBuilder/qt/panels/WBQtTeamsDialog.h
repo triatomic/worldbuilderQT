@@ -12,11 +12,14 @@ class QPushButton;
 class QTreeWidget;
 class QTreeWidgetItem;
 
+namespace Ui { class WBQtTeamsDialog; }	// generated from WBQtTeamsDialog.ui
+
 class WBQtTeamsDialog : public QDialog
 {
 	Q_OBJECT
 public:
 	explicit WBQtTeamsDialog(QWidget *parent = 0);
+	virtual ~WBQtTeamsDialog();
 
 private slots:
 	void onPlayerRowChanged(int row);
@@ -37,6 +40,8 @@ private:
 	void refreshTeamsTable();
 	void refreshButtons();
 	void runTeamSheet();
+
+	Ui::WBQtTeamsDialog *m_ui;	// owns the static widget tree (WBQtTeamsDialog.ui)
 
 	bool m_updating;
 	QListWidget *m_players;

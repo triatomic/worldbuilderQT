@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WBQtWavePanel</class>
+ <widget class="QWidget" name="WBQtWavePanel">
+  <property name="windowTitle">
+   <string>Wave Editor Options</string>
+  </property>
+  <layout class="QVBoxLayout" name="rootLayout" stretch="0,0,0,0,0,1,0">
+   <item>
+    <widget class="QLabel" name="typeLabel">
+     <property name="text">
+      <string>Type:</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QGridLayout" name="cmdGrid">
+     <item row="0" column="0">
+      <widget class="QPushButton" name="cycleBtn">
+       <property name="text">
+        <string>Cycle Type</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QPushButton" name="undoBtn">
+       <property name="text">
+        <string>Undo</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QPushButton" name="saveBtn">
+       <property name="text">
+        <string>Save</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QPushButton" name="reloadBtn">
+       <property name="text">
+        <string>Reload</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="modeBox">
+     <property name="title">
+      <string>Mode</string>
+     </property>
+     <layout class="QHBoxLayout" name="modeLay">
+      <item>
+       <widget class="QPushButton" name="modeCreate">
+        <property name="text">
+         <string>Create</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="modeManipulate">
+        <property name="text">
+         <string>Manipulate</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="modePaint">
+        <property name="text">
+         <string>Paint</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="modeBucket">
+        <property name="text">
+         <string>Bucket</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="brushRow" stretch="0,1">
+     <item>
+      <widget class="QLabel" name="brushLabel">
+       <property name="text">
+        <string>Bucket brush: 120</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QSlider" name="brushSlider">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="helpLabel">
+     <property name="text">
+      <string>Create: drag on water to place a single wave.
+Manipulate: drag a wave to move it, Ctrl+drag to rotate it, Shift+click to multi-select.
+Paint: hold and drag to lay a trail of waves toward shore.
+Bucket: drag along the coast to auto-fill the shoreline with waves.
+Right-click to discard the waves you just added.
+* * Remember to press the Save button to save your waves.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QTreeWidget" name="list">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>220</height>
+      </size>
+     </property>
+     <property name="contextMenuPolicy">
+      <enum>Qt::CustomContextMenu</enum>
+     </property>
+     <property name="selectionMode">
+      <enum>QAbstractItemView::ExtendedSelection</enum>
+     </property>
+     <property name="rootIsDecorated">
+      <bool>false</bool>
+     </property>
+     <column>
+      <property name="text">
+       <string>#</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Start X</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Start Y</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>End X</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>End Y</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Type</string>
+      </property>
+     </column>
+    </widget>
+   </item>
+   <item>
+    <layout class="QGridLayout" name="bottomGrid">
+     <item row="0" column="0">
+      <widget class="QPushButton" name="delBtn">
+       <property name="text">
+        <string>Delete Selected</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QCheckBox" name="showLines">
+       <property name="text">
+        <string>Show wave lines</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QPushButton" name="delAllBtn">
+       <property name="text">
+        <string>Delete All</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QCheckBox" name="showShoreline">
+       <property name="text">
+        <string>Show shoreline</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

@@ -1,20 +1,17 @@
 // WBQtGrovePanel.cpp -- see WBQtGrovePanel.h.
 #include "WBQtGrovePanel.h"
+#include "ui_WBQtGrovePanel.h"
 #include "WBQtGroveBridge.h"
 #include "WBQtPreviewImage.h"
 
 #include <QCheckBox>
 #include <QComboBox>
-#include <QFrame>
 #include <QGridLayout>
-#include <QGroupBox>
-#include <QHBoxLayout>
 #include <QImage>
 #include <QLabel>
 #include <QPixmap>
 #include <QPushButton>
 #include <QSpinBox>
-#include <QVBoxLayout>
 
 WBQtGrovePanel *WBQtGrovePanel::s_instance = NULL;
 
@@ -24,74 +21,35 @@ static const char *kRowProperty = "wbqtGroveRow";
 
 WBQtGrovePanel::WBQtGrovePanel(QWidget *owner)
 	: QWidget(owner, Qt::Tool),
+	  m_ui(new Ui::WBQtGrovePanel),
 	  m_updating(false)
 {
-	setWindowTitle("Grove Options");
+	// The static widget tree lives in WBQtGrovePanel.ui; bind the members the logic
+	// below uses, then add the dynamic tree-type rows.
+	m_ui->setupUi(this);
 	resize(360, 640);
 
-	QVBoxLayout *root = new QVBoxLayout(this);
+	m_setName = m_ui->setName;
+	m_total = m_ui->total;
+	m_numTrees = m_ui->numTrees;
+	m_allowWater = m_ui->allowWater;
+	m_allowCliff = m_ui->allowCliff;
+	m_usePropsOnly = m_ui->usePropsOnly;
+	m_preview = m_ui->preview;	// object preview thumbnail (of the last-touched tree combo)
 
-	// Set-name preset combo + the Save / Settings buttons.
-	QHBoxLayout *setRow = new QHBoxLayout();
-	setRow->addWidget(new QLabel("Set:", this));
-	m_setName = new QComboBox(this);
-	setRow->addWidget(m_setName, 1);
-	QPushButton *saveBtn = new QPushButton("Save", this);
-	QPushButton *settingsBtn = new QPushButton("Settings", this);
-	setRow->addWidget(saveBtn);
-	setRow->addWidget(settingsBtn);
-	root->addLayout(setRow);
-
-	// The 11 tree-type rows: a template combo + a weight spinbox each.
-	QGroupBox *treesBox = new QGroupBox("Tree types & weights", this);
-	QGridLayout *grid = new QGridLayout(treesBox);
-	grid->addWidget(new QLabel("Type", treesBox), 0, 0);
-	grid->addWidget(new QLabel("Weight", treesBox), 0, 1);
+	// The 11 tree-type rows: a template combo + a weight spinbox each, added under
+	// the .ui's Type/Weight header row.
 	for (int t = 1; t <= TREES_PER_SET; ++t)
 	{
 		int i = t - 1;
-		m_treeType[i] = new QComboBox(treesBox);
+		m_treeType[i] = new QComboBox(m_ui->treesBox);
 		m_treeType[i]->setProperty(kRowProperty, t);
-		m_weight[i] = new QSpinBox(treesBox);
+		m_weight[i] = new QSpinBox(m_ui->treesBox);
 		m_weight[i]->setRange(0, 1000000);
 		m_weight[i]->setProperty(kRowProperty, t);
-		grid->addWidget(m_treeType[i], t, 0);
-		grid->addWidget(m_weight[i], t, 1);
+		m_ui->treesGrid->addWidget(m_treeType[i], t, 0);
+		m_ui->treesGrid->addWidget(m_weight[i], t, 1);
 	}
-	root->addWidget(treesBox);
-
-	// Running weight total (read-only display).
-	QHBoxLayout *totalRow = new QHBoxLayout();
-	totalRow->addWidget(new QLabel("Total weight:", this));
-	m_total = new QLabel("0", this);
-	totalRow->addWidget(m_total, 1);
-	root->addLayout(totalRow);
-
-	// Number of trees per grove.
-	QHBoxLayout *numRow = new QHBoxLayout();
-	numRow->addWidget(new QLabel("Number of trees:", this));
-	m_numTrees = new QSpinBox(this);
-	m_numTrees->setRange(0, 1000000);
-	numRow->addWidget(m_numTrees, 1);
-	root->addLayout(numRow);
-
-	// Placement checkboxes.
-	QGroupBox *placeBox = new QGroupBox("Placement", this);
-	QVBoxLayout *placeLay = new QVBoxLayout(placeBox);
-	m_allowWater = new QCheckBox("Allow water placement", placeBox);
-	m_allowCliff = new QCheckBox("Allow cliff placement", placeBox);
-	m_usePropsOnly = new QCheckBox("Use props only", placeBox);
-	placeLay->addWidget(m_allowWater);
-	placeLay->addWidget(m_allowCliff);
-	placeLay->addWidget(m_usePropsOnly);
-	root->addWidget(placeBox);
-
-	// Object preview thumbnail (of the last-touched tree combo).
-	m_preview = new QLabel(this);
-	m_preview->setFixedSize(128, 128);
-	m_preview->setAlignment(Qt::AlignCenter);
-	m_preview->setFrameShape(QFrame::Box);
-	root->addWidget(m_preview, 0, Qt::AlignHCenter);
 
 	// Seed everything from the hidden MFC panel under the guard so nothing echoes back.
 	m_updating = true;
@@ -108,10 +66,19 @@ WBQtGrovePanel::WBQtGrovePanel(QWidget *owner)
 	connect(m_allowWater, SIGNAL(clicked()), this, SLOT(onAllowWaterToggled()));
 	connect(m_allowCliff, SIGNAL(clicked()), this, SLOT(onAllowCliffToggled()));
 	connect(m_usePropsOnly, SIGNAL(clicked()), this, SLOT(onUsePropsOnlyToggled()));
-	connect(saveBtn, SIGNAL(clicked()), this, SLOT(onSaveSet()));
-	connect(settingsBtn, SIGNAL(clicked()), this, SLOT(onOpenSettings()));
+	connect(m_ui->saveBtn, SIGNAL(clicked()), this, SLOT(onSaveSet()));
+	connect(m_ui->settingsBtn, SIGNAL(clicked()), this, SLOT(onOpenSettings()));
 
 	s_instance = this;
+}
+
+WBQtGrovePanel::~WBQtGrovePanel()
+{
+	if (s_instance == this)
+	{
+		s_instance = NULL;
+	}
+	delete m_ui;
 }
 
 int WBQtGrovePanel::rowOfSender(QObject *sender)

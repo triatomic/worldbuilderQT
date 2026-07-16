@@ -1,121 +1,48 @@
 // WBQtMeshMoldPanel.cpp -- see WBQtMeshMoldPanel.h.
 #include "WBQtMeshMoldPanel.h"
+#include "ui_WBQtMeshMoldPanel.h"
 #include "WBQtMeshMoldBridge.h"
 
 #include <QButtonGroup>
-#include <QGroupBox>
-#include <QHBoxLayout>
-#include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QSlider>
 #include <QSpinBox>
-#include <QVBoxLayout>
 
 // The MFC MeshMoldOptions ranges (MeshMoldOptions.h): angle -180..180 degrees, scale 1..200
 // percent, height -10..256 raw slider units (the engine cells->feet MAP_HEIGHT_SCALE multiply
 // is applied MFC-side, so the panel edits the raw unit exactly like the MFC popup slider).
-static const int kMinAngle = -180;
-static const int kMaxAngle = 180;
-static const int kMinScale = 1;
-static const int kMaxScale = 200;
-static const int kMinHeight = -10;
-static const int kMaxHeight = 256;
+// The ranges themselves now live on the slider/spin widgets in WBQtMeshMoldPanel.ui.
 
 WBQtMeshMoldPanel *WBQtMeshMoldPanel::s_instance = NULL;
 
-namespace
-{
-	// Build one labelled "slider + spinbox" row (kept in lockstep by the owner's slots).
-	void makeRow(QWidget *parent, const char *caption, int lo, int hi,
-		QSlider **outSlider, QSpinBox **outSpin, QBoxLayout *into)
-	{
-		QHBoxLayout *row = new QHBoxLayout();
-		row->addWidget(new QLabel(QString::fromLatin1(caption), parent));
-		QSlider *s = new QSlider(Qt::Horizontal, parent);
-		s->setRange(lo, hi);
-		QSpinBox *b = new QSpinBox(parent);
-		b->setRange(lo, hi);
-		row->addWidget(s, 1);
-		row->addWidget(b);
-		into->addLayout(row);
-		*outSlider = s;
-		*outSpin = b;
-	}
-}
-
 WBQtMeshMoldPanel::WBQtMeshMoldPanel(QWidget *owner)
 	: QWidget(owner, Qt::Tool),
+	  m_ui(new Ui::WBQtMeshMoldPanel),
 	  m_updating(false)
 {
-	setWindowTitle("Mesh Mold Options");
-	resize(320, 560);
+	// The static widget tree lives in WBQtMeshMoldPanel.ui; bind the members the
+	// logic below uses.
+	m_ui->setupUi(this);
 
-	QVBoxLayout *root = new QVBoxLayout(this);
+	m_moldList = m_ui->moldList;
+	m_angleSlider = m_ui->angleSlider;
+	m_angleSpin = m_ui->angleSpin;
+	m_scaleSlider = m_ui->scaleSlider;
+	m_scaleSpin = m_ui->scaleSpin;
+	m_heightSlider = m_ui->heightSlider;
+	m_heightSpin = m_ui->heightSpin;
+	m_preview = m_ui->preview;
+	m_applyMesh = m_ui->applyMesh;
+	m_raise = m_ui->raise;
+	m_raiseLower = m_ui->raiseLower;
+	m_lower = m_ui->lower;
 
-	// The mold model list (flat, mirroring the MFC CTreeCtrl of .w3d models).
-	QGroupBox *moldBox = new QGroupBox("Mold Models", this);
-	QVBoxLayout *moldLay = new QVBoxLayout(moldBox);
-	m_moldList = new QListWidget(moldBox);
-	m_moldList->setMinimumHeight(240);
-	m_moldList->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
-	moldLay->addWidget(m_moldList, 1);
-
-	QHBoxLayout *moldBtnRow = new QHBoxLayout();
-	QPushButton *openFolderBtn = new QPushButton("Open Molds Folder", moldBox);
-	QPushButton *openLinkBtn = new QPushButton("How To Create Molds", moldBox);
-	moldBtnRow->addWidget(openFolderBtn);
-	moldBtnRow->addWidget(openLinkBtn);
-	moldLay->addLayout(moldBtnRow);
-	root->addWidget(moldBox, 3);
-
-	// Developer Note: the informational text the MFC dialog shows (the custom-mold blurb and
-	// the shift-drag height hint). Wrapping labels so the text isn't clipped.
-	QGroupBox *noteBox = new QGroupBox("Developer Note:", this);
-	QVBoxLayout *noteLay = new QVBoxLayout(noteBox);
-	QLabel *noteText = new QLabel(
-		"This tool allows the use of custom molds. Click 'How To Create Molds' to access the "
-		"AGX750 tutorial.", noteBox);
-	noteText->setWordWrap(true);
-	noteLay->addWidget(noteText);
-	QLabel *hintText = new QLabel(
-		"Hold Shift and drag with the mouse to increase or decrease the height.", noteBox);
-	hintText->setWordWrap(true);
-	noteLay->addWidget(hintText);
-	root->addWidget(noteBox);
-
-	// Angle / scale / height rows.
-	QGroupBox *xformBox = new QGroupBox("Transform", this);
-	QVBoxLayout *xformLay = new QVBoxLayout(xformBox);
-	makeRow(this, "Angle (deg):", kMinAngle, kMaxAngle, &m_angleSlider, &m_angleSpin, xformLay);
-	makeRow(this, "Scale (%):", kMinScale, kMaxScale, &m_scaleSlider, &m_scaleSpin, xformLay);
-	makeRow(this, "Height (ft):", kMinHeight, kMaxHeight, &m_heightSlider, &m_heightSpin, xformLay);
-	root->addWidget(xformBox);
-
-	// Preview toggle + Apply.
-	QHBoxLayout *actionRow = new QHBoxLayout();
-	m_preview = new QPushButton("Preview", this);
-	m_preview->setCheckable(true);
-	m_applyMesh = new QPushButton("Apply Mesh", this);
-	actionRow->addWidget(m_preview);
-	actionRow->addWidget(m_applyMesh);
-	root->addLayout(actionRow);
-
-	// Raise / Raise+Lower / Lower radios.
-	QGroupBox *modeBox = new QGroupBox("Mesh Mode", this);
-	QVBoxLayout *modeLay = new QVBoxLayout(modeBox);
-	m_raise = new QRadioButton("Raise only", modeBox);
-	m_raiseLower = new QRadioButton("Raise and lower", modeBox);
-	m_lower = new QRadioButton("Lower only", modeBox);
-	modeLay->addWidget(m_raise);
-	modeLay->addWidget(m_raiseLower);
-	modeLay->addWidget(m_lower);
 	QButtonGroup *modeGroup = new QButtonGroup(this);
 	modeGroup->addButton(m_raise);
 	modeGroup->addButton(m_raiseLower);
 	modeGroup->addButton(m_lower);
-	root->addWidget(modeBox);
 
 	// Seed everything under the guard so nothing echoes back to the tool while we populate.
 	m_updating = true;
@@ -152,10 +79,19 @@ WBQtMeshMoldPanel::WBQtMeshMoldPanel(QWidget *owner)
 	connect(m_raise, SIGNAL(clicked()), this, SLOT(onRaiseModeChanged()));
 	connect(m_raiseLower, SIGNAL(clicked()), this, SLOT(onRaiseModeChanged()));
 	connect(m_lower, SIGNAL(clicked()), this, SLOT(onRaiseModeChanged()));
-	connect(openFolderBtn, SIGNAL(clicked()), this, SLOT(onOpenMoldsFolder()));
-	connect(openLinkBtn, SIGNAL(clicked()), this, SLOT(onOpenLink()));
+	connect(m_ui->openFolderBtn, SIGNAL(clicked()), this, SLOT(onOpenMoldsFolder()));
+	connect(m_ui->openLinkBtn, SIGNAL(clicked()), this, SLOT(onOpenLink()));
 
 	s_instance = this;
+}
+
+WBQtMeshMoldPanel::~WBQtMeshMoldPanel()
+{
+	if (s_instance == this)
+	{
+		s_instance = NULL;
+	}
+	delete m_ui;
 }
 
 void WBQtMeshMoldPanel::rebuildMoldList()

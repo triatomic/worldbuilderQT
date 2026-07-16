@@ -20,12 +20,15 @@ class QSpinBox;
 class QTreeWidget;
 class QTreeWidgetItem;
 
+namespace Ui { class WBQtObjectPanel; }	// generated from WBQtObjectPanel.ui
+
 class WBQtObjectPanel : public QWidget
 {
 	Q_OBJECT
 
 public:
 	explicit WBQtObjectPanel(QWidget *owner);
+	virtual ~WBQtObjectPanel();
 
 	// Re-seed label/team/preview from the current MFC selection (WBQtObject_PushFromSelection).
 	void pushFromSelection();
@@ -51,6 +54,8 @@ private:
 	void refreshTeamCombo();
 	void refreshPreview();
 	QTreeWidgetItem *findOrAddChild(QTreeWidgetItem *parent, const QString &label);
+
+	Ui::WBQtObjectPanel *m_ui;	// owns the static widget tree (WBQtObjectPanel.ui)
 
 	QTreeWidget *m_tree;
 	QLabel      *m_preview;

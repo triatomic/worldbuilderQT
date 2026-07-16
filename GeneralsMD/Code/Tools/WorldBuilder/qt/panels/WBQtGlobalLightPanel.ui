@@ -1,0 +1,460 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WBQtGlobalLightPanel</class>
+ <widget class="QWidget" name="WBQtGlobalLightPanel">
+  <property name="windowTitle">
+   <string>Global Light Options</string>
+  </property>
+  <layout class="QVBoxLayout" name="rootLayout">
+   <item>
+    <layout class="QHBoxLayout" name="resetRow">
+     <item>
+      <widget class="QPushButton" name="resetBtn">
+       <property name="text">
+        <string>Restore To Default</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="resetSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="groupsRow">
+     <item>
+      <widget class="QGroupBox" name="ambientBox">
+       <property name="title">
+        <string>Ambient</string>
+       </property>
+       <layout class="QGridLayout" name="ambGrid" rowstretch="0,0,0,0,1">
+        <item row="0" column="0" colspan="2">
+         <widget class="QPushButton" name="ambientSwatch">
+          <property name="minimumSize">
+           <size>
+            <width>28</width>
+            <height>20</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>28</width>
+            <height>20</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="ambRLabel">
+          <property name="text">
+           <string>R:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QSpinBox" name="ambR">
+          <property name="maximum">
+           <number>255</number>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="0">
+         <widget class="QLabel" name="ambGLabel">
+          <property name="text">
+           <string>G:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="QSpinBox" name="ambG">
+          <property name="maximum">
+           <number>255</number>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="0">
+         <widget class="QLabel" name="ambBLabel">
+          <property name="text">
+           <string>B:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="1">
+         <widget class="QSpinBox" name="ambB">
+          <property name="maximum">
+           <number>255</number>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <widget class="QGroupBox" name="sunBox">
+       <property name="title">
+        <string>Sun</string>
+       </property>
+       <layout class="QGridLayout" name="sunGrid" rowstretch="0,0,0,0,0,1">
+        <item row="0" column="0">
+         <widget class="QLabel" name="azLabel0">
+          <property name="text">
+           <string>Az:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="WBQtScrubSpinBox" name="azimuth0">
+          <property name="toolTip">
+           <string>Azimuth (drag left/right to scrub)</string>
+          </property>
+          <property name="wrapping">
+           <bool>true</bool>
+          </property>
+          <property name="decimals">
+           <number>0</number>
+          </property>
+          <property name="maximum">
+           <double>359.000000000000000</double>
+          </property>
+          <property name="singleStep">
+           <double>1.000000000000000</double>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="elLabel0">
+          <property name="text">
+           <string>El:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="WBQtScrubSpinBox" name="elevation0">
+          <property name="toolTip">
+           <string>Elevation (drag up/down to scrub)</string>
+          </property>
+          <property name="decimals">
+           <number>0</number>
+          </property>
+          <property name="maximum">
+           <double>90.000000000000000</double>
+          </property>
+          <property name="singleStep">
+           <double>1.000000000000000</double>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="0">
+         <widget class="QLabel" name="diffRLabel0">
+          <property name="text">
+           <string>R:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="QSpinBox" name="diffR0">
+          <property name="maximum">
+           <number>255</number>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="0">
+         <widget class="QLabel" name="diffGLabel0">
+          <property name="text">
+           <string>G:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="1">
+         <widget class="QSpinBox" name="diffG0">
+          <property name="maximum">
+           <number>255</number>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="0">
+         <widget class="QLabel" name="diffBLabel0">
+          <property name="text">
+           <string>B:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="1">
+         <widget class="QSpinBox" name="diffB0">
+          <property name="maximum">
+           <number>255</number>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <widget class="QGroupBox" name="accent1Box">
+       <property name="title">
+        <string>Accent 1</string>
+       </property>
+       <layout class="QGridLayout" name="accent1Grid" rowstretch="0,0,0,0,0,1">
+        <item row="0" column="0">
+         <widget class="QLabel" name="azLabel1">
+          <property name="text">
+           <string>Az:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="WBQtScrubSpinBox" name="azimuth1">
+          <property name="toolTip">
+           <string>Azimuth (drag left/right to scrub)</string>
+          </property>
+          <property name="wrapping">
+           <bool>true</bool>
+          </property>
+          <property name="decimals">
+           <number>0</number>
+          </property>
+          <property name="maximum">
+           <double>359.000000000000000</double>
+          </property>
+          <property name="singleStep">
+           <double>1.000000000000000</double>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="elLabel1">
+          <property name="text">
+           <string>El:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="WBQtScrubSpinBox" name="elevation1">
+          <property name="toolTip">
+           <string>Elevation (drag up/down to scrub)</string>
+          </property>
+          <property name="decimals">
+           <number>0</number>
+          </property>
+          <property name="maximum">
+           <double>90.000000000000000</double>
+          </property>
+          <property name="singleStep">
+           <double>1.000000000000000</double>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="0">
+         <widget class="QLabel" name="diffRLabel1">
+          <property name="text">
+           <string>R:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="QSpinBox" name="diffR1">
+          <property name="maximum">
+           <number>255</number>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="0">
+         <widget class="QLabel" name="diffGLabel1">
+          <property name="text">
+           <string>G:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="1">
+         <widget class="QSpinBox" name="diffG1">
+          <property name="maximum">
+           <number>255</number>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="0">
+         <widget class="QLabel" name="diffBLabel1">
+          <property name="text">
+           <string>B:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="1">
+         <widget class="QSpinBox" name="diffB1">
+          <property name="maximum">
+           <number>255</number>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <widget class="QGroupBox" name="accent2Box">
+       <property name="title">
+        <string>Accent 2</string>
+       </property>
+       <layout class="QGridLayout" name="accent2Grid" rowstretch="0,0,0,0,0,1">
+        <item row="0" column="0">
+         <widget class="QLabel" name="azLabel2">
+          <property name="text">
+           <string>Az:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="WBQtScrubSpinBox" name="azimuth2">
+          <property name="toolTip">
+           <string>Azimuth (drag left/right to scrub)</string>
+          </property>
+          <property name="wrapping">
+           <bool>true</bool>
+          </property>
+          <property name="decimals">
+           <number>0</number>
+          </property>
+          <property name="maximum">
+           <double>359.000000000000000</double>
+          </property>
+          <property name="singleStep">
+           <double>1.000000000000000</double>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="elLabel2">
+          <property name="text">
+           <string>El:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="WBQtScrubSpinBox" name="elevation2">
+          <property name="toolTip">
+           <string>Elevation (drag up/down to scrub)</string>
+          </property>
+          <property name="decimals">
+           <number>0</number>
+          </property>
+          <property name="maximum">
+           <double>90.000000000000000</double>
+          </property>
+          <property name="singleStep">
+           <double>1.000000000000000</double>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="0">
+         <widget class="QLabel" name="diffRLabel2">
+          <property name="text">
+           <string>R:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="QSpinBox" name="diffR2">
+          <property name="maximum">
+           <number>255</number>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="0">
+         <widget class="QLabel" name="diffGLabel2">
+          <property name="text">
+           <string>G:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="1">
+         <widget class="QSpinBox" name="diffG2">
+          <property name="maximum">
+           <number>255</number>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="0">
+         <widget class="QLabel" name="diffBLabel2">
+          <property name="text">
+           <string>B:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="1">
+         <widget class="QSpinBox" name="diffB2">
+          <property name="maximum">
+           <number>255</number>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="xyzLabel">
+     <property name="text">
+      <string>XYZ:</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="applyBox">
+     <property name="title">
+      <string>Lighting applies to:</string>
+     </property>
+     <layout class="QVBoxLayout" name="applyLay">
+      <item>
+       <widget class="QRadioButton" name="radioTerrain">
+        <property name="text">
+         <string>Terrain (ground, roads, etc.)</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="radioObjects">
+        <property name="text">
+         <string>Objects (buildings, tanks etc.)</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="radioEverything">
+        <property name="text">
+         <string>Everything (Terrain &amp;&amp; Objects).</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="todLabel">
+     <property name="text">
+      <string>Time of day: Morning.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <spacer name="bottomSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>WBQtScrubSpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>WBQtScrubSpinBox.h</header>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

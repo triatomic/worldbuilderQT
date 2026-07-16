@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WBQtFeatherPanel</class>
+ <widget class="QWidget" name="WBQtFeatherPanel">
+  <property name="windowTitle">
+   <string>Feather Brush Options</string>
+  </property>
+  <layout class="QVBoxLayout" name="rootLayout">
+   <item>
+    <widget class="QGroupBox" name="sizeBox">
+     <property name="title">
+      <string>Brush width</string>
+     </property>
+     <layout class="QVBoxLayout" name="sizeLay">
+      <item>
+       <layout class="QHBoxLayout" name="featherRow" stretch="0,1,0">
+        <item>
+         <widget class="QLabel" name="sizeLabel">
+          <property name="text">
+           <string>Size in cells:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="featherSlider">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="minimum">
+           <number>2</number>
+          </property>
+          <property name="maximum">
+           <number>51</number>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="featherSpin">
+          <property name="minimum">
+           <number>2</number>
+          </property>
+          <property name="maximum">
+           <number>999</number>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QLabel" name="feetLabel">
+        <property name="text">
+         <string>0.0 FEET.</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="radiusBox">
+     <property name="title">
+      <string>Filter Radius</string>
+     </property>
+     <layout class="QVBoxLayout" name="radiusLay">
+      <item>
+       <layout class="QHBoxLayout" name="radiusRow" stretch="0,1,0">
+        <item>
+         <widget class="QLabel" name="radiusLabel">
+          <property name="text">
+           <string>Radius:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="radiusSlider">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="minimum">
+           <number>1</number>
+          </property>
+          <property name="maximum">
+           <number>5</number>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="radiusSpin">
+          <property name="minimum">
+           <number>1</number>
+          </property>
+          <property name="maximum">
+           <number>999</number>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QLabel" name="radiusHintLabel">
+        <property name="text">
+         <string>A large value tends to flatten more of the terrain.</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="rateBox">
+     <property name="title">
+      <string>Feather Rate</string>
+     </property>
+     <layout class="QVBoxLayout" name="rateLay">
+      <item>
+       <layout class="QHBoxLayout" name="rateRow" stretch="0,1,0">
+        <item>
+         <widget class="QLabel" name="rateLabel">
+          <property name="text">
+           <string>Rate:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="rateSlider">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="minimum">
+           <number>1</number>
+          </property>
+          <property name="maximum">
+           <number>10</number>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="rateSpin">
+          <property name="minimum">
+           <number>1</number>
+          </property>
+          <property name="maximum">
+           <number>999</number>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QLabel" name="rateHintLabel">
+        <property name="text">
+         <string>A high value flattens faster.</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="mirrorBox">
+     <property name="title">
+      <string>Advanced Mirror Options</string>
+     </property>
+     <layout class="QVBoxLayout" name="mirrorLay">
+      <item>
+       <widget class="QCheckBox" name="mirror">
+        <property name="text">
+         <string>Toggle</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="mirrorX">
+        <property name="text">
+         <string>Mirror X</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="mirrorY">
+        <property name="text">
+         <string>Mirror Y</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="mirrorXY">
+        <property name="text">
+         <string>Diagonal</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer name="bottomSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

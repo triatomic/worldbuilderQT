@@ -14,11 +14,14 @@ class QPlainTextEdit;
 class QPushButton;
 class QSpinBox;
 
+namespace Ui { class WBQtEntityFinderDialog; }	// generated from WBQtEntityFinderDialog.ui
+
 class WBQtEntityFinderDialog : public QWidget
 {
 	Q_OBJECT
 public:
 	explicit WBQtEntityFinderDialog(void *frameHwnd);
+	virtual ~WBQtEntityFinderDialog();
 
 	static WBQtEntityFinderDialog *instance() { return s_instance; }
 
@@ -49,6 +52,8 @@ private:
 	void applyHotkeyPanelState(bool visible);
 
 	static WBQtEntityFinderDialog *s_instance;
+
+	Ui::WBQtEntityFinderDialog *m_ui;	// owns the static widget tree (WBQtEntityFinderDialog.ui)
 
 	QComboBox *m_objectCombo;
 	QComboBox *m_waypointCombo;

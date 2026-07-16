@@ -1,13 +1,10 @@
 // WBQtScorchPanel.cpp -- see WBQtScorchPanel.h.
 #include "WBQtScorchPanel.h"
+#include "ui_WBQtScorchPanel.h"
 #include "WBQtScorchBridge.h"
 
 #include <QComboBox>
 #include <QDoubleSpinBox>
-#include <QGroupBox>
-#include <QHBoxLayout>
-#include <QLabel>
-#include <QVBoxLayout>
 
 WBQtScorchPanel *WBQtScorchPanel::s_instance = NULL;
 
@@ -18,32 +15,18 @@ static const double kScorchSizeMax = 256.0;
 
 WBQtScorchPanel::WBQtScorchPanel(QWidget *owner)
 	: QWidget(owner, Qt::Tool),
+	  m_ui(new Ui::WBQtScorchPanel),
 	  m_updating(false)
 {
-	setWindowTitle("Scorch Options");
-
-	QVBoxLayout *root = new QVBoxLayout(this);
-
-	// The "Scorch" group box, matching the MFC dialog's single group.
-	QGroupBox *scorchBox = new QGroupBox("Scorch", this);
-	QVBoxLayout *scorchLay = new QVBoxLayout(scorchBox);
+	// The static widget tree lives in WBQtScorchPanel.ui; bind the members the
+	// logic below uses, then wire what Designer can't express.
+	m_ui->setupUi(this);
 
 	// Scorch-type combo (IDC_SCORCHTYPE). Populated from the fixed .rc entry list via the bridge.
-	m_type = new QComboBox(scorchBox);
-	scorchLay->addWidget(m_type);
-
+	m_type = m_ui->type;
 	// Scorch size (IDC_SIZE_EDIT + IDC_SIZE_POPUP collapse into one spin box).
-	QHBoxLayout *sizeRow = new QHBoxLayout();
-	sizeRow->addWidget(new QLabel("Scorch Size:", scorchBox));
-	m_size = new QDoubleSpinBox(scorchBox);
-	m_size->setRange(kScorchSizeMin, kScorchSizeMax);
-	m_size->setDecimals(2);
-	m_size->setSingleStep(1.0);
-	sizeRow->addWidget(m_size, 1);
-	scorchLay->addLayout(sizeRow);
-
-	root->addWidget(scorchBox);
-	root->addStretch(1);
+	m_size = m_ui->size;
+	m_size->setRange(kScorchSizeMin, kScorchSizeMax);	// see the comment on the constants
 
 	// Seed the combo + values under the guard so nothing echoes back while we populate.
 	m_updating = true;
@@ -73,6 +56,15 @@ WBQtScorchPanel::WBQtScorchPanel(QWidget *owner)
 	connect(m_size, SIGNAL(valueChanged(double)), this, SLOT(onSizeChanged(double)));
 
 	s_instance = this;
+}
+
+WBQtScorchPanel::~WBQtScorchPanel()
+{
+	if (s_instance == this)
+	{
+		s_instance = NULL;
+	}
+	delete m_ui;
 }
 
 void WBQtScorchPanel::onTypeChanged(int index)

@@ -1,5 +1,6 @@
 // WBQtGlobalLightPanel.cpp -- see WBQtGlobalLightPanel.h.
 #include "WBQtGlobalLightPanel.h"
+#include "ui_WBQtGlobalLightPanel.h"
 #include "WBQtGlobalLightBridge.h"
 #include "WBQtScrubSpinBox.h"
 #include "WBQtWindowPos.h"
@@ -7,14 +8,10 @@
 
 #include <QColor>
 #include <QColorDialog>
-#include <QGridLayout>
-#include <QGroupBox>
-#include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QSpinBox>
-#include <QVBoxLayout>
 
 #include <qt_windows.h>
 
@@ -28,109 +25,57 @@ namespace
 {
 	// The window's owner (created on first open, like the panel host).
 	QWidget *s_owner = NULL;
-
-	QSpinBox *makeColorSpin(QWidget *parent)
-	{
-		QSpinBox *s = new QSpinBox(parent);
-		s->setRange(0, 255);
-		return s;
-	}
 }
 
 WBQtGlobalLightPanel::WBQtGlobalLightPanel(QWidget *owner)
 	: QWidget(owner, Qt::Tool),
+	  m_ui(new Ui::WBQtGlobalLightPanel),
 	  m_updating(false)
 {
-	setWindowTitle("Global Light Options");
+	// The static widget tree lives in WBQtGlobalLightPanel.ui (Ambient | Sun | Accent 1 |
+	// Accent 2 side by side, matching the MFC row); bind the members the logic below uses,
+	// then wire what Designer can't express.
+	m_ui->setupUi(this);
 	WBQtWindowPos_Track(this, "GlobalLight");
 
-	QVBoxLayout *root = new QVBoxLayout(this);
-
-	QPushButton *resetBtn = new QPushButton("Restore To Default", this);
-	QHBoxLayout *resetRow = new QHBoxLayout();
-	resetRow->addWidget(resetBtn);
-	resetRow->addStretch(1);
-	root->addLayout(resetRow);
-
-	// The four groups side by side: Ambient | Sun | Accent 1 | Accent 2 (matching the MFC row).
-	QHBoxLayout *groupsRow = new QHBoxLayout();
-
 	// Ambient (Sun ambient color: swatch + RGB).
-	QGroupBox *ambientBox = new QGroupBox("Ambient", this);
-	QGridLayout *ambGrid = new QGridLayout(ambientBox);
-	m_ambientSwatch = new QPushButton(ambientBox);
-	m_ambientSwatch->setFixedSize(28, 20);
-	ambGrid->addWidget(m_ambientSwatch, 0, 0, 1, 2);
-	ambGrid->addWidget(new QLabel("R:", ambientBox), 1, 0);
-	m_ambR = makeColorSpin(ambientBox);
-	ambGrid->addWidget(m_ambR, 1, 1);
-	ambGrid->addWidget(new QLabel("G:", ambientBox), 2, 0);
-	m_ambG = makeColorSpin(ambientBox);
-	ambGrid->addWidget(m_ambG, 2, 1);
-	ambGrid->addWidget(new QLabel("B:", ambientBox), 3, 0);
-	m_ambB = makeColorSpin(ambientBox);
-	ambGrid->addWidget(m_ambB, 3, 1);
-	ambGrid->setRowStretch(4, 1);
-	groupsRow->addWidget(ambientBox);
+	m_ambientSwatch = m_ui->ambientSwatch;
+	m_ambR = m_ui->ambR;
+	m_ambG = m_ui->ambG;
+	m_ambB = m_ui->ambB;
 
 	// Sun / Accent 1 / Accent 2: azimuth + elevation scrub-spinboxes and diffuse RGB.
-	static const char *kGroupNames[3] = { "Sun", "Accent 1", "Accent 2" };
+	m_azimuth[0] = m_ui->azimuth0;
+	m_azimuth[1] = m_ui->azimuth1;
+	m_azimuth[2] = m_ui->azimuth2;
+	m_elevation[0] = m_ui->elevation0;
+	m_elevation[1] = m_ui->elevation1;
+	m_elevation[2] = m_ui->elevation2;
+	m_diffR[0] = m_ui->diffR0;
+	m_diffR[1] = m_ui->diffR1;
+	m_diffR[2] = m_ui->diffR2;
+	m_diffG[0] = m_ui->diffG0;
+	m_diffG[1] = m_ui->diffG1;
+	m_diffG[2] = m_ui->diffG2;
+	m_diffB[0] = m_ui->diffB0;
+	m_diffB[1] = m_ui->diffB1;
+	m_diffB[2] = m_ui->diffB2;
+
+	m_radioTerrain = m_ui->radioTerrain;
+	m_radioObjects = m_ui->radioObjects;
+	m_radioEverything = m_ui->radioEverything;
+
+	m_xyzLabel = m_ui->xyzLabel;
+	m_todLabel = m_ui->todLabel;
+
 	for (int light = 0; light < 3; ++light)
 	{
-		QGroupBox *box = new QGroupBox(QString::fromLatin1(kGroupNames[light]), this);
-		QGridLayout *grid = new QGridLayout(box);
-
-		grid->addWidget(new QLabel("Az:", box), 0, 0);
-		m_azimuth[light] = new WBQtScrubSpinBox(box);
-		m_azimuth[light]->setDecimals(0);
-		m_azimuth[light]->setRange(0.0, 359.0);
-		m_azimuth[light]->setSingleStep(1.0);
-		m_azimuth[light]->setWrapping(true);
-		m_azimuth[light]->setToolTip("Azimuth (drag left/right to scrub)");
-		grid->addWidget(m_azimuth[light], 0, 1);
-
-		grid->addWidget(new QLabel("El:", box), 1, 0);
-		m_elevation[light] = new WBQtScrubSpinBox(box, /*axisVertical=*/true);
-		m_elevation[light]->setDecimals(0);
-		m_elevation[light]->setRange(0.0, 90.0);
-		m_elevation[light]->setSingleStep(1.0);
-		m_elevation[light]->setToolTip("Elevation (drag up/down to scrub)");
-		grid->addWidget(m_elevation[light], 1, 1);
-
-		grid->addWidget(new QLabel("R:", box), 2, 0);
-		m_diffR[light] = makeColorSpin(box);
-		grid->addWidget(m_diffR[light], 2, 1);
-		grid->addWidget(new QLabel("G:", box), 3, 0);
-		m_diffG[light] = makeColorSpin(box);
-		grid->addWidget(m_diffG[light], 3, 1);
-		grid->addWidget(new QLabel("B:", box), 4, 0);
-		m_diffB[light] = makeColorSpin(box);
-		grid->addWidget(m_diffB[light], 4, 1);
-		grid->setRowStretch(5, 1);
-		groupsRow->addWidget(box);
+		m_elevation[light]->setAxisVertical(true);	// promotion can't pass the ctor arg
 	}
-	root->addLayout(groupsRow);
-
-	m_xyzLabel = new QLabel("XYZ:", this);
-	root->addWidget(m_xyzLabel);
-
-	QGroupBox *applyBox = new QGroupBox("Lighting applies to:", this);
-	QVBoxLayout *applyLay = new QVBoxLayout(applyBox);
-	m_radioTerrain = new QRadioButton("Terrain (ground, roads, etc.)", applyBox);
-	m_radioObjects = new QRadioButton("Objects (buildings, tanks etc.)", applyBox);
-	m_radioEverything = new QRadioButton("Everything (Terrain && Objects).", applyBox);
-	applyLay->addWidget(m_radioTerrain);
-	applyLay->addWidget(m_radioObjects);
-	applyLay->addWidget(m_radioEverything);
-	root->addWidget(applyBox);
-
-	m_todLabel = new QLabel("Time of day: Morning.", this);
-	root->addWidget(m_todLabel);
-	root->addStretch(1);
 
 	seedFromGlobals();
 
-	connect(resetBtn, SIGNAL(clicked()), this, SLOT(onReset()));
+	connect(m_ui->resetBtn, SIGNAL(clicked()), this, SLOT(onReset()));
 	connect(m_radioTerrain, SIGNAL(clicked()), this, SLOT(onLightingRadio()));
 	connect(m_radioObjects, SIGNAL(clicked()), this, SLOT(onLightingRadio()));
 	connect(m_radioEverything, SIGNAL(clicked()), this, SLOT(onLightingRadio()));
@@ -148,6 +93,15 @@ WBQtGlobalLightPanel::WBQtGlobalLightPanel(QWidget *owner)
 	}
 
 	s_instance = this;
+}
+
+WBQtGlobalLightPanel::~WBQtGlobalLightPanel()
+{
+	if (s_instance == this)
+	{
+		s_instance = NULL;
+	}
+	delete m_ui;
 }
 
 void WBQtGlobalLightPanel::seedFromGlobals()

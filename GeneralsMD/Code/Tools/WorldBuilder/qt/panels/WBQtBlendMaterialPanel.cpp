@@ -1,62 +1,32 @@
 // WBQtBlendMaterialPanel.cpp -- see WBQtBlendMaterialPanel.h.
 #include "WBQtBlendMaterialPanel.h"
+#include "ui_WBQtBlendMaterialPanel.h"
 #include "WBQtBlendMaterialBridge.h"
 
 #include <QCheckBox>
-#include <QGroupBox>
-#include <QLabel>
-#include <QVBoxLayout>
 
 WBQtBlendMaterialPanel *WBQtBlendMaterialPanel::s_instance = NULL;
 
 WBQtBlendMaterialPanel::WBQtBlendMaterialPanel(QWidget *owner)
 	: QWidget(owner, Qt::Tool),
+	  m_ui(new Ui::WBQtBlendMaterialPanel),
 	  m_updating(false)
 {
-	setWindowTitle("Blend Material Options");
+	// The static widget tree lives in WBQtBlendMaterialPanel.ui; bind the members the
+	// logic below uses, then wire what Designer can't express.
+	m_ui->setupUi(this);
 
-	QVBoxLayout *root = new QVBoxLayout(this);
-
-	// Tile Gap Options: the two "add one tile between gaps" checkboxes (IDC_HVGAP / IDC_DGAP).
-	QGroupBox *gapBox = new QGroupBox("Tile Gap Options", this);
-	QVBoxLayout *gapLay = new QVBoxLayout(gapBox);
-	m_hvGap = new QCheckBox("Add one tile between horizontal and vertical gaps", gapBox);
-	m_dGap = new QCheckBox("Add one tile between diagonal gaps", gapBox);
-	gapLay->addWidget(m_hvGap);
-	gapLay->addWidget(m_dGap);
-	root->addWidget(gapBox);
-
-	// Advanced Blend Options: the re-revalidate-blends checkbox (IDC_REVALIDATEBLENDS).
-	QGroupBox *advBox = new QGroupBox("Advanced Blend Options", this);
-	QVBoxLayout *advLay = new QVBoxLayout(advBox);
-	m_revalBlends = new QCheckBox("Re-revalidate Blends (3x3 around cursor)", advBox);
-	advLay->addWidget(m_revalBlends);
-	root->addWidget(advBox);
-
-	// Developer note (static text in the MFC dialog).
-	QGroupBox *noteBox = new QGroupBox("Developer Note:", this);
-	QVBoxLayout *noteLay = new QVBoxLayout(noteBox);
-	noteLay->addWidget(new QLabel("Hold shift then click at a texture to unblend them", noteBox));
-	root->addWidget(noteBox);
-
-	// Advanced Mirror Options: the four mirror toggles (IDC_TOGGLE_MIRROR/X/Y/XY). These drive
-	// AutoEdgeOutTool's mirror statics, the same tool the Feather panel's mirror row drives.
-	QGroupBox *mirrorBox = new QGroupBox("Advanced Mirror Options", this);
-	QVBoxLayout *mirrorLay = new QVBoxLayout(mirrorBox);
-	mirrorLay->addWidget(new QLabel(
-		"Warning: On large maps, this may result in noticeable slowdowns, especially near the edges.",
-		mirrorBox));
-	m_mirror = new QCheckBox("Toggle", mirrorBox);
-	m_mirrorX = new QCheckBox("Mirror X", mirrorBox);
-	m_mirrorY = new QCheckBox("Mirror Y", mirrorBox);
-	m_mirrorXY = new QCheckBox("Diagonal", mirrorBox);
-	mirrorLay->addWidget(m_mirror);
-	mirrorLay->addWidget(m_mirrorX);
-	mirrorLay->addWidget(m_mirrorY);
-	mirrorLay->addWidget(m_mirrorXY);
-	root->addWidget(mirrorBox);
-
-	root->addStretch(1);
+	// The two "add one tile between gaps" checkboxes (IDC_HVGAP / IDC_DGAP) and the
+	// re-revalidate-blends checkbox (IDC_REVALIDATEBLENDS).
+	m_hvGap = m_ui->hvGap;
+	m_dGap = m_ui->dGap;
+	m_revalBlends = m_ui->revalBlends;
+	// The four mirror toggles (IDC_TOGGLE_MIRROR/X/Y/XY). These drive AutoEdgeOutTool's
+	// mirror statics, the same tool the Feather panel's mirror row drives.
+	m_mirror = m_ui->mirror;
+	m_mirrorX = m_ui->mirrorX;
+	m_mirrorY = m_ui->mirrorY;
+	m_mirrorXY = m_ui->mirrorXY;
 
 	// Seed from the current tool state under the guard so it doesn't echo back to the tool.
 	m_updating = true;
@@ -80,6 +50,15 @@ WBQtBlendMaterialPanel::WBQtBlendMaterialPanel(QWidget *owner)
 	connect(m_mirrorXY, SIGNAL(clicked()), this, SLOT(onMirrorXY()));
 
 	s_instance = this;
+}
+
+WBQtBlendMaterialPanel::~WBQtBlendMaterialPanel()
+{
+	if (s_instance == this)
+	{
+		s_instance = NULL;
+	}
+	delete m_ui;
 }
 
 // The three gap checkboxes push their explicit state (the setters also refresh the tooltip).

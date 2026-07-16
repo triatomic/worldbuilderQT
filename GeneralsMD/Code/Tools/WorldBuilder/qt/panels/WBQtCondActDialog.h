@@ -19,11 +19,14 @@ class QTreeWidget;
 class QTreeWidgetItem;
 class QUrl;
 
+namespace Ui { class WBQtCondActDialog; }	// generated from WBQtCondActDialog.ui
+
 class WBQtCondActDialog : public QDialog
 {
 	Q_OBJECT
 public:
 	WBQtCondActDialog(void *item, bool isAction, QWidget *parent = 0);
+	virtual ~WBQtCondActDialog();
 
 protected:
 	bool eventFilter(QObject *watched, QEvent *event);
@@ -44,6 +47,8 @@ private:
 	void updateWarnings();
 	void showHelpForType(int type);
 	void applyTreeFont();
+
+	Ui::WBQtCondActDialog *m_ui;	// owns the static widget tree (WBQtCondActDialog.ui)
 
 	void *m_item;
 	int m_isAction;

@@ -16,12 +16,15 @@ class QSpinBox;
 class QLabel;
 class QCheckBox;
 
+namespace Ui { class WBQtFeatherPanel; }	// generated from WBQtFeatherPanel.ui
+
 class WBQtFeatherPanel : public QWidget
 {
 	Q_OBJECT
 
 public:
 	explicit WBQtFeatherPanel(QWidget *owner);
+	virtual ~WBQtFeatherPanel();
 
 	// Tool -> widget display push (called by the free WBQtFeather_Push* functions).
 	void pushFeather(int v);
@@ -41,6 +44,8 @@ private slots:
 
 private:
 	void setRow(QSlider *slider, QSpinBox *spin, int v);	// set both without re-entry
+
+	Ui::WBQtFeatherPanel *m_ui;	// owns the static widget tree (WBQtFeatherPanel.ui)
 
 	QSlider   *m_featherSlider;
 	QSpinBox  *m_featherSpin;

@@ -28,6 +28,10 @@ public:
 	// Value change per pixel of drag (defaults to singleStep()).
 	void setScrubStep(double perPixel) { m_scrubStep = perPixel; }
 
+	// For Designer-promoted instances (promotion can't pass ctor args): switch the
+	// scrub axis after construction.
+	void setAxisVertical(bool vertical) { m_vertical = vertical; }
+
 signals:
 	// A drag crossed the scrub threshold / a scrub drag ended. Lets a panel batch the
 	// whole drag into ONE undoable, like the MFC pop-slider Changed/Finished pair.

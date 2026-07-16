@@ -1,110 +1,40 @@
 // WBQtBuildListPanel.cpp -- see WBQtBuildListPanel.h.
 #include "WBQtBuildListPanel.h"
+#include "ui_WBQtBuildListPanel.h"
 #include "WBQtPanelBridge.h"
 
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
-#include <QGroupBox>
-#include <QHBoxLayout>
-#include <QLabel>
 #include <QListWidget>
 #include <QProgressBar>
 #include <QPushButton>
-#include <QVBoxLayout>
 
 WBQtBuildListPanel *WBQtBuildListPanel::s_instance = NULL;
 
 WBQtBuildListPanel::WBQtBuildListPanel(QWidget *owner)
 	: QWidget(owner, Qt::Tool),
+	  m_ui(new Ui::WBQtBuildListPanel),
 	  m_updating(false)
 {
-	setWindowTitle("Build List");
-	resize(240, 460);
+	// The static widget tree lives in WBQtBuildListPanel.ui; bind the members the
+	// logic below uses.
+	m_ui->setupUi(this);
 
-	QVBoxLayout *root = new QVBoxLayout(this);
-
-	// Side.
-	QGroupBox *sideBox = new QGroupBox("Side", this);
-	QVBoxLayout *sideLay = new QVBoxLayout(sideBox);
-	m_side = new QComboBox(sideBox);
-	sideLay->addWidget(m_side);
-	root->addWidget(sideBox);
-
-	// Build list.
-	QGroupBox *listBox = new QGroupBox("Build List", this);
-	QVBoxLayout *listLay = new QVBoxLayout(listBox);
-	m_buildList = new QListWidget(listBox);
-	m_buildList->setMinimumHeight(220);
-	m_buildList->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
-	listLay->addWidget(m_buildList, 1);
-
-	// Move + edit buttons.
-	QHBoxLayout *btnRow = new QHBoxLayout();
-	m_up = new QPushButton("Up", listBox);
-	m_down = new QPushButton("Down", listBox);
-	m_add = new QPushButton("Add Building", listBox);
-	m_delete = new QPushButton("Delete", listBox);
-	btnRow->addWidget(m_up);
-	btnRow->addWidget(m_down);
-	btnRow->addWidget(m_add);
-	btnRow->addWidget(m_delete);
-	listLay->addLayout(btnRow);
-
-	QHBoxLayout *ioRow = new QHBoxLayout();
-	m_export = new QPushButton("Export", listBox);
-	m_import = new QPushButton("Import", listBox);
-	m_alreadyBuilt = new QCheckBox("Structure Already Built", listBox);
-	ioRow->addWidget(m_export);
-	ioRow->addWidget(m_import);
-	ioRow->addStretch(1);
-	listLay->addLayout(ioRow);
-	listLay->addWidget(m_alreadyBuilt);
-	root->addWidget(listBox, 3);
-
-	// Per-building attributes.
-	QGroupBox *attrBox = new QGroupBox("Selected Building", this);
-	QVBoxLayout *attrLay = new QVBoxLayout(attrBox);
-
-	QHBoxLayout *azRow = new QHBoxLayout();
-	azRow->addWidget(new QLabel("Z:", attrBox));
-	m_z = new QDoubleSpinBox(attrBox);
-	m_z->setRange(-100000.0, 100000.0);
-	m_z->setDecimals(2);
-	azRow->addWidget(m_z, 1);
-	azRow->addWidget(new QLabel("Angle:", attrBox));
-	m_angle = new QDoubleSpinBox(attrBox);
-	m_angle->setRange(-360.0, 360.0);
-	m_angle->setDecimals(2);
-	azRow->addWidget(m_angle, 1);
-	attrLay->addLayout(azRow);
-
-	QHBoxLayout *rbRow = new QHBoxLayout();
-	rbRow->addWidget(new QLabel("Rebuilds:", attrBox));
-	m_rebuilds = new QComboBox(attrBox);
-	m_rebuilds->setEditable(true);
-	m_rebuilds->addItem("0");
-	m_rebuilds->addItem("1");
-	m_rebuilds->addItem("2");
-	m_rebuilds->addItem("3");
-	m_rebuilds->addItem("4");
-	m_rebuilds->addItem("5");
-	m_rebuilds->addItem("Unlimited");
-	rbRow->addWidget(m_rebuilds, 1);
-	attrLay->addLayout(rbRow);
-	root->addWidget(attrBox);
-
-	// Power meter.
-	QGroupBox *powerBox = new QGroupBox("Power Used:", this);
-	QVBoxLayout *powerLay = new QVBoxLayout(powerBox);
-	m_power = new QProgressBar(powerBox);
-	m_power->setRange(0, 100);
-	m_power->setTextVisible(false);
-	powerLay->addWidget(m_power);
-	root->addWidget(powerBox);
-
-	m_forcedShow = new QCheckBox("Don't Hide Objects When Tool Is Closed", this);
-	root->addWidget(m_forcedShow);
+	m_side = m_ui->side;
+	m_buildList = m_ui->buildList;
+	m_up = m_ui->up;
+	m_down = m_ui->down;
+	m_add = m_ui->add;
+	m_delete = m_ui->deleteBtn;
+	m_export = m_ui->exportBtn;
+	m_import = m_ui->importBtn;
+	m_angle = m_ui->angle;
+	m_z = m_ui->z;
+	m_alreadyBuilt = m_ui->alreadyBuilt;
+	m_rebuilds = m_ui->rebuilds;
+	m_power = m_ui->power;
+	m_forcedShow = m_ui->forcedShow;
 
 	refresh();
 
@@ -124,6 +54,15 @@ WBQtBuildListPanel::WBQtBuildListPanel(QWidget *owner)
 	connect(m_forcedShow, SIGNAL(clicked()), this, SLOT(onForcedShowToggled()));
 
 	s_instance = this;
+}
+
+WBQtBuildListPanel::~WBQtBuildListPanel()
+{
+	if (s_instance == this)
+	{
+		s_instance = NULL;
+	}
+	delete m_ui;
 }
 
 void WBQtBuildListPanel::refresh()

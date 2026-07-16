@@ -1,14 +1,12 @@
 // WBQtBrushPanel.cpp -- see WBQtBrushPanel.h.
 #include "WBQtBrushPanel.h"
+#include "ui_WBQtBrushPanel.h"
 #include "WBQtPanelBridge.h"
 
 #include <QCheckBox>
-#include <QGroupBox>
-#include <QHBoxLayout>
 #include <QLabel>
 #include <QSlider>
 #include <QSpinBox>
-#include <QVBoxLayout>
 
 // Cells -> feet conversions from the engine header the Qt lib must not include (see
 // Common/MapObject.h): MAP_XY_FACTOR (width/feather) is 10.0; MAP_HEIGHT_SCALE (height) is
@@ -18,74 +16,30 @@ static const double kFeetPerHeight = 10.0 / 16.0;
 
 WBQtBrushPanel *WBQtBrushPanel::s_instance = NULL;
 
-namespace
-{
-	// Build one labelled "slider + spinbox" row (kept in lockstep by the owner's slots).
-	// typedHi: the spin box accepts typed values past the slider cap (the vanilla WB
-	// pop-slider stopped at hi, but its edit box parsed any int); the slider just pegs.
-	void makeRow(QWidget *parent, const char *caption, int lo, int hi, int typedHi,
-		QSlider **outSlider, QSpinBox **outSpin, QBoxLayout *into)
-	{
-		QHBoxLayout *row = new QHBoxLayout();
-		row->addWidget(new QLabel(QString::fromLatin1(caption), parent));
-		QSlider *s = new QSlider(Qt::Horizontal, parent);
-		s->setRange(lo, hi);
-		QSpinBox *b = new QSpinBox(parent);
-		b->setRange(lo, (typedHi > hi) ? typedHi : hi);
-		row->addWidget(s, 1);
-		row->addWidget(b);
-		into->addLayout(row);
-		*outSlider = s;
-		*outSpin = b;
-	}
-}
-
 WBQtBrushPanel::WBQtBrushPanel(QWidget *owner)
 	: QWidget(owner, Qt::Tool),
+	  m_ui(new Ui::WBQtBrushPanel),
 	  m_updating(false)
 {
-	setWindowTitle("Height Brush Options");
+	// The static widget tree lives in WBQtBrushPanel.ui. Each slider+spinbox row is
+	// kept in lockstep by the slots below; the spin boxes accept typed values past the
+	// slider caps (the vanilla WB pop-slider stopped at the cap, but its edit box parsed
+	// any int) -- the slider just pegs.
+	m_ui->setupUi(this);
 
-	QVBoxLayout *root = new QVBoxLayout(this);
-
-	// Brush width, with a live "FEET" label (value x MAP_XY_FACTOR).
-	QGroupBox *widthBox = new QGroupBox("Brush Width", this);
-	QVBoxLayout *widthLay = new QVBoxLayout(widthBox);
-	makeRow(this, "Size in cells:", 1, 30, 999, &m_widthSlider, &m_widthSpin, widthLay);
-	m_widthLabel = new QLabel("0.0 FEET.", widthBox);
-	widthLay->addWidget(m_widthLabel);
-	root->addWidget(widthBox);
-
-	// Feather width (value x MAP_XY_FACTOR).
-	QGroupBox *featherBox = new QGroupBox("Feather Width", this);
-	QVBoxLayout *featherLay = new QVBoxLayout(featherBox);
-	makeRow(this, "Size in cells:", 0, 20, 999, &m_featherSlider, &m_featherSpin, featherLay);
-	m_featherLabel = new QLabel("0.0 FEET.", featherBox);
-	featherLay->addWidget(m_featherLabel);
-	root->addWidget(featherBox);
-
-	// Brush height (value x MAP_HEIGHT_SCALE).
-	QGroupBox *heightBox = new QGroupBox("Brush Height", this);
-	QVBoxLayout *heightLay = new QVBoxLayout(heightBox);
-	makeRow(this, "Height:", 0, 255, 255, &m_heightSlider, &m_heightSpin, heightLay);
-	m_heightLabel = new QLabel("0.0 FEET.", heightBox);
-	heightLay->addWidget(m_heightLabel);
-	root->addWidget(heightBox);
-
-	// Advanced mirror options.
-	QGroupBox *mirrorBox = new QGroupBox("Advanced Mirror Options", this);
-	QVBoxLayout *mirrorLay = new QVBoxLayout(mirrorBox);
-	m_mirror = new QCheckBox("Toggle", mirrorBox);
-	m_mirrorX = new QCheckBox("Mirror X", mirrorBox);
-	m_mirrorY = new QCheckBox("Mirror Y", mirrorBox);
-	m_mirrorXY = new QCheckBox("Diagonal", mirrorBox);
-	mirrorLay->addWidget(m_mirror);
-	mirrorLay->addWidget(m_mirrorX);
-	mirrorLay->addWidget(m_mirrorY);
-	mirrorLay->addWidget(m_mirrorXY);
-	root->addWidget(mirrorBox);
-
-	root->addStretch(1);
+	m_widthSlider = m_ui->widthSlider;
+	m_widthSpin = m_ui->widthSpin;
+	m_widthLabel = m_ui->widthLabel;
+	m_featherSlider = m_ui->featherSlider;
+	m_featherSpin = m_ui->featherSpin;
+	m_featherLabel = m_ui->featherLabel;
+	m_heightSlider = m_ui->heightSlider;
+	m_heightSpin = m_ui->heightSpin;
+	m_heightLabel = m_ui->heightLabel;
+	m_mirror = m_ui->mirror;
+	m_mirrorX = m_ui->mirrorX;
+	m_mirrorY = m_ui->mirrorY;
+	m_mirrorXY = m_ui->mirrorXY;
 
 	// Seed from the current tool state under the guard so it doesn't echo back to the tool.
 	m_updating = true;
@@ -115,6 +69,15 @@ WBQtBrushPanel::WBQtBrushPanel(QWidget *owner)
 	connect(m_mirrorXY, SIGNAL(clicked()), this, SLOT(onMirrorXY()));
 
 	s_instance = this;
+}
+
+WBQtBrushPanel::~WBQtBrushPanel()
+{
+	if (s_instance == this)
+	{
+		s_instance = NULL;
+	}
+	delete m_ui;
 }
 
 void WBQtBrushPanel::setRow(QSlider *slider, QSpinBox *spin, int v)

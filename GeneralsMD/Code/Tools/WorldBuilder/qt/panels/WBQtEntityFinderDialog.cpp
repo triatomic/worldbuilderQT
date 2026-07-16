@@ -4,6 +4,7 @@
 // the right (search + read-only list; the MFC Expand/Shrink pair becomes one toggle,
 // persisted in the same ShrinkHotkeyList profile value).
 #include "WBQtEntityFinderDialog.h"
+#include "ui_WBQtEntityFinderDialog.h"
 #include "WBQtEntityFinderBridge.h"
 
 // NewSearch toggle (WBQtObjectBridge.cpp): live-filter search in the tree pickers.
@@ -15,7 +16,6 @@ extern "C" void WBQtConfig_SetNewSearch(int on);
 #include <QCloseEvent>
 #include <QComboBox>
 #include <QDesktopServices>
-#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QImage>
 #include <QLabel>
@@ -27,7 +27,6 @@ extern "C" void WBQtConfig_SetNewSearch(int on);
 #include <QSpinBox>
 #include <QTextCursor>
 #include <QUrl>
-#include <QVBoxLayout>
 #include <QWindow>
 
 #include <qt_windows.h>
@@ -87,28 +86,27 @@ WBQtEntityFinderDialog *WBQtEntityFinderDialog::s_instance = NULL;
 
 WBQtEntityFinderDialog::WBQtEntityFinderDialog(void *frameHwnd)
 	: QWidget(NULL, Qt::Window),
-	m_objectCombo(NULL),
-	m_waypointCombo(NULL),
-	m_fontCombo(NULL),
-	m_resolutionCombo(NULL),
-	m_launchCheck(NULL),
-	m_toggleButton(NULL),
-	m_hotkeyPanel(NULL),
-	m_searchEdit(NULL),
-	m_hotkeyText(NULL)
+	m_ui(new Ui::WBQtEntityFinderDialog)
 {
 	s_instance = this;
-	setWindowTitle("Help / Entity Finder / Shortcut Finder");
 
-	QHBoxLayout *root = new QHBoxLayout(this);
+	// The static widget tree lives in WBQtEntityFinderDialog.ui; bind the members
+	// the logic below uses, then wire what Designer can't express.
+	m_ui->setupUi(this);
 
-	// ---------------- left column ----------------
-	QVBoxLayout *left = new QVBoxLayout();
-	root->addLayout(left);
+	m_objectCombo = m_ui->objectCombo;
+	m_waypointCombo = m_ui->waypointCombo;
+	m_fontCombo = m_ui->fontCombo;
+	m_resolutionCombo = m_ui->resolutionCombo;
+	m_undoSpin = m_ui->undoSpin;
+	m_launchCheck = m_ui->launchCheck;
+	m_newSearchCheck = m_ui->newSearchCheck;
+	m_toggleButton = m_ui->toggleButton;
+	m_hotkeyPanel = m_ui->hotkeyPanel;
+	m_searchEdit = m_ui->searchEdit;
+	m_hotkeyText = m_ui->hotkeyText;
 
-	left->addWidget(new QLabel("Adriane [ Deathscythe ] & Triatomic | Community Worldbuilder V4.1.2qt_b", this));
-
-	QHBoxLayout *logoRow = new QHBoxLayout();
+	// ---------------- left column: the dynamic logo row ----------------
 	// The WB logo bitmap ships with a solid white background; key it out with a SOFT
 	// white matte: alpha ramps with the pixel's distance from pure white, and the kept
 	// fraction is un-blended from the white matte -- so the anti-aliased edge pixels of
@@ -168,129 +166,27 @@ WBQtEntityFinderDialog::WBQtEntityFinderDialog(void *frameHwnd)
 		p.end();
 		QLabel *l = new QLabel(this);
 		l->setPixmap(qtLogo);
-		logoRow->addWidget(l);
+		m_ui->logoRow->addWidget(l);
 	}
 	if (!logo2.isNull())
 	{
 		QLabel *l = new QLabel(this);
 		l->setPixmap(logo2);
-		logoRow->addWidget(l);
+		m_ui->logoRow->addWidget(l);
 	}
-	logoRow->addStretch(1);
-	left->addLayout(logoRow);
+	m_ui->logoRow->addStretch(1);
 
-	QLabel *disclaimer = new QLabel(
-		"This is a fan-modified tool of the original ZH worldbuilder. "
-		"All trademarks belong to their respective owners.", this);
-	disclaimer->setWordWrap(true);
-	left->addWidget(disclaimer);
-
-	QGroupBox *credits = new QGroupBox("Collaborators / Testers:", this);
-	QVBoxLayout *creditsLay = new QVBoxLayout(credits);
-	QLabel *creditsText = new QLabel(
-		"Kabuse [Hotkey layout] | Gramantio | Veloxious | Muska | Vite | Sgtmyers | WWB2 | BKR | Emil", credits);
-	creditsText->setWordWrap(true);
-	creditsLay->addWidget(creditsText);
-	left->addWidget(credits);
-
-	QHBoxLayout *discordRow = new QHBoxLayout();
-	discordRow->addWidget(new QLabel("Discord Server:", this));
-	discordRow->addWidget(new QLabel("https://discord.gg/tJ6zyGb", this), 1);
-	QPushButton *discordButton = new QPushButton("Open Link", this);
-	discordButton->setAutoDefault(false);
-	discordRow->addWidget(discordButton);
-	left->addLayout(discordRow);
-	connect(discordButton, SIGNAL(clicked()), this, SLOT(onOpenDiscord()));
-
-	QGroupBox *objectGroup = new QGroupBox("Object Finder:", this);
-	QHBoxLayout *objectRow = new QHBoxLayout(objectGroup);
-	m_objectCombo = new QComboBox(objectGroup);
-	m_objectCombo->setEditable(true);
-	objectRow->addWidget(m_objectCombo, 1);
-	QPushButton *objectFind = new QPushButton("Find", objectGroup);
-	objectFind->setAutoDefault(false);
-	objectRow->addWidget(objectFind);
-	QPushButton *objectRefresh = new QPushButton("Refresh", objectGroup);
-	objectRefresh->setAutoDefault(false);
-	objectRow->addWidget(objectRefresh);
-	left->addWidget(objectGroup);
-	connect(objectFind, SIGNAL(clicked()), this, SLOT(onFindObject()));
-	connect(objectRefresh, SIGNAL(clicked()), this, SLOT(onRefreshObjects()));
-
-	QGroupBox *waypointGroup = new QGroupBox("Waypoint Finder:", this);
-	QHBoxLayout *waypointRow = new QHBoxLayout(waypointGroup);
-	m_waypointCombo = new QComboBox(waypointGroup);
-	m_waypointCombo->setEditable(true);
-	waypointRow->addWidget(m_waypointCombo, 1);
-	QPushButton *waypointFind = new QPushButton("Find", waypointGroup);
-	waypointFind->setAutoDefault(false);
-	waypointRow->addWidget(waypointFind);
-	QPushButton *waypointRefresh = new QPushButton("Refresh", waypointGroup);
-	waypointRefresh->setAutoDefault(false);
-	waypointRow->addWidget(waypointRefresh);
-	left->addWidget(waypointGroup);
-	connect(waypointFind, SIGNAL(clicked()), this, SLOT(onFindWaypoint()));
-	connect(waypointRefresh, SIGNAL(clicked()), this, SLOT(onRefreshWaypoints()));
-
-	QGroupBox *visual = new QGroupBox("Visual Settings:", this);
-	QVBoxLayout *visualLay = new QVBoxLayout(visual);
-	QHBoxLayout *fontRow = new QHBoxLayout();
-	m_fontCombo = new QComboBox(visual);
-	fontRow->addWidget(m_fontCombo, 1);
-	fontRow->addWidget(new QLabel("(applies on restart)", visual));
-	visualLay->addLayout(fontRow);
-	QHBoxLayout *resolutionRow = new QHBoxLayout();
-	m_resolutionCombo = new QComboBox(visual);
-	resolutionRow->addWidget(m_resolutionCombo, 1);
-	resolutionRow->addWidget(new QLabel("Viewport resolution", visual));
-	visualLay->addLayout(resolutionRow);
-	QHBoxLayout *undoRow = new QHBoxLayout();
-	m_undoSpin = new QSpinBox(visual);
-	m_undoSpin->setRange(1, 999);
-	m_undoSpin->setToolTip("How many editor actions can be undone (Ctrl+Z). Applies immediately.\n"
-		"Every terrain edit keeps a heightmap snapshot in the history, so very\n"
-		"high values can cost a lot of memory on large maps.");
-	undoRow->addWidget(m_undoSpin, 1);
-	undoRow->addWidget(new QLabel("Undo history depth", visual));
-	visualLay->addLayout(undoRow);
-
-	m_newSearchCheck = new QCheckBox("Live search in the tree pickers (NewSearch)", visual);
-	m_newSearchCheck->setToolTip("When on, the object/fence/road/texture panels and the Edit\n"
-		"Action / Pick Unit dialogs filter as you type instead of needing a\n"
-		"Search/Find click. Applies to windows opened after this is changed.");
-	visualLay->addWidget(m_newSearchCheck);
-	left->addWidget(visual);
-
-	left->addStretch(1);
-
-	QHBoxLayout *bottomRow = new QHBoxLayout();
-	m_launchCheck = new QCheckBox("Launch this window on app startup", this);
-	bottomRow->addWidget(m_launchCheck, 1);
-	m_toggleButton = new QPushButton(this);
-	m_toggleButton->setAutoDefault(false);
-	bottomRow->addWidget(m_toggleButton);
-	left->addLayout(bottomRow);
+	connect(m_ui->discordBtn, SIGNAL(clicked()), this, SLOT(onOpenDiscord()));
+	connect(m_ui->objectFindBtn, SIGNAL(clicked()), this, SLOT(onFindObject()));
+	connect(m_ui->objectRefreshBtn, SIGNAL(clicked()), this, SLOT(onRefreshObjects()));
+	connect(m_ui->waypointFindBtn, SIGNAL(clicked()), this, SLOT(onFindWaypoint()));
+	connect(m_ui->waypointRefreshBtn, SIGNAL(clicked()), this, SLOT(onRefreshWaypoints()));
 	connect(m_launchCheck, SIGNAL(toggled(bool)), this, SLOT(onLaunchOnStartupToggled(bool)));
 	connect(m_toggleButton, SIGNAL(clicked()), this, SLOT(onToggleHotkeyPanel()));
 
 	// ---------------- right: the hotkey list panel ----------------
-	m_hotkeyPanel = new QWidget(this);
-	QVBoxLayout *panel = new QVBoxLayout(m_hotkeyPanel);
-	panel->setContentsMargins(0, 0, 0, 0);
-	QHBoxLayout *searchRow = new QHBoxLayout();
-	searchRow->addWidget(new QLabel("Hotkey List    Search:", m_hotkeyPanel));
-	m_searchEdit = new QLineEdit(m_hotkeyPanel);
-	searchRow->addWidget(m_searchEdit, 1);
-	QPushButton *findButton = new QPushButton("Find", m_hotkeyPanel);
-	findButton->setAutoDefault(false);
-	searchRow->addWidget(findButton);
-	panel->addLayout(searchRow);
-	m_hotkeyText = new QPlainTextEdit(m_hotkeyPanel);
-	m_hotkeyText->setReadOnly(true);
 	m_hotkeyText->setTabStopDistance(m_hotkeyText->fontMetrics().horizontalAdvance(QChar('x')) * 8);
-	panel->addWidget(m_hotkeyText, 1);
-	root->addWidget(m_hotkeyPanel, 1);
-	connect(findButton, SIGNAL(clicked()), this, SLOT(onFindHotkey()));
+	connect(m_ui->hotkeyFindBtn, SIGNAL(clicked()), this, SLOT(onFindHotkey()));
 	connect(m_searchEdit, SIGNAL(returnPressed()), this, SLOT(onFindHotkey()));
 
 	// ---------------- seed ----------------
@@ -344,6 +240,15 @@ WBQtEntityFinderDialog::WBQtEntityFinderDialog(void *frameHwnd)
 	{
 		move(leftPos, top);
 	}
+}
+
+WBQtEntityFinderDialog::~WBQtEntityFinderDialog()
+{
+	if (s_instance == this)
+	{
+		s_instance = NULL;
+	}
+	delete m_ui;
 }
 
 bool WBQtEntityFinderDialog::ownsWin32Focus() const

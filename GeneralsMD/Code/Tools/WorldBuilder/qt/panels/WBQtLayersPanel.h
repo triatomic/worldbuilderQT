@@ -13,12 +13,15 @@
 class QTreeWidget;
 class QTreeWidgetItem;
 
+namespace Ui { class WBQtLayersPanel; }	// generated from WBQtLayersPanel.ui
+
 class WBQtLayersPanel : public QWidget
 {
 	Q_OBJECT
 
 public:
 	explicit WBQtLayersPanel(QWidget *owner);
+	virtual ~WBQtLayersPanel();
 
 	// Rebuild the tree from the hidden MFC model (WBQtLayers_PushRefresh).
 	void pushRefresh();
@@ -34,6 +37,8 @@ private slots:
 private:
 	QString selectedLayerName() const;	// the selected item's layer (itself or its parent)
 	bool    isLayerItem(QTreeWidgetItem *item) const;
+
+	Ui::WBQtLayersPanel *m_ui;	// owns the static widget tree (WBQtLayersPanel.ui)
 
 	QTreeWidget *m_tree;
 

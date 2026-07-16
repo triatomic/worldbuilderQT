@@ -13,11 +13,15 @@ class QLineEdit;
 class QListWidget;
 class QPushButton;
 
+namespace Ui { class WBQtPlayerListDialog; }	// generated from WBQtPlayerListDialog.ui
+namespace Ui { class WBQtAddPlayerDialog; }	// generated from WBQtAddPlayerDialog.ui
+
 class WBQtPlayerListDialog : public QDialog
 {
 	Q_OBJECT
 public:
 	explicit WBQtPlayerListDialog(QWidget *parent = 0);
+	virtual ~WBQtPlayerListDialog();
 
 private slots:
 	void onPlayerRowChanged(int row);
@@ -36,6 +40,8 @@ private slots:
 private:
 	void refreshAll();
 	QString relationMask(QListWidget *list) const;
+
+	Ui::WBQtPlayerListDialog *m_ui;	// owns the static widget tree (WBQtPlayerListDialog.ui)
 
 	bool m_updating;
 	QListWidget *m_players;
@@ -61,11 +67,14 @@ class WBQtAddPlayerDialog : public QDialog
 	Q_OBJECT
 public:
 	explicit WBQtAddPlayerDialog(QWidget *parent = 0, const QString &onlySide = QString());
+	virtual ~WBQtAddPlayerDialog();
 
 	void accept();
 	QString addedTemplate() const { return m_addedTemplate; }
 
 private:
+	Ui::WBQtAddPlayerDialog *m_ui;	// owns the static widget tree (WBQtAddPlayerDialog.ui)
+
 	QComboBox *m_templates;
 	QString m_addedTemplate;
 };

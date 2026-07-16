@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WBQtBlendMaterialPanel</class>
+ <widget class="QWidget" name="WBQtBlendMaterialPanel">
+  <property name="windowTitle">
+   <string>Blend Material Options</string>
+  </property>
+  <layout class="QVBoxLayout" name="rootLayout">
+   <item>
+    <widget class="QGroupBox" name="gapBox">
+     <property name="title">
+      <string>Tile Gap Options</string>
+     </property>
+     <layout class="QVBoxLayout" name="gapLay">
+      <item>
+       <widget class="QCheckBox" name="hvGap">
+        <property name="text">
+         <string>Add one tile between horizontal and vertical gaps</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="dGap">
+        <property name="text">
+         <string>Add one tile between diagonal gaps</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="advBox">
+     <property name="title">
+      <string>Advanced Blend Options</string>
+     </property>
+     <layout class="QVBoxLayout" name="advLay">
+      <item>
+       <widget class="QCheckBox" name="revalBlends">
+        <property name="text">
+         <string>Re-revalidate Blends (3x3 around cursor)</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="noteBox">
+     <property name="title">
+      <string>Developer Note:</string>
+     </property>
+     <layout class="QVBoxLayout" name="noteLay">
+      <item>
+       <widget class="QLabel" name="noteLabel">
+        <property name="text">
+         <string>Hold shift then click at a texture to unblend them</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="mirrorBox">
+     <property name="title">
+      <string>Advanced Mirror Options</string>
+     </property>
+     <layout class="QVBoxLayout" name="mirrorLay">
+      <item>
+       <widget class="QLabel" name="mirrorWarnLabel">
+        <property name="text">
+         <string>Warning: On large maps, this may result in noticeable slowdowns, especially near the edges.</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="mirror">
+        <property name="text">
+         <string>Toggle</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="mirrorX">
+        <property name="text">
+         <string>Mirror X</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="mirrorY">
+        <property name="text">
+         <string>Mirror Y</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="mirrorXY">
+        <property name="text">
+         <string>Diagonal</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer name="bottomSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

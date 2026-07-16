@@ -1,16 +1,14 @@
 // WBQtLayersPanel.cpp -- see WBQtLayersPanel.h.
 #include "WBQtLayersPanel.h"
+#include "ui_WBQtLayersPanel.h"
 #include "WBQtLayersBridge.h"
 #include "WBQtTreeStyle.h"
 #include "WBQtWindowPos.h"
 #include "qwinwidget.h"
 
 #include <QFont>
-#include <QGroupBox>
-#include <QLabel>
 #include <QMenu>
 #include <QTreeWidget>
-#include <QVBoxLayout>
 
 #include <qt_windows.h>
 
@@ -31,45 +29,16 @@ namespace
 
 WBQtLayersPanel::WBQtLayersPanel(QWidget *owner)
 	: QWidget(owner, Qt::Tool),
+	  m_ui(new Ui::WBQtLayersPanel),
 	  m_updating(false)
 {
-	setWindowTitle("Layers List");
-	resize(300, 420);
+	// The static widget tree lives in WBQtLayersPanel.ui; bind the members the
+	// logic below uses, then wire what Designer can't express.
+	m_ui->setupUi(this);
 	WBQtWindowPos_Track(this, "LayersList");
 
-	QVBoxLayout *root = new QVBoxLayout(this);
-
-	m_tree = new QTreeWidget(this);
-	m_tree->setHeaderHidden(true);
-	m_tree->setColumnCount(1);
-	m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
-	m_tree->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+	m_tree = m_ui->tree;
 	WBQtTreeStyle::applyTreeLines(m_tree);
-	root->addWidget(m_tree, 1);
-
-	// The MFC dialog's help boxes (everything is right-click driven, like the MFC tree).
-	QGroupBox *noteBox = new QGroupBox("Developer Note (How To Use):", this);
-	QVBoxLayout *noteLay = new QVBoxLayout(noteBox);
-	QLabel *noteText = new QLabel(
-		"1. Right Click on the List and hit Insert New Layer\n"
-		"2. Select an object on the map\n"
-		"3. Right Click to on the layer list again\n"
-		"4. Select Merge Into View Selection Into\n"
-		"5. Select Your  New Layer", noteBox);
-	noteLay->addWidget(noteText);
-	QLabel *noteHint = new QLabel(
-		"Right Click on the on the items list to see more Options", noteBox);
-	noteLay->addWidget(noteHint);
-	root->addWidget(noteBox);
-
-	QGroupBox *usageBox = new QGroupBox("Example Usage:", this);
-	QVBoxLayout *usageLay = new QVBoxLayout(usageBox);
-	QLabel *usageText = new QLabel(
-		"It's great when you have lots of objects/waypoints going to the same spot for a "
-		"cinematic. You can hide most of them and work without the clutter", usageBox);
-	usageText->setWordWrap(true);
-	usageLay->addWidget(usageText);
-	root->addWidget(usageBox);
 
 	pushRefresh();
 
@@ -81,6 +50,15 @@ WBQtLayersPanel::WBQtLayersPanel(QWidget *owner)
 		this, SLOT(onContextMenu(const QPoint &)));
 
 	s_instance = this;
+}
+
+WBQtLayersPanel::~WBQtLayersPanel()
+{
+	if (s_instance == this)
+	{
+		s_instance = NULL;
+	}
+	delete m_ui;
 }
 
 bool WBQtLayersPanel::isLayerItem(QTreeWidgetItem *item) const

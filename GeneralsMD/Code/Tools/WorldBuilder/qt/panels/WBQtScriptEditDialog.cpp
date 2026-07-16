@@ -3,13 +3,14 @@
 // IDD_ScriptActionsFalse); every command routes through the bridge, which ports the page
 // handlers verbatim and reports back the row to select after the rebuild.
 #include "WBQtScriptEditDialog.h"
+#include "ui_WBQtScriptEditListTab.h"
+#include "ui_WBQtScriptEditDialog.h"
 #include "WBQtScriptEditBridge.h"
 #include "WBQtScriptWindow.h"
 
 #include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QGroupBox>
-#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -18,7 +19,6 @@
 #include <QRadioButton>
 #include <QSpinBox>
 #include <QTabWidget>
-#include <QVBoxLayout>
 
 #include <qt_windows.h>
 
@@ -46,13 +46,26 @@ namespace
 
 WBQtScriptEditListTab::WBQtScriptEditListTab(void *script, Mode mode, QWidget *parent)
 	: QWidget(parent),
+	m_ui(new Ui::WBQtScriptEditListTab),
 	m_script(script),
 	m_mode(mode),
 	m_updating(false),
 	m_orButton(NULL),
 	m_moveToOtherButton(NULL)
 {
-	QVBoxLayout *root = new QVBoxLayout(this);
+	// The static widget tree lives in WBQtScriptEditListTab.ui; the mode-dependent
+	// pieces (caption, New button text, the Or / Move-to-Other button) are set here.
+	m_ui->setupUi(this);
+
+	m_list = m_ui->list;
+	m_smartCopyCheck = m_ui->smartCopyCheck;
+	m_newButton = m_ui->newButton;
+	m_editButton = m_ui->editButton;
+	m_copyButton = m_ui->copyButton;
+	m_deleteButton = m_ui->deleteButton;
+	m_moveUpButton = m_ui->moveUpButton;
+	m_moveDownButton = m_ui->moveDownButton;
+	m_commentEdit = m_ui->commentEdit;
 
 	const char *caption = "Conditions for this script:";
 	if (m_mode == ModeActionsTrue)
@@ -63,46 +76,19 @@ WBQtScriptEditListTab::WBQtScriptEditListTab(void *script, Mode mode, QWidget *p
 	{
 		caption = "Actions to take if conditions are false:";
 	}
-	root->addWidget(new QLabel(caption, this));
+	m_ui->captionLabel->setText(caption);
 
-	QHBoxLayout *middle = new QHBoxLayout();
-	m_list = new QListWidget(this);
-	m_list->setSelectionMode(QAbstractItemView::SingleSelection);
-	m_list->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-	middle->addWidget(m_list, 1);
-
-	QVBoxLayout *buttons = new QVBoxLayout();
-	m_smartCopyCheck = new QCheckBox("Smart Copy", this);
-	buttons->addWidget(m_smartCopyCheck);
-	m_newButton = new QPushButton((m_mode == ModeConditions) ? "New... [&S]" : "New...[&S]", this);
-	buttons->addWidget(m_newButton);
-	m_editButton = new QPushButton("&Edit...", this);
-	buttons->addWidget(m_editButton);
-	m_copyButton = new QPushButton("&Copy", this);
-	buttons->addWidget(m_copyButton);
-	m_deleteButton = new QPushButton("&Delete", this);
-	buttons->addWidget(m_deleteButton);
+	m_newButton->setText((m_mode == ModeConditions) ? "New... [&S]" : "New...[&S]");
 	if (m_mode == ModeConditions)
 	{
 		m_orButton = new QPushButton("O&r", this);
-		buttons->addWidget(m_orButton);
+		m_ui->buttonsLayout->insertWidget(5, m_orButton);	// after Delete, before the stretch
 	}
 	else
 	{
 		m_moveToOtherButton = new QPushButton((m_mode == ModeActionsTrue) ? "Move to False" : "Move to True", this);
-		buttons->addWidget(m_moveToOtherButton);
+		m_ui->buttonsLayout->insertWidget(5, m_moveToOtherButton);	// after Delete, before the stretch
 	}
-	buttons->addStretch(1);
-	m_moveUpButton = new QPushButton("Move Up [&Z]", this);
-	buttons->addWidget(m_moveUpButton);
-	m_moveDownButton = new QPushButton("Move Down [&X]", this);
-	buttons->addWidget(m_moveDownButton);
-	middle->addLayout(buttons);
-	root->addLayout(middle, 1);
-
-	m_commentEdit = new QPlainTextEdit(this);
-	m_commentEdit->setFixedHeight(64);
-	root->addWidget(m_commentEdit);
 
 	connect(m_list, SIGNAL(currentRowChanged(int)), this, SLOT(onSelectionChanged()));
 	connect(m_list, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(onEdit()));
@@ -126,6 +112,11 @@ WBQtScriptEditListTab::WBQtScriptEditListTab(void *script, Mode mode, QWidget *p
 	// Initial fill: the conditions page selected row 1 (the first condition) in OnInitDialog;
 	// the actions pages started at the top.
 	reload((m_mode == ModeConditions) ? 1 : 0);
+}
+
+WBQtScriptEditListTab::~WBQtScriptEditListTab()
+{
+	delete m_ui;
 }
 
 int WBQtScriptEditListTab::currentRow() const
@@ -376,16 +367,19 @@ void WBQtScriptEditListTab::onCommentChanged()
 
 WBQtScriptEditDialog::WBQtScriptEditDialog(void *script, QWidget *parent)
 	: QDialog(parent),
+	m_ui(new Ui::WBQtScriptEditDialog),
 	m_script(script),
 	m_updating(false)
 {
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
-	QVBoxLayout *root = new QVBoxLayout(this);
-	m_tabs = new QTabWidget(this);
-	root->addWidget(m_tabs, 1);
+	// The static widget tree (tab widget + Script Properties page + button box) lives in
+	// WBQtScriptEditDialog.ui; the three list pages are runtime-built WBQtScriptEditListTabs.
+	m_ui->setupUi(this);
 
-	m_tabs->addTab(buildPropertiesTab(), "Script Properties");
+	m_tabs = m_ui->tabs;
+
+	wirePropertiesTab();
 	m_conditionsTab = new WBQtScriptEditListTab(m_script, WBQtScriptEditListTab::ModeConditions, this);
 	m_tabs->addTab(m_conditionsTab, "Script Conditions");
 	m_trueTab = new WBQtScriptEditListTab(m_script, WBQtScriptEditListTab::ModeActionsTrue, this);
@@ -394,73 +388,31 @@ WBQtScriptEditDialog::WBQtScriptEditDialog(void *script, QWidget *parent)
 	m_tabs->addTab(m_falseTab, "Actions if false.");
 	connect(m_tabs, SIGNAL(currentChanged(int)), this, SLOT(onTabChanged(int)));
 
-	QDialogButtonBox *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-	connect(buttons, SIGNAL(accepted()), this, SLOT(accept()));
-	connect(buttons, SIGNAL(rejected()), this, SLOT(reject()));
-	root->addWidget(buttons);
+	connect(m_ui->buttonBox, SIGNAL(accepted()), this, SLOT(accept()));
+	connect(m_ui->buttonBox, SIGNAL(rejected()), this, SLOT(reject()));
 
 	seedProperties();
 	resize(780, 560);
 }
 
-QWidget *WBQtScriptEditDialog::buildPropertiesTab()
+WBQtScriptEditDialog::~WBQtScriptEditDialog()
 {
-	QWidget *page = new QWidget(this);
-	QVBoxLayout *root = new QVBoxLayout(page);
+	delete m_ui;
+}
 
-	QHBoxLayout *nameRow = new QHBoxLayout();
-	nameRow->addWidget(new QLabel("Script Name:", page));
-	m_nameEdit = new QLineEdit(page);
-	nameRow->addWidget(m_nameEdit, 1);
-	root->addLayout(nameRow);
-
-	QHBoxLayout *middle = new QHBoxLayout();
-
-	QGroupBox *flagsBox = new QGroupBox("Script Flags:", page);
-	QVBoxLayout *flagsLay = new QVBoxLayout(flagsBox);
-	m_subroutineCheck = new QCheckBox("Script is Subroutine (Make this script usable by teams, read the manual for more info)", page);
-	flagsLay->addWidget(m_subroutineCheck);
-	m_activeCheck = new QCheckBox("Script is Active", page);
-	flagsLay->addWidget(m_activeCheck);
-	m_oneShotCheck = new QCheckBox("Deactivate upon success (automatically disables itself after completing successfully)", page);
-	flagsLay->addWidget(m_oneShotCheck);
-	flagsLay->addStretch(1);
-	middle->addWidget(flagsBox, 1);
-
-	QGroupBox *activeInBox = new QGroupBox("Active in:", page);
-	QVBoxLayout *activeInLay = new QVBoxLayout(activeInBox);
-	m_easyCheck = new QCheckBox("Easy", page);
-	activeInLay->addWidget(m_easyCheck);
-	m_normalCheck = new QCheckBox("Normal", page);
-	activeInLay->addWidget(m_normalCheck);
-	m_hardCheck = new QCheckBox("Hard", page);
-	activeInLay->addWidget(m_hardCheck);
-	activeInLay->addStretch(1);
-	middle->addWidget(activeInBox);
-
-	QGroupBox *evalBox = new QGroupBox("Evaluate script:", page);
-	QVBoxLayout *evalLay = new QVBoxLayout(evalBox);
-	m_everyFrameRadio = new QRadioButton("Every Frame", page);
-	evalLay->addWidget(m_everyFrameRadio);
-	QHBoxLayout *secondsRow = new QHBoxLayout();
-	m_everySecondRadio = new QRadioButton("Every", page);
-	secondsRow->addWidget(m_everySecondRadio);
-	m_secondsSpin = new QSpinBox(page);
-	m_secondsSpin->setRange(1, 9999);
-	secondsRow->addWidget(m_secondsSpin);
-	secondsRow->addWidget(new QLabel("seconds.", page));
-	secondsRow->addStretch(1);
-	evalLay->addLayout(secondsRow);
-	evalLay->addStretch(1);
-	middle->addWidget(evalBox);
-
-	root->addLayout(middle);
-
-	QGroupBox *commentBox = new QGroupBox("Script Comment:", page);
-	QVBoxLayout *commentLay = new QVBoxLayout(commentBox);
-	m_commentEdit = new QPlainTextEdit(page);
-	commentLay->addWidget(m_commentEdit);
-	root->addWidget(commentBox, 1);
+void WBQtScriptEditDialog::wirePropertiesTab()
+{
+	m_nameEdit = m_ui->nameEdit;
+	m_subroutineCheck = m_ui->subroutineCheck;
+	m_activeCheck = m_ui->activeCheck;
+	m_oneShotCheck = m_ui->oneShotCheck;
+	m_easyCheck = m_ui->easyCheck;
+	m_normalCheck = m_ui->normalCheck;
+	m_hardCheck = m_ui->hardCheck;
+	m_everyFrameRadio = m_ui->everyFrameRadio;
+	m_everySecondRadio = m_ui->everySecondRadio;
+	m_secondsSpin = m_ui->secondsSpin;
+	m_commentEdit = m_ui->commentEdit;
 
 	connect(m_nameEdit, SIGNAL(textChanged(QString)), this, SLOT(onNameChanged(QString)));
 	connect(m_commentEdit, SIGNAL(textChanged()), this, SLOT(onCommentChanged()));
@@ -511,8 +463,6 @@ QWidget *WBQtScriptEditDialog::buildPropertiesTab()
 			WBQtScriptEditData_SetFlag(m_script, WB_QT_SCRIPTEDIT_FLAG_HARD, on ? 1 : 0);
 		}
 	});
-
-	return page;
 }
 
 void WBQtScriptEditDialog::seedProperties()

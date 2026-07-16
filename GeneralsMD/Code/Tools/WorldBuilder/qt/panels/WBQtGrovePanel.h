@@ -19,12 +19,15 @@ class QComboBox;
 class QLabel;
 class QSpinBox;
 
+namespace Ui { class WBQtGrovePanel; }	// generated from WBQtGrovePanel.ui
+
 class WBQtGrovePanel : public QWidget
 {
 	Q_OBJECT
 
 public:
 	explicit WBQtGrovePanel(QWidget *owner);
+	virtual ~WBQtGrovePanel();
 
 	// Re-seed weights/total/combos/preview from the current MFC state (WBQtGrove_PushRefresh),
 	// e.g. after a set load pulls in a whole new tree makeup.
@@ -52,6 +55,8 @@ private:
 	void refreshTotal();				// re-display the running weight total
 	void refreshPreview();
 	int  rowOfSender(QObject *sender);	// map a signalling child widget back to its 1..11 slot
+
+	Ui::WBQtGrovePanel *m_ui;	// owns the static widget tree (WBQtGrovePanel.ui)
 
 	QComboBox *m_setName;
 	QComboBox *m_treeType[TREES_PER_SET];

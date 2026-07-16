@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WBQtScriptEditDialog</class>
+ <widget class="QDialog" name="WBQtScriptEditDialog">
+  <layout class="QVBoxLayout" name="rootLayout" stretch="1,0">
+   <item>
+    <widget class="QTabWidget" name="tabs">
+     <property name="currentIndex">
+      <number>0</number>
+     </property>
+     <widget class="QWidget" name="propertiesTab">
+      <attribute name="title">
+       <string>Script Properties</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="propertiesLayout" stretch="0,0,1">
+       <item>
+        <layout class="QHBoxLayout" name="nameRow" stretch="0,1">
+         <item>
+          <widget class="QLabel" name="nameLabel">
+           <property name="text">
+            <string>Script Name:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLineEdit" name="nameEdit"/>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="middleRow" stretch="1,0,0">
+         <item>
+          <widget class="QGroupBox" name="flagsBox">
+           <property name="title">
+            <string>Script Flags:</string>
+           </property>
+           <layout class="QVBoxLayout" name="flagsLay">
+            <item>
+             <widget class="QCheckBox" name="subroutineCheck">
+              <property name="text">
+               <string>Script is Subroutine (Make this script usable by teams, read the manual for more info)</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QCheckBox" name="activeCheck">
+              <property name="text">
+               <string>Script is Active</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QCheckBox" name="oneShotCheck">
+              <property name="text">
+               <string>Deactivate upon success (automatically disables itself after completing successfully)</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="flagsSpacer">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <widget class="QGroupBox" name="activeInBox">
+           <property name="title">
+            <string>Active in:</string>
+           </property>
+           <layout class="QVBoxLayout" name="activeInLay">
+            <item>
+             <widget class="QCheckBox" name="easyCheck">
+              <property name="text">
+               <string>Easy</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QCheckBox" name="normalCheck">
+              <property name="text">
+               <string>Normal</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QCheckBox" name="hardCheck">
+              <property name="text">
+               <string>Hard</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="activeInSpacer">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <widget class="QGroupBox" name="evalBox">
+           <property name="title">
+            <string>Evaluate script:</string>
+           </property>
+           <layout class="QVBoxLayout" name="evalLay">
+            <item>
+             <widget class="QRadioButton" name="everyFrameRadio">
+              <property name="text">
+               <string>Every Frame</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="secondsRow">
+              <item>
+               <widget class="QRadioButton" name="everySecondRadio">
+                <property name="text">
+                 <string>Every</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QSpinBox" name="secondsSpin">
+                <property name="minimum">
+                 <number>1</number>
+                </property>
+                <property name="maximum">
+                 <number>9999</number>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="secondsLabel">
+                <property name="text">
+                 <string>seconds.</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <spacer name="secondsSpacer">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </spacer>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <spacer name="evalSpacer">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="commentBox">
+         <property name="title">
+          <string>Script Comment:</string>
+         </property>
+         <layout class="QVBoxLayout" name="commentLay">
+          <item>
+           <widget class="QPlainTextEdit" name="commentEdit"/>
+          </item>
+         </layout>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+   <item>
+    <widget class="QDialogButtonBox" name="buttonBox">
+     <property name="standardButtons">
+      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

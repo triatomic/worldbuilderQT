@@ -17,12 +17,15 @@
 class QComboBox;
 class QDoubleSpinBox;
 
+namespace Ui { class WBQtScorchPanel; }	// generated from WBQtScorchPanel.ui
+
 class WBQtScorchPanel : public QWidget
 {
 	Q_OBJECT
 
 public:
 	explicit WBQtScorchPanel(QWidget *owner);
+	virtual ~WBQtScorchPanel();
 
 	// Re-seed the type combo + size field from the current MFC statics (WBQtScorch_PushRefresh).
 	void pushRefresh();
@@ -34,6 +37,8 @@ private slots:
 	void onSizeChanged(double v);
 
 private:
+	Ui::WBQtScorchPanel *m_ui;	// owns the static widget tree (WBQtScorchPanel.ui)
+
 	QComboBox      *m_type;
 	QDoubleSpinBox *m_size;
 

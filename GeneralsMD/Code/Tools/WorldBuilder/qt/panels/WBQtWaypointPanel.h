@@ -23,12 +23,15 @@ class QGroupBox;
 class QLabel;
 class QLineEdit;
 
+namespace Ui { class WBQtWaypointPanel; }	// generated from WBQtWaypointPanel.ui
+
 class WBQtWaypointPanel : public QWidget
 {
 	Q_OBJECT
 
 public:
 	explicit WBQtWaypointPanel(QWidget *owner);
+	virtual ~WBQtWaypointPanel();
 
 	// Re-seed every control from the current MFC selection (WBQtWaypoint_PushRefresh).
 	void pushRefresh();
@@ -47,6 +50,8 @@ private slots:
 private:
 	void rebuildNamePresets(int kind);	// repopulate the combo drop-down for the current kind
 	void applyLabel(int labelIndex, QLineEdit *edit);
+
+	Ui::WBQtWaypointPanel *m_ui;	// owns the static widget tree (WBQtWaypointPanel.ui)
 
 	QGroupBox      *m_nameBox;
 	QComboBox      *m_name;

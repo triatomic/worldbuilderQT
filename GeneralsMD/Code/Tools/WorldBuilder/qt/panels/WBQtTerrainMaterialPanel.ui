@@ -1,0 +1,492 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WBQtTerrainMaterialPanel</class>
+ <widget class="QWidget" name="WBQtTerrainMaterialPanel">
+  <property name="windowTitle">
+   <string>Terrain Material Options</string>
+  </property>
+  <layout class="QVBoxLayout" name="rootLayout" stretch="0,3,0,0,0,0,0,0,0,0,0">
+   <item>
+    <layout class="QHBoxLayout" name="searchRow" stretch="1,0,0">
+     <item>
+      <widget class="QLineEdit" name="search">
+       <property name="placeholderText">
+        <string>Search textures...</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="searchBtn">
+       <property name="text">
+        <string>Search</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="resetBtn">
+       <property name="text">
+        <string>Reset</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QTreeWidget" name="tree">
+     <attribute name="headerVisible">
+      <bool>false</bool>
+     </attribute>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="favHeadRow">
+     <item>
+      <widget class="QLabel" name="favoritesLabel">
+       <property name="text">
+        <string>Favorites:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="favHeadSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="setFavBtn">
+       <property name="text">
+        <string>Set</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="delFavBtn">
+       <property name="text">
+        <string>Delete</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="importFavBtn">
+       <property name="text">
+        <string>Import</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QTreeWidget" name="favTree">
+     <attribute name="headerVisible">
+      <bool>false</bool>
+     </attribute>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="mirrorBox">
+     <property name="title">
+      <string>Advanced Mirror Options</string>
+     </property>
+     <layout class="QHBoxLayout" name="mirrorLay">
+      <item>
+       <widget class="QCheckBox" name="mirror">
+        <property name="text">
+         <string>Toggle</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="mirrorX">
+        <property name="text">
+         <string>Mirror X</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="mirrorXY">
+        <property name="text">
+         <string>Diagonal</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="mirrorY">
+        <property name="text">
+         <string>Mirror Y</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="mirrorSpacer">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </spacer>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="patBox">
+     <property name="title">
+      <string>Single Click Paint Mode</string>
+     </property>
+     <layout class="QVBoxLayout" name="patLay">
+      <item>
+       <layout class="QHBoxLayout" name="patRow" stretch="0,0,1">
+        <item>
+         <widget class="QCheckBox" name="patternPaint">
+          <property name="text">
+           <string>Toggle</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="noMixing">
+          <property name="text">
+           <string>No Mixing</string>
+          </property>
+          <property name="toolTip">
+           <string>Don't auto-blend different texture classes.</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="paintMode"/>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="densRow" stretch="0,1">
+        <item>
+         <widget class="QLabel" name="densityLabel">
+          <property name="text">
+           <string>Density:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="density">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="minimum">
+           <number>0</number>
+          </property>
+          <property name="maximum">
+           <number>100</number>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="midRow" stretch="1,0">
+     <item>
+      <layout class="QVBoxLayout" name="midLeft">
+       <item>
+        <widget class="QLabel" name="nameLabel">
+         <property name="text">
+          <string>No Selection</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="wRow" stretch="0,1,0,0">
+         <item>
+          <widget class="QLabel" name="cellLabel">
+           <property name="text">
+            <string>Cell:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QSlider" name="widthSlider">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="WBQtScrubSpinBox" name="widthSpin">
+           <property name="toolTip">
+            <string>Drag up/down to scrub, or type a value.</string>
+           </property>
+           <property name="decimals">
+            <number>0</number>
+           </property>
+           <property name="singleStep">
+            <double>1.000000000000000</double>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="widthLabel">
+           <property name="text">
+            <string>0.0 FEET.</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="zRow" stretch="0,1,0">
+         <item>
+          <widget class="QLabel" name="zLabel">
+           <property name="text">
+            <string>Z:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QSlider" name="heightSlider">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="WBQtScrubSpinBox" name="heightSpin">
+           <property name="toolTip">
+            <string>Drag up/down to scrub, or type a value.</string>
+           </property>
+           <property name="decimals">
+            <number>0</number>
+           </property>
+           <property name="singleStep">
+            <double>1.000000000000000</double>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </item>
+     <item>
+      <layout class="QVBoxLayout" name="midRight">
+       <item>
+        <layout class="QHBoxLayout" name="swatchRow">
+         <item>
+          <widget class="QLabel" name="fgSwatch">
+           <property name="minimumSize">
+            <size>
+             <width>48</width>
+             <height>48</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>48</width>
+             <height>48</height>
+            </size>
+           </property>
+           <property name="frameShape">
+            <enum>QFrame::Box</enum>
+           </property>
+           <property name="toolTip">
+            <string>Foreground texture</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="bgSwatch">
+           <property name="minimumSize">
+            <size>
+             <width>48</width>
+             <height>48</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>48</width>
+             <height>48</height>
+            </size>
+           </property>
+           <property name="frameShape">
+            <enum>QFrame::Box</enum>
+           </property>
+           <property name="toolTip">
+            <string>Background texture</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QPushButton" name="swapBtn">
+         <property name="text">
+          <string>Swap</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="pathRow">
+     <item>
+      <widget class="QCheckBox" name="paintPathing">
+       <property name="text">
+        <string>Paint passable / impassable</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="pathSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QRadioButton" name="passable">
+       <property name="text">
+        <string>Passable</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QRadioButton" name="impassable">
+       <property name="text">
+        <string>Impassable</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QFrame" name="copySep">
+     <property name="frameShape">
+      <enum>QFrame::HLine</enum>
+     </property>
+     <property name="frameShadow">
+      <enum>QFrame::Sunken</enum>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="copyRow">
+     <item>
+      <widget class="QCheckBox" name="copyTexture">
+       <property name="text">
+        <string>Texture Copy</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="copyTerrain">
+       <property name="text">
+        <string>Terrain Copy</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="raiseOnly">
+       <property name="text">
+        <string>Raise Only</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="copySpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="saRow">
+     <item>
+      <widget class="QRadioButton" name="copySelect">
+       <property name="text">
+        <string>Select</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QRadioButton" name="copyApply">
+       <property name="text">
+        <string>Apply</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="saGap">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeType">
+        <enum>QSizePolicy::Fixed</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>12</width>
+         <height>0</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QLabel" name="rotateLabel">
+       <property name="text">
+        <string>Rotate:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QRadioButton" name="rot0">
+       <property name="text">
+        <string>0</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QRadioButton" name="rot90">
+       <property name="text">
+        <string>90</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QRadioButton" name="rot180">
+       <property name="text">
+        <string>180</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QRadioButton" name="rot270">
+       <property name="text">
+        <string>270</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="saSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>WBQtScrubSpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>WBQtScrubSpinBox.h</header>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

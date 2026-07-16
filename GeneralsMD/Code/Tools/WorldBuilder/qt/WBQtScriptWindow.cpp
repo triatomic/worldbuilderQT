@@ -1,5 +1,6 @@
 // WBQtScriptWindow.cpp -- see WBQtScriptWindow.h.
 #include "WBQtScriptWindow.h"
+#include "ui_WBQtScriptWindow.h"
 #include "WBQtPanelBridge.h"
 #include "WBQtTreeStyle.h"
 #include "WBQtWindowPos.h"
@@ -10,10 +11,6 @@
 #include <QColor>
 #include <QDropEvent>
 #include <QFont>
-#include <QGridLayout>
-#include <QGroupBox>
-#include <QHBoxLayout>
-#include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
 #include <QMouseEvent>
@@ -29,7 +26,6 @@
 #include <QTextBrowser>
 #include <QTreeWidgetItemIterator>
 #include <QUrl>
-#include <QVBoxLayout>
 #include <QWindow>
 
 #include <qt_windows.h>
@@ -103,6 +99,7 @@ void WBQtScriptTree::dropEvent(QDropEvent *event)
 //----------------------------------------------------------------------------------------
 WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	: QWidget(NULL, Qt::Window),
+	  m_ui(new Ui::WBQtScriptWindow),
 	  m_lastFoundListType(0),
 	  m_updating(false)
 {
@@ -112,65 +109,34 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	// instead of the search / rename fields. A real top-level owns its own focus. It still gets
 	// the dark title bar (WBQtTheme targets all top-level windows). owner is now unused.
 	(void)owner;
-	setWindowTitle("Script Editor");
+	// The static widget tree lives in WBQtScriptWindow.ui; bind the members the logic
+	// below uses, then wire what Designer can't express.
+	m_ui->setupUi(this);
 	resize(900, 640);
 	WBQtWindowPos_Track(this, "ScriptEditor");
 
-	QVBoxLayout *root = new QVBoxLayout(this);
-
 	// --- Option checkboxes (top strip), mirroring the MFC dialog's row ---
-	QGroupBox *optBox = new QGroupBox("Options", this);
-	QGridLayout *optGrid = new QGridLayout(optBox);
-	m_ckCompress = new QCheckBox("Compress Script", optBox);
-	m_ckNewIcons = new QCheckBox("New Icons", optBox);
+	m_ckCompress = m_ui->ckCompress;
+	m_ckNewIcons = m_ui->ckNewIcons;
 	// The Qt tree always draws the native Qt icon set -- there is no "old icons" BMP set
 	// on the Qt side -- so the choice is fixed: show the box checked and grayed out.
 	m_ckNewIcons->setChecked(true);
 	m_ckNewIcons->setEnabled(false);
-	m_ckCleanName = new QCheckBox("Clean Script Name", optBox);
-	m_ckAutoVerify = new QCheckBox("Auto Verify", optBox);
-	m_ckSmartCopy = new QCheckBox("Smart Copy", optBox);
-	m_ckFastLoad = new QCheckBox("Fast Load", optBox);
-	m_ckScriptMerge = new QCheckBox("Script Merge", optBox);
-	m_ckRefByParam = new QCheckBox("Detect References via picked Parameters", optBox);
-	m_ckDisableRef = new QCheckBox("Disable references (reduces input lag)", optBox);
-
-	// Hover help. Kept to what each box actually does in the handlers (qtMSetCheckbox /
-	// formatScriptLabel / buildReferencedInTag / the warning-cache load).
-	m_ckCompress->setToolTip("Save scripts compressed in the map file (smaller maps).");
-	m_ckNewIcons->setToolTip("Modern tree icons. Always on in the Qt editor.");
-	m_ckCleanName->setToolTip("Hide the [E N H] difficulty tag on scripts that run on all three difficulties.");
-	m_ckAutoVerify->setToolTip("Re-check scripts for warnings (red) automatically after every edit.");
-	m_ckSmartCopy->setToolTip("Copy auto-increments numbers in the script's parameters (Counter01 → Counter02).");
-	m_ckFastLoad->setToolTip("Open the editor faster on big script sets by skipping the deep warning-hint scan.");
-	m_ckScriptMerge->setToolTip("Ctrl+drag a script or folder onto another to merge them. Plain drag still moves.");
-	m_ckRefByParam->setToolTip("Find [Referenced in] by scanning actual script parameters instead of plain text.");
-	m_ckDisableRef->setToolTip("Skip the [Referenced in] scan on selection. Faster on huge script sets.");
-
-	optGrid->addWidget(m_ckCompress, 0, 0);
-	optGrid->addWidget(m_ckNewIcons, 0, 1);
-	optGrid->addWidget(m_ckCleanName, 0, 2);
-	optGrid->addWidget(m_ckAutoVerify, 0, 3);
-	optGrid->addWidget(m_ckSmartCopy, 1, 0);
-	optGrid->addWidget(m_ckFastLoad, 1, 1);
-	optGrid->addWidget(m_ckScriptMerge, 1, 2);
-	optGrid->addWidget(m_ckRefByParam, 2, 0, 1, 2);
-	optGrid->addWidget(m_ckDisableRef, 2, 2, 1, 2);
-	root->addWidget(optBox);
+	m_ckCleanName = m_ui->ckCleanName;
+	m_ckAutoVerify = m_ui->ckAutoVerify;
+	m_ckSmartCopy = m_ui->ckSmartCopy;
+	m_ckFastLoad = m_ui->ckFastLoad;
+	m_ckScriptMerge = m_ui->ckScriptMerge;
+	m_ckRefByParam = m_ui->ckRefByParam;
+	m_ckDisableRef = m_ui->ckDisableRef;
 
 	// --- Search row ---
-	QHBoxLayout *searchRow = new QHBoxLayout();
-	searchRow->addWidget(new QLabel("Search:", this));
-	m_search = new QLineEdit(this);
-	m_search->setPlaceholderText("name / comment / parameter");
-	m_findBtn = new QPushButton("Find Next", this);
-	searchRow->addWidget(m_search, 1);
-	searchRow->addWidget(m_findBtn);
-	root->addLayout(searchRow);
+	m_search = m_ui->search;
+	m_findBtn = m_ui->findBtn;
 
 	// --- Middle: tree | (description over comment) ---
-	QSplitter *split = new QSplitter(Qt::Horizontal, this);
-
+	// The tree's ctor needs this window (no setter), so it stays created here and is
+	// inserted into the .ui splitter in front of the detail pane.
 	m_tree = new WBQtScriptTree(this);
 	m_tree->setHeaderHidden(true);
 	m_tree->setColumnCount(1);
@@ -185,64 +151,32 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	m_tree->setSelectionMode(QAbstractItemView::SingleSelection);
 	m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
 	WBQtTreeStyle::applyTreeLines(m_tree);
-	split->addWidget(m_tree);
+	m_ui->split->insertWidget(0, m_tree);
+	m_ui->split->setStretchFactor(0, 1);
+	m_ui->split->setStretchFactor(1, 2);
 
-	QWidget *detailPane = new QWidget(split);
-	QVBoxLayout *detailLay = new QVBoxLayout(detailPane);
-	detailLay->setContentsMargins(0, 0, 0, 0);
-	m_description = new QPlainTextEdit(detailPane);
-	m_description->setReadOnly(true);
+	m_description = m_ui->description;
 	// Browser (not edit) so the "[Referenced in]" script names render as clickable links
 	// that jump the tree to the referencing script. Read-only by default.
-	m_comment = new QTextBrowser(detailPane);
-	m_comment->setOpenLinks(false);
-	m_comment->setMaximumHeight(140);
-	detailLay->addWidget(m_description, 1);
-	detailLay->addWidget(m_comment);
-	split->addWidget(detailPane);
-	split->setStretchFactor(0, 1);
-	split->setStretchFactor(1, 2);
-	root->addWidget(split, 1);
+	m_comment = m_ui->comment;
 
 	// --- Command button rows ---
-	QHBoxLayout *cmdRow = new QHBoxLayout();
-	m_newFolder = new QPushButton("New Folder", this);
-	m_newScript = new QPushButton("New Script", this);
-	m_editScript = new QPushButton("Edit", this);
-	m_copyScript = new QPushButton("Copy", this);
-	m_delete = new QPushButton("Delete", this);
-	m_verify = new QPushButton("Re-Verify All", this);
-	cmdRow->addWidget(m_newFolder);
-	cmdRow->addWidget(m_newScript);
-	cmdRow->addWidget(m_editScript);
-	cmdRow->addWidget(m_copyScript);
-	cmdRow->addWidget(m_delete);
-	cmdRow->addWidget(m_verify);
-	root->addLayout(cmdRow);
-
-	QHBoxLayout *cmdRow2 = new QHBoxLayout();
-	m_addDebug = new QPushButton("Add Debug", this);
-	m_removeDebug = new QPushButton("Delete Debug", this);
-	m_patchGC = new QPushButton("Patch \"GC_\"", this);
-	m_export = new QPushButton("Export Scripts", this);
-	m_import = new QPushButton("Import Scripts", this);
-	m_saveNow = new QPushButton("Save Now (Ctrl+S)", this);
-	cmdRow2->addWidget(m_addDebug);
-	cmdRow2->addWidget(m_removeDebug);
-	cmdRow2->addWidget(m_patchGC);
-	cmdRow2->addWidget(m_export);
-	cmdRow2->addWidget(m_import);
-	cmdRow2->addWidget(m_saveNow);
-	root->addLayout(cmdRow2);
+	m_newFolder = m_ui->newFolder;
+	m_newScript = m_ui->newScript;
+	m_editScript = m_ui->editScript;
+	m_copyScript = m_ui->copyScript;
+	m_delete = m_ui->deleteBtn;
+	m_verify = m_ui->verify;
+	m_addDebug = m_ui->addDebug;
+	m_removeDebug = m_ui->removeDebug;
+	m_patchGC = m_ui->patchGC;
+	m_export = m_ui->exportBtn;
+	m_import = m_ui->importBtn;
+	m_saveNow = m_ui->saveNow;
 
 	// --- Commit row ---
-	QHBoxLayout *okRow = new QHBoxLayout();
-	okRow->addStretch(1);
-	m_ok = new QPushButton("Save + Close", this);
-	m_cancel = new QPushButton("Cancel", this);
-	okRow->addWidget(m_ok);
-	okRow->addWidget(m_cancel);
-	root->addLayout(okRow);
+	m_ok = m_ui->ok;
+	m_cancel = m_ui->cancel;
 
 	buildIcons();
 	seedCheckboxes();
@@ -304,6 +238,15 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	connect(m_ckDisableRef, SIGNAL(clicked()), this, SLOT(onCheckboxToggled()));
 
 	s_instance = this;
+}
+
+WBQtScriptWindow::~WBQtScriptWindow()
+{
+	if (s_instance == this)
+	{
+		s_instance = NULL;
+	}
+	delete m_ui;
 }
 
 namespace

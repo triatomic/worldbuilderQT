@@ -19,12 +19,15 @@ class QGroupBox;
 class QSlider;
 class QSpinBox;
 
+namespace Ui { class WBQtWaterPanel; }	// generated from WBQtWaterPanel.ui
+
 class WBQtWaterPanel : public QWidget
 {
 	Q_OBJECT
 
 public:
 	explicit WBQtWaterPanel(QWidget *owner);
+	virtual ~WBQtWaterPanel();
 
 	// Re-seed every control from the current MFC selection (WBQtWater_PushRefresh).
 	void pushRefresh();
@@ -40,6 +43,8 @@ private slots:
 
 private:
 	void setHeightRow(int v);	// keep the height slider + spinbox in lockstep (caller guards)
+
+	Ui::WBQtWaterPanel *m_ui;	// owns the static widget tree (WBQtWaterPanel.ui)
 
 	QCheckBox *m_waterPolygon;
 	QSpinBox  *m_spacing;

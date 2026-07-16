@@ -1,57 +1,28 @@
 // WBQtRampPanel.cpp -- see WBQtRampPanel.h.
 #include "WBQtRampPanel.h"
+#include "ui_WBQtRampPanel.h"
 #include "WBQtPanelBridge.h"
 
 #include <QCheckBox>
-#include <QGroupBox>
-#include <QHBoxLayout>
-#include <QLabel>
 #include <QPushButton>
 #include <QDoubleSpinBox>
-#include <QVBoxLayout>
 
 WBQtRampPanel *WBQtRampPanel::s_instance = NULL;
 
 WBQtRampPanel::WBQtRampPanel(QWidget *owner)
 	: QWidget(owner, Qt::Tool),
+	  m_ui(new Ui::WBQtRampPanel),
 	  m_updating(false)
 {
-	setWindowTitle("Ramp Options");
+	// The static widget tree lives in WBQtRampPanel.ui; bind the members the
+	// logic below uses, then wire what Designer can't express.
+	m_ui->setupUi(this);
 
-	QVBoxLayout *root = new QVBoxLayout(this);
-
-	// Ramp width + the Apply button. RampTool draws feedback from the width live and applies
-	// the ramp when the latch is set (Apply); pressing Apply after dragging out the ramp line
-	// commits it, matching the MFC dialog's Apply button.
-	QGroupBox *rampBox = new QGroupBox("Ramp", this);
-	QVBoxLayout *rampLay = new QVBoxLayout(rampBox);
-
-	QHBoxLayout *widthRow = new QHBoxLayout();
-	widthRow->addWidget(new QLabel("Width:", rampBox));
-	m_width = new QDoubleSpinBox(rampBox);
-	m_width->setDecimals(2);
-	m_width->setRange(0.0, 1000000.0);
-	widthRow->addWidget(m_width, 1);
-	rampLay->addLayout(widthRow);
-
-	QPushButton *apply = new QPushButton("Apply", rampBox);
-	rampLay->addWidget(apply);
-	root->addWidget(rampBox);
-
-	// Advanced mirror options.
-	QGroupBox *mirrorBox = new QGroupBox("Advanced Mirror Options", this);
-	QVBoxLayout *mirrorLay = new QVBoxLayout(mirrorBox);
-	m_mirror = new QCheckBox("Toggle", mirrorBox);
-	m_mirrorX = new QCheckBox("Mirror X", mirrorBox);
-	m_mirrorY = new QCheckBox("Mirror Y", mirrorBox);
-	m_mirrorXY = new QCheckBox("Diagonal", mirrorBox);
-	mirrorLay->addWidget(m_mirror);
-	mirrorLay->addWidget(m_mirrorX);
-	mirrorLay->addWidget(m_mirrorY);
-	mirrorLay->addWidget(m_mirrorXY);
-	root->addWidget(mirrorBox);
-
-	root->addStretch(1);
+	m_width = m_ui->width;
+	m_mirror = m_ui->mirror;
+	m_mirrorX = m_ui->mirrorX;
+	m_mirrorY = m_ui->mirrorY;
+	m_mirrorXY = m_ui->mirrorXY;
 
 	// Seed from the current tool/panel state under the guard so it doesn't echo back.
 	m_updating = true;
@@ -62,14 +33,26 @@ WBQtRampPanel::WBQtRampPanel(QWidget *owner)
 	m_mirrorXY->setChecked(WBQtRamp_GetMirrorXY() != 0);
 	m_updating = false;
 
+	// RampTool draws feedback from the width live and applies the ramp when the latch is set
+	// (Apply); pressing Apply after dragging out the ramp line commits it, matching the MFC
+	// dialog's Apply button.
 	connect(m_width, SIGNAL(valueChanged(double)), this, SLOT(onWidthChanged(double)));
-	connect(apply, SIGNAL(clicked()), this, SLOT(onApply()));
+	connect(m_ui->applyBtn, SIGNAL(clicked()), this, SLOT(onApply()));
 	connect(m_mirror, SIGNAL(clicked()), this, SLOT(onMirror()));
 	connect(m_mirrorX, SIGNAL(clicked()), this, SLOT(onMirrorX()));
 	connect(m_mirrorY, SIGNAL(clicked()), this, SLOT(onMirrorY()));
 	connect(m_mirrorXY, SIGNAL(clicked()), this, SLOT(onMirrorXY()));
 
 	s_instance = this;
+}
+
+WBQtRampPanel::~WBQtRampPanel()
+{
+	if (s_instance == this)
+	{
+		s_instance = NULL;
+	}
+	delete m_ui;
 }
 
 void WBQtRampPanel::onWidthChanged(double v)

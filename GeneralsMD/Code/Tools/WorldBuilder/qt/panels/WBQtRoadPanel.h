@@ -25,12 +25,15 @@ class QRadioButton;
 class QTreeWidget;
 class QTreeWidgetItem;
 
+namespace Ui { class WBQtRoadPanel; }	// generated from WBQtRoadPanel.ui
+
 class WBQtRoadPanel : public QWidget
 {
 	Q_OBJECT
 
 public:
 	explicit WBQtRoadPanel(QWidget *owner);
+	virtual ~WBQtRoadPanel();
 
 	// Re-seed corner/join checkboxes + selected-road name from the current MFC selection
 	// (WBQtRoad_PushRefresh).
@@ -51,6 +54,8 @@ private:
 	void rebuildTree(const QString &filter);	// filter empty => full list
 	void refreshSelectionState();				// re-display corner/join/name from the tool
 	QTreeWidgetItem *findOrAddChild(QTreeWidgetItem *parent, const QString &label);
+
+	Ui::WBQtRoadPanel *m_ui;	// owns the static widget tree (WBQtRoadPanel.ui)
 
 	QTreeWidget    *m_tree;
 	QLabel         *m_nameLabel;

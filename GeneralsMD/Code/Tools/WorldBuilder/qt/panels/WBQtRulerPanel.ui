@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WBQtRulerPanel</class>
+ <widget class="QWidget" name="WBQtRulerPanel">
+  <property name="windowTitle">
+   <string>Ruler Options</string>
+  </property>
+  <layout class="QVBoxLayout" name="rootLayout">
+   <item>
+    <widget class="QGroupBox" name="typeBox">
+     <property name="title">
+      <string>Ruler</string>
+     </property>
+     <layout class="QVBoxLayout" name="typeLay">
+      <item>
+       <widget class="QCheckBox" name="circle">
+        <property name="text">
+         <string>Circular Measurements</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="widthRow" stretch="0,1">
+        <item>
+         <widget class="QLabel" name="widthLabel">
+          <property name="text">
+           <string>Diameter:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QDoubleSpinBox" name="width">
+          <property name="decimals">
+           <number>2</number>
+          </property>
+          <property name="maximum">
+           <double>1000000.000000000000000</double>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="optBox">
+     <property name="title">
+      <string>Options</string>
+     </property>
+     <layout class="QVBoxLayout" name="optLay">
+      <item>
+       <widget class="QCheckBox" name="useMeters">
+        <property name="text">
+         <string>Use meters</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="showGrid">
+        <property name="text">
+         <string>Show ruler grid</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer name="bottomSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

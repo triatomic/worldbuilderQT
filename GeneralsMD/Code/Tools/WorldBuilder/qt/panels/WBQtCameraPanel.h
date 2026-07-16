@@ -13,12 +13,15 @@
 class QLabel;
 class WBQtScrubSpinBox;
 
+namespace Ui { class WBQtCameraPanel; }	// generated from WBQtCameraPanel.ui
+
 class WBQtCameraPanel : public QWidget
 {
 	Q_OBJECT
 
 public:
 	explicit WBQtCameraPanel(QWidget *owner);
+	virtual ~WBQtCameraPanel();
 
 	// Re-seed the pitch + info readouts from the view. Called per camera move while visible.
 	void pushRefresh();
@@ -35,6 +38,8 @@ private slots:
 	void onCenterOnSelected();
 
 private:
+	Ui::WBQtCameraPanel *m_ui;	// owns the static widget tree (WBQtCameraPanel.ui)
+
 	WBQtScrubSpinBox *m_pitch;
 	QLabel *m_heightText;
 	QLabel *m_zoomText;

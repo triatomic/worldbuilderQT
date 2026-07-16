@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WBQtLayersPanel</class>
+ <widget class="QWidget" name="WBQtLayersPanel">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>300</width>
+    <height>420</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Layers List</string>
+  </property>
+  <layout class="QVBoxLayout" name="rootLayout" stretch="1,0,0">
+   <item>
+    <widget class="QTreeWidget" name="tree">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="contextMenuPolicy">
+      <enum>Qt::CustomContextMenu</enum>
+     </property>
+     <property name="headerHidden">
+      <bool>true</bool>
+     </property>
+     <column>
+      <property name="text">
+       <string notr="true">1</string>
+      </property>
+     </column>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="noteBox">
+     <property name="title">
+      <string>Developer Note (How To Use):</string>
+     </property>
+     <layout class="QVBoxLayout" name="noteLay">
+      <item>
+       <widget class="QLabel" name="noteText">
+        <property name="text">
+         <string>1. Right Click on the List and hit Insert New Layer
+2. Select an object on the map
+3. Right Click to on the layer list again
+4. Select Merge Into View Selection Into
+5. Select Your  New Layer</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="noteHint">
+        <property name="text">
+         <string>Right Click on the on the items list to see more Options</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="usageBox">
+     <property name="title">
+      <string>Example Usage:</string>
+     </property>
+     <layout class="QVBoxLayout" name="usageLay">
+      <item>
+       <widget class="QLabel" name="usageText">
+        <property name="text">
+         <string>It's great when you have lots of objects/waypoints going to the same spot for a cinematic. You can hide most of them and work without the clutter</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

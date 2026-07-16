@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WBQtRampPanel</class>
+ <widget class="QWidget" name="WBQtRampPanel">
+  <property name="windowTitle">
+   <string>Ramp Options</string>
+  </property>
+  <layout class="QVBoxLayout" name="rootLayout">
+   <item>
+    <widget class="QGroupBox" name="rampBox">
+     <property name="title">
+      <string>Ramp</string>
+     </property>
+     <layout class="QVBoxLayout" name="rampLay">
+      <item>
+       <layout class="QHBoxLayout" name="widthRow" stretch="0,1">
+        <item>
+         <widget class="QLabel" name="widthLabel">
+          <property name="text">
+           <string>Width:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QDoubleSpinBox" name="width">
+          <property name="decimals">
+           <number>2</number>
+          </property>
+          <property name="maximum">
+           <double>1000000.000000000000000</double>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QPushButton" name="applyBtn">
+        <property name="text">
+         <string>Apply</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="mirrorBox">
+     <property name="title">
+      <string>Advanced Mirror Options</string>
+     </property>
+     <layout class="QVBoxLayout" name="mirrorLay">
+      <item>
+       <widget class="QCheckBox" name="mirror">
+        <property name="text">
+         <string>Toggle</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="mirrorX">
+        <property name="text">
+         <string>Mirror X</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="mirrorY">
+        <property name="text">
+         <string>Mirror Y</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="mirrorXY">
+        <property name="text">
+         <string>Diagonal</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer name="bottomSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

@@ -1,0 +1,553 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WBQtTeamSheetDialog</class>
+ <widget class="QDialog" name="WBQtTeamSheetDialog">
+  <property name="windowTitle">
+   <string>Edit Team Template.</string>
+  </property>
+  <layout class="QVBoxLayout" name="root" stretch="1,0">
+   <item>
+    <widget class="QTabWidget" name="tabs">
+     <property name="currentIndex">
+      <number>0</number>
+     </property>
+     <widget class="QWidget" name="identityTab">
+      <attribute name="title">
+       <string>Identity</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="identityRoot">
+       <item>
+        <layout class="QHBoxLayout" name="nameRow" stretch="1,0,0">
+         <item>
+          <widget class="QLineEdit" name="nameEdit"/>
+         </item>
+         <item>
+          <widget class="QLabel" name="maxQuantityLabel">
+           <property name="text">
+            <string>Maximum Quantity:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLineEdit" name="maxEdit">
+           <property name="minimumSize">
+            <size>
+             <width>50</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>50</width>
+             <height>16777215</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QGridLayout" name="identityGrid">
+         <item row="0" column="0">
+          <widget class="QLabel" name="ownerLabel">
+           <property name="text">
+            <string>Owner:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QComboBox" name="ownerCombo"/>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="homeLabel">
+           <property name="text">
+            <string>Home Position:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QComboBox" name="homeWaypointCombo"/>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="prodBox">
+         <property name="title">
+          <string>Production:</string>
+         </property>
+         <layout class="QGridLayout" name="prodGrid">
+          <item row="0" column="0">
+           <widget class="QLabel" name="conditionLabel">
+            <property name="text">
+             <string>Condition:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1" colspan="3">
+           <widget class="QComboBox" name="productionConditionCombo"/>
+          </item>
+          <item row="1" column="1" colspan="3">
+           <widget class="QCheckBox" name="executeActionsCheck">
+            <property name="text">
+             <string>Execute associated actions</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="priorityLabel">
+            <property name="text">
+             <string>Priority:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QLineEdit" name="priorityEdit">
+            <property name="minimumSize">
+             <size>
+              <width>50</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>50</width>
+              <height>16777215</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="2">
+           <widget class="QLabel" name="increaseLabel">
+            <property name="text">
+             <string>Success Priority Increase:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="3">
+           <widget class="QLineEdit" name="increaseEdit">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>40</width>
+              <height>16777215</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="0" colspan="2">
+           <layout class="QHBoxLayout" name="framesRow">
+            <item>
+             <widget class="QLabel" name="buildForLabel">
+              <property name="text">
+               <string>Build for</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="framesEdit">
+              <property name="minimumSize">
+               <size>
+                <width>50</width>
+                <height>0</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>50</width>
+                <height>16777215</height>
+               </size>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="framesLabel">
+              <property name="text">
+               <string>frames.</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="framesSpacer">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </item>
+          <item row="3" column="2">
+           <widget class="QLabel" name="decreaseLabel">
+            <property name="text">
+             <string>Failure Priority Decrease:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="3">
+           <widget class="QLineEdit" name="decreaseEdit">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>40</width>
+              <height>16777215</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="membersBox">
+         <property name="title">
+          <string>Members:</string>
+         </property>
+         <layout class="QGridLayout" name="membersGrid" columnstretch="0,0,1">
+          <item row="0" column="0">
+           <widget class="QLabel" name="minLabel">
+            <property name="text">
+             <string>Min:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QLabel" name="maxLabel">
+            <property name="text">
+             <string>Max:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="2">
+           <widget class="QLabel" name="unitTypeLabel">
+            <property name="text">
+             <string>Unit Type:</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="recruitBox">
+         <property name="title">
+          <string>Recruitment Options:</string>
+         </property>
+         <layout class="QVBoxLayout" name="recruitLay">
+          <item>
+           <widget class="QCheckBox" name="autoReinforceCheck">
+            <property name="text">
+             <string>Automatically reinforce whenever possible</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="aiRecruitableCheck">
+            <property name="text">
+             <string>Team members are AI Recruitable</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="singletonCheck">
+         <property name="text">
+          <string>Team created once and only once.</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="descBox">
+         <property name="title">
+          <string>Team Description:</string>
+         </property>
+         <layout class="QVBoxLayout" name="descLay">
+          <item>
+           <widget class="QLineEdit" name="descriptionEdit"/>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <spacer name="identitySpacer">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="reinforcementTab">
+      <attribute name="title">
+       <string>Reinforcement</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="reinforcementRoot">
+       <item>
+        <widget class="QGroupBox" name="reinfBox">
+         <property name="title">
+          <string>If reinforcing, then:</string>
+         </property>
+         <layout class="QVBoxLayout" name="reinfLay">
+          <item>
+           <layout class="QHBoxLayout" name="deployRow" stretch="0,1">
+            <item>
+             <widget class="QCheckBox" name="deployByCheck">
+              <property name="text">
+               <string>Deploy by</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QComboBox" name="transportCombo"/>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="transportsExitCheck">
+            <property name="text">
+             <string>Transports exit map after unloading.</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QGroupBox" name="waypointBox">
+            <property name="title">
+             <string>Start team or transports at waypoint:</string>
+            </property>
+            <layout class="QVBoxLayout" name="waypointLay">
+             <item>
+              <widget class="QComboBox" name="waypointCombo"/>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="teamStartsFullCheck">
+            <property name="text">
+             <string>Load members into transports (if applicable).</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="vetBox">
+         <property name="title">
+          <string>Veterancy Level</string>
+         </property>
+         <layout class="QVBoxLayout" name="vetLay">
+          <item>
+           <widget class="QComboBox" name="veterancyCombo"/>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <spacer name="reinforcementSpacer">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="behaviorTab">
+      <attribute name="title">
+       <string>Behavior</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="behaviorRoot">
+       <item>
+        <widget class="QGroupBox" name="triggersBox">
+         <property name="title">
+          <string>Behavior Script Triggers:</string>
+         </property>
+         <layout class="QGridLayout" name="triggersGrid">
+          <item row="0" column="0">
+           <widget class="QLabel" name="onCreateLabel">
+            <property name="text">
+             <string>On Create:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1" colspan="2">
+           <widget class="QComboBox" name="onCreateCombo"/>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="onEnemySightedLabel">
+            <property name="text">
+             <string>On Enemy Sighted:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1" colspan="2">
+           <widget class="QComboBox" name="onEnemySightedCombo"/>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="onAllClearLabel">
+            <property name="text">
+             <string>On All Clear:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1" colspan="2">
+           <widget class="QComboBox" name="onAllClearCombo"/>
+          </item>
+          <item row="3" column="0">
+           <layout class="QHBoxLayout" name="destroyedRow">
+            <item>
+             <widget class="QLabel" name="onDestroyedLabel">
+              <property name="text">
+               <string>On Destroyed %</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="percentEdit">
+              <property name="minimumSize">
+               <size>
+                <width>40</width>
+                <height>0</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>40</width>
+                <height>16777215</height>
+               </size>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item row="3" column="1" colspan="2">
+           <widget class="QComboBox" name="onDestroyedCombo"/>
+          </item>
+          <item row="4" column="0">
+           <widget class="QLabel" name="onIdleLabel">
+            <property name="text">
+             <string>On Idle:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="1" colspan="2">
+           <widget class="QComboBox" name="onIdleCombo"/>
+          </item>
+          <item row="5" column="0">
+           <widget class="QLabel" name="onUnitDestroyedLabel">
+            <property name="text">
+             <string>On Unit Destroyed:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="1" colspan="2">
+           <widget class="QComboBox" name="onUnitDestroyedCombo"/>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="optionsBox">
+         <property name="title">
+          <string>Behavior Options</string>
+         </property>
+         <layout class="QVBoxLayout" name="optionsLay">
+          <item>
+           <widget class="QCheckBox" name="transportsReturnCheck">
+            <property name="text">
+             <string>Transports return to base after unloading.</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="avoidThreatsCheck">
+            <property name="text">
+             <string>Team avoids threats.</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QGroupBox" name="initialBox">
+            <property name="title">
+             <string>Initial Team Behavior</string>
+            </property>
+            <layout class="QVBoxLayout" name="initialLay">
+             <item>
+              <widget class="QComboBox" name="enemyInteractionsCombo"/>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item>
+           <widget class="QGroupBox" name="attackBox">
+            <property name="title">
+             <string>Attack:</string>
+            </property>
+            <layout class="QVBoxLayout" name="attackLay">
+             <item>
+              <widget class="QCheckBox" name="attackCommonTargetCheck">
+               <property name="text">
+                <string>Does this team focus on a single target at a time
+in Hard and Brutal (never in Normal)?</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <spacer name="behaviorSpacer">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="genericTab">
+      <attribute name="title">
+       <string>Generic</string>
+      </attribute>
+      <layout class="QGridLayout" name="genericGrid"/>
+     </widget>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="buttons">
+     <item>
+      <spacer name="buttonsSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="okButton">
+       <property name="text">
+        <string>OK</string>
+       </property>
+       <property name="default">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

@@ -20,12 +20,15 @@
 
 class QCheckBox;
 
+namespace Ui { class WBQtBlendMaterialPanel; }	// generated from WBQtBlendMaterialPanel.ui
+
 class WBQtBlendMaterialPanel : public QWidget
 {
 	Q_OBJECT
 
 public:
 	explicit WBQtBlendMaterialPanel(QWidget *owner);
+	virtual ~WBQtBlendMaterialPanel();
 
 	static WBQtBlendMaterialPanel *instance() { return s_instance; }
 
@@ -39,6 +42,8 @@ private slots:
 	void onMirrorXY();
 
 private:
+	Ui::WBQtBlendMaterialPanel *m_ui;	// owns the static widget tree (WBQtBlendMaterialPanel.ui)
+
 	QCheckBox *m_hvGap;
 	QCheckBox *m_dGap;
 	QCheckBox *m_revalBlends;

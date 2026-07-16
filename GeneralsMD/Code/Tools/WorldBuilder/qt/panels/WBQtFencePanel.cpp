@@ -1,5 +1,6 @@
 // WBQtFencePanel.cpp -- see WBQtFencePanel.h.
 #include "WBQtFencePanel.h"
+#include "ui_WBQtFencePanel.h"
 #include "WBQtFenceBridge.h"
 #include "WBQtPreviewImage.h"
 #include "WBQtTreeStyle.h"
@@ -9,17 +10,12 @@ extern "C" int WBQtConfig_GetNewSearch(void);
 
 #include <QCheckBox>
 #include <QDoubleSpinBox>
-#include <QFrame>
-#include <QGroupBox>
-#include <QHBoxLayout>
 #include <QImage>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPixmap>
-#include <QPushButton>
 #include <QTreeWidget>
 #include <QTreeWidgetItemIterator>
-#include <QVBoxLayout>
 
 WBQtFencePanel *WBQtFencePanel::s_instance = NULL;
 
@@ -29,67 +25,29 @@ static const int kListIndexRole = Qt::UserRole + 1;
 
 WBQtFencePanel::WBQtFencePanel(QWidget *owner)
 	: QWidget(owner, Qt::Tool),
+	  m_ui(new Ui::WBQtFencePanel),
 	  m_updating(false)
 {
-	setWindowTitle("Fence Options");
-	resize(320, 620);
-
-	QVBoxLayout *root = new QVBoxLayout(this);
+	// The static widget tree lives in WBQtFencePanel.ui; bind the members the
+	// logic below uses, then wire what Designer can't express.
+	m_ui->setupUi(this);
 
 	// "Show all object types" -- the MFC "fence only" checkbox. Checked == show every template,
 	// unchecked == only fence-width templates (the default).
-	m_showAll = new QCheckBox("Show all object types", this);
-	root->addWidget(m_showAll);
-
+	m_showAll = m_ui->showAll;
 	// Search row. Only meaningful when showing all types (matches the MFC enable/disable);
 	// searching within the fence-only list is left as-is (the MFC search box is disabled then).
-	QHBoxLayout *searchRow = new QHBoxLayout();
-	m_search = new QLineEdit(this);
-	m_search->setPlaceholderText("Search objects...");
-	QPushButton *searchBtn = new QPushButton("Search", this);
-	QPushButton *resetBtn = new QPushButton("Reset", this);
-	searchRow->addWidget(m_search, 1);
-	searchRow->addWidget(searchBtn);
-	searchRow->addWidget(resetBtn);
-	root->addLayout(searchRow);
-
+	m_search = m_ui->search;
 	// The object tree.
-	m_tree = new QTreeWidget(this);
-	m_tree->setHeaderHidden(true);
-	m_tree->setColumnCount(1);
-	m_tree->setMinimumHeight(260);
-	m_tree->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
-	WBQtTreeStyle::applyTreeLines(m_tree);
-	root->addWidget(m_tree, 3);
-
+	m_tree = m_ui->tree;
 	// Selected-object name + preview thumbnail.
-	m_nameLabel = new QLabel("No Selection", this);
-	root->addWidget(m_nameLabel);
-
-	m_preview = new QLabel(this);
-	m_preview->setFixedSize(128, 128);
-	m_preview->setAlignment(Qt::AlignCenter);
-	m_preview->setFrameShape(QFrame::Box);
-	root->addWidget(m_preview, 0, Qt::AlignHCenter);
-
+	m_nameLabel = m_ui->nameLabel;
+	m_preview = m_ui->preview;
 	// Fence spacing (editable) + offset (read-only, derived from the template on selection).
-	QGroupBox *fenceBox = new QGroupBox("Fence", this);
-	QVBoxLayout *fenceLay = new QVBoxLayout(fenceBox);
+	m_spacing = m_ui->spacing;
+	m_offsetLabel = m_ui->offsetLabel;
 
-	QHBoxLayout *spacingRow = new QHBoxLayout();
-	spacingRow->addWidget(new QLabel("Spacing:", fenceBox));
-	m_spacing = new QDoubleSpinBox(fenceBox);
-	m_spacing->setDecimals(2);
-	m_spacing->setRange(0.0, 1000000.0);
-	spacingRow->addWidget(m_spacing, 1);
-	fenceLay->addLayout(spacingRow);
-
-	QHBoxLayout *offsetRow = new QHBoxLayout();
-	offsetRow->addWidget(new QLabel("Offset:", fenceBox));
-	m_offsetLabel = new QLabel("0", fenceBox);
-	offsetRow->addWidget(m_offsetLabel, 1);
-	fenceLay->addLayout(offsetRow);
-	root->addWidget(fenceBox);
+	WBQtTreeStyle::applyTreeLines(m_tree);
 
 	// Seed everything under the guard so nothing echoes back while we populate.
 	m_updating = true;
@@ -102,8 +60,8 @@ WBQtFencePanel::WBQtFencePanel(QWidget *owner)
 	connect(m_tree, SIGNAL(itemSelectionChanged()), this, SLOT(onTreeSelectionChanged()));
 	connect(m_spacing, SIGNAL(valueChanged(double)), this, SLOT(onSpacingChanged(double)));
 	connect(m_showAll, SIGNAL(clicked()), this, SLOT(onShowAllToggled()));
-	connect(searchBtn, SIGNAL(clicked()), this, SLOT(onSearch()));
-	connect(resetBtn, SIGNAL(clicked()), this, SLOT(onReset()));
+	connect(m_ui->searchBtn, SIGNAL(clicked()), this, SLOT(onSearch()));
+	connect(m_ui->resetBtn, SIGNAL(clicked()), this, SLOT(onReset()));
 	connect(m_search, SIGNAL(returnPressed()), this, SLOT(onSearch()));
 	if (WBQtConfig_GetNewSearch() != 0)
 	{
@@ -113,6 +71,15 @@ WBQtFencePanel::WBQtFencePanel(QWidget *owner)
 	}
 
 	s_instance = this;
+}
+
+WBQtFencePanel::~WBQtFencePanel()
+{
+	if (s_instance == this)
+	{
+		s_instance = NULL;
+	}
+	delete m_ui;
 }
 
 QTreeWidgetItem *WBQtFencePanel::findOrAddChild(QTreeWidgetItem *parent, const QString &label)

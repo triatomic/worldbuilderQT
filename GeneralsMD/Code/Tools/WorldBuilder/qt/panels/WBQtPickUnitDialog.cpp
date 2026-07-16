@@ -2,6 +2,7 @@
 // row / tree / preview swatch beside a tall OK over Cancel) and IDD_REPLACEUNIT (missing
 // label / tree / OK-Cancel / "Continue without replacing...").
 #include "WBQtPickUnitDialog.h"
+#include "ui_WBQtPickUnitDialog.h"
 #include "WBQtPickUnitBridge.h"
 #include "WBQtPreviewImage.h"
 #include "WBQtTreeStyle.h"
@@ -23,7 +24,6 @@ QWidget *WBQt_DialogParent(void);
 #include <QPixmap>
 #include <QPushButton>
 #include <QTreeWidget>
-#include <QVBoxLayout>
 
 #include <qt_windows.h>
 
@@ -39,6 +39,7 @@ namespace
 
 WBQtPickUnitDialog::WBQtPickUnitDialog(bool replaceMode, const QString &missingName, QWidget *parent)
 	: QDialog(parent),
+	m_ui(new Ui::WBQtPickUnitDialog),
 	m_replaceMode(replaceMode),
 	m_panelMode(false),
 	m_panelFactionOnly(0),
@@ -48,29 +49,27 @@ WBQtPickUnitDialog::WBQtPickUnitDialog(bool replaceMode, const QString &missingN
 	m_cancelButton(NULL)
 {
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
+
+	// The static widget tree lives in WBQtPickUnitDialog.ui; it carries BOTH modes' pieces
+	// (the missing-name label and the search row), and the mode picks which one shows.
+	m_ui->setupUi(this);
 	setWindowTitle(replaceMode ? "Replace Missing Unit" : "Pick A Unit");
 
-	QVBoxLayout *root = new QVBoxLayout(this);
+	m_tree = m_ui->tree;
+	m_preview = m_ui->preview;
+	WBQtTreeStyle::applyTreeLines(m_tree);
 
 	if (replaceMode)
 	{
-		root->addWidget(new QLabel(missingName, this));
+		m_ui->searchRow->hide();	// the MFC replace dialog hooks no search buttons
+		m_ui->missingLabel->setText(missingName);
 	}
 	else
 	{
-		QHBoxLayout *searchRow = new QHBoxLayout();
-		searchRow->addWidget(new QLabel("Search:", this));
-		m_searchEdit = new QLineEdit(this);
-		searchRow->addWidget(m_searchEdit, 1);
-		QPushButton *findButton = new QPushButton("Find", this);
-		findButton->setAutoDefault(false);
-		searchRow->addWidget(findButton);
-		QPushButton *resetButton = new QPushButton("Reset", this);
-		resetButton->setAutoDefault(false);
-		searchRow->addWidget(resetButton);
-		root->addLayout(searchRow);
-		connect(findButton, SIGNAL(clicked()), this, SLOT(onSearch()));
-		connect(resetButton, SIGNAL(clicked()), this, SLOT(onReset()));
+		m_ui->missingLabel->hide();
+		m_searchEdit = m_ui->searchEdit;
+		connect(m_ui->findButton, SIGNAL(clicked()), this, SLOT(onSearch()));
+		connect(m_ui->resetButton, SIGNAL(clicked()), this, SLOT(onReset()));
 		if (WBQtConfig_GetNewSearch() != 0)
 		{
 			// NewSearch: filter live as the user types (Find button still works).
@@ -78,10 +77,6 @@ WBQtPickUnitDialog::WBQtPickUnitDialog(bool replaceMode, const QString &missingN
 		}
 	}
 
-	m_tree = new QTreeWidget(this);
-	m_tree->setHeaderHidden(true);
-	WBQtTreeStyle::applyTreeLines(m_tree);
-	root->addWidget(m_tree, 1);
 	connect(m_tree, SIGNAL(currentItemChanged(QTreeWidgetItem*,QTreeWidgetItem*)),
 			this, SLOT(onCurrentItemChanged(QTreeWidgetItem*,QTreeWidgetItem*)));
 
@@ -96,45 +91,38 @@ WBQtPickUnitDialog::WBQtPickUnitDialog(bool replaceMode, const QString &missingN
 	// The model preview renders in BOTH modes: the MFC OnInitDialog creates the
 	// ObjectPreview over the placeholder rect and force-shows it, so the replace dialog
 	// had one too (the template's NOT WS_VISIBLE only hid the placeholder static).
-	m_preview = new QLabel(this);
-	m_preview->setFixedSize(96, 80);
-	m_preview->setFrameShape(QFrame::StyledPanel);
-	m_preview->setAlignment(Qt::AlignCenter);
 
+	// The button column differs per mode, so it stays imperative; the .ui leaves
+	// buttonColHost empty beside the preview swatch for it.
 	if (replaceMode)
 	{
-		QHBoxLayout *bottomRow = new QHBoxLayout();
-		bottomRow->addWidget(m_preview);
-		QVBoxLayout *buttonCol = new QVBoxLayout();
 		QHBoxLayout *buttonRow = new QHBoxLayout();
 		buttonRow->addWidget(okButton);
 		buttonRow->addWidget(cancelButton);
 		buttonRow->addStretch(1);
-		buttonCol->addLayout(buttonRow);
+		m_ui->buttonColHost->addLayout(buttonRow);
 		QPushButton *ignoreButton = new QPushButton("Continue without replacing...", this);
 		ignoreButton->setAutoDefault(false);
-		buttonCol->addWidget(ignoreButton, 0, Qt::AlignLeft);
-		buttonCol->addStretch(1);
-		bottomRow->addLayout(buttonCol, 1);
-		root->addLayout(bottomRow);
+		m_ui->buttonColHost->addWidget(ignoreButton, 0, Qt::AlignLeft);
+		m_ui->buttonColHost->addStretch(1);
 		connect(ignoreButton, SIGNAL(clicked()), this, SLOT(onIgnore()));
 	}
 	else
 	{
 		// == IDD_PICKUNIT's bottom strip: preview swatch left, the tall OK over Cancel right.
-		QHBoxLayout *bottomRow = new QHBoxLayout();
-		bottomRow->addWidget(m_preview);
-		QVBoxLayout *buttonCol = new QVBoxLayout();
 		okButton->setMinimumHeight(44);
-		buttonCol->addWidget(okButton);
-		buttonCol->addWidget(cancelButton);
-		bottomRow->addLayout(buttonCol, 1);
-		root->addLayout(bottomRow);
+		m_ui->buttonColHost->addWidget(okButton);
+		m_ui->buttonColHost->addWidget(cancelButton);
 	}
 
 	populate(QString());
 
 	resize(replaceMode ? QSize(380, 540) : QSize(320, 620));
+}
+
+WBQtPickUnitDialog::~WBQtPickUnitDialog()
+{
+	delete m_ui;
 }
 
 // Rebuild the tree from the bridge catalog; a non-empty filter keeps only leaves whose name

@@ -2,6 +2,14 @@
 // IDD_SHADOW_OPTIONS / IDD_IMPASSABLEOPTIONS / IDD_MACRO_TEXTURE / IDD_MAP_SETTINGS /
 // IDD_EXPORT_SCRIPTS_OPTIONS dialogs; all state round-trips through the bridge.
 #include "WBQtMiscModals.h"
+#include "ui_WBQtShadowDialog.h"
+#include "ui_WBQtImpassableDialog.h"
+#include "ui_WBQtMacrotextureDialog.h"
+#include "ui_WBQtMapSettingsDialog.h"
+#include "ui_WBQtFixTeamOwnerDialog.h"
+#include "ui_WBQtBaseBuildPropsDialog.h"
+#include "ui_WBQtNewHeightMapDialog.h"
+#include "ui_WBQtExportScriptsDialog.h"
 #include "WBQtMiscModalsBridge.h"
 #include "WBQtParamBridge.h"	// subroutine-script enumeration for Building Properties
 
@@ -28,78 +36,44 @@ QWidget *WBQt_DialogParent(void);
 namespace
 {
 	const int kNameCap = 512;
-
-	QPushButton *addOkCancel(QVBoxLayout *root, QDialog *dlg, bool withCancel)
-	{
-		QHBoxLayout *buttons = new QHBoxLayout();
-		buttons->addStretch(1);
-		QPushButton *okButton = new QPushButton("OK", dlg);
-		okButton->setDefault(true);
-		buttons->addWidget(okButton);
-		QObject::connect(okButton, SIGNAL(clicked()), dlg, SLOT(accept()));
-		if (withCancel)
-		{
-			QPushButton *cancelButton = new QPushButton("Cancel", dlg);
-			cancelButton->setAutoDefault(false);
-			buttons->addWidget(cancelButton);
-			QObject::connect(cancelButton, SIGNAL(clicked()), dlg, SLOT(reject()));
-		}
-		root->addLayout(buttons);
-		return okButton;
-	}
 }
 
 // ===================== WBQtShadowDialog =====================
 
 WBQtShadowDialog::WBQtShadowDialog(QWidget *parent)
 	: QDialog(parent),
+	m_ui(new Ui::WBQtShadowDialog),
 	m_updating(false)
 {
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
-	setWindowTitle("Shadow Options");
+
+	// The static widget tree lives in WBQtShadowDialog.ui; bind the members the logic uses.
+	m_ui->setupUi(this);
+	m_red = m_ui->red;
+	m_green = m_ui->green;
+	m_blue = m_ui->blue;
+	m_intensity = m_ui->intensity;
 
 	double r = 0.0, g = 0.0, b = 0.0, intensity = 0.0;
 	WBQtShadow_Get(&r, &g, &b, &intensity);
-
-	QVBoxLayout *root = new QVBoxLayout(this);
-	QGroupBox *colorBox = new QGroupBox("Shadow Color:", this);
-	QVBoxLayout *colorLay = new QVBoxLayout(colorBox);
-	const char *labels[3] = { "RED:", "GREEN:", "BLUE:" };
-	double values[3];
-	values[0] = r;
-	values[1] = g;
-	values[2] = b;
-	QLineEdit *edits[3];
-	for (int i = 0; i < 3; i++)
-	{
-		QHBoxLayout *row = new QHBoxLayout();
-		row->addWidget(new QLabel(labels[i], colorBox));
-		edits[i] = new QLineEdit(QString::number(values[i], 'f', 2), colorBox);
-		row->addWidget(edits[i]);
-		colorLay->addLayout(row);
-	}
-	m_red = edits[0];
-	m_green = edits[1];
-	m_blue = edits[2];
-	root->addWidget(colorBox);
-
-	QGroupBox *intensityBox = new QGroupBox("Shadow Intensity:", this);
-	QHBoxLayout *intensityLay = new QHBoxLayout(intensityBox);
-	intensityLay->addWidget(new QLabel("Intensity:", intensityBox));
-	m_intensity = new QLineEdit(QString::number(intensity, 'f', 2), intensityBox);
-	intensityLay->addWidget(m_intensity);
-	root->addWidget(intensityBox);
+	m_red->setText(QString::number(r, 'f', 2));
+	m_green->setText(QString::number(g, 'f', 2));
+	m_blue->setText(QString::number(b, 'f', 2));
+	m_intensity->setText(QString::number(intensity, 'f', 2));
 
 	// The dialog has only OK; it applies live as the fields change (== the MFC EN_CHANGE
 	// handlers), so OK just closes.
-	addOkCancel(root, this, false);
+	connect(m_ui->okBtn, SIGNAL(clicked()), this, SLOT(accept()));
 
 	connect(m_red, SIGNAL(textChanged(QString)), this, SLOT(onFieldChanged()));
 	connect(m_green, SIGNAL(textChanged(QString)), this, SLOT(onFieldChanged()));
 	connect(m_blue, SIGNAL(textChanged(QString)), this, SLOT(onFieldChanged()));
 	connect(m_intensity, SIGNAL(textChanged(QString)), this, SLOT(onFieldChanged()));
+}
 
-	resize(240, 220);
+WBQtShadowDialog::~WBQtShadowDialog()
+{
+	delete m_ui;
 }
 
 void WBQtShadowDialog::onFieldChanged()
@@ -132,40 +106,29 @@ void WBQtShadowDialog::apply()
 // ===================== WBQtImpassableDialog =====================
 
 WBQtImpassableDialog::WBQtImpassableDialog(QWidget *parent)
-	: QDialog(parent)
+	: QDialog(parent),
+	m_ui(new Ui::WBQtImpassableDialog)
 {
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
-	setWindowTitle("Impassable Options");
+
+	// The static widget tree lives in WBQtImpassableDialog.ui; bind the members the logic uses.
+	m_ui->setupUi(this);
+	m_angle = m_ui->angle;
 
 	WBQtImpassable_Begin();	// force the overlay on for the dialog's lifetime (== the ctor)
 
 	double slope = WBQtImpassable_GetSlope();
+	m_angle->setText(QString::number(slope, 'f', 2));
 
-	QVBoxLayout *root = new QVBoxLayout(this);
-	QHBoxLayout *angleRow = new QHBoxLayout();
-	angleRow->addWidget(new QLabel("Angle (deg): ", this));
-	m_angle = new QLineEdit(QString::number(slope, 'f', 2), this);
-	angleRow->addWidget(m_angle);
-	root->addLayout(angleRow);
-
-	QHBoxLayout *buttons = new QHBoxLayout();
-	QPushButton *previewButton = new QPushButton("Preview", this);
-	previewButton->setAutoDefault(false);
-	buttons->addWidget(previewButton);
-	buttons->addStretch(1);
-	QPushButton *okButton = new QPushButton("OK", this);
-	okButton->setDefault(true);
-	buttons->addWidget(okButton);
-	QPushButton *cancelButton = new QPushButton("Cancel", this);
-	cancelButton->setAutoDefault(false);
-	buttons->addWidget(cancelButton);
-	root->addLayout(buttons);
-	connect(previewButton, SIGNAL(clicked()), this, SLOT(onPreview()));
-	connect(okButton, SIGNAL(clicked()), this, SLOT(accept()));
-	connect(cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
+	connect(m_ui->previewBtn, SIGNAL(clicked()), this, SLOT(onPreview()));
+	connect(m_ui->okBtn, SIGNAL(clicked()), this, SLOT(accept()));
+	connect(m_ui->cancelBtn, SIGNAL(clicked()), this, SLOT(reject()));
 	connect(m_angle, SIGNAL(textChanged(QString)), this, SLOT(onAngleChanged()));
+}
 
-	resize(280, 110);
+WBQtImpassableDialog::~WBQtImpassableDialog()
+{
+	delete m_ui;
 }
 
 void WBQtImpassableDialog::onAngleChanged()
@@ -194,14 +157,14 @@ void WBQtImpassableDialog::onPreview()
 // ===================== WBQtMacrotextureDialog =====================
 
 WBQtMacrotextureDialog::WBQtMacrotextureDialog(QWidget *parent)
-	: QDialog(parent)
+	: QDialog(parent),
+	m_ui(new Ui::WBQtMacrotextureDialog)
 {
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
-	setWindowTitle("Select Mactotexture");
 
-	QVBoxLayout *root = new QVBoxLayout(this);
-	m_list = new QListWidget(this);
-	root->addWidget(m_list, 1);
+	// The static widget tree lives in WBQtMacrotextureDialog.ui; bind the members the logic uses.
+	m_ui->setupUi(this);
+	m_list = m_ui->list;
 
 	char buf[kNameCap];
 	int count = WBQtMacrotexture_GetCount();
@@ -213,10 +176,13 @@ WBQtMacrotextureDialog::WBQtMacrotextureDialog(QWidget *parent)
 	}
 	m_list->sortItems(Qt::AscendingOrder);
 
-	addOkCancel(root, this, false);
+	connect(m_ui->okBtn, SIGNAL(clicked()), this, SLOT(accept()));
 	connect(m_list, SIGNAL(currentRowChanged(int)), this, SLOT(onRowChanged(int)));
+}
 
-	resize(220, 300);
+WBQtMacrotextureDialog::~WBQtMacrotextureDialog()
+{
+	delete m_ui;
 }
 
 void WBQtMacrotextureDialog::onRowChanged(int row)
@@ -245,27 +211,23 @@ void WBQtMacrotextureDialog::onRowChanged(int row)
 // ===================== WBQtMapSettingsDialog =====================
 
 WBQtMapSettingsDialog::WBQtMapSettingsDialog(QWidget *parent)
-	: QDialog(parent)
+	: QDialog(parent),
+	m_ui(new Ui::WBQtMapSettingsDialog)
 {
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
-	setWindowTitle("Map Settings");
 
-	QVBoxLayout *root = new QVBoxLayout(this);
-
-	QHBoxLayout *nameRow = new QHBoxLayout();
-	nameRow->addWidget(new QLabel("Map Name", this));
-	m_mapName = new QLineEdit(this);
-	nameRow->addWidget(m_mapName, 1);
-	root->addLayout(nameRow);
+	// The static widget tree lives in WBQtMapSettingsDialog.ui; bind the members the logic uses.
+	m_ui->setupUi(this);
+	m_mapName = m_ui->mapName;
+	m_compression = m_ui->compression;
+	m_timeOfDay = m_ui->timeOfDay;
+	m_weather = m_ui->weather;
 
 	char buf[kNameCap];
 	buf[0] = 0;
 	WBQtMapSettings_GetMapName(buf, sizeof(buf));
 	m_mapName->setText(QString::fromLocal8Bit(buf));
 
-	QHBoxLayout *compRow = new QHBoxLayout();
-	compRow->addWidget(new QLabel("Compression", this));
-	m_compression = new QComboBox(this);
 	int compCount = WBQtMapSettings_GetCompressionCount();
 	for (int i = 0; i < compCount; i++)
 	{
@@ -274,12 +236,7 @@ WBQtMapSettingsDialog::WBQtMapSettingsDialog(QWidget *parent)
 		m_compression->addItem(QString::fromLocal8Bit(buf));
 	}
 	m_compression->setCurrentIndex(WBQtMapSettings_GetCompressionIndex());
-	compRow->addWidget(m_compression, 1);
-	root->addLayout(compRow);
 
-	QHBoxLayout *todRow = new QHBoxLayout();
-	todRow->addWidget(new QLabel("Time", this));
-	m_timeOfDay = new QComboBox(this);
 	int todCount = WBQtMapSettings_GetTimeOfDayCount();
 	for (int i = 0; i < todCount; i++)
 	{
@@ -288,12 +245,7 @@ WBQtMapSettingsDialog::WBQtMapSettingsDialog(QWidget *parent)
 		m_timeOfDay->addItem(QString::fromLocal8Bit(buf));
 	}
 	m_timeOfDay->setCurrentIndex(WBQtMapSettings_GetTimeOfDayIndex());
-	todRow->addWidget(m_timeOfDay, 1);
-	root->addLayout(todRow);
 
-	QHBoxLayout *weatherRow = new QHBoxLayout();
-	weatherRow->addWidget(new QLabel("Weather", this));
-	m_weather = new QComboBox(this);
 	int weatherCount = WBQtMapSettings_GetWeatherCount();
 	for (int i = 0; i < weatherCount; i++)
 	{
@@ -302,11 +254,14 @@ WBQtMapSettingsDialog::WBQtMapSettingsDialog(QWidget *parent)
 		m_weather->addItem(QString::fromLocal8Bit(buf));
 	}
 	m_weather->setCurrentIndex(WBQtMapSettings_GetWeatherIndex());
-	weatherRow->addWidget(m_weather, 1);
-	root->addLayout(weatherRow);
 
-	addOkCancel(root, this, true);
-	resize(360, 190);
+	connect(m_ui->okBtn, SIGNAL(clicked()), this, SLOT(accept()));
+	connect(m_ui->cancelBtn, SIGNAL(clicked()), this, SLOT(reject()));
+}
+
+WBQtMapSettingsDialog::~WBQtMapSettingsDialog()
+{
+	delete m_ui;
 }
 
 void WBQtMapSettingsDialog::accept()
@@ -321,21 +276,21 @@ void WBQtMapSettingsDialog::accept()
 
 WBQtFixTeamOwnerDialog::WBQtFixTeamOwnerDialog(void *teamsInfo, void *sidesList, QWidget *parent)
 	: QDialog(parent),
+	m_ui(new Ui::WBQtFixTeamOwnerDialog),
 	m_sidesList(sidesList),
 	m_pickedSide(-1)
 {
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
-	setWindowTitle("Select a valid Player");
 
-	QVBoxLayout *root = new QVBoxLayout(this);
+	// The static widget tree lives in WBQtFixTeamOwnerDialog.ui; bind the members the logic uses.
+	m_ui->setupUi(this);
+	m_list = m_ui->list;
+
 	char buf[kNameCap];
 	buf[0] = 0;
 	WBQtFixOwnerData_GetPrompt(teamsInfo, buf, sizeof(buf));
-	QLabel *prompt = new QLabel(QString::fromLocal8Bit(buf), this);
-	prompt->setWordWrap(true);
-	root->addWidget(prompt);
+	m_ui->promptLabel->setText(QString::fromLocal8Bit(buf));
 
-	m_list = new QListWidget(this);
 	int count = WBQtFixOwnerData_GetCount(sidesList);
 	for (int i = 0; i < count; i++)
 	{
@@ -345,10 +300,14 @@ WBQtFixTeamOwnerDialog::WBQtFixTeamOwnerDialog(void *teamsInfo, void *sidesList,
 		item->setData(Qt::UserRole, i);	// side index survives the sort
 	}
 	m_list->sortItems(Qt::AscendingOrder);	// == the LBS_SORT display
-	root->addWidget(m_list, 1);
 
-	addOkCancel(root, this, true);
-	resize(300, 240);
+	connect(m_ui->okBtn, SIGNAL(clicked()), this, SLOT(accept()));
+	connect(m_ui->cancelBtn, SIGNAL(clicked()), this, SLOT(reject()));
+}
+
+WBQtFixTeamOwnerDialog::~WBQtFixTeamOwnerDialog()
+{
+	delete m_ui;
 }
 
 void WBQtFixTeamOwnerDialog::accept()
@@ -366,19 +325,19 @@ void WBQtFixTeamOwnerDialog::accept()
 // ===================== WBQtBaseBuildPropsDialog =====================
 
 WBQtBaseBuildPropsDialog::WBQtBaseBuildPropsDialog(const QString &name, const QString &script, int health, int unsellable, QWidget *parent)
-	: QDialog(parent)
+	: QDialog(parent),
+	m_ui(new Ui::WBQtBaseBuildPropsDialog)
 {
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
-	setWindowTitle("Building Properties");
 
-	QVBoxLayout *root = new QVBoxLayout(this);
+	// The static widget tree lives in WBQtBaseBuildPropsDialog.ui; bind the members the logic uses.
+	m_ui->setupUi(this);
+	m_nameEdit = m_ui->nameEdit;
+	m_scriptCombo = m_ui->scriptCombo;
+	m_healthEdit = m_ui->healthEdit;
+	m_unsellableCheck = m_ui->unsellableCheck;
 
-	QGridLayout *grid = new QGridLayout();
-	grid->addWidget(new QLabel("Name:", this), 0, 0);
-	m_nameEdit = new QLineEdit(name, this);
-	grid->addWidget(m_nameEdit, 0, 1);
-	grid->addWidget(new QLabel("Script:", this), 1, 0);
-	m_scriptCombo = new QComboBox(this);
+	m_nameEdit->setText(name);
 	char buf[kNameCap];
 	int count = WBQtParamData_LoadSubroutineScripts();
 	QStringList scripts;
@@ -399,49 +358,40 @@ WBQtBaseBuildPropsDialog::WBQtBaseBuildPropsDialog(const QString &name, const QS
 		index = m_scriptCombo->findText(current);
 	}
 	m_scriptCombo->setCurrentIndex(index);
-	grid->addWidget(m_scriptCombo, 1, 1);
-	grid->addWidget(new QLabel("Starting Health", this), 2, 0);
-	m_healthEdit = new QLineEdit(QString::number(health), this);
-	m_healthEdit->setFixedWidth(60);
-	grid->addWidget(m_healthEdit, 2, 1, Qt::AlignLeft);
-	root->addLayout(grid);
-
-	m_unsellableCheck = new QCheckBox("Unsellable", this);
+	m_healthEdit->setText(QString::number(health));
 	m_unsellableCheck->setChecked(unsellable != 0);
-	root->addWidget(m_unsellableCheck);
 
-	addOkCancel(root, this, true);
-	resize(340, 190);
+	connect(m_ui->okBtn, SIGNAL(clicked()), this, SLOT(accept()));
+	connect(m_ui->cancelBtn, SIGNAL(clicked()), this, SLOT(reject()));
+}
+
+WBQtBaseBuildPropsDialog::~WBQtBaseBuildPropsDialog()
+{
+	delete m_ui;
 }
 
 // ===================== WBQtNewHeightMapDialog =====================
 
 WBQtNewHeightMapDialog::WBQtNewHeightMapDialog(const QString &label, bool forResize,
 	int initialHeight, int xExtent, int yExtent, int borderWidth, QWidget *parent)
-	: QDialog(parent)
+	: QDialog(parent),
+	m_ui(new Ui::WBQtNewHeightMapDialog)
 {
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
-	setWindowTitle(label.isEmpty() ? QString("New Height Map") : label);
 
-	QVBoxLayout *root = new QVBoxLayout(this);
-	QGridLayout *grid = new QGridLayout();
-	grid->addWidget(new QLabel("Horz (x) size:", this), 0, 0);
-	m_xEdit = new QLineEdit(QString::number(xExtent), this);
-	m_xEdit->setFixedWidth(60);
-	grid->addWidget(m_xEdit, 0, 1, Qt::AlignLeft);
-	grid->addWidget(new QLabel("Vert (y) size:", this), 1, 0);
-	m_yEdit = new QLineEdit(QString::number(yExtent), this);
-	m_yEdit->setFixedWidth(60);
-	grid->addWidget(m_yEdit, 1, 1, Qt::AlignLeft);
-	grid->addWidget(new QLabel("Border size:", this), 2, 0);
-	m_borderEdit = new QLineEdit(QString::number(borderWidth), this);
-	m_borderEdit->setFixedWidth(60);
-	grid->addWidget(m_borderEdit, 2, 1, Qt::AlignLeft);
-	grid->addWidget(new QLabel("Initial height (0-255):", this), 3, 0);
-	m_heightEdit = new QLineEdit(QString::number(initialHeight), this);
-	m_heightEdit->setFixedWidth(60);
-	grid->addWidget(m_heightEdit, 3, 1, Qt::AlignLeft);
-	root->addLayout(grid);
+	// The static widget tree lives in WBQtNewHeightMapDialog.ui; bind the members the logic uses.
+	// The resize-only anchor grid stays dynamic and goes into the .ui's empty anchorsHost layout.
+	m_ui->setupUi(this);
+	setWindowTitle(label.isEmpty() ? QString("New Height Map") : label);
+	m_xEdit = m_ui->xEdit;
+	m_yEdit = m_ui->yEdit;
+	m_borderEdit = m_ui->borderEdit;
+	m_heightEdit = m_ui->heightEdit;
+
+	m_xEdit->setText(QString::number(xExtent));
+	m_yEdit->setText(QString::number(yExtent));
+	m_borderEdit->setText(QString::number(borderWidth));
+	m_heightEdit->setText(QString::number(initialHeight));
 
 	for (int i = 0; i < 9; i++)
 	{
@@ -450,7 +400,7 @@ WBQtNewHeightMapDialog::WBQtNewHeightMapDialog(const QString &label, bool forRes
 	if (forResize)
 	{
 		// == the 3x3 BS_PUSHLIKE anchor grid: exclusive, center = grow evenly (no anchors).
-		root->addWidget(new QLabel("Anchor:", this));
+		m_ui->anchorsHost->addWidget(new QLabel("Anchor:", this));
 		QGridLayout *anchorGrid = new QGridLayout();
 		anchorGrid->setSpacing(0);
 		for (int i = 0; i < 9; i++)
@@ -472,12 +422,18 @@ WBQtNewHeightMapDialog::WBQtNewHeightMapDialog(const QString &label, bool forRes
 		QHBoxLayout *anchorRow = new QHBoxLayout();
 		anchorRow->addLayout(anchorGrid);
 		anchorRow->addStretch(1);
-		root->addLayout(anchorRow);
+		m_ui->anchorsHost->addLayout(anchorRow);
 		m_anchors[4]->setChecked(true);	// center, == OnInitDialog's default
 	}
 
-	addOkCancel(root, this, true);
+	connect(m_ui->okBtn, SIGNAL(clicked()), this, SLOT(accept()));
+	connect(m_ui->cancelBtn, SIGNAL(clicked()), this, SLOT(reject()));
 	resize(260, forResize ? 300 : 180);
+}
+
+WBQtNewHeightMapDialog::~WBQtNewHeightMapDialog()
+{
+	delete m_ui;
 }
 
 void WBQtNewHeightMapDialog::anchorsOut(int *top, int *bottom, int *left, int *right) const
@@ -510,47 +466,39 @@ void WBQtNewHeightMapDialog::anchorsOut(int *top, int *bottom, int *left, int *r
 // ===================== WBQtExportScriptsDialog =====================
 
 WBQtExportScriptsDialog::WBQtExportScriptsDialog(QWidget *parent)
-	: QDialog(parent)
+	: QDialog(parent),
+	m_ui(new Ui::WBQtExportScriptsDialog)
 {
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
-	setWindowTitle("Export Script Options");
 
 	int waypoints = 0, triggers = 0, units = 0, teams = 0, sides = 0, allScripts = 0;
 	WBQtExportScripts_Get(&waypoints, &triggers, &units, &teams, &sides, &allScripts);
 
-	QVBoxLayout *root = new QVBoxLayout(this);
+	// The static widget tree lives in WBQtExportScriptsDialog.ui; bind the members the logic uses.
+	m_ui->setupUi(this);
+	m_waypoints = m_ui->waypoints;
+	m_triggers = m_ui->triggers;
+	m_units = m_ui->units;
+	m_teams = m_ui->teams;
+	m_sides = m_ui->sides;
+	m_allScripts = m_ui->allScripts;
+	m_selectedScripts = m_ui->selectedScripts;
 
-	QGroupBox *includeBox = new QGroupBox("Include items referenced in the scripts:", this);
-	QVBoxLayout *includeLay = new QVBoxLayout(includeBox);
-	m_waypoints = new QCheckBox("Include waypoints and waypoint paths.", includeBox);
 	m_waypoints->setChecked(waypoints != 0);
-	includeLay->addWidget(m_waypoints);
-	m_triggers = new QCheckBox("Include trigger areas.", includeBox);
 	m_triggers->setChecked(triggers != 0);
-	includeLay->addWidget(m_triggers);
-	m_units = new QCheckBox("Include units and buildings.", includeBox);
 	m_units->setChecked(units != 0);
-	includeLay->addWidget(m_units);
-	m_teams = new QCheckBox("Include Teams", includeBox);
 	m_teams->setChecked(teams != 0);
-	includeLay->addWidget(m_teams);
-	m_sides = new QCheckBox("Include Players.", includeBox);
 	m_sides->setChecked(sides != 0);
-	includeLay->addWidget(m_sides);
-	root->addWidget(includeBox);
-
-	QGroupBox *modeBox = new QGroupBox("Export Mode:", this);
-	QVBoxLayout *modeLay = new QVBoxLayout(modeBox);
-	m_allScripts = new QRadioButton("Export all scripts.", modeBox);
-	modeLay->addWidget(m_allScripts);
-	m_selectedScripts = new QRadioButton("Export selected scripts/folder.", modeBox);
-	modeLay->addWidget(m_selectedScripts);
 	m_allScripts->setChecked(allScripts != 0);
 	m_selectedScripts->setChecked(allScripts == 0);
-	root->addWidget(modeBox);
 
-	addOkCancel(root, this, true);
-	resize(320, 250);
+	connect(m_ui->okBtn, SIGNAL(clicked()), this, SLOT(accept()));
+	connect(m_ui->cancelBtn, SIGNAL(clicked()), this, SLOT(reject()));
+}
+
+WBQtExportScriptsDialog::~WBQtExportScriptsDialog()
+{
+	delete m_ui;
 }
 
 void WBQtExportScriptsDialog::accept()

@@ -1,5 +1,6 @@
 // WBQtTracingOverlayWindow.cpp -- see WBQtTracingOverlayWindow.h.
 #include "WBQtTracingOverlayWindow.h"
+#include "ui_WBQtTracingOverlayWindow.h"
 #include "WBQtTracingOverlayBridge.h"
 #include "WBQtWindowPos.h"
 #include "qwinwidget.h"
@@ -7,12 +8,10 @@
 #include <QApplication>
 #include <QCloseEvent>
 #include <QComboBox>
-#include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QPushButton>
 #include <QSlider>
-#include <QVBoxLayout>
 
 #include <qt_windows.h>
 
@@ -30,51 +29,38 @@ namespace
 
 WBQtTracingOverlayWindow::WBQtTracingOverlayWindow(QWidget *owner)
 	: QWidget(owner, Qt::Tool),
-	  m_opacitySlider(NULL),
-	  m_opacityLabel(NULL),
-	  m_filterCombo(NULL),
+	  m_ui(new Ui::WBQtTracingOverlayWindow),
 	  m_updating(false)
 {
-	setWindowTitle("Tracing Overlay Settings");
+	// The static widget tree lives in WBQtTracingOverlayWindow.ui; bind the members the
+	// logic below uses, then wire what Designer can't express.
+	m_ui->setupUi(this);
 	WBQtWindowPos_Track(this, "TracingOverlay");
 
-	QVBoxLayout *root = new QVBoxLayout(this);
+	m_opacitySlider = m_ui->opacitySlider;
+	m_opacityLabel = m_ui->opacityLabel;
+	m_filterCombo = m_ui->filterCombo;
 
-	// Opacity row: caption + live "NN%" readout, slider below (== the MFC layout).
-	QHBoxLayout *opacityHeader = new QHBoxLayout();
-	opacityHeader->addWidget(new QLabel("Opacity:", this));
-	opacityHeader->addStretch(1);
-	m_opacityLabel = new QLabel("100%", this);
-	opacityHeader->addWidget(m_opacityLabel);
-	root->addLayout(opacityHeader);
-
-	m_opacitySlider = new QSlider(Qt::Horizontal, this);
-	m_opacitySlider->setRange(0, 100);
-	m_opacitySlider->setTickPosition(QSlider::TicksBelow);
-	m_opacitySlider->setTickInterval(10);
-	root->addWidget(m_opacitySlider);
-
-	root->addWidget(new QLabel("Resize interpolation:", this));
-	m_filterCombo = new QComboBox(this);
+	// The item ORDER is load-bearing: currentIndex() is passed straight through as the
+	// bridge filter value, so keep the enum mapping visible here.
 	m_filterCombo->addItem("Default");		// FILTER_DEFAULT (linear)
 	m_filterCombo->addItem("Nearest");		// FILTER_NEAREST (point sampling)
-	root->addWidget(m_filterCombo);
-
-	QHBoxLayout *buttonRow = new QHBoxLayout();
-	buttonRow->addStretch(1);
-	QPushButton *okBtn = new QPushButton("OK", this);
-	okBtn->setDefault(true);
-	buttonRow->addWidget(okBtn);
-	root->addLayout(buttonRow);
 
 	connect(m_opacitySlider, SIGNAL(valueChanged(int)), this, SLOT(onOpacityChanged(int)));
 	connect(m_opacitySlider, SIGNAL(sliderReleased()), this, SLOT(onOpacityReleased()));
 	connect(m_filterCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(onFilterChanged(int)));
-	connect(okBtn, SIGNAL(clicked()), this, SLOT(onOkClicked()));
-
-	setFixedWidth(280);
+	connect(m_ui->okBtn, SIGNAL(clicked()), this, SLOT(onOkClicked()));
 
 	s_instance = this;
+}
+
+WBQtTracingOverlayWindow::~WBQtTracingOverlayWindow()
+{
+	if (s_instance == this)
+	{
+		s_instance = NULL;
+	}
+	delete m_ui;
 }
 
 void WBQtTracingOverlayWindow::seedFromSettings()

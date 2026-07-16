@@ -9,13 +9,11 @@
 #include <QFontDatabase>
 #include <QHBoxLayout>
 #include <QHeaderView>
-#include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QStringList>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
-#include <QVBoxLayout>
 
 #include "WBQtTreeStyle.h"
 
@@ -27,6 +25,7 @@ QWidget *WBQt_DialogParent(void);
 // its moc the standard way; the public WBQtMapIniReport.h stays a pure C facade for the MFC
 // side. See the include below.
 #include "WBQtMapIniReportPrivate.h"
+#include "ui_WBQtMapIniReportDialog.h"
 
 namespace
 {
@@ -63,57 +62,38 @@ namespace
 WBQtMapIniReportDialog::WBQtMapIniReportDialog(const QString &title, const QString &text,
 	bool applyMode, QWidget *parent)
 	: QDialog(parent),
+	  m_ui(new Ui::WBQtMapIniReportDialog),
 	  m_filter(NULL),
 	  m_tree(NULL),
 	  m_rawText(text)
 {
+	// The static widget tree lives in WBQtMapIniReportDialog.ui; bind the members the
+	// logic below uses, then wire what Designer can't express.
+	m_ui->setupUi(this);
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 	setWindowTitle(title);
 
-	QVBoxLayout *root = new QVBoxLayout(this);
-
-	// Filter + expand/collapse controls.
-	QHBoxLayout *topRow = new QHBoxLayout();
-	topRow->addWidget(new QLabel("Filter:", this));
-	m_filter = new QLineEdit(this);
-	m_filter->setPlaceholderText("substring (object / module / store name)...");
-	topRow->addWidget(m_filter, 1);
-	QPushButton *expandBtn = new QPushButton("Expand all", this);
-	expandBtn->setAutoDefault(false);
-	QPushButton *collapseBtn = new QPushButton("Collapse all", this);
-	collapseBtn->setAutoDefault(false);
-	topRow->addWidget(expandBtn);
-	topRow->addWidget(collapseBtn);
-	root->addLayout(topRow);
+	m_filter = m_ui->filter;
 
 	// The report tree: section headers as parents, their lines as monospace children.
-	m_tree = new QTreeWidget(this);
-	m_tree->setHeaderHidden(true);
-	m_tree->setColumnCount(1);
-	m_tree->setUniformRowHeights(true);
-	m_tree->setSelectionMode(QAbstractItemView::ExtendedSelection);
+	m_tree = m_ui->tree;
 	QFont mono = QFontDatabase::systemFont(QFontDatabase::FixedFont);
 	m_tree->setFont(mono);
 	WBQtTreeStyle::applyTreeLines(m_tree);	// MFC-style branch lines, like every other WB tree
-	root->addWidget(m_tree, 1);
 
 	buildTree(text);
 
 	// Buttons. Apply mode (open/Reload) offers OK (load) / Cancel (don't); informational
-	// mode (Check) just closes. Copy is always available.
-	QHBoxLayout *buttons = new QHBoxLayout();
-	QPushButton *copyBtn = new QPushButton("Copy report", this);
-	copyBtn->setAutoDefault(false);
-	buttons->addWidget(copyBtn);
-	buttons->addStretch(1);
+	// mode (Check) just closes. Copy is always available. The .ui holds Copy + the
+	// stretch; the mode-dependent buttons are appended here.
 	if (applyMode)
 	{
 		QPushButton *okButton = new QPushButton("OK (load map.ini)", this);
 		okButton->setDefault(true);
-		buttons->addWidget(okButton);
+		m_ui->buttonsLayout->addWidget(okButton);
 		QPushButton *cancelButton = new QPushButton("Cancel", this);
 		cancelButton->setAutoDefault(false);
-		buttons->addWidget(cancelButton);
+		m_ui->buttonsLayout->addWidget(cancelButton);
 		connect(okButton, SIGNAL(clicked()), this, SLOT(accept()));
 		connect(cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
 	}
@@ -121,17 +101,21 @@ WBQtMapIniReportDialog::WBQtMapIniReportDialog(const QString &title, const QStri
 	{
 		QPushButton *closeBtn = new QPushButton("Close", this);
 		closeBtn->setDefault(true);
-		buttons->addWidget(closeBtn);
+		m_ui->buttonsLayout->addWidget(closeBtn);
 		connect(closeBtn, SIGNAL(clicked()), this, SLOT(accept()));
 	}
-	root->addLayout(buttons);
 
 	connect(m_filter, SIGNAL(textChanged(QString)), this, SLOT(onFilterChanged(QString)));
-	connect(expandBtn, SIGNAL(clicked()), this, SLOT(onExpandAll()));
-	connect(collapseBtn, SIGNAL(clicked()), this, SLOT(onCollapseAll()));
-	connect(copyBtn, SIGNAL(clicked()), this, SLOT(onCopy()));
+	connect(m_ui->expandBtn, SIGNAL(clicked()), this, SLOT(onExpandAll()));
+	connect(m_ui->collapseBtn, SIGNAL(clicked()), this, SLOT(onCollapseAll()));
+	connect(m_ui->copyBtn, SIGNAL(clicked()), this, SLOT(onCopy()));
 
 	resize(720, 560);
+}
+
+WBQtMapIniReportDialog::~WBQtMapIniReportDialog()
+{
+	delete m_ui;
 }
 
 void WBQtMapIniReportDialog::buildTree(const QString &text)

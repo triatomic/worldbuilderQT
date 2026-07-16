@@ -3,16 +3,14 @@
 // re-reads its whole state from the hidden MFC dialog after every action (all bridge calls
 // are synchronous). The Expand/Shrink button is dropped -- the Qt dialog resizes natively.
 #include "WBQtTeamsDialog.h"
+#include "ui_WBQtTeamsDialog.h"
 #include "WBQtTeamsBridge.h"
 #include "WBQtTeamSheetDialog.h"
 
-#include <QHBoxLayout>
 #include <QHeaderView>
 #include <QListWidget>
 #include <QPushButton>
-#include <QSplitter>
 #include <QTreeWidget>
-#include <QVBoxLayout>
 
 #include <qt_windows.h>
 
@@ -27,90 +25,48 @@ namespace
 
 WBQtTeamsDialog::WBQtTeamsDialog(QWidget *parent)
 	: QDialog(parent),
+	m_ui(new Ui::WBQtTeamsDialog),
 	m_updating(false)
 {
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
-	setWindowTitle("Team Builder");
 
-	QVBoxLayout *root = new QVBoxLayout(this);
+	// The static widget tree lives in WBQtTeamsDialog.ui; bind the members the
+	// logic below uses, then wire what Designer can't express.
+	m_ui->setupUi(this);
 
-	// The command row (== the MFC top button strip, minus Expand/Shrink).
-	QHBoxLayout *commands = new QHBoxLayout();
-	QPushButton *membersButton = new QPushButton("Select Team Members From The Map...", this);
-	membersButton->setAutoDefault(false);
-	commands->addWidget(membersButton);
-	m_newButton = new QPushButton("Add New Team", this);
-	m_newButton->setAutoDefault(false);
-	commands->addWidget(m_newButton);
-	m_copyButton = new QPushButton("Copy Team", this);
-	m_copyButton->setAutoDefault(false);
-	commands->addWidget(m_copyButton);
-	m_deleteButton = new QPushButton("Delete Team", this);
-	m_deleteButton->setAutoDefault(false);
-	commands->addWidget(m_deleteButton);
-	m_moveUpButton = new QPushButton("Move Team Up", this);
-	m_moveUpButton->setAutoDefault(false);
-	commands->addWidget(m_moveUpButton);
-	m_moveDownButton = new QPushButton("Move Team Down", this);
-	m_moveDownButton->setAutoDefault(false);
-	commands->addWidget(m_moveDownButton);
-	commands->addStretch(1);
-	QPushButton *cancelButton = new QPushButton("Cancel", this);
-	cancelButton->setAutoDefault(false);
-	commands->addWidget(cancelButton);
-	QPushButton *okButton = new QPushButton("OK", this);
-	okButton->setDefault(true);
-	commands->addWidget(okButton);
-	root->addLayout(commands);
+	m_players = m_ui->players;
+	m_teams = m_ui->teams;
+	m_newButton = m_ui->newButton;
+	m_copyButton = m_ui->copyButton;
+	m_deleteButton = m_ui->deleteButton;
+	m_moveUpButton = m_ui->moveUpButton;
+	m_moveDownButton = m_ui->moveDownButton;
 
-	QSplitter *split = new QSplitter(Qt::Horizontal, this);
-
-	QWidget *left = new QWidget(split);
-	QVBoxLayout *leftLay = new QVBoxLayout(left);
-	leftLay->setContentsMargins(0, 0, 0, 0);
-	m_players = new QListWidget(left);
-	leftLay->addWidget(m_players, 1);
-	QPushButton *exportButton = new QPushButton("Export Teams", left);
-	exportButton->setAutoDefault(false);
-	leftLay->addWidget(exportButton);
-	QPushButton *importButton = new QPushButton("Import Teams", left);
-	importButton->setAutoDefault(false);
-	leftLay->addWidget(importButton);
-	split->addWidget(left);
-
-	m_teams = new QTreeWidget(split);
-	m_teams->setColumnCount(kTeamColumns);
-	QStringList headers;
-	headers << "Team Name" << "Script" << "Trigger" << "Priority" << "Origin";
-	m_teams->setHeaderLabels(headers);
-	m_teams->setRootIsDecorated(false);
-	m_teams->setAllColumnsShowFocus(true);
-	m_teams->setSelectionMode(QAbstractItemView::SingleSelection);
 	m_teams->header()->resizeSection(0, 200);
 	m_teams->header()->resizeSection(1, 200);
 	m_teams->header()->resizeSection(2, 200);
 	m_teams->header()->resizeSection(3, 60);
-	split->addWidget(m_teams);
-	split->setStretchFactor(0, 1);
-	split->setStretchFactor(1, 4);
-	root->addWidget(split, 1);
 
 	connect(m_players, SIGNAL(currentRowChanged(int)), this, SLOT(onPlayerRowChanged(int)));
 	connect(m_teams, SIGNAL(itemSelectionChanged()), this, SLOT(onTeamRowChanged()));
 	connect(m_teams, SIGNAL(itemDoubleClicked(QTreeWidgetItem*,int)), this, SLOT(onTeamDoubleClicked(QTreeWidgetItem*,int)));
-	connect(membersButton, SIGNAL(clicked()), this, SLOT(onSelectTeamMembers()));
+	connect(m_ui->membersButton, SIGNAL(clicked()), this, SLOT(onSelectTeamMembers()));
 	connect(m_newButton, SIGNAL(clicked()), this, SLOT(onNewTeam()));
 	connect(m_copyButton, SIGNAL(clicked()), this, SLOT(onCopyTeam()));
 	connect(m_deleteButton, SIGNAL(clicked()), this, SLOT(onDeleteTeam()));
 	connect(m_moveUpButton, SIGNAL(clicked()), this, SLOT(onMoveUpTeam()));
 	connect(m_moveDownButton, SIGNAL(clicked()), this, SLOT(onMoveDownTeam()));
-	connect(exportButton, SIGNAL(clicked()), this, SLOT(onExportTeams()));
-	connect(importButton, SIGNAL(clicked()), this, SLOT(onImportTeams()));
-	connect(okButton, SIGNAL(clicked()), this, SLOT(accept()));
-	connect(cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
+	connect(m_ui->exportButton, SIGNAL(clicked()), this, SLOT(onExportTeams()));
+	connect(m_ui->importButton, SIGNAL(clicked()), this, SLOT(onImportTeams()));
+	connect(m_ui->okButton, SIGNAL(clicked()), this, SLOT(accept()));
+	connect(m_ui->cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
 
 	refreshAll();
-	resize(1030, 540);
+}
+
+WBQtTeamsDialog::~WBQtTeamsDialog()
+{
+	delete m_ui;
 }
 
 void WBQtTeamsDialog::refreshAll()

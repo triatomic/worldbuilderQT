@@ -4,6 +4,7 @@
 // links pop the (still MFC) EditParameter modals through the bridge; the sentence and warnings
 // re-render when they return.
 #include "WBQtCondActDialog.h"
+#include "ui_WBQtCondActDialog.h"
 #include "WBQtCondActBridge.h"
 #include "WBQtTreeStyle.h"
 
@@ -14,7 +15,6 @@ extern "C" int WBQtConfig_GetNewSearch(void);
 #include <QCheckBox>
 #include <QEvent>
 #include <QGroupBox>
-#include <QHBoxLayout>
 #include <QHash>
 #include <QKeyEvent>
 #include <QLabel>
@@ -24,7 +24,6 @@ extern "C" int WBQtConfig_GetNewSearch(void);
 #include <QTextBrowser>
 #include <QTreeWidget>
 #include <QUrl>
-#include <QVBoxLayout>
 
 namespace
 {
@@ -63,85 +62,41 @@ namespace
 
 WBQtCondActDialog::WBQtCondActDialog(void *item, bool isAction, QWidget *parent)
 	: QDialog(parent),
+	m_ui(new Ui::WBQtCondActDialog),
 	m_item(item),
 	m_isAction(isAction ? 1 : 0),
 	m_updating(false)
 {
+	// The static widget tree lives in WBQtCondActDialog.ui; bind the members the
+	// logic below uses, then wire what Designer can't express.
+	m_ui->setupUi(this);
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 	setWindowTitle(isAction ? "Edit Action:" : "Edit Condition:");
 
-	QVBoxLayout *root = new QVBoxLayout(this);
+	m_searchEdit = m_ui->searchEdit;
+	m_compressCheck = m_ui->compressCheck;
+	m_tree = m_ui->tree;
+	m_sentence = m_ui->sentence;
+	m_warningsBox = m_ui->warningsBox;
+	m_warningsLabel = m_ui->warningsLabel;
+	m_helpLabel = m_ui->helpLabel;
 
-	// Top command row, matching the MFC dialog (search left, Compress middle, OK/Cancel right).
-	QHBoxLayout *top = new QHBoxLayout();
-	top->addWidget(new QLabel("Search:", this));
-	m_searchEdit = new QLineEdit(this);
-	m_searchEdit->setMinimumWidth(200);
 	m_searchEdit->installEventFilter(this);
-	top->addWidget(m_searchEdit);
-	QPushButton *findButton = new QPushButton("Find", this);
-	findButton->setAutoDefault(false);
-	top->addWidget(findButton);
-	QPushButton *resetButton = new QPushButton("Reset", this);
-	resetButton->setAutoDefault(false);
-	top->addWidget(resetButton);
-	m_compressCheck = new QCheckBox("Compress Script", this);
-	top->addWidget(m_compressCheck);
-	top->addStretch(1);
-	QPushButton *cancelButton = new QPushButton("&Cancel", this);
-	cancelButton->setAutoDefault(false);
-	top->addWidget(cancelButton);
-	QPushButton *okButton = new QPushButton("OK", this);
-	okButton->setDefault(true);
-	top->addWidget(okButton);
-	root->addLayout(top);
-
-	QHBoxLayout *content = new QHBoxLayout();
-
-	m_tree = new QTreeWidget(this);
-	m_tree->setHeaderHidden(true);
 	WBQtTreeStyle::applyTreeLines(m_tree);
-	content->addWidget(m_tree, 3);
-
-	QVBoxLayout *right = new QVBoxLayout();
-	m_sentence = new QTextBrowser(this);
-	m_sentence->setOpenLinks(false);
-	m_sentence->setMinimumHeight(120);
-	right->addWidget(m_sentence, 1);
-
-	m_warningsBox = new QGroupBox("No Warnings", this);
-	QVBoxLayout *warnLay = new QVBoxLayout(m_warningsBox);
-	m_warningsLabel = new QLabel(m_warningsBox);
-	m_warningsLabel->setWordWrap(true);
-	m_warningsLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-	warnLay->addWidget(m_warningsLabel);
-	m_warningsBox->setMinimumHeight(70);
-	right->addWidget(m_warningsBox);
-
-	QGroupBox *helpBox = new QGroupBox("Developer Notes:", this);
-	QVBoxLayout *helpLay = new QVBoxLayout(helpBox);
-	m_helpLabel = new QLabel(helpBox);
-	m_helpLabel->setWordWrap(true);
-	m_helpLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-	helpLay->addWidget(m_helpLabel, 1);
-	right->addWidget(helpBox, 2);
-
-	content->addLayout(right, 2);
-	root->addLayout(content, 1);
 
 	connect(m_tree, SIGNAL(currentItemChanged(QTreeWidgetItem*,QTreeWidgetItem*)),
 			this, SLOT(onCurrentItemChanged(QTreeWidgetItem*,QTreeWidgetItem*)));
 	connect(m_sentence, SIGNAL(anchorClicked(QUrl)), this, SLOT(onLinkClicked(QUrl)));
-	connect(findButton, SIGNAL(clicked()), this, SLOT(onSearch()));
-	connect(resetButton, SIGNAL(clicked()), this, SLOT(onReset()));
+	connect(m_ui->findBtn, SIGNAL(clicked()), this, SLOT(onSearch()));
+	connect(m_ui->resetBtn, SIGNAL(clicked()), this, SLOT(onReset()));
 	if (WBQtConfig_GetNewSearch() != 0)
 	{
 		// NewSearch: filter live as the user types (Find button still works).
 		connect(m_searchEdit, SIGNAL(textChanged(QString)), this, SLOT(onSearchLive(QString)));
 	}
 	connect(m_compressCheck, SIGNAL(toggled(bool)), this, SLOT(onCompressToggled(bool)));
-	connect(okButton, SIGNAL(clicked()), this, SLOT(accept()));
-	connect(cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
+	connect(m_ui->okBtn, SIGNAL(clicked()), this, SLOT(accept()));
+	connect(m_ui->cancelBtn, SIGNAL(clicked()), this, SLOT(reject()));
 
 	m_updating = true;
 	m_compressCheck->setChecked(WBQtCondAct_GetCompress() != 0);
@@ -154,6 +109,11 @@ WBQtCondActDialog::WBQtCondActDialog(void *item, bool isAction, QWidget *parent)
 	m_tree->setFocus();
 
 	resize(900, 560);
+}
+
+WBQtCondActDialog::~WBQtCondActDialog()
+{
+	delete m_ui;
 }
 
 bool WBQtCondActDialog::eventFilter(QObject *watched, QEvent *event)

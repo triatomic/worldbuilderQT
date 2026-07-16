@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WBQtExportScriptsDialog</class>
+ <widget class="QDialog" name="WBQtExportScriptsDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>320</width>
+    <height>250</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Export Script Options</string>
+  </property>
+  <layout class="QVBoxLayout" name="rootLayout">
+   <item>
+    <widget class="QGroupBox" name="includeBox">
+     <property name="title">
+      <string>Include items referenced in the scripts:</string>
+     </property>
+     <layout class="QVBoxLayout" name="includeLay">
+      <item>
+       <widget class="QCheckBox" name="waypoints">
+        <property name="text">
+         <string>Include waypoints and waypoint paths.</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="triggers">
+        <property name="text">
+         <string>Include trigger areas.</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="units">
+        <property name="text">
+         <string>Include units and buildings.</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="teams">
+        <property name="text">
+         <string>Include Teams</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="sides">
+        <property name="text">
+         <string>Include Players.</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="modeBox">
+     <property name="title">
+      <string>Export Mode:</string>
+     </property>
+     <layout class="QVBoxLayout" name="modeLay">
+      <item>
+       <widget class="QRadioButton" name="allScripts">
+        <property name="text">
+         <string>Export all scripts.</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="selectedScripts">
+        <property name="text">
+         <string>Export selected scripts/folder.</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="buttonsRow">
+     <item>
+      <spacer name="buttonsSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="okBtn">
+       <property name="text">
+        <string>OK</string>
+       </property>
+       <property name="default">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="cancelBtn">
+       <property name="text">
+        <string>Cancel</string>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

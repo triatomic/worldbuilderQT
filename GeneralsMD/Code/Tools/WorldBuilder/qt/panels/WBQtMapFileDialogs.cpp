@@ -1,18 +1,17 @@
 // WBQtMapFileDialogs.cpp -- see WBQtMapFileDialogs.h. Layouts mirror IDD_OPEN_MAP /
 // IDD_SAVE_MAP (the push-like mode strip on top, the map list, search / name row).
 #include "WBQtMapFileDialogs.h"
+#include "ui_WBQtOpenMapDialog.h"
+#include "ui_WBQtSaveMapDialog.h"
 #include "WBQtMapFileBridge.h"
 #include "WBQtPreviewImage.h"
 
-#include <QFrame>
-#include <QHBoxLayout>
 #include <QImage>
 #include <QLabel>
 #include <QPixmap>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
-#include <QVBoxLayout>
 
 #include <qt_windows.h>
 
@@ -36,37 +35,30 @@ namespace
 		int rc = dlg.exec();
 		return (rc == QDialog::Accepted) ? 1 : 0;
 	}
-
-	QPushButton *makeModeButton(const QString &label, QWidget *parent)
-	{
-		QPushButton *button = new QPushButton(label, parent);
-		button->setCheckable(true);
-		button->setAutoDefault(false);
-		return button;
-	}
 }
 
 // ===================== WBQtOpenMapDialog =====================
 
 WBQtOpenMapDialog::WBQtOpenMapDialog(QWidget *parent)
 	: QDialog(parent),
+	m_ui(new Ui::WBQtOpenMapDialog),
 	m_updating(false)
 {
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
-	setWindowTitle("Open Map");
 
-	QVBoxLayout *root = new QVBoxLayout(this);
+	// The static widget tree lives in WBQtOpenMapDialog.ui; bind the members the
+	// logic below uses. The preview label shows the <name>.tga next to the .map in
+	// the map's folder, the same image the game lobby shows.
+	m_ui->setupUi(this);
 
-	QHBoxLayout *top = new QHBoxLayout();
-	top->addWidget(new QLabel("Open Map:", this));
-	top->addStretch(1);
-	m_packedButton = makeModeButton("Packed Maps", this);
-	top->addWidget(m_packedButton);
-	m_userButton = makeModeButton("User Maps", this);
-	top->addWidget(m_userButton);
-	m_systemButton = makeModeButton("System Maps", this);
-	top->addWidget(m_systemButton);
-	root->addLayout(top);
+	m_packedButton = m_ui->packedButton;
+	m_userButton = m_ui->userButton;
+	m_systemButton = m_ui->systemButton;
+	m_searchEdit = m_ui->searchEdit;
+	m_list = m_ui->list;
+	m_preview = m_ui->preview;
+	m_okButton = m_ui->okButton;
+
 	if (WBQtMapFileData_RadiosVisible() == 0)
 	{
 		// == the MFC release hide (System/User hidden; Packed stays).
@@ -74,57 +66,24 @@ WBQtOpenMapDialog::WBQtOpenMapDialog(QWidget *parent)
 		m_systemButton->hide();
 	}
 
-	QHBoxLayout *searchRow = new QHBoxLayout();
-	searchRow->addWidget(new QLabel("Search:", this));
-	m_searchEdit = new QLineEdit(this);
-	searchRow->addWidget(m_searchEdit, 1);
-	QPushButton *findButton = new QPushButton("Find", this);
-	findButton->setAutoDefault(false);
-	searchRow->addWidget(findButton);
-	QPushButton *resetButton = new QPushButton("Reset", this);
-	resetButton->setAutoDefault(false);
-	searchRow->addWidget(resetButton);
-	root->addLayout(searchRow);
-
-	// Map list + the preview thumbnail (the <name>.tga next to the .map in the map's
-	// folder, the same image the game lobby shows).
-	QHBoxLayout *listRow = new QHBoxLayout();
-	m_list = new QListWidget(this);
-	listRow->addWidget(m_list, 1);
-	m_preview = new QLabel(this);
-	m_preview->setFixedSize(220, 220);
-	m_preview->setAlignment(Qt::AlignCenter);
-	m_preview->setFrameShape(QFrame::Box);
-	m_preview->setText("(no preview)");
-	listRow->addWidget(m_preview, 0, Qt::AlignTop);
-	root->addLayout(listRow, 1);
-
-	QHBoxLayout *buttons = new QHBoxLayout();
-	QPushButton *browseButton = new QPushButton("Browse...", this);
-	browseButton->setAutoDefault(false);
-	buttons->addWidget(browseButton);
-	buttons->addStretch(1);
-	QPushButton *cancelButton = new QPushButton("Cancel", this);
-	cancelButton->setAutoDefault(false);
-	buttons->addWidget(cancelButton);
-	m_okButton = new QPushButton("OK", this);
-	m_okButton->setDefault(true);
-	buttons->addWidget(m_okButton);
-	root->addLayout(buttons);
-
 	connect(m_packedButton, SIGNAL(clicked()), this, SLOT(onModeClicked()));
 	connect(m_userButton, SIGNAL(clicked()), this, SLOT(onModeClicked()));
 	connect(m_systemButton, SIGNAL(clicked()), this, SLOT(onModeClicked()));
-	connect(findButton, SIGNAL(clicked()), this, SLOT(onFind()));
-	connect(resetButton, SIGNAL(clicked()), this, SLOT(onReset()));
-	connect(browseButton, SIGNAL(clicked()), this, SLOT(onBrowse()));
+	connect(m_ui->findBtn, SIGNAL(clicked()), this, SLOT(onFind()));
+	connect(m_ui->resetBtn, SIGNAL(clicked()), this, SLOT(onReset()));
+	connect(m_ui->browseBtn, SIGNAL(clicked()), this, SLOT(onBrowse()));
 	connect(m_list, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(onDoubleClicked()));
 	connect(m_list, SIGNAL(currentRowChanged(int)), this, SLOT(onSelectionChanged()));
 	connect(m_okButton, SIGNAL(clicked()), this, SLOT(accept()));
-	connect(cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
+	connect(m_ui->cancelBtn, SIGNAL(clicked()), this, SLOT(reject()));
 
 	reload();
 	resize(700, 480);
+}
+
+WBQtOpenMapDialog::~WBQtOpenMapDialog()
+{
+	delete m_ui;
 }
 
 void WBQtOpenMapDialog::reload()
@@ -253,57 +212,34 @@ void WBQtOpenMapDialog::accept()
 
 WBQtSaveMapDialog::WBQtSaveMapDialog(const QString &initialFilename, QWidget *parent)
 	: QDialog(parent),
+	m_ui(new Ui::WBQtSaveMapDialog),
 	m_updating(false),
 	m_browse(false),
 	m_systemDir(WBQtSaveMapData_GetUseSystemDir() != 0)
 {
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
-	setWindowTitle("Save Map As:");
 
-	QVBoxLayout *root = new QVBoxLayout(this);
+	// The static widget tree lives in WBQtSaveMapDialog.ui; bind the members the
+	// logic below uses.
+	m_ui->setupUi(this);
 
-	QHBoxLayout *top = new QHBoxLayout();
-	top->addWidget(new QLabel("Existing maps:", this));
-	top->addStretch(1);
-	m_systemButton = makeModeButton("System Maps", this);
-	top->addWidget(m_systemButton);
-	m_userButton = makeModeButton("User Maps", this);
-	top->addWidget(m_userButton);
-	root->addLayout(top);
+	m_systemButton = m_ui->systemButton;
+	m_userButton = m_ui->userButton;
+	m_list = m_ui->list;
+	m_nameEdit = m_ui->nameEdit;
+
 	if (WBQtMapFileData_RadiosVisible() == 0)
 	{
 		m_userButton->hide();
 		m_systemButton->hide();
 	}
 
-	m_list = new QListWidget(this);
-	root->addWidget(m_list, 1);
-
-	QHBoxLayout *nameRow = new QHBoxLayout();
-	nameRow->addWidget(new QLabel("Map name:", this));
-	m_nameEdit = new QLineEdit(this);
-	nameRow->addWidget(m_nameEdit, 1);
-	root->addLayout(nameRow);
-
-	QHBoxLayout *buttons = new QHBoxLayout();
-	QPushButton *browseButton = new QPushButton("Browse...", this);
-	browseButton->setAutoDefault(false);
-	buttons->addWidget(browseButton);
-	buttons->addStretch(1);
-	QPushButton *cancelButton = new QPushButton("Cancel", this);
-	cancelButton->setAutoDefault(false);
-	buttons->addWidget(cancelButton);
-	QPushButton *okButton = new QPushButton("OK", this);
-	okButton->setDefault(true);
-	buttons->addWidget(okButton);
-	root->addLayout(buttons);
-
 	connect(m_systemButton, SIGNAL(clicked()), this, SLOT(onModeClicked()));
 	connect(m_userButton, SIGNAL(clicked()), this, SLOT(onModeClicked()));
 	connect(m_list, SIGNAL(itemSelectionChanged()), this, SLOT(onListSelectionChanged()));
-	connect(browseButton, SIGNAL(clicked()), this, SLOT(onBrowse()));
-	connect(okButton, SIGNAL(clicked()), this, SLOT(accept()));
-	connect(cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
+	connect(m_ui->browseBtn, SIGNAL(clicked()), this, SLOT(onBrowse()));
+	connect(m_ui->okBtn, SIGNAL(clicked()), this, SLOT(accept()));
+	connect(m_ui->cancelBtn, SIGNAL(clicked()), this, SLOT(reject()));
 
 	reload();
 
@@ -324,6 +260,11 @@ WBQtSaveMapDialog::WBQtSaveMapDialog(const QString &initialFilename, QWidget *pa
 	m_nameEdit->setFocus();
 
 	resize(460, 420);
+}
+
+WBQtSaveMapDialog::~WBQtSaveMapDialog()
+{
+	delete m_ui;
 }
 
 void WBQtSaveMapDialog::reload()

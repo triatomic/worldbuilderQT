@@ -17,12 +17,15 @@ class QSpinBox;
 class QLabel;
 class QCheckBox;
 
+namespace Ui { class WBQtBrushPanel; }	// generated from WBQtBrushPanel.ui
+
 class WBQtBrushPanel : public QWidget
 {
 	Q_OBJECT
 
 public:
 	explicit WBQtBrushPanel(QWidget *owner);
+	virtual ~WBQtBrushPanel();
 
 	// Tool -> widget display push (called by the free WBQtBrush_Push* functions).
 	void pushWidth(int v);
@@ -42,6 +45,8 @@ private slots:
 
 private:
 	void setRow(QSlider *slider, QSpinBox *spin, int v);	// set both without re-entry
+
+	Ui::WBQtBrushPanel *m_ui;	// owns the static widget tree (WBQtBrushPanel.ui)
 
 	QSlider   *m_widthSlider;
 	QSpinBox  *m_widthSpin;

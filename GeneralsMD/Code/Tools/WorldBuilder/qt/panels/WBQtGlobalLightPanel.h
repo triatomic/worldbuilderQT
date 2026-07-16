@@ -20,12 +20,15 @@ class QRadioButton;
 class QSpinBox;
 class WBQtScrubSpinBox;
 
+namespace Ui { class WBQtGlobalLightPanel; }	// generated from WBQtGlobalLightPanel.ui
+
 class WBQtGlobalLightPanel : public QWidget
 {
 	Q_OBJECT
 
 public:
 	explicit WBQtGlobalLightPanel(QWidget *owner);
+	virtual ~WBQtGlobalLightPanel();
 
 	// Re-seed every control from the hidden MFC dialog / globals.
 	void seedFromGlobals();
@@ -48,6 +51,8 @@ private:
 	void updateXYZLabel(int light);
 	void updateSwatch();
 	int  senderLight(QObject *src) const;	// which light column a control belongs to
+
+	Ui::WBQtGlobalLightPanel *m_ui;	// owns the static widget tree (WBQtGlobalLightPanel.ui)
 
 	// Per-light angle + diffuse controls (0 Sun, 1 Accent1, 2 Accent2).
 	WBQtScrubSpinBox *m_azimuth[3];

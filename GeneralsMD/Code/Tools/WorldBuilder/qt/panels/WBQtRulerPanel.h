@@ -16,12 +16,15 @@ class QCheckBox;
 class QDoubleSpinBox;
 class QLabel;
 
+namespace Ui { class WBQtRulerPanel; }	// generated from WBQtRulerPanel.ui
+
 class WBQtRulerPanel : public QWidget
 {
 	Q_OBJECT
 
 public:
 	explicit WBQtRulerPanel(QWidget *owner);
+	virtual ~WBQtRulerPanel();
 
 	static WBQtRulerPanel *instance() { return s_instance; }
 
@@ -34,6 +37,8 @@ private slots:
 private:
 	void refreshWidthFromTool();	// re-display the stored length in the current unit
 	void syncCircleState();			// checkbox + width-field-enabled from the tool's type
+
+	Ui::WBQtRulerPanel *m_ui;	// owns the static widget tree (WBQtRulerPanel.ui)
 
 	QCheckBox      *m_circle;
 	QDoubleSpinBox *m_width;

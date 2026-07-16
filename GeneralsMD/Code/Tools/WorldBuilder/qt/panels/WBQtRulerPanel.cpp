@@ -1,13 +1,11 @@
 // WBQtRulerPanel.cpp -- see WBQtRulerPanel.h.
 #include "WBQtRulerPanel.h"
+#include "ui_WBQtRulerPanel.h"
 #include "WBQtPanelBridge.h"
 
 #include <QCheckBox>
 #include <QDoubleSpinBox>
-#include <QGroupBox>
-#include <QHBoxLayout>
 #include <QLabel>
-#include <QVBoxLayout>
 
 // Feet per meter, matching RulerOptions' 0.3048 factor. The tool stores lengths in feet;
 // this is only applied when the user has picked the "meters" display unit.
@@ -22,41 +20,22 @@ WBQtRulerPanel *WBQtRulerPanel::s_instance = NULL;
 
 WBQtRulerPanel::WBQtRulerPanel(QWidget *owner)
 	: QWidget(owner, Qt::Tool),
+	  m_ui(new Ui::WBQtRulerPanel),
 	  m_updating(false)
 {
-	setWindowTitle("Ruler Options");
+	// The static widget tree lives in WBQtRulerPanel.ui; bind the members the
+	// logic below uses, then wire what Designer can't express.
+	m_ui->setupUi(this);
 
-	QVBoxLayout *root = new QVBoxLayout(this);
-
-	// Ruler type + circle diameter. The width field is only meaningful for a circle ruler.
-	QGroupBox *typeBox = new QGroupBox("Ruler", this);
-	QVBoxLayout *typeLay = new QVBoxLayout(typeBox);
 	// "Circular Measurements" (checked) vs a straight line ruler (unchecked). The checkbox
 	// state always reflects the tool's real type -- see syncCircleState(), which re-reads it
-	// after switchType() since the tool can refuse to flip mid-measure.
-	m_circle = new QCheckBox("Circular Measurements", typeBox);
-	typeLay->addWidget(m_circle);
-
-	QHBoxLayout *widthRow = new QHBoxLayout();
-	m_widthLabel = new QLabel("Diameter:", typeBox);
-	widthRow->addWidget(m_widthLabel);
-	m_width = new QDoubleSpinBox(typeBox);
-	m_width->setDecimals(2);
-	m_width->setRange(0.0, 1000000.0);
-	widthRow->addWidget(m_width, 1);
-	typeLay->addLayout(widthRow);
-	root->addWidget(typeBox);
-
-	// Display / overlay options.
-	QGroupBox *optBox = new QGroupBox("Options", this);
-	QVBoxLayout *optLay = new QVBoxLayout(optBox);
-	m_useMeters = new QCheckBox("Use meters", optBox);
-	m_showGrid = new QCheckBox("Show ruler grid", optBox);
-	optLay->addWidget(m_useMeters);
-	optLay->addWidget(m_showGrid);
-	root->addWidget(optBox);
-
-	root->addStretch(1);
+	// after switchType() since the tool can refuse to flip mid-measure. The width field is
+	// only meaningful for a circle ruler.
+	m_circle = m_ui->circle;
+	m_widthLabel = m_ui->widthLabel;
+	m_width = m_ui->width;
+	m_useMeters = m_ui->useMeters;
+	m_showGrid = m_ui->showGrid;
 
 	// Seed from the current tool state under the guard so it doesn't echo back to the tool.
 	m_updating = true;
@@ -72,6 +51,15 @@ WBQtRulerPanel::WBQtRulerPanel(QWidget *owner)
 	connect(m_showGrid, SIGNAL(clicked()), this, SLOT(onShowGridToggled()));
 
 	s_instance = this;
+}
+
+WBQtRulerPanel::~WBQtRulerPanel()
+{
+	if (s_instance == this)
+	{
+		s_instance = NULL;
+	}
+	delete m_ui;
 }
 
 // Checkbox + width-field-enabled reflect the tool's current ruler type (1 == circle).

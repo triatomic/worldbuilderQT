@@ -26,12 +26,15 @@ class QListWidget;
 class QPushButton;
 class WBQtScrubSpinBox;
 
+namespace Ui { class WBQtObjectPropsPanel; }	// generated from WBQtObjectPropsPanel.ui
+
 class WBQtObjectPropsPanel : public QWidget
 {
 	Q_OBJECT
 
 public:
 	explicit WBQtObjectPropsPanel(QWidget *owner);
+	virtual ~WBQtObjectPropsPanel();
 
 	// Re-seed every control from the current MFC selection (WBQtObjectProps_PushRefresh).
 	void pushRefresh();
@@ -84,6 +87,8 @@ private:
 	void rebuildTeams();	// repopulate the team combo from the bridge
 	void applyFlag(int flagId, QCheckBox *box);
 	void rebuildSoundList();	// enumerate the (large) attached-sound combo once
+
+	Ui::WBQtObjectPropsPanel *m_ui;	// owns the static widget tree (WBQtObjectPropsPanel.ui)
 
 	QLabel    *m_selectionLabel;	// "No Selection" / "N objects" / the object name
 	QGroupBox *m_generalBox;

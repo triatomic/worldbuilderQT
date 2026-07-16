@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WBQtWaypointPanel</class>
+ <widget class="QWidget" name="WBQtWaypointPanel">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>320</width>
+    <height>480</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Waypoint Options</string>
+  </property>
+  <layout class="QVBoxLayout" name="rootLayout">
+   <item>
+    <widget class="QGroupBox" name="nameBox">
+     <property name="title">
+      <string>Name</string>
+     </property>
+     <layout class="QVBoxLayout" name="nameLay">
+      <item>
+       <widget class="QComboBox" name="name">
+        <property name="editable">
+         <bool>true</bool>
+        </property>
+        <property name="insertPolicy">
+         <enum>QComboBox::NoInsert</enum>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="locationBox">
+     <property name="title">
+      <string>Waypoint Location</string>
+     </property>
+     <layout class="QHBoxLayout" name="locLay" stretch="0,1,0,1">
+      <item>
+       <widget class="QLabel" name="xLabel">
+        <property name="text">
+         <string>X:</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QDoubleSpinBox" name="locX">
+        <property name="decimals">
+         <number>2</number>
+        </property>
+        <property name="minimum">
+         <double>-1000000.000000000000000</double>
+        </property>
+        <property name="maximum">
+         <double>1000000.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="yLabel">
+        <property name="text">
+         <string>Y:</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QDoubleSpinBox" name="locY">
+        <property name="decimals">
+         <number>2</number>
+        </property>
+        <property name="minimum">
+         <double>-1000000.000000000000000</double>
+        </property>
+        <property name="maximum">
+         <double>1000000.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="labelsBox">
+     <property name="title">
+      <string>Waypoint Path Labels</string>
+     </property>
+     <layout class="QVBoxLayout" name="labelsLay">
+      <item>
+       <widget class="QLineEdit" name="label1"/>
+      </item>
+      <item>
+       <widget class="QLineEdit" name="label2"/>
+      </item>
+      <item>
+       <widget class="QLineEdit" name="label3"/>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="biDirectional">
+        <property name="text">
+         <string>Bi-Directional (Used for back-and-forth patrol routes)</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="helpBox">
+     <property name="title">
+      <string>Reference</string>
+     </property>
+     <layout class="QVBoxLayout" name="helpLay">
+      <item>
+       <widget class="QLabel" name="aiLabel">
+        <property name="text">
+         <string>AI Used Waypoint Labels for skirmish maps: Flank / Center / BackDoor</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="trainLabel">
+        <property name="text">
+         <string>Train Related Waypoint Labels (copy-pasteable): _Station / _PingPong / _Tunnel / _Disembark.
+Adding one of these to a waypoint name affects train behaviours (e.g. Waypoint12_Station):
+&gt; _Station - the train stops here
+&gt; _PingPong - the train reverses after this waypoint
+&gt; _Tunnel - must be used for both tunnel exits
+&gt; _Disembark - trains disembark units here</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer name="bottomSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

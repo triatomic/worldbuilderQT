@@ -13,6 +13,8 @@ class QPushButton;
 class QTreeWidget;
 class QTreeWidgetItem;
 
+namespace Ui { class WBQtPickUnitDialog; }	// generated from WBQtPickUnitDialog.ui
+
 class WBQtPickUnitDialog : public QDialog
 {
 	Q_OBJECT
@@ -22,6 +24,7 @@ public:
 	// (the MFC replace dialog hooks no search buttons). The model preview shows in both
 	// modes, like the MFC ObjectPreview.
 	WBQtPickUnitDialog(bool replaceMode, const QString &missingName, QWidget *parent = 0);
+	virtual ~WBQtPickUnitDialog();
 
 	QString pickedName() const { return m_pickedName; }
 
@@ -47,6 +50,8 @@ private slots:
 private:
 	int populate(const QString &filter);	// returns the number of leaves added
 	void refreshPreview(const QString &name);
+
+	Ui::WBQtPickUnitDialog *m_ui;	// owns the static widget tree (WBQtPickUnitDialog.ui)
 
 	bool m_replaceMode;
 	bool m_panelMode;

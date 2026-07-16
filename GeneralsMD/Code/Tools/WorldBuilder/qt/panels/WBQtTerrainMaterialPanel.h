@@ -31,12 +31,15 @@ class QTreeWidget;
 class QTreeWidgetItem;
 class WBQtScrubSpinBox;
 
+namespace Ui { class WBQtTerrainMaterialPanel; }	// generated from WBQtTerrainMaterialPanel.ui
+
 class WBQtTerrainMaterialPanel : public QWidget
 {
 	Q_OBJECT
 
 public:
 	explicit WBQtTerrainMaterialPanel(QWidget *owner);
+	virtual ~WBQtTerrainMaterialPanel();
 
 	// Re-seed the whole panel from the current MFC/tool state (WBQtTerrainMaterial_PushRefresh).
 	void refreshFromState();
@@ -91,6 +94,8 @@ private:
 	void setWidthRow(int v);
 	void setSwatch(QLabel *label, int texClass);
 	QTreeWidgetItem *findOrAddChild(QTreeWidgetItem *parent, const QString &label);
+
+	Ui::WBQtTerrainMaterialPanel *m_ui;	// owns the static widget tree (WBQtTerrainMaterialPanel.ui)
 
 	// Texture browser.
 	QLineEdit    *m_search;

@@ -10,6 +10,8 @@
 class QLineEdit;
 class QTreeWidget;
 
+namespace Ui { class WBQtMapIniReportDialog; }	// generated from WBQtMapIniReportDialog.ui
+
 class WBQtMapIniReportDialog : public QDialog
 {
 	Q_OBJECT
@@ -17,6 +19,7 @@ public:
 	// applyMode true -> OK/Cancel (caller applies on OK); false -> a single Close button.
 	WBQtMapIniReportDialog(const QString &title, const QString &text, bool applyMode,
 		QWidget *parent = 0);
+	virtual ~WBQtMapIniReportDialog();
 
 private slots:
 	void onFilterChanged(const QString &text);
@@ -27,6 +30,8 @@ private slots:
 private:
 	// Parse the report into (header, body-lines) sections keyed off its ';'-comment headers.
 	void buildTree(const QString &text);
+
+	Ui::WBQtMapIniReportDialog *m_ui;	// owns the static widget tree (WBQtMapIniReportDialog.ui)
 
 	QLineEdit *m_filter;
 	QTreeWidget *m_tree;

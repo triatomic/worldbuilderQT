@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WBQtScorchPanel</class>
+ <widget class="QWidget" name="WBQtScorchPanel">
+  <property name="windowTitle">
+   <string>Scorch Options</string>
+  </property>
+  <layout class="QVBoxLayout" name="rootLayout">
+   <item>
+    <widget class="QGroupBox" name="scorchBox">
+     <property name="title">
+      <string>Scorch</string>
+     </property>
+     <layout class="QVBoxLayout" name="scorchLay">
+      <item>
+       <widget class="QComboBox" name="type"/>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="sizeRow" stretch="0,1">
+        <item>
+         <widget class="QLabel" name="sizeLabel">
+          <property name="text">
+           <string>Scorch Size:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QDoubleSpinBox" name="size">
+          <property name="decimals">
+           <number>2</number>
+          </property>
+          <property name="singleStep">
+           <double>1.000000000000000</double>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer name="bottomSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

@@ -20,12 +20,15 @@ class QPushButton;
 class QSlider;
 class QTreeWidget;
 
+namespace Ui { class WBQtWavePanel; }	// generated from WBQtWavePanel.ui
+
 class WBQtWavePanel : public QWidget
 {
 	Q_OBJECT
 
 public:
 	explicit WBQtWavePanel(QWidget *owner);
+	virtual ~WBQtWavePanel();
 
 	// Re-seed the type label + wave list from the tool (WBQtWave_PushRefresh).
 	void pushRefresh();
@@ -59,6 +62,8 @@ private:
 	void syncModeButtons(int mode);	// exactly one mode button pressed; brush row only in Bucket
 	void populateList();
 	void syncToolSelectionFromList();
+
+	Ui::WBQtWavePanel *m_ui;	// owns the static widget tree (WBQtWavePanel.ui)
 
 	QLabel      *m_typeLabel;
 	QPushButton *m_modeCreate;

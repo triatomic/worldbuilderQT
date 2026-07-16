@@ -15,12 +15,15 @@
 class QCheckBox;
 class QDoubleSpinBox;
 
+namespace Ui { class WBQtRampPanel; }	// generated from WBQtRampPanel.ui
+
 class WBQtRampPanel : public QWidget
 {
 	Q_OBJECT
 
 public:
 	explicit WBQtRampPanel(QWidget *owner);
+	virtual ~WBQtRampPanel();
 
 	static WBQtRampPanel *instance() { return s_instance; }
 
@@ -33,6 +36,8 @@ private slots:
 	void onMirrorXY();
 
 private:
+	Ui::WBQtRampPanel *m_ui;	// owns the static widget tree (WBQtRampPanel.ui)
+
 	QDoubleSpinBox *m_width;
 	QCheckBox      *m_mirror;
 	QCheckBox      *m_mirrorX;

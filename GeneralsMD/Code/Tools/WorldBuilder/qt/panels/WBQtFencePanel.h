@@ -20,12 +20,15 @@ class QLineEdit;
 class QTreeWidget;
 class QTreeWidgetItem;
 
+namespace Ui { class WBQtFencePanel; }	// generated from WBQtFencePanel.ui
+
 class WBQtFencePanel : public QWidget
 {
 	Q_OBJECT
 
 public:
 	explicit WBQtFencePanel(QWidget *owner);
+	virtual ~WBQtFencePanel();
 
 	// Re-seed spacing/offset/preview from the current MFC selection (WBQtFence_PushRefresh).
 	void pushRefresh();
@@ -44,6 +47,8 @@ private:
 	void refreshPreview();
 	void refreshSpacingOffset();				// re-display spacing + offset from the tool
 	QTreeWidgetItem *findOrAddChild(QTreeWidgetItem *parent, const QString &label);
+
+	Ui::WBQtFencePanel *m_ui;	// owns the static widget tree (WBQtFencePanel.ui)
 
 	QTreeWidget    *m_tree;
 	QLabel         *m_preview;

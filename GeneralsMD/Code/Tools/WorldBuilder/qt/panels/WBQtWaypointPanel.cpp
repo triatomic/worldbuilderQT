@@ -1,88 +1,39 @@
 // WBQtWaypointPanel.cpp -- see WBQtWaypointPanel.h.
 #include "WBQtWaypointPanel.h"
+#include "ui_WBQtWaypointPanel.h"
 #include "WBQtWaypointBridge.h"
 
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QGroupBox>
-#include <QHBoxLayout>
-#include <QLabel>
 #include <QLineEdit>
-#include <QVBoxLayout>
 
 WBQtWaypointPanel *WBQtWaypointPanel::s_instance = NULL;
 
 WBQtWaypointPanel::WBQtWaypointPanel(QWidget *owner)
 	: QWidget(owner, Qt::Tool),
+	  m_ui(new Ui::WBQtWaypointPanel),
 	  m_updating(false)
 {
-	setWindowTitle("Waypoint Options");
-	resize(320, 480);
+	// The static widget tree lives in WBQtWaypointPanel.ui: the dual-purpose name combo
+	// (editable, like the MFC CBS_DROPDOWN; its preset list is repopulated per selection
+	// kind in pushRefresh()), the waypoint location X/Y pair, the path labels +
+	// bi-directional block, and the read-only helper text the MFC dialog shows for a
+	// waypoint (and hides for a trigger). Bind the members the logic below uses.
+	m_ui->setupUi(this);
 
-	QVBoxLayout *root = new QVBoxLayout(this);
-
-	// Name (dual purpose: waypoint name or trigger-area name). The combo is editable, like the
-	// MFC CBS_DROPDOWN, and its preset list is repopulated per selection kind in pushRefresh().
-	m_nameBox = new QGroupBox("Name", this);
-	QVBoxLayout *nameLay = new QVBoxLayout(m_nameBox);
-	m_name = new QComboBox(m_nameBox);
-	m_name->setEditable(true);
-	m_name->setInsertPolicy(QComboBox::NoInsert);
-	nameLay->addWidget(m_name);
-	root->addWidget(m_nameBox);
-
-	// Waypoint location (waypoint only).
-	m_locationBox = new QGroupBox("Waypoint Location", this);
-	QHBoxLayout *locLay = new QHBoxLayout(m_locationBox);
-	locLay->addWidget(new QLabel("X:", m_locationBox));
-	m_locX = new QDoubleSpinBox(m_locationBox);
-	m_locX->setDecimals(2);
-	m_locX->setRange(-1000000.0, 1000000.0);
-	locLay->addWidget(m_locX, 1);
-	locLay->addWidget(new QLabel("Y:", m_locationBox));
-	m_locY = new QDoubleSpinBox(m_locationBox);
-	m_locY->setDecimals(2);
-	m_locY->setRange(-1000000.0, 1000000.0);
-	locLay->addWidget(m_locY, 1);
-	root->addWidget(m_locationBox);
-
-	// Path labels + bi-directional (waypoint only, and only when the waypoint is linked).
-	m_labelsBox = new QGroupBox("Waypoint Path Labels", this);
-	QVBoxLayout *labelsLay = new QVBoxLayout(m_labelsBox);
-	m_label1 = new QLineEdit(m_labelsBox);
-	m_label2 = new QLineEdit(m_labelsBox);
-	m_label3 = new QLineEdit(m_labelsBox);
-	labelsLay->addWidget(m_label1);
-	labelsLay->addWidget(m_label2);
-	labelsLay->addWidget(m_label3);
-	m_biDirectional = new QCheckBox("Bi-Directional (Used for back-and-forth patrol routes)", m_labelsBox);
-	labelsLay->addWidget(m_biDirectional);
-	root->addWidget(m_labelsBox);
-
-	// Read-only helper text -- the AI perimeter labels and train waypoint labels the MFC dialog
-	// shows for a waypoint (and hides for a trigger). Pure information, carries no state.
-	m_helpBox = new QGroupBox("Reference", this);
-	QVBoxLayout *helpLay = new QVBoxLayout(m_helpBox);
-	QLabel *aiLbl = new QLabel(
-		"AI Used Waypoint Labels for skirmish maps: Flank / Center / BackDoor",
-		m_helpBox);
-	aiLbl->setWordWrap(true);
-	helpLay->addWidget(aiLbl);
-	QLabel *trainLbl = new QLabel(
-		"Train Related Waypoint Labels (copy-pasteable): _Station / _PingPong / _Tunnel / "
-		"_Disembark.\n"
-		"Adding one of these to a waypoint name affects train behaviours (e.g. Waypoint12_Station):\n"
-		"> _Station - the train stops here\n"
-		"> _PingPong - the train reverses after this waypoint\n"
-		"> _Tunnel - must be used for both tunnel exits\n"
-		"> _Disembark - trains disembark units here",
-		m_helpBox);
-	trainLbl->setWordWrap(true);
-	helpLay->addWidget(trainLbl);
-	root->addWidget(m_helpBox);
-
-	root->addStretch(1);
+	m_nameBox = m_ui->nameBox;
+	m_name = m_ui->name;
+	m_locationBox = m_ui->locationBox;
+	m_locX = m_ui->locX;
+	m_locY = m_ui->locY;
+	m_labelsBox = m_ui->labelsBox;
+	m_label1 = m_ui->label1;
+	m_label2 = m_ui->label2;
+	m_label3 = m_ui->label3;
+	m_biDirectional = m_ui->biDirectional;
+	m_helpBox = m_ui->helpBox;
 
 	// Seed from the current selection under the guard so nothing echoes back while populating.
 	pushRefresh();
@@ -97,6 +48,15 @@ WBQtWaypointPanel::WBQtWaypointPanel(QWidget *owner)
 	connect(m_biDirectional, SIGNAL(clicked()), this, SLOT(onBiDirectionalToggled()));
 
 	s_instance = this;
+}
+
+WBQtWaypointPanel::~WBQtWaypointPanel()
+{
+	if (s_instance == this)
+	{
+		s_instance = NULL;
+	}
+	delete m_ui;
 }
 
 // Repopulate the name combo's preset drop-down for the current selection kind. Caller has set

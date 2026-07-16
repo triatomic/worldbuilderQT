@@ -18,12 +18,15 @@ class QListWidget;
 class QProgressBar;
 class QPushButton;
 
+namespace Ui { class WBQtBuildListPanel; }	// generated from WBQtBuildListPanel.ui
+
 class WBQtBuildListPanel : public QWidget
 {
 	Q_OBJECT
 
 public:
 	explicit WBQtBuildListPanel(QWidget *owner);
+	virtual ~WBQtBuildListPanel();
 
 	void refresh();		// re-read everything from the seam (also the WBQtBuildList_PushRefresh target)
 
@@ -47,6 +50,8 @@ private slots:
 
 private:
 	void refreshAttributes();		// the per-building attribute controls + power + button enables
+
+	Ui::WBQtBuildListPanel *m_ui;	// owns the static widget tree (WBQtBuildListPanel.ui)
 
 	QComboBox      *m_side;
 	QListWidget    *m_buildList;

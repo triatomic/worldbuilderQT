@@ -13,11 +13,15 @@ class QLineEdit;
 class QListWidget;
 class QPushButton;
 
+namespace Ui { class WBQtOpenMapDialog; }	// generated from WBQtOpenMapDialog.ui
+namespace Ui { class WBQtSaveMapDialog; }	// generated from WBQtSaveMapDialog.ui
+
 class WBQtOpenMapDialog : public QDialog
 {
 	Q_OBJECT
 public:
 	explicit WBQtOpenMapDialog(QWidget *parent = 0);
+	virtual ~WBQtOpenMapDialog();
 
 	void accept();	// == OK: pick the current row; stays open when the pick only drills
 
@@ -33,6 +37,7 @@ private:
 	void reload();
 	void updatePreview();
 
+	Ui::WBQtOpenMapDialog *m_ui;	// owns the static widget tree (WBQtOpenMapDialog.ui)
 	bool m_updating;
 	QPushButton *m_packedButton;
 	QPushButton *m_userButton;
@@ -49,6 +54,7 @@ class WBQtSaveMapDialog : public QDialog
 	Q_OBJECT
 public:
 	explicit WBQtSaveMapDialog(const QString &initialFilename, QWidget *parent = 0);
+	virtual ~WBQtSaveMapDialog();
 
 	void accept();	// == OK: overwrite confirmation may keep the dialog open
 
@@ -64,6 +70,7 @@ private slots:
 private:
 	void reload();
 
+	Ui::WBQtSaveMapDialog *m_ui;	// owns the static widget tree (WBQtSaveMapDialog.ui)
 	bool m_updating;
 	bool m_browse;
 	bool m_systemDir;

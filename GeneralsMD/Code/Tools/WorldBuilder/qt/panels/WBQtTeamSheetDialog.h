@@ -15,26 +15,35 @@ class QCheckBox;
 class QComboBox;
 class QLineEdit;
 
+namespace Ui { class WBQtTeamSheetDialog; }	// generated from WBQtTeamSheetDialog.ui
+
 class WBQtTeamSheetDialog : public QDialog
 {
 	Q_OBJECT
 public:
 	explicit WBQtTeamSheetDialog(QWidget *parent = 0);
+	virtual ~WBQtTeamSheetDialog();
 
 	// Persist the window size on ANY close path (OK, Esc, the X button all funnel here).
 	virtual void done(int r);
 
 private:
-	QWidget *buildIdentityTab();
-	QWidget *buildReinforcementTab();
-	QWidget *buildBehaviorTab();
-	QWidget *buildGenericTab();
+	// wire the .ui widgets of each tab to their hidden page controls
+	void setupIdentityTab();
+	void setupReinforcementTab();
+	void setupBehaviorTab();
+	void setupGenericTab();
 
-	// binding helpers (each wires the widget to the hidden page control)
+	// binding helpers (each wires the widget to the hidden page control); the
+	// widget-creating overloads serve the dynamic member/script row loops
 	QLineEdit *bindEdit(int page, int ctrlId, QWidget *parent, int notify);
-	QCheckBox *bindCheck(int page, int ctrlId, const QString &label, QWidget *parent);
+	void bindEdit(int page, int ctrlId, QLineEdit *edit, int notify);
+	void bindCheck(int page, int ctrlId, QCheckBox *check);
 	QComboBox *bindCombo(int page, int ctrlId, const QStringList &items, QWidget *parent, int notify);
+	void bindCombo(int page, int ctrlId, const QStringList &items, QComboBox *combo, int notify);
 	QStringList readComboItems(int page, int ctrlId) const;
+
+	Ui::WBQtTeamSheetDialog *m_ui;	// owns the static widget tree (WBQtTeamSheetDialog.ui)
 
 	QLineEdit *m_nameEdit;
 	QComboBox *m_unitCombos[7];

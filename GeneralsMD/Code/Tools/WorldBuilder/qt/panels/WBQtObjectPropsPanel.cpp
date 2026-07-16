@@ -1,5 +1,6 @@
 // WBQtObjectPropsPanel.cpp -- see WBQtObjectPropsPanel.h.
 #include "WBQtObjectPropsPanel.h"
+#include "ui_WBQtObjectPropsPanel.h"
 #include "WBQtObjectPropsBridge.h"
 #include "WBQtScrubSpinBox.h"
 #include "WBQtShortcuts.h"	// WBQtShortcuts_PostCommand -- post the delete command
@@ -10,250 +11,87 @@
 #include <QEvent>
 #include <QComboBox>
 #include <QKeyEvent>
-#include <QGridLayout>
 #include <QGroupBox>
-#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
-#include <QVBoxLayout>
 
 WBQtObjectPropsPanel *WBQtObjectPropsPanel::s_instance = NULL;
 
 WBQtObjectPropsPanel::WBQtObjectPropsPanel(QWidget *owner)
 	: QWidget(owner, Qt::Tool),
+	  m_ui(new Ui::WBQtObjectPropsPanel),
 	  m_soundListBuilt(false),
 	  m_updating(false)
 {
-	setWindowTitle("Object Properties");
+	// The static widget tree lives in WBQtObjectPropsPanel.ui; bind the members the
+	// logic below uses, then wire what Designer can't express.
+	m_ui->setupUi(this);
 	resize(300, 520);	// == the MFC IDD_MAPOBJECT_PROPS width (200 DLU ~= 300px)
 
-	QVBoxLayout *root = new QVBoxLayout(this);
+	m_selectionLabel = m_ui->selectionLabel;
+	m_generalBox = m_ui->generalBox;
+	m_name = m_ui->name;
+	m_team = m_ui->team;
+	m_script = m_ui->script;
+	m_logicalBox = m_ui->logicalBox;
+	m_health = m_ui->health;
+	m_healthEdit = m_ui->healthEdit;
+	m_maxHPs = m_ui->maxHPs;
+	m_aggressiveness = m_ui->aggressiveness;
+	m_veterancy = m_ui->veterancy;
+	m_enabled = m_ui->enabled;
+	m_indestructible = m_ui->indestructible;
+	m_unsellable = m_ui->unsellable;
+	m_targetable = m_ui->targetable;
+	m_powered = m_ui->powered;
+	m_recruitableAI = m_ui->recruitableAI;
+	m_selectable = m_ui->selectable;
+	m_distanceBox = m_ui->distanceBox;
+	m_stopping = m_ui->stopping;
+	m_targeting = m_ui->targeting;
+	m_shroud = m_ui->shroud;
+	m_visualBox = m_ui->visualBox;
+	m_xyPos = m_ui->xyPos;
+	m_zOffset = m_ui->zOffset;
+	m_weather = m_ui->weather;
+	m_angle = m_ui->angle;
+	m_time = m_ui->time;
+	m_soundBox = m_ui->soundBox;
+	m_sound = m_ui->sound;
+	m_listen = m_ui->listen;
+	m_customize = m_ui->customize;
+	m_soundEnabled = m_ui->soundEnabled;
+	m_looping = m_ui->looping;
+	m_loopCount = m_ui->loopCount;
+	m_priority = m_ui->priority;
+	m_volume = m_ui->volume;
+	m_minVolume = m_ui->minVolume;
+	m_minRange = m_ui->minRange;
+	m_maxRange = m_ui->maxRange;
+	m_upgradesBox = m_ui->upgradesBox;
+	m_upgrades = m_ui->upgrades;
 
-	// Which object(s) the panel is editing.
-	m_selectionLabel = new QLabel("No Selection", this);
-	root->addWidget(m_selectionLabel);
-
-	// General section: object name (single-select only) + owning team.
-	m_generalBox = new QGroupBox("General", this);
-	QVBoxLayout *genLay = new QVBoxLayout(m_generalBox);
-
-	QHBoxLayout *nameRow = new QHBoxLayout();
-	nameRow->addWidget(new QLabel("Name:", m_generalBox));
-	m_name = new QLineEdit(m_generalBox);
-	nameRow->addWidget(m_name, 1);
-	genLay->addLayout(nameRow);
-
-	QHBoxLayout *teamRow = new QHBoxLayout();
-	teamRow->addWidget(new QLabel("Team:", m_generalBox));
-	m_team = new QComboBox(m_generalBox);
 	// Don't let a long team name dictate the panel width (== the MFC combo, which stays
 	// fixed and elides). The dropdown popup can still be wide.
 	m_team->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
 	m_team->setMinimumContentsLength(12);
-	teamRow->addWidget(m_team, 1);
-	genLay->addLayout(teamRow);
 
 	// Script row: disabled, matching the MFC dialog (the script attachment is inert in this build).
-	QHBoxLayout *scriptRow = new QHBoxLayout();
-	QLabel *scriptLabel = new QLabel("Script:", m_generalBox);
-	scriptLabel->setEnabled(false);
-	scriptRow->addWidget(scriptLabel);
-	m_script = new QComboBox(m_generalBox);
+	m_ui->scriptLabel->setEnabled(false);
 	m_script->setEnabled(false);
-	scriptRow->addWidget(m_script, 1);
-	genLay->addLayout(scriptRow);
 
-	root->addWidget(m_generalBox);
-
-	// Logical section. Matches the MFC dialog: a left column of combos (Initial Health, Max HP,
-	// Aggressiveness, Veterancy) and a right column of the seven object flags.
-	m_logicalBox = new QGroupBox("Logical", this);
-	QHBoxLayout *logLay = new QHBoxLayout(m_logicalBox);
-
-	// Left column: the four combos.
-	QGridLayout *leftGrid = new QGridLayout();
-
-	leftGrid->addWidget(new QLabel("Initial Health %", m_logicalBox), 0, 0);
-	QHBoxLayout *healthRow = new QHBoxLayout();
-	m_health = new QComboBox(m_logicalBox);
-	m_health->addItem("Dead");
-	m_health->addItem("25%");
-	m_health->addItem("50%");
-	m_health->addItem("75%");
-	m_health->addItem("100%");
-	m_health->addItem("Other");
-	healthRow->addWidget(m_health);
-	m_healthEdit = new QLineEdit(m_logicalBox);
-	m_healthEdit->setMaximumWidth(48);
-	healthRow->addWidget(m_healthEdit);
-	leftGrid->addLayout(healthRow, 0, 1);
-
-	leftGrid->addWidget(new QLabel("Max HP", m_logicalBox), 1, 0);
-	m_maxHPs = new QComboBox(m_logicalBox);
-	m_maxHPs->setEditable(true);
-	m_maxHPs->addItem("Default For Unit");
-	leftGrid->addWidget(m_maxHPs, 1, 1);
-
-	leftGrid->addWidget(new QLabel("Aggressiveness:", m_logicalBox), 2, 0);
-	m_aggressiveness = new QComboBox(m_logicalBox);
-	m_aggressiveness->addItem("Sleep");
-	m_aggressiveness->addItem("Passive");
-	m_aggressiveness->addItem("Normal");
-	m_aggressiveness->addItem("Alert");
-	m_aggressiveness->addItem("Aggressive");
-	leftGrid->addWidget(m_aggressiveness, 2, 1);
-
-	leftGrid->addWidget(new QLabel("Veterancy:", m_logicalBox), 3, 0);
-	m_veterancy = new QComboBox(m_logicalBox);
-	m_veterancy->addItem("Normal");
-	m_veterancy->addItem("Veteran");
-	m_veterancy->addItem("Elite");
-	m_veterancy->addItem("Heroic");
-	leftGrid->addWidget(m_veterancy, 3, 1);
-	logLay->addLayout(leftGrid, 1);
-
-	// Right column: the seven object flags, in the MFC order.
-	QVBoxLayout *flagCol = new QVBoxLayout();
-	m_enabled        = new QCheckBox("Enabled", m_logicalBox);
-	m_unsellable     = new QCheckBox("Unsellable", m_logicalBox);
-	m_targetable     = new QCheckBox("Targetable", m_logicalBox);
-	m_indestructible = new QCheckBox("Indestructible", m_logicalBox);
-	m_recruitableAI  = new QCheckBox("AI Recruitable", m_logicalBox);
-	m_powered        = new QCheckBox("Powered", m_logicalBox);
-	m_selectable     = new QCheckBox("Selectable", m_logicalBox);
-	flagCol->addWidget(m_enabled);
-	flagCol->addWidget(m_unsellable);
-	flagCol->addWidget(m_targetable);
-	flagCol->addWidget(m_indestructible);
-	flagCol->addWidget(m_recruitableAI);
-	flagCol->addWidget(m_powered);
-	flagCol->addWidget(m_selectable);
-	flagCol->addStretch(1);
-	logLay->addLayout(flagCol);
-
-	root->addWidget(m_logicalBox);
-
-	// Distance box: Stopping / Targeting / Shroud, matching the MFC "Distance" groupbox. Note the
-	// "Targeting" field edits the object's vision/visual range (TheKey_objectVisualRange).
-	m_distanceBox = new QGroupBox("Distance", this);
-	QHBoxLayout *distLay = new QHBoxLayout(m_distanceBox);
-	distLay->addWidget(new QLabel("Stopping:", m_distanceBox));
-	m_stopping = new QLineEdit(m_distanceBox);
-	m_stopping->setMaximumWidth(48);
-	distLay->addWidget(m_stopping);
-	distLay->addWidget(new QLabel("Targeting:", m_distanceBox));
-	m_targeting = new QLineEdit(m_distanceBox);
-	m_targeting->setMaximumWidth(48);
-	distLay->addWidget(m_targeting);
-	distLay->addWidget(new QLabel("Shroud:", m_distanceBox));
-	m_shroud = new QLineEdit(m_distanceBox);
-	m_shroud->setMaximumWidth(48);
-	distLay->addWidget(m_shroud);
-	distLay->addStretch(1);
-	root->addWidget(m_distanceBox);
-
-	// Visual section: XY position, Z offset, weather, angle, time -- laid out like the MFC box
-	// (XY Pos + Z on one row, Weather + Angle, Time).
-	m_visualBox = new QGroupBox("Visual", this);
-	QGridLayout *visGrid = new QGridLayout(m_visualBox);
-
-	visGrid->addWidget(new QLabel("XY Pos:", m_visualBox), 0, 0);
-	m_xyPos = new QLineEdit(m_visualBox);
-	visGrid->addWidget(m_xyPos, 0, 1);
-	visGrid->addWidget(new QLabel("Z:", m_visualBox), 0, 2);
-	m_zOffset = new WBQtScrubSpinBox(m_visualBox, /*axisVertical=*/true);
-	m_zOffset->setDecimals(2);
+	m_zOffset->setAxisVertical(true);	// promotion can't pass the ctor arg
 	m_zOffset->setRange(-100.0, 100.0);	// matches the MFC IDC_HEIGHT_POPUP slider range
-	m_zOffset->setSingleStep(1.0);
-	m_zOffset->setToolTip("Drag up/down to scrub, or type a value.");
-	visGrid->addWidget(m_zOffset, 0, 3);
-
-	visGrid->addWidget(new QLabel("Weather:", m_visualBox), 1, 0);
-	m_weather = new QComboBox(m_visualBox);
-	m_weather->addItem("Use Map Weather");
-	m_weather->addItem("Use Normal Model");
-	m_weather->addItem("Use Snow Model");
-	visGrid->addWidget(m_weather, 1, 1);
-	visGrid->addWidget(new QLabel("Angle:", m_visualBox), 1, 2);
-	m_angle = new WBQtScrubSpinBox(m_visualBox);
-	m_angle->setDecimals(2);
 	m_angle->setRange(0.0, 360.0);	// matches the MFC IDC_ANGLE_POPUP slider range
-	m_angle->setSingleStep(1.0);
 	m_angle->setWrapping(true);	// 360 wraps to 0, like a compass heading
-	m_angle->setToolTip("Drag left/right to scrub, or type a value.");
-	visGrid->addWidget(m_angle, 1, 3);
 
-	visGrid->addWidget(new QLabel("Time:", m_visualBox), 2, 0);
-	m_time = new QComboBox(m_visualBox);
-	m_time->addItem("Use Map Time");
-	m_time->addItem("Use Day Model");
-	m_time->addItem("Use Night Model");
-	visGrid->addWidget(m_time, 2, 1);
-
-	root->addWidget(m_visualBox);
-
-	// Sound section: attached sound + Listen, the customize/enabled/looping gate, loop count,
-	// priority, and the volume/range edits -- matching the MFC Sound box.
-	m_soundBox = new QGroupBox("Sound", this);
-	QGridLayout *sndGrid = new QGridLayout(m_soundBox);
-
-	sndGrid->addWidget(new QLabel("Attached Sound:", m_soundBox), 0, 0);
-	m_sound = new QComboBox(m_soundBox);
 	// The sound list holds hundreds of long names; without this it forces the whole panel
 	// far wider than the MFC dialog. Cap the field width; the popup can still be wide.
 	m_sound->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
 	m_sound->setMinimumContentsLength(12);
 	m_sound->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-	sndGrid->addWidget(m_sound, 0, 1, 1, 2);
-	m_listen = new QPushButton("Listen", m_soundBox);
-	sndGrid->addWidget(m_listen, 0, 3);
-
-	QHBoxLayout *sndFlagsRow = new QHBoxLayout();
-	m_customize = new QCheckBox("Customize", m_soundBox);
-	m_soundEnabled = new QCheckBox("Enabled", m_soundBox);
-	m_looping = new QCheckBox("Looping", m_soundBox);
-	sndFlagsRow->addWidget(m_customize);
-	sndFlagsRow->addWidget(m_soundEnabled);
-	sndFlagsRow->addWidget(m_looping);
-	sndFlagsRow->addStretch(1);
-	sndGrid->addLayout(sndFlagsRow, 1, 0, 1, 3);
-
-	sndGrid->addWidget(new QLabel("Loop Count:", m_soundBox), 2, 0);
-	m_loopCount = new QLineEdit(m_soundBox);
-	sndGrid->addWidget(m_loopCount, 2, 1);
-	sndGrid->addWidget(new QLabel("Priority:", m_soundBox), 2, 2);
-	m_priority = new QComboBox(m_soundBox);
-	sndGrid->addWidget(m_priority, 2, 3);
-
-	sndGrid->addWidget(new QLabel("Volume:", m_soundBox), 3, 0);
-	m_volume = new QLineEdit(m_soundBox);
-	sndGrid->addWidget(m_volume, 3, 1);
-	sndGrid->addWidget(new QLabel("Min Volume:", m_soundBox), 3, 2);
-	m_minVolume = new QLineEdit(m_soundBox);
-	sndGrid->addWidget(m_minVolume, 3, 3);
-
-	sndGrid->addWidget(new QLabel("Min Range:", m_soundBox), 4, 0);
-	m_minRange = new QLineEdit(m_soundBox);
-	sndGrid->addWidget(m_minRange, 4, 1);
-	sndGrid->addWidget(new QLabel("Max Range:", m_soundBox), 4, 2);
-	m_maxRange = new QLineEdit(m_soundBox);
-	sndGrid->addWidget(m_maxRange, 4, 3);
-
-	root->addWidget(m_soundBox);
-
-	// Pre-built upgrades: a multi-select list of the upgrades this object can grant. Single-object
-	// only (a multi-select shows the "Single Selection Only" placeholder item).
-	m_upgradesBox = new QGroupBox("Pre-built upgrades", this);
-	QVBoxLayout *upLay = new QVBoxLayout(m_upgradesBox);
-	m_upgrades = new QListWidget(m_upgradesBox);
-	m_upgrades->setSelectionMode(QAbstractItemView::ExtendedSelection);
-	m_upgrades->setMinimumHeight(80);
-	upLay->addWidget(m_upgrades);
-	root->addWidget(m_upgradesBox);
-
-	root->addStretch(1);
 
 	// Seed from the current selection under the guard.
 	pushRefresh();
@@ -303,6 +141,15 @@ WBQtObjectPropsPanel::WBQtObjectPropsPanel(QWidget *owner)
 	qApp->installEventFilter(this);
 
 	s_instance = this;
+}
+
+WBQtObjectPropsPanel::~WBQtObjectPropsPanel()
+{
+	if (s_instance == this)
+	{
+		s_instance = NULL;
+	}
+	delete m_ui;
 }
 
 void WBQtObjectPropsPanel::rebuildTeams()

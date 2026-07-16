@@ -1,76 +1,39 @@
 // WBQtWaterPanel.cpp -- see WBQtWaterPanel.h.
 #include "WBQtWaterPanel.h"
+#include "ui_WBQtWaterPanel.h"
 #include "WBQtWaterBridge.h"
 
 #include <QCheckBox>
 #include <QComboBox>
 #include <QGroupBox>
-#include <QHBoxLayout>
-#include <QLabel>
 #include <QLineEdit>
 #include <QSlider>
 #include <QSpinBox>
-#include <QVBoxLayout>
 
 WBQtWaterPanel *WBQtWaterPanel::s_instance = NULL;
 
 WBQtWaterPanel::WBQtWaterPanel(QWidget *owner)
 	: QWidget(owner, Qt::Tool),
+	  m_ui(new Ui::WBQtWaterPanel),
 	  m_updating(false)
 {
-	setWindowTitle("Water Options");
-	resize(320, 300);
+	// The static widget tree lives in WBQtWaterPanel.ui; bind the members the
+	// logic below uses, then wire what Designer can't express.
+	m_ui->setupUi(this);
 
-	QVBoxLayout *root = new QVBoxLayout(this);
-
-	// Global tool state: the "Water Polygon" toggle (flood-fill water areas vs single points)
-	// and the point spacing used when placing points. These are meaningful with or without a
-	// selection, so they live outside the selection group.
-	QGroupBox *toolBox = new QGroupBox("Tool", this);
-	QVBoxLayout *toolLay = new QVBoxLayout(toolBox);
-	m_waterPolygon = new QCheckBox("Water Polygon", toolBox);
-	toolLay->addWidget(m_waterPolygon);
-
-	QHBoxLayout *spacingRow = new QHBoxLayout();
-	spacingRow->addWidget(new QLabel("Point Spacing:", toolBox));
-	m_spacing = new QSpinBox(toolBox);
-	m_spacing->setRange(0, 1000000);
-	spacingRow->addWidget(m_spacing, 1);
-	toolLay->addLayout(spacingRow);
-	root->addWidget(toolBox);
-
-	// Selected water-area trigger: its name, water height, and the Make River toggle. Shown only
-	// when a single water-area PolygonTrigger is selected (mirrors updateTheUI enabling these).
-	m_selectionBox = new QGroupBox("Selected Water Area", this);
-	QVBoxLayout *selLay = new QVBoxLayout(m_selectionBox);
-
-	// Name (editable, like the MFC CBS_DROPDOWN combo).
-	QHBoxLayout *nameRow = new QHBoxLayout();
-	nameRow->addWidget(new QLabel("Name:", m_selectionBox));
-	m_name = new QComboBox(m_selectionBox);
-	m_name->setEditable(true);
-	m_name->setInsertPolicy(QComboBox::NoInsert);
-	nameRow->addWidget(m_name, 1);
-	selLay->addLayout(nameRow);
+	m_waterPolygon = m_ui->waterPolygon;
+	m_spacing = m_ui->spacing;
+	m_selectionBox = m_ui->selectionBox;
+	m_name = m_ui->name;
+	m_heightSlider = m_ui->heightSlider;
+	m_heightSpin = m_ui->heightSpin;
+	m_makeRiver = m_ui->makeRiver;
 
 	// Water height: slider + spinbox in lockstep. The slider spans the popup-slider range
-	// (0 .. 255*MAP_HEIGHT_SCALE); the spinbox range is a little wider so a hand-typed value that
-	// exceeds the slider (as the MFC edit control allowed) is still accepted.
-	QHBoxLayout *heightRow = new QHBoxLayout();
-	heightRow->addWidget(new QLabel("Height:", m_selectionBox));
-	m_heightSlider = new QSlider(Qt::Horizontal, m_selectionBox);
+	// (0 .. 255*MAP_HEIGHT_SCALE) -- runtime values from the bridge, so set here; the spinbox
+	// range (in the .ui) is a little wider so a hand-typed value that exceeds the slider (as
+	// the MFC edit control allowed) is still accepted.
 	m_heightSlider->setRange(WBQtWater_GetHeightMin(), WBQtWater_GetHeightMax());
-	m_heightSpin = new QSpinBox(m_selectionBox);
-	m_heightSpin->setRange(0, 65535);
-	heightRow->addWidget(m_heightSlider, 1);
-	heightRow->addWidget(m_heightSpin);
-	selLay->addLayout(heightRow);
-
-	m_makeRiver = new QCheckBox("Make River", m_selectionBox);
-	selLay->addWidget(m_makeRiver);
-
-	root->addWidget(m_selectionBox);
-	root->addStretch(1);
 
 	// Seed from the current tool + selection state under the guard so nothing echoes back while
 	// populating.
@@ -85,6 +48,15 @@ WBQtWaterPanel::WBQtWaterPanel(QWidget *owner)
 	connect(m_makeRiver, SIGNAL(clicked()), this, SLOT(onMakeRiverToggled()));
 
 	s_instance = this;
+}
+
+WBQtWaterPanel::~WBQtWaterPanel()
+{
+	if (s_instance == this)
+	{
+		s_instance = NULL;
+	}
+	delete m_ui;
 }
 
 void WBQtWaterPanel::setHeightRow(int v)

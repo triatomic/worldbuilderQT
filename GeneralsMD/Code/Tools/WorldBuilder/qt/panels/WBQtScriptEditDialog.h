@@ -18,6 +18,9 @@ class QRadioButton;
 class QSpinBox;
 class QTabWidget;
 
+namespace Ui { class WBQtScriptEditListTab; }	// generated from WBQtScriptEditListTab.ui
+namespace Ui { class WBQtScriptEditDialog; }	// generated from WBQtScriptEditDialog.ui
+
 // One list page (Script Conditions / Actions if true / Actions if false) -- the three MFC pages
 // are structural twins (list + button column + Smart Copy + comment), so one widget serves all
 // three, parameterized by mode.
@@ -33,6 +36,7 @@ public:
 	};
 
 	WBQtScriptEditListTab(void *script, Mode mode, QWidget *parent = 0);
+	virtual ~WBQtScriptEditListTab();
 
 	// Rebuild the list from the script (== the MFC page's loadList()); selects selectRow
 	// (clamped; -1 keeps the current row) and re-seeds the Smart Copy checkbox + comment.
@@ -54,6 +58,8 @@ private slots:
 private:
 	int  currentRow() const;
 	void updateButtonStates();
+
+	Ui::WBQtScriptEditListTab *m_ui;	// owns the static widget tree (WBQtScriptEditListTab.ui)
 
 	void *m_script;
 	Mode m_mode;
@@ -77,6 +83,7 @@ class WBQtScriptEditDialog : public QDialog
 	Q_OBJECT
 public:
 	explicit WBQtScriptEditDialog(void *script, QWidget *parent = 0);
+	virtual ~WBQtScriptEditDialog();
 
 private slots:
 	void onTabChanged(int index);
@@ -87,8 +94,10 @@ private slots:
 	void onSecondsChanged(int value);
 
 private:
-	QWidget *buildPropertiesTab();
+	void wirePropertiesTab();	// binds + connects the Script Properties page (tree lives in the .ui)
 	void seedProperties();
+
+	Ui::WBQtScriptEditDialog *m_ui;	// owns the static widget tree (WBQtScriptEditDialog.ui)
 
 	void *m_script;
 	bool m_updating;

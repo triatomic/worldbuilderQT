@@ -2,20 +2,18 @@
 // dialog re-reads its whole state from the hidden MFC dialog after every action (all bridge
 // calls are synchronous, so no push mechanism is needed).
 #include "WBQtPlayerListDialog.h"
+#include "ui_WBQtPlayerListDialog.h"
+#include "ui_WBQtAddPlayerDialog.h"
 #include "WBQtPlayerListBridge.h"
 
 #include <QApplication>
 #include <QCheckBox>
 #include <QColorDialog>
 #include <QComboBox>
-#include <QGridLayout>
-#include <QGroupBox>
-#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
-#include <QVBoxLayout>
 
 #include <qt_windows.h>
 
@@ -45,94 +43,32 @@ namespace
 
 WBQtPlayerListDialog::WBQtPlayerListDialog(QWidget *parent)
 	: QDialog(parent),
+	m_ui(new Ui::WBQtPlayerListDialog),
 	m_updating(false)
 {
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
-	setWindowTitle("Player List");
 
-	QVBoxLayout *root = new QVBoxLayout(this);
+	// The static widget tree lives in WBQtPlayerListDialog.ui; bind the members the
+	// logic below uses.
+	m_ui->setupUi(this);
 
-	m_players = new QListWidget(this);
-	m_players->setMinimumHeight(120);
-	root->addWidget(m_players);
-
-	// Player Name group (edit + Set Name; renames run team fixups, hence the explicit button)
-	// and the identity row.
-	QHBoxLayout *identityRow = new QHBoxLayout();
-	QGroupBox *nameBox = new QGroupBox("Player Name", this);
-	QHBoxLayout *nameLay = new QHBoxLayout(nameBox);
-	m_nameEdit = new QLineEdit(nameBox);
-	nameLay->addWidget(m_nameEdit, 1);
-	QPushButton *setNameButton = new QPushButton("Set Name", nameBox);
-	setNameButton->setAutoDefault(false);
-	nameLay->addWidget(setNameButton);
-	identityRow->addWidget(nameBox, 1);
-
-	m_isComputerCheck = new QCheckBox("Is Player computer-controlled?", this);
-	identityRow->addWidget(m_isComputerCheck);
-	root->addLayout(identityRow);
-
-	QHBoxLayout *displayRow = new QHBoxLayout();
-	displayRow->addWidget(new QLabel("Player Display Name:", this));
-	m_displayNameEdit = new QLineEdit(this);
-	displayRow->addWidget(m_displayNameEdit, 1);
-	QGroupBox *factionBox = new QGroupBox("Faction", this);
-	QHBoxLayout *factionLay = new QHBoxLayout(factionBox);
-	m_factionCombo = new QComboBox(factionBox);
-	factionLay->addWidget(m_factionCombo);
-	displayRow->addWidget(factionBox);
-	root->addLayout(displayRow);
-
-	QHBoxLayout *colorRow = new QHBoxLayout();
-	m_colorButton = new QPushButton(this);
-	m_colorButton->setFixedSize(28, 20);
-	m_colorButton->setAutoDefault(false);
-	colorRow->addWidget(m_colorButton);
-	colorRow->addWidget(new QLabel("Color:", this));
-	m_colorCombo = new QComboBox(this);
-	colorRow->addWidget(m_colorCombo, 1);
-	root->addLayout(colorRow);
-
-	QGridLayout *relations = new QGridLayout();
-	relations->addWidget(new QLabel("Allies:", this), 0, 0);
-	relations->addWidget(new QLabel("Enemies:", this), 0, 1);
-	m_allies = new QListWidget(this);
-	m_allies->setSelectionMode(QAbstractItemView::MultiSelection);
-	relations->addWidget(m_allies, 1, 0);
-	m_enemies = new QListWidget(this);
-	m_enemies->setSelectionMode(QAbstractItemView::MultiSelection);
-	relations->addWidget(m_enemies, 1, 1);
-	relations->addWidget(new QLabel("How Player Regard Others:", this), 2, 0);
-	relations->addWidget(new QLabel("How Others Regard Player:", this), 2, 1);
-	m_regardOut = new QListWidget(this);
-	m_regardOut->setSelectionMode(QAbstractItemView::NoSelection);
-	relations->addWidget(m_regardOut, 3, 0);
-	m_regardIn = new QListWidget(this);
-	m_regardIn->setSelectionMode(QAbstractItemView::NoSelection);
-	relations->addWidget(m_regardIn, 3, 1);
-	root->addLayout(relations, 1);
-
-	QHBoxLayout *buttons = new QHBoxLayout();
-	m_newButton = new QPushButton("New Player", this);
-	m_newButton->setAutoDefault(false);
-	buttons->addWidget(m_newButton);
-	m_removeButton = new QPushButton("Remove Player", this);
-	m_removeButton->setAutoDefault(false);
-	buttons->addWidget(m_removeButton);
-	QPushButton *skirmishButton = new QPushButton("Add Skirmish Players", this);
-	skirmishButton->setAutoDefault(false);
-	buttons->addWidget(skirmishButton);
-	buttons->addStretch(1);
-	QPushButton *okButton = new QPushButton("OK", this);
-	okButton->setDefault(true);
-	buttons->addWidget(okButton);
-	QPushButton *cancelButton = new QPushButton("Cancel", this);
-	cancelButton->setAutoDefault(false);
-	buttons->addWidget(cancelButton);
-	root->addLayout(buttons);
+	m_players = m_ui->players;
+	m_nameEdit = m_ui->nameEdit;
+	m_displayNameEdit = m_ui->displayNameEdit;
+	m_isComputerCheck = m_ui->isComputerCheck;
+	m_factionCombo = m_ui->factionCombo;
+	m_colorButton = m_ui->colorButton;
+	m_colorCombo = m_ui->colorCombo;
+	m_allies = m_ui->allies;
+	m_enemies = m_ui->enemies;
+	m_regardOut = m_ui->regardOut;
+	m_regardIn = m_ui->regardIn;
+	m_newButton = m_ui->newButton;
+	m_removeButton = m_ui->removeButton;
 
 	connect(m_players, SIGNAL(currentRowChanged(int)), this, SLOT(onPlayerRowChanged(int)));
-	connect(setNameButton, SIGNAL(clicked()), this, SLOT(onSetName()));
+	// Set Name is an explicit button because renames run team fixups.
+	connect(m_ui->setNameButton, SIGNAL(clicked()), this, SLOT(onSetName()));
 	connect(m_displayNameEdit, SIGNAL(textEdited(QString)), this, SLOT(onDisplayNameEdited(QString)));
 	connect(m_isComputerCheck, SIGNAL(toggled(bool)), this, SLOT(onIsComputerToggled(bool)));
 	connect(m_factionCombo, SIGNAL(activated(int)), this, SLOT(onFactionChanged(int)));
@@ -142,12 +78,16 @@ WBQtPlayerListDialog::WBQtPlayerListDialog(QWidget *parent)
 	connect(m_enemies, SIGNAL(itemSelectionChanged()), this, SLOT(onEnemiesChanged()));
 	connect(m_newButton, SIGNAL(clicked()), this, SLOT(onNewPlayer()));
 	connect(m_removeButton, SIGNAL(clicked()), this, SLOT(onRemovePlayer()));
-	connect(skirmishButton, SIGNAL(clicked()), this, SLOT(onAddSkirmishPlayers()));
-	connect(okButton, SIGNAL(clicked()), this, SLOT(accept()));
-	connect(cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
+	connect(m_ui->skirmishButton, SIGNAL(clicked()), this, SLOT(onAddSkirmishPlayers()));
+	connect(m_ui->okButton, SIGNAL(clicked()), this, SLOT(accept()));
+	connect(m_ui->cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
 
 	refreshAll();
-	resize(460, 620);
+}
+
+WBQtPlayerListDialog::~WBQtPlayerListDialog()
+{
+	delete m_ui;
 }
 
 void WBQtPlayerListDialog::refreshAll()
@@ -393,17 +333,15 @@ void WBQtPlayerListDialog::onAddSkirmishPlayers()
 // ===================== WBQtAddPlayerDialog =====================
 
 WBQtAddPlayerDialog::WBQtAddPlayerDialog(QWidget *parent, const QString &onlySide)
-	: QDialog(parent)
+	: QDialog(parent),
+	m_ui(new Ui::WBQtAddPlayerDialog)
 {
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
-	setWindowTitle("Add A Player");
 
-	QVBoxLayout *root = new QVBoxLayout(this);
-	QLabel *label = new QLabel("Which of the following PlayerTemplates shall I use to add the Player you need?", this);
-	label->setWordWrap(true);
-	root->addWidget(label);
+	// The static widget tree lives in WBQtAddPlayerDialog.ui.
+	m_ui->setupUi(this);
 
-	m_templates = new QComboBox(this);
+	m_templates = m_ui->templates;
 	QStringList names;
 	int count = WBQtAddPlayerData_GetTemplateCount();
 	for (int i = 0; i < count; i++)
@@ -431,21 +369,14 @@ WBQtAddPlayerDialog::WBQtAddPlayerDialog(QWidget *parent, const QString &onlySid
 	names.sort(Qt::CaseInsensitive);	// == the CBS_SORT combo
 	m_templates->addItems(names);
 	m_templates->setCurrentIndex(0);
-	root->addWidget(m_templates);
 
-	QHBoxLayout *buttons = new QHBoxLayout();
-	buttons->addStretch(1);
-	QPushButton *okButton = new QPushButton("OK", this);
-	okButton->setDefault(true);
-	buttons->addWidget(okButton);
-	QPushButton *cancelButton = new QPushButton("Cancel", this);
-	cancelButton->setAutoDefault(false);
-	buttons->addWidget(cancelButton);
-	root->addLayout(buttons);
-	connect(okButton, SIGNAL(clicked()), this, SLOT(accept()));
-	connect(cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
+	connect(m_ui->okButton, SIGNAL(clicked()), this, SLOT(accept()));
+	connect(m_ui->cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
+}
 
-	resize(300, 140);
+WBQtAddPlayerDialog::~WBQtAddPlayerDialog()
+{
+	delete m_ui;
 }
 
 void WBQtAddPlayerDialog::accept()

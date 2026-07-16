@@ -2,6 +2,10 @@
 // IDD_EDIT_PARAMETER / IDD_EDIT_COORD_PARAMETER / EditObjectParameter / IDD_EDIT_GROUP
 // dialogs; all values round-trip through the bridge, which ports the MFC handlers verbatim.
 #include "WBQtParamDialog.h"
+#include "ui_WBQtParamDialog.h"
+#include "ui_WBQtCoordDialog.h"
+#include "ui_WBQtObjectPickDialog.h"
+#include "ui_WBQtGroupDialog.h"
 #include "WBQtParamBridge.h"
 #include "WBQtScriptWindow.h"
 #include "WBQtTreeStyle.h"
@@ -13,7 +17,6 @@ QWidget *WBQt_DialogParent(void);
 #include <QCheckBox>
 #include <QColorDialog>
 #include <QGroupBox>
-#include <QHBoxLayout>
 #include <QHash>
 #include <QItemSelectionModel>
 #include <QKeyEvent>
@@ -22,7 +25,6 @@ QWidget *WBQt_DialogParent(void);
 #include <QListWidget>
 #include <QPushButton>
 #include <QTreeWidget>
-#include <QVBoxLayout>
 
 #include <qt_windows.h>
 
@@ -38,6 +40,7 @@ namespace
 
 WBQtParamDialog::WBQtParamDialog(void *parameter, const char *unitName, QWidget *parent)
 	: QDialog(parent),
+	m_ui(new Ui::WBQtParamDialog),
 	m_parameter(parameter),
 	m_kind(WB_QT_PARAM_KIND_EDIT),
 	m_updating(false),
@@ -46,7 +49,6 @@ WBQtParamDialog::WBQtParamDialog(void *parameter, const char *unitName, QWidget 
 	m_autoPreviewCheck(NULL)
 {
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
-	setWindowTitle("Edit Parameter:");
 
 	char caption[256];
 	caption[0] = 0;
@@ -57,20 +59,21 @@ WBQtParamDialog::WBQtParamDialog(void *parameter, const char *unitName, QWidget 
 	int count = WBQtParamData_Describe(m_parameter, unitName, caption, sizeof(caption),
 		&m_kind, &showAudio, &initialSel, initialText, sizeof(initialText));
 
-	QVBoxLayout *root = new QVBoxLayout(this);
-	QGroupBox *box = new QGroupBox(QString::fromLocal8Bit(caption), this);
-	QVBoxLayout *boxLay = new QVBoxLayout(box);
+	// The static skeleton (caption box + OK/Cancel row) lives in WBQtParamDialog.ui; the
+	// edit/list/audio widgets depend on the parameter kind, so they stay built here.
+	m_ui->setupUi(this);
+	m_ui->box->setTitle(QString::fromLocal8Bit(caption));
 
 	if (m_kind == WB_QT_PARAM_KIND_EDIT || m_kind == WB_QT_PARAM_KIND_COMBO)
 	{
-		m_edit = new QLineEdit(box);
+		m_edit = new QLineEdit(m_ui->box);
 		connect(m_edit, SIGNAL(textChanged(QString)), this, SLOT(onEditTextChanged(QString)));
 		m_edit->installEventFilter(this);	// arrow keys walk the filtered list
-		boxLay->addWidget(m_edit);
+		m_ui->boxLay->addWidget(m_edit);
 	}
 	if (m_kind == WB_QT_PARAM_KIND_COMBO || m_kind == WB_QT_PARAM_KIND_LIST)
 	{
-		m_list = new QListWidget(box);
+		m_list = new QListWidget(m_ui->box);
 		char buf[kTextCap];
 		for (int i = 0; i < count; i++)
 		{
@@ -78,31 +81,21 @@ WBQtParamDialog::WBQtParamDialog(void *parameter, const char *unitName, QWidget 
 			WBQtParamData_GetOption(i, buf, sizeof(buf));
 			new QListWidgetItem(QString::fromLocal8Bit(buf), m_list);
 		}
-		boxLay->addWidget(m_list, 1);
+		m_ui->boxLay->addWidget(m_list, 1);
 	}
-	root->addWidget(box, 1);
 
-	QHBoxLayout *buttons = new QHBoxLayout();
 	if (showAudio)
 	{
 		QPushButton *previewButton = new QPushButton("Preview Sound", this);
 		previewButton->setAutoDefault(false);
-		buttons->addWidget(previewButton);
+		m_ui->buttonsRow->insertWidget(0, previewButton);
 		m_autoPreviewCheck = new QCheckBox("Auto Preview", this);
 		m_autoPreviewCheck->setChecked(true);	// == the MFC dialog checking it on show
-		buttons->addWidget(m_autoPreviewCheck);
+		m_ui->buttonsRow->insertWidget(1, m_autoPreviewCheck);
 		connect(previewButton, SIGNAL(clicked()), this, SLOT(onPreviewSound()));
 	}
-	buttons->addStretch(1);
-	QPushButton *okButton = new QPushButton("OK", this);
-	okButton->setDefault(true);
-	buttons->addWidget(okButton);
-	QPushButton *cancelButton = new QPushButton("Cancel", this);
-	cancelButton->setAutoDefault(false);
-	buttons->addWidget(cancelButton);
-	root->addLayout(buttons);
-	connect(okButton, SIGNAL(clicked()), this, SLOT(accept()));
-	connect(cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
+	connect(m_ui->okButton, SIGNAL(clicked()), this, SLOT(accept()));
+	connect(m_ui->cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
 
 	// Seed the initial value/selection (== OnInitDialog's SetWindowText/SetCurSel block).
 	m_updating = true;
@@ -137,6 +130,11 @@ WBQtParamDialog::WBQtParamDialog(void *parameter, const char *unitName, QWidget 
 	}
 
 	resize(440, (m_kind == WB_QT_PARAM_KIND_EDIT) ? 140 : 520);
+}
+
+WBQtParamDialog::~WBQtParamDialog()
+{
+	delete m_ui;
 }
 
 void WBQtParamDialog::onRowChanged(int row)
@@ -334,51 +332,34 @@ void WBQtParamDialog::accept()
 
 WBQtCoordDialog::WBQtCoordDialog(void *parameter, QWidget *parent)
 	: QDialog(parent),
+	m_ui(new Ui::WBQtCoordDialog),
 	m_parameter(parameter)
 {
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
-	setWindowTitle("Edit Coordinate Parameter:");
 
 	double x = 0.0;
 	double y = 0.0;
 	double z = 0.0;
 	WBQtParamData_GetCoord(m_parameter, &x, &y, &z);
 
-	QVBoxLayout *root = new QVBoxLayout(this);
-	QGroupBox *box = new QGroupBox("Location:", this);
-	QVBoxLayout *boxLay = new QVBoxLayout(box);
-	const char *labels[3] = { "X:", "Y:", "Z:" };
-	double values[3];
-	values[0] = x;
-	values[1] = y;
-	values[2] = z;
-	QLineEdit *edits[3];
-	for (int i = 0; i < 3; i++)
-	{
-		QHBoxLayout *row = new QHBoxLayout();
-		row->addWidget(new QLabel(labels[i], box));
-		edits[i] = new QLineEdit(QString::number(values[i], 'f', 2), box);
-		row->addWidget(edits[i]);
-		boxLay->addLayout(row);
-	}
-	m_editX = edits[0];
-	m_editY = edits[1];
-	m_editZ = edits[2];
-	root->addWidget(box);
+	// The static widget tree lives in WBQtCoordDialog.ui; bind the fields and seed them.
+	m_ui->setupUi(this);
+	m_editX = m_ui->editX;
+	m_editY = m_ui->editY;
+	m_editZ = m_ui->editZ;
+	m_editX->setText(QString::number(x, 'f', 2));
+	m_editY->setText(QString::number(y, 'f', 2));
+	m_editZ->setText(QString::number(z, 'f', 2));
 
-	QHBoxLayout *buttons = new QHBoxLayout();
-	buttons->addStretch(1);
-	QPushButton *okButton = new QPushButton("OK", this);
-	okButton->setDefault(true);
-	buttons->addWidget(okButton);
-	QPushButton *cancelButton = new QPushButton("Cancel", this);
-	cancelButton->setAutoDefault(false);
-	buttons->addWidget(cancelButton);
-	root->addLayout(buttons);
-	connect(okButton, SIGNAL(clicked()), this, SLOT(accept()));
-	connect(cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
+	connect(m_ui->okButton, SIGNAL(clicked()), this, SLOT(accept()));
+	connect(m_ui->cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
 
 	resize(260, 180);
+}
+
+WBQtCoordDialog::~WBQtCoordDialog()
+{
+	delete m_ui;
 }
 
 void WBQtCoordDialog::accept()
@@ -409,17 +390,15 @@ void WBQtCoordDialog::accept()
 
 WBQtObjectPickDialog::WBQtObjectPickDialog(void *parameter, QWidget *parent)
 	: QDialog(parent),
+	m_ui(new Ui::WBQtObjectPickDialog),
 	m_parameter(parameter)
 {
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
-	setWindowTitle("Edit Object Parameter:");
 
-	QVBoxLayout *root = new QVBoxLayout(this);
-
-	m_tree = new QTreeWidget(this);
-	m_tree->setHeaderHidden(true);
+	// The static widget tree lives in WBQtObjectPickDialog.ui.
+	m_ui->setupUi(this);
+	m_tree = m_ui->tree;
 	WBQtTreeStyle::applyTreeLines(m_tree);
-	root->addWidget(m_tree, 1);
 
 	// Free-text override (map.ini objects WorldBuilder cannot parse yet); seeded with the
 	// current value -- the MFC dialog left it empty, but seeding round-trips harmlessly and
@@ -427,20 +406,11 @@ WBQtObjectPickDialog::WBQtObjectPickDialog(void *parameter, QWidget *parent)
 	char current[kTextCap];
 	current[0] = 0;
 	WBQtParamData_GetString(m_parameter, current, sizeof(current));
-	m_edit = new QLineEdit(QString::fromLocal8Bit(current), this);
-	root->addWidget(m_edit);
+	m_edit = m_ui->edit;
+	m_edit->setText(QString::fromLocal8Bit(current));
 
-	QHBoxLayout *buttons = new QHBoxLayout();
-	buttons->addStretch(1);
-	QPushButton *okButton = new QPushButton("OK", this);
-	okButton->setDefault(true);
-	buttons->addWidget(okButton);
-	QPushButton *cancelButton = new QPushButton("Cancel", this);
-	cancelButton->setAutoDefault(false);
-	buttons->addWidget(cancelButton);
-	root->addLayout(buttons);
-	connect(okButton, SIGNAL(clicked()), this, SLOT(accept()));
-	connect(cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
+	connect(m_ui->okButton, SIGNAL(clicked()), this, SLOT(accept()));
+	connect(m_ui->cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
 
 	// == EditObjectParameter::OnInitDialog/addObject: [TEST/]side/editor-sorting/name.
 	QHash<QString, QTreeWidgetItem *> folders;
@@ -510,6 +480,11 @@ WBQtObjectPickDialog::WBQtObjectPickDialog(void *parameter, QWidget *parent)
 	resize(420, 560);
 }
 
+WBQtObjectPickDialog::~WBQtObjectPickDialog()
+{
+	delete m_ui;
+}
+
 void WBQtObjectPickDialog::onCurrentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous)
 {
 	Q_UNUSED(previous);
@@ -544,10 +519,10 @@ void WBQtObjectPickDialog::accept()
 
 WBQtGroupDialog::WBQtGroupDialog(void *scriptGroup, QWidget *parent)
 	: QDialog(parent),
+	m_ui(new Ui::WBQtGroupDialog),
 	m_scriptGroup(scriptGroup)
 {
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
-	setWindowTitle("Edit Group");
 
 	char name[kTextCap];
 	name[0] = 0;
@@ -555,35 +530,26 @@ WBQtGroupDialog::WBQtGroupDialog(void *scriptGroup, QWidget *parent)
 	int subroutine = 0;
 	WBQtGroupData_Get(m_scriptGroup, name, sizeof(name), &active, &subroutine);
 
-	QVBoxLayout *root = new QVBoxLayout(this);
-	m_subroutineCheck = new QCheckBox("Group is Subroutine.", this);
+	// The static widget tree lives in WBQtGroupDialog.ui; bind the members and seed them.
+	m_ui->setupUi(this);
+	m_subroutineCheck = m_ui->subroutineCheck;
 	m_subroutineCheck->setChecked(subroutine != 0);
-	root->addWidget(m_subroutineCheck);
-	m_activeCheck = new QCheckBox("Group is Active.", this);
+	m_activeCheck = m_ui->activeCheck;
 	m_activeCheck->setChecked(active != 0);
-	root->addWidget(m_activeCheck);
+	m_nameEdit = m_ui->nameEdit;
+	m_nameEdit->setText(QString::fromLocal8Bit(name));
 
-	QGroupBox *nameBox = new QGroupBox("Group Name:", this);
-	QVBoxLayout *nameLay = new QVBoxLayout(nameBox);
-	m_nameEdit = new QLineEdit(QString::fromLocal8Bit(name), nameBox);
-	nameLay->addWidget(m_nameEdit);
-	root->addWidget(nameBox);
-
-	QHBoxLayout *buttons = new QHBoxLayout();
-	buttons->addStretch(1);
-	QPushButton *okButton = new QPushButton("OK", this);
-	okButton->setDefault(true);
-	buttons->addWidget(okButton);
-	QPushButton *cancelButton = new QPushButton("Cancel", this);
-	cancelButton->setAutoDefault(false);
-	buttons->addWidget(cancelButton);
-	root->addLayout(buttons);
-	connect(okButton, SIGNAL(clicked()), this, SLOT(accept()));
-	connect(cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
+	connect(m_ui->okButton, SIGNAL(clicked()), this, SLOT(accept()));
+	connect(m_ui->cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
 
 	m_nameEdit->setFocus();
 	m_nameEdit->selectAll();
 	resize(300, 170);
+}
+
+WBQtGroupDialog::~WBQtGroupDialog()
+{
+	delete m_ui;
 }
 
 void WBQtGroupDialog::accept()

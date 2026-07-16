@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WBQtMeshMoldPanel</class>
+ <widget class="QWidget" name="WBQtMeshMoldPanel">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>320</width>
+    <height>560</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Mesh Mold Options</string>
+  </property>
+  <layout class="QVBoxLayout" name="rootLayout" stretch="3,0,0,0,0">
+   <item>
+    <widget class="QGroupBox" name="moldBox">
+     <property name="title">
+      <string>Mold Models</string>
+     </property>
+     <layout class="QVBoxLayout" name="moldLay" stretch="1,0">
+      <item>
+       <widget class="QListWidget" name="moldList">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>240</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="moldBtnRow">
+        <item>
+         <widget class="QPushButton" name="openFolderBtn">
+          <property name="text">
+           <string>Open Molds Folder</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="openLinkBtn">
+          <property name="text">
+           <string>How To Create Molds</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="noteBox">
+     <property name="title">
+      <string>Developer Note:</string>
+     </property>
+     <layout class="QVBoxLayout" name="noteLay">
+      <item>
+       <widget class="QLabel" name="noteText">
+        <property name="text">
+         <string>This tool allows the use of custom molds. Click 'How To Create Molds' to access the AGX750 tutorial.</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="hintText">
+        <property name="text">
+         <string>Hold Shift and drag with the mouse to increase or decrease the height.</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="xformBox">
+     <property name="title">
+      <string>Transform</string>
+     </property>
+     <layout class="QVBoxLayout" name="xformLay">
+      <item>
+       <layout class="QHBoxLayout" name="angleRow" stretch="0,1,0">
+        <item>
+         <widget class="QLabel" name="angleLabel">
+          <property name="text">
+           <string>Angle (deg):</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="angleSlider">
+          <property name="minimum">
+           <number>-180</number>
+          </property>
+          <property name="maximum">
+           <number>180</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="angleSpin">
+          <property name="minimum">
+           <number>-180</number>
+          </property>
+          <property name="maximum">
+           <number>180</number>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="scaleRow" stretch="0,1,0">
+        <item>
+         <widget class="QLabel" name="scaleLabel">
+          <property name="text">
+           <string>Scale (%):</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="scaleSlider">
+          <property name="minimum">
+           <number>1</number>
+          </property>
+          <property name="maximum">
+           <number>200</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="scaleSpin">
+          <property name="minimum">
+           <number>1</number>
+          </property>
+          <property name="maximum">
+           <number>200</number>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="heightRow" stretch="0,1,0">
+        <item>
+         <widget class="QLabel" name="heightLabel">
+          <property name="text">
+           <string>Height (ft):</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSlider" name="heightSlider">
+          <property name="minimum">
+           <number>-10</number>
+          </property>
+          <property name="maximum">
+           <number>256</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="heightSpin">
+          <property name="minimum">
+           <number>-10</number>
+          </property>
+          <property name="maximum">
+           <number>256</number>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="actionRow">
+     <item>
+      <widget class="QPushButton" name="preview">
+       <property name="text">
+        <string>Preview</string>
+       </property>
+       <property name="checkable">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="applyMesh">
+       <property name="text">
+        <string>Apply Mesh</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="modeBox">
+     <property name="title">
+      <string>Mesh Mode</string>
+     </property>
+     <layout class="QVBoxLayout" name="modeLay">
+      <item>
+       <widget class="QRadioButton" name="raise">
+        <property name="text">
+         <string>Raise only</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="raiseLower">
+        <property name="text">
+         <string>Raise and lower</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="lower">
+        <property name="text">
+         <string>Lower only</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

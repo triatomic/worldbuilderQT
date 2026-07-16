@@ -1,5 +1,6 @@
 // WBQtRoadPanel.cpp -- see WBQtRoadPanel.h.
 #include "WBQtRoadPanel.h"
+#include "ui_WBQtRoadPanel.h"
 #include "WBQtRoadBridge.h"
 #include "WBQtTreeStyle.h"
 
@@ -9,14 +10,10 @@ extern "C" int WBQtConfig_GetNewSearch(void);
 #include <QButtonGroup>
 #include <QCheckBox>
 #include <QDoubleSpinBox>
-#include <QGroupBox>
-#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
-#include <QPushButton>
 #include <QRadioButton>
 #include <QTreeWidget>
-#include <QVBoxLayout>
 
 WBQtRoadPanel *WBQtRoadPanel::s_instance = NULL;
 
@@ -26,88 +23,36 @@ static const int kListIndexRole = Qt::UserRole + 1;
 
 WBQtRoadPanel::WBQtRoadPanel(QWidget *owner)
 	: QWidget(owner, Qt::Tool),
+	  m_ui(new Ui::WBQtRoadPanel),
 	  m_updating(false)
 {
-	setWindowTitle("Road Options");
-	resize(320, 620);
+	// The static widget tree lives in WBQtRoadPanel.ui; bind the members the logic below
+	// uses, then wire what Designer can't express. Layout notes preserved in the .ui:
+	// the road/bridge tree is the primary control -- it gets a large minimum + all the
+	// slack (Expanding, stretch 3, no trailing stretch) so the boxes below don't squeeze
+	// it into a few rows and there's no wasted space below the controls.
+	m_ui->setupUi(this);
 
-	QVBoxLayout *root = new QVBoxLayout(this);
-
-	// Search row.
-	QHBoxLayout *searchRow = new QHBoxLayout();
-	m_search = new QLineEdit(this);
-	m_search->setPlaceholderText("Search roads...");
-	QPushButton *searchBtn = new QPushButton("Search", this);
-	QPushButton *resetBtn = new QPushButton("Reset", this);
-	searchRow->addWidget(m_search, 1);
-	searchRow->addWidget(searchBtn);
-	searchRow->addWidget(resetBtn);
-	root->addLayout(searchRow);
-
-	// The road/bridge tree -- the primary control; give it a large minimum + all the slack so
-	// the boxes below don't squeeze it into a few rows.
-	m_tree = new QTreeWidget(this);
-	m_tree->setHeaderHidden(true);
-	m_tree->setColumnCount(1);
-	m_tree->setMinimumHeight(260);
-	m_tree->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
-	WBQtTreeStyle::applyTreeLines(m_tree);
-	root->addWidget(m_tree, 3);
-
+	m_search = m_ui->search;
+	m_tree = m_ui->tree;
 	// Current road type (the selected road name), matching the MFC "Current road type:" box.
-	QGroupBox *curBox = new QGroupBox("Current road type:", this);
-	QVBoxLayout *curLay = new QVBoxLayout(curBox);
-	m_nameLabel = new QLabel("Road", curBox);
-	curLay->addWidget(m_nameLabel);
-	root->addWidget(curBox);
+	m_nameLabel = m_ui->nameLabel;
+	// Corner-type radios (Broad / Tight / Angled -- mutually exclusive like the MFC panel).
+	m_broad = m_ui->broad;
+	m_tight = m_ui->tight;
+	m_angled = m_ui->angled;
+	// Join checkbox (matches the MFC IDC_JOIN label).
+	m_join = m_ui->join;
+	// Tool Option: road snap distance.
+	m_snap = m_ui->snap;
 
-	// Corner-type radio group (Broad / Tight / Angled -- mutually exclusive like the MFC panel).
-	QGroupBox *cornerBox = new QGroupBox("Corner Type:", this);
-	QVBoxLayout *cornerLay = new QVBoxLayout(cornerBox);
-	m_broad = new QRadioButton("Broad Curve", cornerBox);
-	m_tight = new QRadioButton("Tight Curve.", cornerBox);
-	m_angled = new QRadioButton("Angled.", cornerBox);
-	cornerLay->addWidget(m_broad);
-	cornerLay->addWidget(m_tight);
-	cornerLay->addWidget(m_angled);
+	WBQtTreeStyle::applyTreeLines(m_tree);
+
 	m_cornerGroup = new QButtonGroup(this);
 	m_cornerGroup->addButton(m_broad, WBQT_ROAD_CORNER_BROAD);
 	m_cornerGroup->addButton(m_tight, WBQT_ROAD_CORNER_TIGHT);
 	m_cornerGroup->addButton(m_angled, WBQT_ROAD_CORNER_ANGLED);
 	m_cornerGroup->setExclusive(true);
-	root->addWidget(cornerBox);
-
-	// Join checkbox (matches the MFC IDC_JOIN label).
-	m_join = new QCheckBox("Add end cap and/or Join to different road.", this);
-	root->addWidget(m_join);
-
-	// Road Replacer: applies the current road type to the selected road points, flood-fill
-	// style. IDC_APPLY_ROAD in the MFC dialog.
-	QGroupBox *replacerBox = new QGroupBox("Road Replacer", this);
-	QVBoxLayout *replacerLay = new QVBoxLayout(replacerBox);
-	QLabel *replacerText = new QLabel(
-		"Updates only the selected road points (single or multiple), spreading to connected "
-		"segments like a flood fill.", replacerBox);
-	replacerText->setWordWrap(true);
-	replacerLay->addWidget(replacerText);
-	QPushButton *applyBtn = new QPushButton("Apply To Selection", replacerBox);
-	replacerLay->addWidget(applyBtn, 0, Qt::AlignRight);
-	root->addWidget(replacerBox);
-
-	// Tool Option: road snap distance.
-	QGroupBox *snapBox = new QGroupBox("Tool Option:", this);
-	QHBoxLayout *snapRow = new QHBoxLayout(snapBox);
-	snapRow->addWidget(new QLabel("Road Snap Distance:", snapBox));
-	m_snap = new QDoubleSpinBox(snapBox);
-	m_snap->setDecimals(2);
-	m_snap->setRange(0.2, 5.0);
-	m_snap->setSingleStep(0.1);
-	snapRow->addWidget(m_snap, 1);
-	snapRow->addWidget(new QLabel("(Min: 0.0 - Max: 5.0)", snapBox));
-	root->addWidget(snapBox);
-
-	// No trailing stretch -- the tree (Expanding, stretch 3) takes all the vertical slack so
-	// there's no wasted space below the controls.
 
 	// Seed everything under the guard so nothing echoes back while we populate.
 	m_updating = true;
@@ -123,10 +68,12 @@ WBQtRoadPanel::WBQtRoadPanel(QWidget *owner)
 	connect(m_tight, SIGNAL(clicked()), this, SLOT(onCornerTypeChanged()));
 	connect(m_angled, SIGNAL(clicked()), this, SLOT(onCornerTypeChanged()));
 	connect(m_join, SIGNAL(clicked()), this, SLOT(onJoinToggled()));
-	connect(applyBtn, SIGNAL(clicked()), this, SLOT(onApplyRoad()));
+	// Road Replacer: applies the current road type to the selected road points, flood-fill
+	// style. IDC_APPLY_ROAD in the MFC dialog.
+	connect(m_ui->applyBtn, SIGNAL(clicked()), this, SLOT(onApplyRoad()));
 	connect(m_snap, SIGNAL(valueChanged(double)), this, SLOT(onSnapDistanceChanged(double)));
-	connect(searchBtn, SIGNAL(clicked()), this, SLOT(onSearch()));
-	connect(resetBtn, SIGNAL(clicked()), this, SLOT(onReset()));
+	connect(m_ui->searchBtn, SIGNAL(clicked()), this, SLOT(onSearch()));
+	connect(m_ui->resetBtn, SIGNAL(clicked()), this, SLOT(onReset()));
 	connect(m_search, SIGNAL(returnPressed()), this, SLOT(onSearch()));
 	if (WBQtConfig_GetNewSearch() != 0)
 	{
@@ -135,6 +82,15 @@ WBQtRoadPanel::WBQtRoadPanel(QWidget *owner)
 	}
 
 	s_instance = this;
+}
+
+WBQtRoadPanel::~WBQtRoadPanel()
+{
+	if (s_instance == this)
+	{
+		s_instance = NULL;
+	}
+	delete m_ui;
 }
 
 QTreeWidgetItem *WBQtRoadPanel::findOrAddChild(QTreeWidgetItem *parent, const QString &label)

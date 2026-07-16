@@ -15,6 +15,15 @@ class QListWidget;
 class QTreeWidget;
 class QTreeWidgetItem;
 
+// Generated from the matching .ui files (one per dialog class).
+namespace Ui
+{
+	class WBQtParamDialog;
+	class WBQtCoordDialog;
+	class WBQtObjectPickDialog;
+	class WBQtGroupDialog;
+}
+
 // The generic single-value editor: a caption box holding an edit, an editable combo (edit +
 // option list), or a selection-only list, plus the audio preview row for sound parameters.
 class WBQtParamDialog : public QDialog
@@ -22,6 +31,7 @@ class WBQtParamDialog : public QDialog
 	Q_OBJECT
 public:
 	WBQtParamDialog(void *parameter, const char *unitName, QWidget *parent = 0);
+	virtual ~WBQtParamDialog();
 
 	void accept();	// == OnOK: validate + write back; beep and stay open on bad input
 
@@ -37,6 +47,8 @@ private slots:
 	void onPreviewSound();
 
 private:
+	Ui::WBQtParamDialog *m_ui;	// owns the static widget tree (WBQtParamDialog.ui)
+
 	void *m_parameter;
 	int m_kind;
 	bool m_updating;
@@ -52,10 +64,13 @@ class WBQtCoordDialog : public QDialog
 	Q_OBJECT
 public:
 	explicit WBQtCoordDialog(void *parameter, QWidget *parent = 0);
+	virtual ~WBQtCoordDialog();
 
 	void accept();
 
 private:
+	Ui::WBQtCoordDialog *m_ui;	// owns the static widget tree (WBQtCoordDialog.ui)
+
 	void *m_parameter;
 	QLineEdit *m_editX;
 	QLineEdit *m_editY;
@@ -69,6 +84,7 @@ class WBQtObjectPickDialog : public QDialog
 	Q_OBJECT
 public:
 	explicit WBQtObjectPickDialog(void *parameter, QWidget *parent = 0);
+	virtual ~WBQtObjectPickDialog();
 
 	void accept();
 
@@ -76,6 +92,8 @@ private slots:
 	void onCurrentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
 
 private:
+	Ui::WBQtObjectPickDialog *m_ui;	// owns the static widget tree (WBQtObjectPickDialog.ui)
+
 	void *m_parameter;
 	QTreeWidget *m_tree;
 	QLineEdit *m_edit;
@@ -87,10 +105,13 @@ class WBQtGroupDialog : public QDialog
 	Q_OBJECT
 public:
 	explicit WBQtGroupDialog(void *scriptGroup, QWidget *parent = 0);
+	virtual ~WBQtGroupDialog();
 
 	void accept();
 
 private:
+	Ui::WBQtGroupDialog *m_ui;	// owns the static widget tree (WBQtGroupDialog.ui)
+
 	void *m_scriptGroup;
 	QLineEdit *m_nameEdit;
 	QCheckBox *m_activeCheck;

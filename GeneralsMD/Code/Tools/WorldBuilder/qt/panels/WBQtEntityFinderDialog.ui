@@ -1,0 +1,305 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WBQtEntityFinderDialog</class>
+ <widget class="QWidget" name="WBQtEntityFinderDialog">
+  <property name="windowTitle">
+   <string>Help / Entity Finder / Shortcut Finder</string>
+  </property>
+  <layout class="QHBoxLayout" name="rootLayout" stretch="0,1">
+   <item>
+    <layout class="QVBoxLayout" name="leftColumn">
+     <item>
+      <widget class="QLabel" name="versionLabel">
+       <property name="text">
+        <string>Adriane [ Deathscythe ] &amp; Triatomic | Community Worldbuilder V4.1.2qt_b</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <layout class="QHBoxLayout" name="logoRow"/>
+     </item>
+     <item>
+      <widget class="QLabel" name="disclaimerLabel">
+       <property name="text">
+        <string>This is a fan-modified tool of the original ZH worldbuilder. All trademarks belong to their respective owners.</string>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QGroupBox" name="creditsBox">
+       <property name="title">
+        <string>Collaborators / Testers:</string>
+       </property>
+       <layout class="QVBoxLayout" name="creditsLay">
+        <item>
+         <widget class="QLabel" name="creditsLabel">
+          <property name="text">
+           <string>Kabuse [Hotkey layout] | Gramantio | Veloxious | Muska | Vite | Sgtmyers | WWB2 | BKR | Emil</string>
+          </property>
+          <property name="wordWrap">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <layout class="QHBoxLayout" name="discordRow" stretch="0,1,0">
+       <item>
+        <widget class="QLabel" name="discordLabel">
+         <property name="text">
+          <string>Discord Server:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="discordUrlLabel">
+         <property name="text">
+          <string>https://discord.gg/tJ6zyGb</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="discordBtn">
+         <property name="text">
+          <string>Open Link</string>
+         </property>
+         <property name="autoDefault">
+          <bool>false</bool>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </item>
+     <item>
+      <widget class="QGroupBox" name="objectGroup">
+       <property name="title">
+        <string>Object Finder:</string>
+       </property>
+       <layout class="QHBoxLayout" name="objectRow" stretch="1,0,0">
+        <item>
+         <widget class="QComboBox" name="objectCombo">
+          <property name="editable">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="objectFindBtn">
+          <property name="text">
+           <string>Find</string>
+          </property>
+          <property name="autoDefault">
+           <bool>false</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="objectRefreshBtn">
+          <property name="text">
+           <string>Refresh</string>
+          </property>
+          <property name="autoDefault">
+           <bool>false</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <widget class="QGroupBox" name="waypointGroup">
+       <property name="title">
+        <string>Waypoint Finder:</string>
+       </property>
+       <layout class="QHBoxLayout" name="waypointRow" stretch="1,0,0">
+        <item>
+         <widget class="QComboBox" name="waypointCombo">
+          <property name="editable">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="waypointFindBtn">
+          <property name="text">
+           <string>Find</string>
+          </property>
+          <property name="autoDefault">
+           <bool>false</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="waypointRefreshBtn">
+          <property name="text">
+           <string>Refresh</string>
+          </property>
+          <property name="autoDefault">
+           <bool>false</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <widget class="QGroupBox" name="visualBox">
+       <property name="title">
+        <string>Visual Settings:</string>
+       </property>
+       <layout class="QVBoxLayout" name="visualLay">
+        <item>
+         <layout class="QHBoxLayout" name="fontRow" stretch="1,0">
+          <item>
+           <widget class="QComboBox" name="fontCombo"/>
+          </item>
+          <item>
+           <widget class="QLabel" name="fontHintLabel">
+            <property name="text">
+             <string>(applies on restart)</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="resolutionRow" stretch="1,0">
+          <item>
+           <widget class="QComboBox" name="resolutionCombo"/>
+          </item>
+          <item>
+           <widget class="QLabel" name="resolutionLabel">
+            <property name="text">
+             <string>Viewport resolution</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="undoRow" stretch="1,0">
+          <item>
+           <widget class="QSpinBox" name="undoSpin">
+            <property name="toolTip">
+             <string>How many editor actions can be undone (Ctrl+Z). Applies immediately.
+Every terrain edit keeps a heightmap snapshot in the history, so very
+high values can cost a lot of memory on large maps.</string>
+            </property>
+            <property name="minimum">
+             <number>1</number>
+            </property>
+            <property name="maximum">
+             <number>999</number>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="undoLabel">
+            <property name="text">
+             <string>Undo history depth</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="newSearchCheck">
+          <property name="toolTip">
+           <string>When on, the object/fence/road/texture panels and the Edit
+Action / Pick Unit dialogs filter as you type instead of needing a
+Search/Find click. Applies to windows opened after this is changed.</string>
+          </property>
+          <property name="text">
+           <string>Live search in the tree pickers (NewSearch)</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <spacer name="leftSpacer">
+       <property name="orientation">
+        <enum>Qt::Vertical</enum>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <layout class="QHBoxLayout" name="bottomRow" stretch="1,0">
+       <item>
+        <widget class="QCheckBox" name="launchCheck">
+         <property name="text">
+          <string>Launch this window on app startup</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="toggleButton">
+         <property name="autoDefault">
+          <bool>false</bool>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QWidget" name="hotkeyPanel" native="true">
+     <layout class="QVBoxLayout" name="hotkeyPanelLay" stretch="0,1">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <layout class="QHBoxLayout" name="searchRow" stretch="0,1,0">
+        <item>
+         <widget class="QLabel" name="hotkeySearchLabel">
+          <property name="text">
+           <string>Hotkey List    Search:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="searchEdit"/>
+        </item>
+        <item>
+         <widget class="QPushButton" name="hotkeyFindBtn">
+          <property name="text">
+           <string>Find</string>
+          </property>
+          <property name="autoDefault">
+           <bool>false</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QPlainTextEdit" name="hotkeyText">
+        <property name="readOnly">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

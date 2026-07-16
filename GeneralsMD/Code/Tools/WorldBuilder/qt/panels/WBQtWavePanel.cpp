@@ -1,12 +1,11 @@
 // WBQtWavePanel.cpp -- see WBQtWavePanel.h.
 #include "WBQtWavePanel.h"
+#include "ui_WBQtWavePanel.h"
 #include "WBQtWaveBridge.h"
 #include "WBQtTreeStyle.h"
 
 #include <QCheckBox>
-#include <QGridLayout>
 #include <QGroupBox>
-#include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
 #include <QMenu>
@@ -14,7 +13,6 @@
 #include <QPushButton>
 #include <QSlider>
 #include <QTreeWidget>
-#include <QVBoxLayout>
 
 // Bucket brush-size slider range (world units) -- matches the MFC WAVE_BRUSH_MIN/MAX.
 static const int kBrushMin = 30;
@@ -24,95 +22,35 @@ WBQtWavePanel *WBQtWavePanel::s_instance = NULL;
 
 WBQtWavePanel::WBQtWavePanel(QWidget *owner)
 	: QWidget(owner, Qt::Tool),
+	  m_ui(new Ui::WBQtWavePanel),
 	  m_updating(false)
 {
-	setWindowTitle("Wave Editor Options");
+	// The static widget tree lives in WBQtWavePanel.ui; bind the members the
+	// logic below uses, then wire what Designer can't express.
+	m_ui->setupUi(this);
 	resize(380, 560);
 
-	QVBoxLayout *root = new QVBoxLayout(this);
+	m_typeLabel = m_ui->typeLabel;
+	m_modeCreate = m_ui->modeCreate;
+	m_modeManipulate = m_ui->modeManipulate;
+	m_modePaint = m_ui->modePaint;
+	m_modeBucket = m_ui->modeBucket;
+	m_brushLabel = m_ui->brushLabel;
+	m_brushSlider = m_ui->brushSlider;
+	m_list = m_ui->list;
+	m_showLines = m_ui->showLines;
+	m_showShoreline = m_ui->showShoreline;
 
-	// Current type + the four command buttons.
-	m_typeLabel = new QLabel("Type:", this);
-	root->addWidget(m_typeLabel);
-
-	QGridLayout *cmdGrid = new QGridLayout();
-	QPushButton *cycleBtn = new QPushButton("Cycle Type", this);
-	QPushButton *undoBtn = new QPushButton("Undo", this);
-	QPushButton *saveBtn = new QPushButton("Save", this);
-	QPushButton *reloadBtn = new QPushButton("Reload", this);
-	cmdGrid->addWidget(cycleBtn, 0, 0);
-	cmdGrid->addWidget(undoBtn, 0, 1);
-	cmdGrid->addWidget(saveBtn, 1, 0);
-	cmdGrid->addWidget(reloadBtn, 1, 1);
-	root->addLayout(cmdGrid);
-
-	// Editor mode: four push-like toggles (exactly one pressed, kept in sync by hand like the
-	// MFC BS_PUSHLIKE radios).
-	QGroupBox *modeBox = new QGroupBox("Mode", this);
-	QHBoxLayout *modeLay = new QHBoxLayout(modeBox);
-	m_modeCreate = new QPushButton("Create", modeBox);
-	m_modeManipulate = new QPushButton("Manipulate", modeBox);
-	m_modePaint = new QPushButton("Paint", modeBox);
-	m_modeBucket = new QPushButton("Bucket", modeBox);
-	m_modeCreate->setCheckable(true);
-	m_modeManipulate->setCheckable(true);
-	m_modePaint->setCheckable(true);
-	m_modeBucket->setCheckable(true);
-	modeLay->addWidget(m_modeCreate);
-	modeLay->addWidget(m_modeManipulate);
-	modeLay->addWidget(m_modePaint);
-	modeLay->addWidget(m_modeBucket);
-	root->addWidget(modeBox);
-
-	// Bucket brush size (only visible in Bucket mode).
-	QHBoxLayout *brushRow = new QHBoxLayout();
-	m_brushLabel = new QLabel("Bucket brush: 120", this);
-	m_brushSlider = new QSlider(Qt::Horizontal, this);
+	// Slider range comes from the shared kBrushMin/kBrushMax constants (the clamps
+	// below use the same values), so it stays here rather than in the .ui.
 	m_brushSlider->setRange(kBrushMin, kBrushMax);
-	brushRow->addWidget(m_brushLabel);
-	brushRow->addWidget(m_brushSlider, 1);
-	root->addLayout(brushRow);
 
-	// Help text (mirrors the MFC statics).
-	QLabel *help = new QLabel(
-		"Create: drag on water to place a single wave.\n"
-		"Manipulate: drag a wave to move it, Ctrl+drag to rotate it, Shift+click to multi-select.\n"
-		"Paint: hold and drag to lay a trail of waves toward shore.\n"
-		"Bucket: drag along the coast to auto-fill the shoreline with waves.\n"
-		"Right-click to discard the waves you just added.\n"
-		"* * Remember to press the Save button to save your waves.", this);
-	help->setWordWrap(true);
-	root->addWidget(help);
-
-	// The wave list: multi-select, 6 columns like the MFC report view.
-	m_list = new QTreeWidget(this);
-	m_list->setRootIsDecorated(false);
-	m_list->setSelectionMode(QAbstractItemView::ExtendedSelection);
-	m_list->setContextMenuPolicy(Qt::CustomContextMenu);
-	m_list->setMinimumHeight(220);
-	m_list->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
-	QStringList headers;
-	headers << "#" << "Start X" << "Start Y" << "End X" << "End Y" << "Type";
-	m_list->setHeaderLabels(headers);
 	m_list->header()->resizeSection(0, 44);
 	m_list->header()->resizeSection(1, 62);
 	m_list->header()->resizeSection(2, 62);
 	m_list->header()->resizeSection(3, 62);
 	m_list->header()->resizeSection(4, 62);
 	WBQtTreeStyle::applyTreeLines(m_list);
-	root->addWidget(m_list, 1);
-
-	// Delete buttons + overlay checkboxes.
-	QGridLayout *bottomGrid = new QGridLayout();
-	QPushButton *delBtn = new QPushButton("Delete Selected", this);
-	QPushButton *delAllBtn = new QPushButton("Delete All", this);
-	m_showLines = new QCheckBox("Show wave lines", this);
-	m_showShoreline = new QCheckBox("Show shoreline", this);
-	bottomGrid->addWidget(delBtn, 0, 0);
-	bottomGrid->addWidget(m_showLines, 0, 1);
-	bottomGrid->addWidget(delAllBtn, 1, 0);
-	bottomGrid->addWidget(m_showShoreline, 1, 1);
-	root->addLayout(bottomGrid);
 
 	// Seed everything under the guard.
 	m_updating = true;
@@ -129,17 +67,17 @@ WBQtWavePanel::WBQtWavePanel(QWidget *owner)
 	m_showShoreline->setChecked(WBQtWave_GetShowShoreline() != 0);
 	m_updating = false;
 
-	connect(cycleBtn, SIGNAL(clicked()), this, SLOT(onCycleType()));
-	connect(undoBtn, SIGNAL(clicked()), this, SLOT(onUndo()));
-	connect(saveBtn, SIGNAL(clicked()), this, SLOT(onSave()));
-	connect(reloadBtn, SIGNAL(clicked()), this, SLOT(onReload()));
+	connect(m_ui->cycleBtn, SIGNAL(clicked()), this, SLOT(onCycleType()));
+	connect(m_ui->undoBtn, SIGNAL(clicked()), this, SLOT(onUndo()));
+	connect(m_ui->saveBtn, SIGNAL(clicked()), this, SLOT(onSave()));
+	connect(m_ui->reloadBtn, SIGNAL(clicked()), this, SLOT(onReload()));
 	connect(m_modeCreate, SIGNAL(clicked()), this, SLOT(onModeClicked()));
 	connect(m_modeManipulate, SIGNAL(clicked()), this, SLOT(onModeClicked()));
 	connect(m_modePaint, SIGNAL(clicked()), this, SLOT(onModeClicked()));
 	connect(m_modeBucket, SIGNAL(clicked()), this, SLOT(onModeClicked()));
 	connect(m_brushSlider, SIGNAL(valueChanged(int)), this, SLOT(onBrushSliderMoved(int)));
-	connect(delBtn, SIGNAL(clicked()), this, SLOT(onDeleteSelected()));
-	connect(delAllBtn, SIGNAL(clicked()), this, SLOT(onDeleteAll()));
+	connect(m_ui->delBtn, SIGNAL(clicked()), this, SLOT(onDeleteSelected()));
+	connect(m_ui->delAllBtn, SIGNAL(clicked()), this, SLOT(onDeleteAll()));
 	connect(m_showLines, SIGNAL(clicked()), this, SLOT(onShowWaveLinesToggled()));
 	connect(m_showShoreline, SIGNAL(clicked()), this, SLOT(onShowShorelineToggled()));
 	connect(m_list, SIGNAL(itemSelectionChanged()), this, SLOT(onListSelectionChanged()));
@@ -147,6 +85,15 @@ WBQtWavePanel::WBQtWavePanel(QWidget *owner)
 		this, SLOT(onListContextMenu(const QPoint &)));
 
 	s_instance = this;
+}
+
+WBQtWavePanel::~WBQtWavePanel()
+{
+	if (s_instance == this)
+	{
+		s_instance = NULL;
+	}
+	delete m_ui;
 }
 
 void WBQtWavePanel::updateTypeLabel()

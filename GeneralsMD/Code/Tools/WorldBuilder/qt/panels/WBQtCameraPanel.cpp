@@ -1,16 +1,13 @@
 // WBQtCameraPanel.cpp -- see WBQtCameraPanel.h.
 #include "WBQtCameraPanel.h"
+#include "ui_WBQtCameraPanel.h"
 #include "WBQtCameraBridge.h"
 #include "WBQtScrubSpinBox.h"
 #include "WBQtWindowPos.h"
 #include "qwinwidget.h"
 
-#include <QGridLayout>
-#include <QGroupBox>
-#include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
-#include <QVBoxLayout>
 
 #include <qt_windows.h>
 
@@ -27,61 +24,39 @@ namespace
 
 WBQtCameraPanel::WBQtCameraPanel(QWidget *owner)
 	: QWidget(owner, Qt::Tool),
+	  m_ui(new Ui::WBQtCameraPanel),
 	  m_updating(false)
 {
-	setWindowTitle("Camera Options");
+	// The static widget tree lives in WBQtCameraPanel.ui; bind the members the
+	// logic below uses, then wire what Designer can't express.
+	m_ui->setupUi(this);
 	WBQtWindowPos_Track(this, "CameraOptions");
 
-	QVBoxLayout *root = new QVBoxLayout(this);
+	m_pitch = m_ui->pitch;
+	m_heightText = m_ui->heightText;
+	m_zoomText = m_ui->zoomText;
+	m_posText = m_ui->posText;
+	m_targetText = m_ui->targetText;
 
-	// Top row: reset + the pitch group (like the MFC layout).
-	QHBoxLayout *topRow = new QHBoxLayout();
-	QPushButton *resetBtn = new QPushButton("Restore To Default", this);
-	topRow->addWidget(resetBtn);
-	topRow->addStretch(1);
-	QGroupBox *pitchBox = new QGroupBox("Pitch", this);
-	QHBoxLayout *pitchLay = new QHBoxLayout(pitchBox);
-	m_pitch = new WBQtScrubSpinBox(pitchBox, /*axisVertical=*/true);
-	m_pitch->setDecimals(2);
-	m_pitch->setRange(0.0, 1.0);
-	m_pitch->setSingleStep(0.01);
-	m_pitch->setToolTip("Camera pitch (drag up/down to scrub)");
-	pitchLay->addWidget(m_pitch);
-	topRow->addWidget(pitchBox);
-	root->addLayout(topRow);
-
-	// Read-only camera info.
-	QGridLayout *infoGrid = new QGridLayout();
-	infoGrid->addWidget(new QLabel("Height above ground:", this), 0, 0);
-	m_heightText = new QLabel(this);
-	infoGrid->addWidget(m_heightText, 0, 1);
-	infoGrid->addWidget(new QLabel("Zoom:", this), 1, 0);
-	m_zoomText = new QLabel(this);
-	infoGrid->addWidget(m_zoomText, 1, 1);
-	infoGrid->addWidget(new QLabel("(1.0 == max, 0.0 == min)", this), 1, 2);
-	infoGrid->addWidget(new QLabel("Position:", this), 2, 0);
-	m_posText = new QLabel(this);
-	infoGrid->addWidget(m_posText, 2, 1, 1, 2);
-	infoGrid->addWidget(new QLabel("Target:", this), 3, 0);
-	m_targetText = new QLabel(this);
-	infoGrid->addWidget(m_targetText, 3, 1, 1, 2);
-	infoGrid->setColumnStretch(2, 1);
-	root->addLayout(infoGrid);
-
-	QPushButton *dropBtn = new QPushButton("Drop Waypoint", this);
-	root->addWidget(dropBtn);
-	QPushButton *centerBtn = new QPushButton("Center Camera On Selected Object", this);
-	root->addWidget(centerBtn);
-	root->addStretch(1);
+	m_pitch->setAxisVertical(true);		// promotion can't pass the ctor arg
 
 	pushRefresh();
 
-	connect(resetBtn, SIGNAL(clicked()), this, SLOT(onReset()));
+	connect(m_ui->resetBtn, SIGNAL(clicked()), this, SLOT(onReset()));
 	connect(m_pitch, SIGNAL(valueChanged(double)), this, SLOT(onPitchChanged()));
-	connect(dropBtn, SIGNAL(clicked()), this, SLOT(onDropWaypoint()));
-	connect(centerBtn, SIGNAL(clicked()), this, SLOT(onCenterOnSelected()));
+	connect(m_ui->dropBtn, SIGNAL(clicked()), this, SLOT(onDropWaypoint()));
+	connect(m_ui->centerBtn, SIGNAL(clicked()), this, SLOT(onCenterOnSelected()));
 
 	s_instance = this;
+}
+
+WBQtCameraPanel::~WBQtCameraPanel()
+{
+	if (s_instance == this)
+	{
+		s_instance = NULL;
+	}
+	delete m_ui;
 }
 
 void WBQtCameraPanel::pushRefresh()

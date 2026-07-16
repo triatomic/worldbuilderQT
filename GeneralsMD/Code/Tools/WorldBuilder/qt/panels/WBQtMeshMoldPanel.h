@@ -18,12 +18,15 @@ class QRadioButton;
 class QSlider;
 class QSpinBox;
 
+namespace Ui { class WBQtMeshMoldPanel; }	// generated from WBQtMeshMoldPanel.ui
+
 class WBQtMeshMoldPanel : public QWidget
 {
 	Q_OBJECT
 
 public:
 	explicit WBQtMeshMoldPanel(QWidget *owner);
+	virtual ~WBQtMeshMoldPanel();
 
 	static WBQtMeshMoldPanel *instance() { return s_instance; }
 
@@ -41,6 +44,8 @@ private slots:
 private:
 	void setRow(QSlider *slider, QSpinBox *spin, int v);	// set both without re-entry
 	void rebuildMoldList();
+
+	Ui::WBQtMeshMoldPanel *m_ui;	// owns the static widget tree (WBQtMeshMoldPanel.ui)
 
 	QListWidget  *m_moldList;
 	QSlider      *m_angleSlider;

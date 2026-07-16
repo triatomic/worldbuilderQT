@@ -1,14 +1,12 @@
 // WBQtFeatherPanel.cpp -- see WBQtFeatherPanel.h.
 #include "WBQtFeatherPanel.h"
+#include "ui_WBQtFeatherPanel.h"
 #include "WBQtPanelBridge.h"
 
 #include <QCheckBox>
-#include <QGroupBox>
-#include <QHBoxLayout>
 #include <QLabel>
 #include <QSlider>
 #include <QSpinBox>
-#include <QVBoxLayout>
 
 // MAP_XY_FACTOR (cells -> feet) is 10.0. It lives in an engine header the Qt lib must not
 // include, so mirror the constant here (see Common/MapObject.h).
@@ -16,72 +14,28 @@ static const double kFeetPerCell = 10.0;
 
 WBQtFeatherPanel *WBQtFeatherPanel::s_instance = NULL;
 
-namespace
-{
-	// Build one labelled "slider + spinbox" row (kept in lockstep by the owner's slots).
-	// typedHi: the spin box accepts typed values past the slider cap (the vanilla WB
-	// pop-slider stopped at hi, but its edit box parsed any int); the slider just pegs.
-	void makeRow(QWidget *parent, const char *caption, int lo, int hi, int typedHi,
-		QSlider **outSlider, QSpinBox **outSpin, QBoxLayout *into)
-	{
-		QHBoxLayout *row = new QHBoxLayout();
-		row->addWidget(new QLabel(QString::fromLatin1(caption), parent));
-		QSlider *s = new QSlider(Qt::Horizontal, parent);
-		s->setRange(lo, hi);
-		QSpinBox *b = new QSpinBox(parent);
-		b->setRange(lo, (typedHi > hi) ? typedHi : hi);
-		row->addWidget(s, 1);
-		row->addWidget(b);
-		into->addLayout(row);
-		*outSlider = s;
-		*outSpin = b;
-	}
-}
-
 WBQtFeatherPanel::WBQtFeatherPanel(QWidget *owner)
 	: QWidget(owner, Qt::Tool),
+	  m_ui(new Ui::WBQtFeatherPanel),
 	  m_updating(false)
 {
-	setWindowTitle("Feather Brush Options");
+	// The static widget tree lives in WBQtFeatherPanel.ui. Each slider+spinbox row is
+	// kept in lockstep by the slots below; the spin boxes accept typed values past the
+	// slider caps (the vanilla WB pop-slider stopped at the cap, but its edit box parsed
+	// any int) -- the slider just pegs.
+	m_ui->setupUi(this);
 
-	QVBoxLayout *root = new QVBoxLayout(this);
-
-	// Brush width (the editable "feather/size" row) with a live "FEET" label.
-	QGroupBox *sizeBox = new QGroupBox("Brush width", this);
-	QVBoxLayout *sizeLay = new QVBoxLayout(sizeBox);
-	makeRow(this, "Size in cells:", 2, 51, 999, &m_featherSlider, &m_featherSpin, sizeLay);
-	m_feetLabel = new QLabel("0.0 FEET.", sizeBox);
-	sizeLay->addWidget(m_feetLabel);
-	root->addWidget(sizeBox);
-
-	// Filter radius.
-	QGroupBox *radiusBox = new QGroupBox("Filter Radius", this);
-	QVBoxLayout *radiusLay = new QVBoxLayout(radiusBox);
-	makeRow(this, "Radius:", 1, 5, 999, &m_radiusSlider, &m_radiusSpin, radiusLay);
-	radiusLay->addWidget(new QLabel("A large value tends to flatten more of the terrain.", radiusBox));
-	root->addWidget(radiusBox);
-
-	// Feather rate.
-	QGroupBox *rateBox = new QGroupBox("Feather Rate", this);
-	QVBoxLayout *rateLay = new QVBoxLayout(rateBox);
-	makeRow(this, "Rate:", 1, 10, 999, &m_rateSlider, &m_rateSpin, rateLay);
-	rateLay->addWidget(new QLabel("A high value flattens faster.", rateBox));
-	root->addWidget(rateBox);
-
-	// Advanced mirror options.
-	QGroupBox *mirrorBox = new QGroupBox("Advanced Mirror Options", this);
-	QVBoxLayout *mirrorLay = new QVBoxLayout(mirrorBox);
-	m_mirror = new QCheckBox("Toggle", mirrorBox);
-	m_mirrorX = new QCheckBox("Mirror X", mirrorBox);
-	m_mirrorY = new QCheckBox("Mirror Y", mirrorBox);
-	m_mirrorXY = new QCheckBox("Diagonal", mirrorBox);
-	mirrorLay->addWidget(m_mirror);
-	mirrorLay->addWidget(m_mirrorX);
-	mirrorLay->addWidget(m_mirrorY);
-	mirrorLay->addWidget(m_mirrorXY);
-	root->addWidget(mirrorBox);
-
-	root->addStretch(1);
+	m_featherSlider = m_ui->featherSlider;
+	m_featherSpin = m_ui->featherSpin;
+	m_feetLabel = m_ui->feetLabel;
+	m_radiusSlider = m_ui->radiusSlider;
+	m_radiusSpin = m_ui->radiusSpin;
+	m_rateSlider = m_ui->rateSlider;
+	m_rateSpin = m_ui->rateSpin;
+	m_mirror = m_ui->mirror;
+	m_mirrorX = m_ui->mirrorX;
+	m_mirrorY = m_ui->mirrorY;
+	m_mirrorXY = m_ui->mirrorXY;
 
 	// Seed from the current tool state under the guard so it doesn't echo back to the tool.
 	m_updating = true;
@@ -109,6 +63,15 @@ WBQtFeatherPanel::WBQtFeatherPanel(QWidget *owner)
 	connect(m_mirrorXY, SIGNAL(clicked()), this, SLOT(onMirrorXY()));
 
 	s_instance = this;
+}
+
+WBQtFeatherPanel::~WBQtFeatherPanel()
+{
+	if (s_instance == this)
+	{
+		s_instance = NULL;
+	}
+	delete m_ui;
 }
 
 void WBQtFeatherPanel::setRow(QSlider *slider, QSpinBox *spin, int v)

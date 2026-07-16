@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WBQtRoadPanel</class>
+ <widget class="QWidget" name="WBQtRoadPanel">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>320</width>
+    <height>620</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Road Options</string>
+  </property>
+  <layout class="QVBoxLayout" name="rootLayout" stretch="0,3,0,0,0,0,0">
+   <item>
+    <layout class="QHBoxLayout" name="searchRow" stretch="1,0,0">
+     <item>
+      <widget class="QLineEdit" name="search">
+       <property name="placeholderText">
+        <string>Search roads...</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="searchBtn">
+       <property name="text">
+        <string>Search</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="resetBtn">
+       <property name="text">
+        <string>Reset</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QTreeWidget" name="tree">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>260</height>
+      </size>
+     </property>
+     <property name="headerHidden">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="curBox">
+     <property name="title">
+      <string>Current road type:</string>
+     </property>
+     <layout class="QVBoxLayout" name="curLay">
+      <item>
+       <widget class="QLabel" name="nameLabel">
+        <property name="text">
+         <string>Road</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="cornerBox">
+     <property name="title">
+      <string>Corner Type:</string>
+     </property>
+     <layout class="QVBoxLayout" name="cornerLay">
+      <item>
+       <widget class="QRadioButton" name="broad">
+        <property name="text">
+         <string>Broad Curve</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="tight">
+        <property name="text">
+         <string>Tight Curve.</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="angled">
+        <property name="text">
+         <string>Angled.</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QCheckBox" name="join">
+     <property name="text">
+      <string>Add end cap and/or Join to different road.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="replacerBox">
+     <property name="title">
+      <string>Road Replacer</string>
+     </property>
+     <layout class="QVBoxLayout" name="replacerLay">
+      <item>
+       <widget class="QLabel" name="replacerText">
+        <property name="text">
+         <string>Updates only the selected road points (single or multiple), spreading to connected segments like a flood fill.</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item alignment="Qt::AlignRight">
+       <widget class="QPushButton" name="applyBtn">
+        <property name="text">
+         <string>Apply To Selection</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="snapBox">
+     <property name="title">
+      <string>Tool Option:</string>
+     </property>
+     <layout class="QHBoxLayout" name="snapRow" stretch="0,1,0">
+      <item>
+       <widget class="QLabel" name="snapLabel">
+        <property name="text">
+         <string>Road Snap Distance:</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QDoubleSpinBox" name="snap">
+        <property name="decimals">
+         <number>2</number>
+        </property>
+        <property name="minimum">
+         <double>0.200000000000000</double>
+        </property>
+        <property name="maximum">
+         <double>5.000000000000000</double>
+        </property>
+        <property name="singleStep">
+         <double>0.100000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="snapHintLabel">
+        <property name="text">
+         <string>(Min: 0.0 - Max: 5.0)</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
