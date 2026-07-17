@@ -10,6 +10,7 @@
 #include "ui_WBQtBaseBuildPropsDialog.h"
 #include "ui_WBQtNewHeightMapDialog.h"
 #include "ui_WBQtExportScriptsDialog.h"
+#include "WBQtComboStyle.h"
 #include "WBQtMiscModalsBridge.h"
 #include "WBQtParamBridge.h"	// subroutine-script enumeration for Building Properties
 
@@ -223,6 +224,9 @@ WBQtMapSettingsDialog::WBQtMapSettingsDialog(QWidget *parent)
 	m_timeOfDay = m_ui->timeOfDay;
 	m_weather = m_ui->weather;
 
+	// MFC's combos are WS_VSCROLL: give every drop-down here a scrolling popup.
+	WBQtComboStyle::applyPopupScrollRecursive(this);
+
 	char buf[kNameCap];
 	buf[0] = 0;
 	WBQtMapSettings_GetMapName(buf, sizeof(buf));
@@ -336,6 +340,9 @@ WBQtBaseBuildPropsDialog::WBQtBaseBuildPropsDialog(const QString &name, const QS
 	m_scriptCombo = m_ui->scriptCombo;
 	m_healthEdit = m_ui->healthEdit;
 	m_unsellableCheck = m_ui->unsellableCheck;
+
+	// MFC's combos are WS_VSCROLL: give every drop-down here a scrolling popup.
+	WBQtComboStyle::applyPopupScrollRecursive(this);
 
 	m_nameEdit->setText(name);
 	char buf[kNameCap];

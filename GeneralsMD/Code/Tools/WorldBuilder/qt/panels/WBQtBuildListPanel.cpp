@@ -1,6 +1,7 @@
 // WBQtBuildListPanel.cpp -- see WBQtBuildListPanel.h.
 #include "WBQtBuildListPanel.h"
 #include "ui_WBQtBuildListPanel.h"
+#include "WBQtComboStyle.h"
 #include "WBQtPanelBridge.h"
 
 #include <QCheckBox>
@@ -35,6 +36,11 @@ WBQtBuildListPanel::WBQtBuildListPanel(QWidget *owner)
 	m_rebuilds = m_ui->rebuilds;
 	m_power = m_ui->power;
 	m_forcedShow = m_ui->forcedShow;
+
+	// == the MFC IDC_REBUILDS (CBS_DROPDOWN): type to narrow the list. The rest of the panel's
+	// combos were CBS_DROPDOWNLIST, so they stay pick-only -- but all of them scroll (WS_VSCROLL).
+	WBQtComboStyle::applyTypeToFilter(m_rebuilds);
+	WBQtComboStyle::applyPopupScrollRecursive(this);
 
 	refresh();
 

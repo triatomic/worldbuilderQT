@@ -4,6 +4,7 @@
 #include "WBQtPlayerListDialog.h"
 #include "ui_WBQtPlayerListDialog.h"
 #include "ui_WBQtAddPlayerDialog.h"
+#include "WBQtComboStyle.h"
 #include "WBQtPlayerListBridge.h"
 
 #include <QApplication>
@@ -65,6 +66,9 @@ WBQtPlayerListDialog::WBQtPlayerListDialog(QWidget *parent)
 	m_regardIn = m_ui->regardIn;
 	m_newButton = m_ui->newButton;
 	m_removeButton = m_ui->removeButton;
+
+	// MFC's combos are WS_VSCROLL: give every drop-down here a scrolling popup.
+	WBQtComboStyle::applyPopupScrollRecursive(this);
 
 	connect(m_players, SIGNAL(currentRowChanged(int)), this, SLOT(onPlayerRowChanged(int)));
 	// Set Name is an explicit button because renames run team fixups.
@@ -342,6 +346,10 @@ WBQtAddPlayerDialog::WBQtAddPlayerDialog(QWidget *parent, const QString &onlySid
 	m_ui->setupUi(this);
 
 	m_templates = m_ui->templates;
+
+	// MFC's combos are WS_VSCROLL: give every drop-down here a scrolling popup.
+	WBQtComboStyle::applyPopupScrollRecursive(this);
+
 	QStringList names;
 	int count = WBQtAddPlayerData_GetTemplateCount();
 	for (int i = 0; i < count; i++)

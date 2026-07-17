@@ -1,6 +1,7 @@
 // WBQtGrovePanel.cpp -- see WBQtGrovePanel.h.
 #include "WBQtGrovePanel.h"
 #include "ui_WBQtGrovePanel.h"
+#include "WBQtComboStyle.h"
 #include "WBQtGroveBridge.h"
 #include "WBQtPreviewImage.h"
 
@@ -50,6 +51,19 @@ WBQtGrovePanel::WBQtGrovePanel(QWidget *owner)
 		m_ui->treesGrid->addWidget(m_treeType[i], t, 0);
 		m_ui->treesGrid->addWidget(m_weight[i], t, 1);
 	}
+
+	// MFC's combos are WS_VSCROLL: give every drop-down here a scrolling popup.
+	WBQtComboStyle::applyPopupScrollRecursive(this);
+
+	// The tree-type lists are long (every tree template in the game), so let the user type to
+	// narrow them. MFC's IDC_Grove_Type* were CBS_DROPDOWNLIST (pick-only) -- we deliberately
+	// go further here; NoInsert + the completer mean typing can still only ever land on a real
+	// entry, so the index onTreeTypeChanged() hands to the MFC combo stays valid.
+	for (int i = 0; i < TREES_PER_SET; ++i)
+	{
+		WBQtComboStyle::applyTypeToFilter(m_treeType[i]);
+	}
+	WBQtComboStyle::applyTypeToFilter(m_setName);
 
 	// Seed everything from the hidden MFC panel under the guard so nothing echoes back.
 	m_updating = true;

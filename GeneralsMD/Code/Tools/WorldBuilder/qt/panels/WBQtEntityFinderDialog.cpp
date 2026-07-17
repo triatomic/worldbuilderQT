@@ -5,6 +5,7 @@
 // persisted in the same ShrinkHotkeyList profile value).
 #include "WBQtEntityFinderDialog.h"
 #include "ui_WBQtEntityFinderDialog.h"
+#include "WBQtComboStyle.h"
 #include "WBQtEntityFinderBridge.h"
 
 // NewSearch toggle (WBQtObjectBridge.cpp): live-filter search in the tree pickers.
@@ -96,6 +97,11 @@ WBQtEntityFinderDialog::WBQtEntityFinderDialog(void *frameHwnd)
 
 	m_objectCombo = m_ui->objectCombo;
 	m_waypointCombo = m_ui->waypointCombo;
+
+	// == the MFC IDC_FIND_QUERY_OBJ / IDC_FIND_QUERY_WP (CBS_DROPDOWN): type to narrow the list.
+	WBQtComboStyle::applyTypeToFilter(m_objectCombo);
+	WBQtComboStyle::applyTypeToFilter(m_waypointCombo);
+	WBQtComboStyle::applyPopupScrollRecursive(this);
 	m_fontCombo = m_ui->fontCombo;
 	m_resolutionCombo = m_ui->resolutionCombo;
 	m_undoSpin = m_ui->undoSpin;

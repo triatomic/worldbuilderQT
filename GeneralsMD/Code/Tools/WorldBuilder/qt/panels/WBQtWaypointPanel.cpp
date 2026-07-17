@@ -1,6 +1,7 @@
 // WBQtWaypointPanel.cpp -- see WBQtWaypointPanel.h.
 #include "WBQtWaypointPanel.h"
 #include "ui_WBQtWaypointPanel.h"
+#include "WBQtComboStyle.h"
 #include "WBQtWaypointBridge.h"
 
 #include <QCheckBox>
@@ -34,6 +35,9 @@ WBQtWaypointPanel::WBQtWaypointPanel(QWidget *owner)
 	m_label3 = m_ui->label3;
 	m_biDirectional = m_ui->biDirectional;
 	m_helpBox = m_ui->helpBox;
+
+	// MFC's combos are WS_VSCROLL: give every drop-down here a scrolling popup.
+	WBQtComboStyle::applyPopupScrollRecursive(this);
 
 	// Seed from the current selection under the guard so nothing echoes back while populating.
 	pushRefresh();

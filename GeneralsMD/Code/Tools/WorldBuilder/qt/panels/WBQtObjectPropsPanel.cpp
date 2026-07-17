@@ -1,6 +1,7 @@
 // WBQtObjectPropsPanel.cpp -- see WBQtObjectPropsPanel.h.
 #include "WBQtObjectPropsPanel.h"
 #include "ui_WBQtObjectPropsPanel.h"
+#include "WBQtComboStyle.h"
 #include "WBQtObjectPropsBridge.h"
 #include "WBQtScrubSpinBox.h"
 #include "WBQtShortcuts.h"	// WBQtShortcuts_PostCommand -- post the delete command
@@ -72,6 +73,9 @@ WBQtObjectPropsPanel::WBQtObjectPropsPanel(QWidget *owner)
 	m_maxRange = m_ui->maxRange;
 	m_upgradesBox = m_ui->upgradesBox;
 	m_upgrades = m_ui->upgrades;
+
+	// MFC's combos are WS_VSCROLL: give every drop-down here a scrolling popup.
+	WBQtComboStyle::applyPopupScrollRecursive(this);
 
 	// Don't let a long team name dictate the panel width (== the MFC combo, which stays
 	// fixed and elides). The dropdown popup can still be wide.

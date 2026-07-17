@@ -1,6 +1,7 @@
 // WBQtObjectPanel.cpp -- see WBQtObjectPanel.h.
 #include "WBQtObjectPanel.h"
 #include "ui_WBQtObjectPanel.h"
+#include "WBQtComboStyle.h"
 #include "WBQtPanelBridge.h"
 #include "WBQtPreviewImage.h"
 #include "WBQtTreeStyle.h"
@@ -41,6 +42,9 @@ WBQtObjectPanel::WBQtObjectPanel(QWidget *owner)
 	m_previewSound = m_ui->previewSound;
 	m_previewBuildZone = m_ui->previewBuildZone;
 	m_useWaterHeight = m_ui->useWaterHeight;
+
+	// MFC's combos are WS_VSCROLL: give every drop-down here a scrolling popup.
+	WBQtComboStyle::applyPopupScrollRecursive(this);
 
 	WBQtTreeStyle::applyTreeLines(m_tree);
 

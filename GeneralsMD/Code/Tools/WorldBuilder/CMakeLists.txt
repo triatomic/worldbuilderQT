@@ -346,6 +346,8 @@ if(RTS_ENABLE_WORLDBUILDER_QT)
         "qt/WBQtBridge.h"
         "qt/WBQtTheme.cpp"
         "qt/WBQtTheme.h"
+        "qt/WBQtComboStyle.cpp"
+        "qt/WBQtComboStyle.h"
         "qt/WBQtTreeStyle.cpp"
         "qt/WBQtTreeStyle.h"
         "qt/WBQtWindowPos.cpp"

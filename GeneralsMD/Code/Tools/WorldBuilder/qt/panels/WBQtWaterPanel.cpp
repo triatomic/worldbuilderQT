@@ -1,6 +1,7 @@
 // WBQtWaterPanel.cpp -- see WBQtWaterPanel.h.
 #include "WBQtWaterPanel.h"
 #include "ui_WBQtWaterPanel.h"
+#include "WBQtComboStyle.h"
 #include "WBQtWaterBridge.h"
 
 #include <QCheckBox>
@@ -28,6 +29,9 @@ WBQtWaterPanel::WBQtWaterPanel(QWidget *owner)
 	m_heightSlider = m_ui->heightSlider;
 	m_heightSpin = m_ui->heightSpin;
 	m_makeRiver = m_ui->makeRiver;
+
+	// MFC's combos are WS_VSCROLL: give every drop-down here a scrolling popup.
+	WBQtComboStyle::applyPopupScrollRecursive(this);
 
 	// Water height: slider + spinbox in lockstep. The slider spans the popup-slider range
 	// (0 .. 255*MAP_HEIGHT_SCALE) -- runtime values from the bridge, so set here; the spinbox

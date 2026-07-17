@@ -3,6 +3,7 @@
 // resource.h (pure #defines, Qt-safe; the res dir is on the qt lib include path).
 #include "WBQtTeamSheetDialog.h"
 #include "ui_WBQtTeamSheetDialog.h"
+#include "WBQtComboStyle.h"
 #include "WBQtTeamsBridge.h"
 #include "resource.h"
 
@@ -215,6 +216,8 @@ void WBQtTeamSheetDialog::setupReinforcementTab()
 
 	bindCheck(page, IDC_DEPLOY_BY, m_ui->deployByCheck);
 	bindCombo(page, IDC_TRANSPORT_COMBO, readComboItems(page, IDC_TRANSPORT_COMBO), m_ui->transportCombo, WB_QT_TEAMNOTIFY_SELCHANGE);
+	// == the MFC IDC_TRANSPORT_COMBO (CBS_DROPDOWN): the only typable combo on this sheet.
+	WBQtComboStyle::applyTypeToFilter(m_ui->transportCombo);
 	bindCheck(page, IDC_TRANSPORTS_EXIT, m_ui->transportsExitCheck);
 	bindCombo(page, IDC_WAYPOINT_COMBO, readComboItems(page, IDC_WAYPOINT_COMBO), m_ui->waypointCombo, WB_QT_TEAMNOTIFY_SELCHANGE);
 	bindCheck(page, IDC_TEAM_STARTS_FULL, m_ui->teamStartsFullCheck);

@@ -1,6 +1,7 @@
 // WBQtTracingOverlayWindow.cpp -- see WBQtTracingOverlayWindow.h.
 #include "WBQtTracingOverlayWindow.h"
 #include "ui_WBQtTracingOverlayWindow.h"
+#include "WBQtComboStyle.h"
 #include "WBQtTracingOverlayBridge.h"
 #include "WBQtWindowPos.h"
 #include "qwinwidget.h"
@@ -40,6 +41,9 @@ WBQtTracingOverlayWindow::WBQtTracingOverlayWindow(QWidget *owner)
 	m_opacitySlider = m_ui->opacitySlider;
 	m_opacityLabel = m_ui->opacityLabel;
 	m_filterCombo = m_ui->filterCombo;
+
+	// MFC's combos are WS_VSCROLL: give every drop-down here a scrolling popup.
+	WBQtComboStyle::applyPopupScrollRecursive(this);
 
 	// The item ORDER is load-bearing: currentIndex() is passed straight through as the
 	// bridge filter value, so keep the enum mapping visible here.

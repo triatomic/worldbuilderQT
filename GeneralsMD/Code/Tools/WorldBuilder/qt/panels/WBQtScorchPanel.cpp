@@ -1,6 +1,7 @@
 // WBQtScorchPanel.cpp -- see WBQtScorchPanel.h.
 #include "WBQtScorchPanel.h"
 #include "ui_WBQtScorchPanel.h"
+#include "WBQtComboStyle.h"
 #include "WBQtScorchBridge.h"
 
 #include <QComboBox>
@@ -27,6 +28,9 @@ WBQtScorchPanel::WBQtScorchPanel(QWidget *owner)
 	// Scorch size (IDC_SIZE_EDIT + IDC_SIZE_POPUP collapse into one spin box).
 	m_size = m_ui->size;
 	m_size->setRange(kScorchSizeMin, kScorchSizeMax);	// see the comment on the constants
+
+	// MFC's combos are WS_VSCROLL: give every drop-down here a scrolling popup.
+	WBQtComboStyle::applyPopupScrollRecursive(this);
 
 	// Seed the combo + values under the guard so nothing echoes back while we populate.
 	m_updating = true;

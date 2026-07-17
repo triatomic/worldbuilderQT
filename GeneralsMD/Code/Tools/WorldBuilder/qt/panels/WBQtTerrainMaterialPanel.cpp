@@ -1,6 +1,7 @@
 // WBQtTerrainMaterialPanel.cpp -- see WBQtTerrainMaterialPanel.h.
 #include "WBQtTerrainMaterialPanel.h"
 #include "ui_WBQtTerrainMaterialPanel.h"
+#include "WBQtComboStyle.h"
 #include "WBQtTerrainMaterialBridge.h"
 #include "WBQtScrubSpinBox.h"
 #include "WBQtTreeStyle.h"
@@ -85,6 +86,9 @@ WBQtTerrainMaterialPanel::WBQtTerrainMaterialPanel(QWidget *owner)
 	m_mirrorX = m_ui->mirrorX;
 	m_mirrorY = m_ui->mirrorY;
 	m_mirrorXY = m_ui->mirrorXY;
+
+	// MFC's combos are WS_VSCROLL: give every drop-down here a scrolling popup.
+	WBQtComboStyle::applyPopupScrollRecursive(this);
 
 	// The texture tree is the primary control (== the 190x135 DLU tree) -- keep a solid
 	// minimum and let it take all the vertical slack.
