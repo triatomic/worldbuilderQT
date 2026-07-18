@@ -187,6 +187,18 @@ extern "C" void WBQtCondAct_EditParameter(void *item, int isAction, int i)
 	{
 		// == the EN_LINK WM_LBUTTONDOWN handler. EditParameter's modals resolve their owner
 		// via GetActiveWindow, which is the Qt dialog while it runs.
+		if (isAction && param->getParameterType() == Parameter::COMMANDBUTTON_ABILITY)
+		{
+			// == EditAction's COMMANDBUTTON_ABILITY special case: the ability list is built
+			// from the unit this action targets -- the action's FIRST parameter -- so pass
+			// its name through, or the picker can't resolve the unit's command set.
+			Parameter *unitParam = qtParameterAt(item, isAction, 0);
+			if (unitParam != NULL)
+			{
+				EditParameter::edit(param, 0, unitParam->getString());
+				return;
+			}
+		}
 		EditParameter::edit(param, 0);
 	}
 }
