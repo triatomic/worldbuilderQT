@@ -1736,6 +1736,14 @@ BOOL ScriptDialog::OnInitDialog()
 
 HTREEITEM ScriptDialog::addPlayer(Int playerIndx)
 {
+	// Qt (de-bridged) build: this dialog window is never Create()d, so there is no tree to
+	// insert into. The player was already added to the model by the caller (e.g. the import
+	// parser's ParsePlayersDataChunk); the Qt window rebuilds its own tree afterwards. Do the
+	// UI work only when the MFC window actually exists.
+	if (GetSafeHwnd() == NULL)
+	{
+		return NULL;
+	}
 
 	CTreeCtrl *pTree = (CTreeCtrl*)GetDlgItem(IDC_SCRIPT_TREE);
 	TVINSERTSTRUCT ins;
