@@ -140,6 +140,7 @@ void WBQtTeamSheetDialog::bindCombo(int page, int ctrlId, const QStringList &ite
 	combo->setMinimumContentsLength(24);
 	combo->addItems(items);
 	seedComboCurrent(combo, pageText(page, ctrlId));
+	combo->setEnabled(WBQtTeamPage_IsEnabled(page, ctrlId) != 0);	// == MFC's initial EnableWindow
 	connect(combo, static_cast<void (QComboBox::*)(int)>(&QComboBox::activated), combo,
 		[combo, page, ctrlId, notify](int index)
 	{
@@ -219,6 +220,22 @@ void WBQtTeamSheetDialog::setupReinforcementTab()
 	// == the MFC IDC_TRANSPORT_COMBO (CBS_DROPDOWN): the only typable combo on this sheet.
 	WBQtComboStyle::applyTypeToFilter(m_ui->transportCombo);
 	bindCheck(page, IDC_TRANSPORTS_EXIT, m_ui->transportsExitCheck);
+
+	// == TeamReinforcement's OnDeployBy: Deploy By gates the transport combo + Transports Exit
+	// checkbox. bindCheck already flips s_qtSheetDeployBy via SetCheck; re-query IsEnabled and
+	// apply it to both dependents on every toggle (bindCombo only sets the initial state).
+	QComboBox *transport = m_ui->transportCombo;
+	QCheckBox *transportsExit = m_ui->transportsExitCheck;
+	connect(m_ui->deployByCheck, &QCheckBox::toggled, this, [this, page, transport, transportsExit](bool)
+	{
+		bool enable = WBQtTeamPage_IsEnabled(page, IDC_TRANSPORT_COMBO) != 0;
+		transport->setEnabled(enable);
+		transportsExit->setEnabled(WBQtTeamPage_IsEnabled(page, IDC_TRANSPORTS_EXIT) != 0);
+		if (!enable)
+		{
+			transport->setCurrentIndex(-1);	// == MFC unchecking: SetCurSel(-1) + clear dict
+		}
+	});
 	bindCombo(page, IDC_WAYPOINT_COMBO, readComboItems(page, IDC_WAYPOINT_COMBO), m_ui->waypointCombo, WB_QT_TEAMNOTIFY_SELCHANGE);
 	bindCheck(page, IDC_TEAM_STARTS_FULL, m_ui->teamStartsFullCheck);
 	bindCombo(page, IDC_VETERANCY, readComboItems(page, IDC_VETERANCY), m_ui->veterancyCombo, WB_QT_TEAMNOTIFY_SELCHANGE);

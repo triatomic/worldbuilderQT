@@ -199,6 +199,15 @@ void WBQtOpenMapDialog::onDoubleClicked()
 
 void WBQtOpenMapDialog::accept()
 {
+	// == OnOK's first check: Enter pressed in the search box performs a search instead of
+	// opening a map (the list always pre-selects row 0, so without this Enter-to-search would
+	// silently open the wrong map). Only when the search box has focus and holds text.
+	if (m_searchEdit != NULL && m_searchEdit->hasFocus() && !m_searchEdit->text().isEmpty())
+	{
+		onFind();
+		return;
+	}
+
 	// == OK/double-click: completes with a map (or drills into an archive and stays open).
 	if (WBQtOpenMap_Pick(m_list->currentRow()) != 0)
 	{

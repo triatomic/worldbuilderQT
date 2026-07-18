@@ -46,6 +46,7 @@ private slots:
 	void onZChanged(double v);
 	void onAlreadyBuiltToggled();
 	void onRebuildsChanged();
+	void onRebuildsTextCommitted();		// a hand-typed rebuild count (== MFC's CBN_EDITCHANGE)
 	void onForcedShowToggled();
 
 private:

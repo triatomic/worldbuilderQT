@@ -7,6 +7,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QLineEdit>
 #include <QListWidget>
 #include <QProgressBar>
 #include <QPushButton>
@@ -57,6 +58,12 @@ WBQtBuildListPanel::WBQtBuildListPanel(QWidget *owner)
 	connect(m_z, SIGNAL(valueChanged(double)), this, SLOT(onZChanged(double)));
 	connect(m_alreadyBuilt, SIGNAL(clicked()), this, SLOT(onAlreadyBuiltToggled()));
 	connect(m_rebuilds, SIGNAL(currentIndexChanged(int)), this, SLOT(onRebuildsChanged()));
+	// == MFC's ON_CBN_EDITCHANGE(IDC_REBUILDS): a hand-typed count (e.g. 12) matches no list
+	// entry, so currentIndexChanged never fires; commit it when the edit finishes instead.
+	if (m_rebuilds->lineEdit() != NULL)
+	{
+		connect(m_rebuilds->lineEdit(), SIGNAL(editingFinished()), this, SLOT(onRebuildsTextCommitted()));
+	}
 	connect(m_forcedShow, SIGNAL(clicked()), this, SLOT(onForcedShowToggled()));
 
 	s_instance = this;
@@ -280,6 +287,29 @@ void WBQtBuildListPanel::onRebuildsChanged()
 		// A typed value.
 		WBQtBuildList_SetRebuilds(m_rebuilds->currentText().toInt());
 	}
+}
+
+// A hand-typed rebuild count that matches no list entry (7+). currentIndexChanged never fires
+// for it, so this commits on edit-finish -- == MFC's OnEditchangeRebuilds (GetCurSel()==-1).
+void WBQtBuildListPanel::onRebuildsTextCommitted()
+{
+	if (m_updating)
+	{
+		return;
+	}
+	// Only handle genuine free text; a real list pick is already covered by onRebuildsChanged.
+	if (m_rebuilds->currentIndex() >= 0)
+	{
+		return;
+	}
+	bool ok = false;
+	int nr = m_rebuilds->currentText().toInt(&ok);
+	if (!ok)
+	{
+		return;	// non-numeric -- ignore, like sscanf failing
+	}
+	WBQtBuildList_SetCurBuild(m_buildList->currentRow());
+	WBQtBuildList_SetRebuilds(nr);
 }
 
 void WBQtBuildListPanel::onForcedShowToggled()

@@ -201,6 +201,10 @@ void WBQtObjectPanel::onTreeSelectionChanged()
 	refreshTeamCombo();
 	m_updating = false;
 	refreshPreview();
+
+	// == ObjectOptions' selection block: play the template's ambient sound when the toggle is
+	// on (the MFC gate was window-open, always false in the Qt build, so it never ran here).
+	WBQtObject_PreviewAmbient();
 }
 
 void WBQtObjectPanel::refreshTeamCombo()

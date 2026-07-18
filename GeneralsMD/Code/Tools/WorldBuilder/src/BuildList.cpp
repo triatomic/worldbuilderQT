@@ -1118,10 +1118,30 @@ int BuildList::qtGetRebuilds(void)
 	return (nr == BuildListInfo::UNLIMITED_REBUILDS) ? -1 : (int)nr;
 }
 
+// == OnChangeAngle/OnChangeZOffset's tail: redraw the placed building in the 3D view so an
+// angle/Z edit is visible immediately (the Qt setters dropped this, so the ghost never moved).
+static void qtInvalBuildItem(BuildListInfo *p)
+{
+	if (p == NULL)
+	{
+		return;
+	}
+	CWorldBuilderDoc *pDoc = CWorldBuilderDoc::GetActiveDoc();
+	WbView3d *p3View = (pDoc != NULL) ? pDoc->GetActive3DView() : NULL;
+	if (p3View != NULL)
+	{
+		p3View->invalBuildListItemInView(p);
+	}
+}
+
 void BuildList::qtSetAngle(double deg)
 {
 	BuildListInfo *p = qtBuildAt(qtGetCurSide(), qtGetCurBuild());
-	if (p != NULL) { p->setAngle((Real)(deg * PI / 180)); }
+	if (p != NULL)
+	{
+		p->setAngle((Real)(deg * PI / 180));
+		qtInvalBuildItem(p);
+	}
 }
 
 void BuildList::qtSetZ(double z)
@@ -1132,6 +1152,7 @@ void BuildList::qtSetZ(double z)
 		Coord3D loc = *p->getLocation();
 		loc.z = (Real)z;
 		p->setLocation(loc);
+		qtInvalBuildItem(p);
 	}
 }
 

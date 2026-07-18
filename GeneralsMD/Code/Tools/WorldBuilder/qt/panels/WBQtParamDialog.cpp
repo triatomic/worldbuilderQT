@@ -108,6 +108,16 @@ WBQtParamDialog::WBQtParamDialog(void *parameter, const char *unitName, QWidget 
 	{
 		m_list->setCurrentRow(initialSel);
 		m_list->scrollToItem(m_list->item(initialSel), QAbstractItemView::PositionAtTop);
+
+		// == MFC's SetCurSel(0) on the CBS_SIMPLE combo when the param string is empty: that
+		// copies row 0's text into the edit field, so OK commits the first entry instead of
+		// leaving the parameter empty (it would otherwise stay "???"). Mirror the selected
+		// row into an empty combo edit so accept() adopts it the same way.
+		if (m_edit != NULL && m_kind == WB_QT_PARAM_KIND_COMBO && m_edit->text().isEmpty())
+		{
+			m_edit->setText(m_list->item(initialSel)->text());
+			m_edit->selectAll();
+		}
 	}
 	m_updating = false;
 

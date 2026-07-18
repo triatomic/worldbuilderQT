@@ -191,6 +191,7 @@ int  WBQtObject_RenderPreview(unsigned char *bgrOut, int cap);
 // Preview toggles (persisted in the registry like the MFC panel).
 void WBQtObject_SetPreviewSound(int on);
 int  WBQtObject_GetPreviewSound(void);
+void WBQtObject_PreviewAmbient(void);	// play the selected template's ambient sound if the toggle is on
 void WBQtObject_SetPreviewBuildZone(int on);
 int  WBQtObject_GetPreviewBuildZone(void);
 void WBQtObject_SetUseWaterHeight(int on);

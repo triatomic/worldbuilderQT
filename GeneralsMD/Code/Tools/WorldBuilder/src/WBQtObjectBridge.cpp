@@ -19,6 +19,9 @@
 #include "Common/WellKnownKeys.h"
 #include "Common/ThingTemplate.h"
 #include "Common/ThingSort.h"
+#include "Common/AudioEventRTS.h"
+#include "Common/GameAudio.h"
+#include <mmsystem.h>		// PlaySound + SND_* (winmm, already linked)
 #include "Common/PlayerTemplate.h"
 #include "GameLogic/SidesList.h"
 #include "qt/WBQtPanelBridge.h"
@@ -367,6 +370,48 @@ void WBQtObject_SetPreviewSound(int on)
 int WBQtObject_GetPreviewSound(void)
 {
 	return ::AfxGetApp()->GetProfileInt("ObjectOptionPanel", "PreviewSound", 1);
+}
+// == the ObjectOptions selection-change block that plays a template's ambient sound when
+// "Preview sound" is on. The MFC panel gated it on m_isObjectOptsWindowOpen (false in the Qt
+// build), so it never ran; the Qt panel calls this from its own selection handler instead.
+void WBQtObject_PreviewAmbient(void)
+{
+	if (::AfxGetApp()->GetProfileInt("ObjectOptionPanel", "PreviewSound", 1) == 0)
+	{
+		return;
+	}
+	MapObject *pObj = objectAtIndex(ObjectOptions::qtGetCurrentIndex());
+	if (pObj == NULL)
+	{
+		return;
+	}
+	const ThingTemplate *thingTemplate = pObj->getThingTemplate();
+	if (thingTemplate == NULL)
+	{
+		return;
+	}
+	const AudioEventRTS *event = thingTemplate->getSoundAmbient();
+	if (event == NULL)
+	{
+		return;
+	}
+	const AudioEventInfo *audioInfo = event->getAudioEventInfo();
+	if (audioInfo == NULL && TheAudio != NULL)
+	{
+		audioInfo = TheAudio->findAudioEventInfo(event->getEventName());
+	}
+	if (audioInfo == NULL)
+	{
+		return;
+	}
+	AudioEventRTS eventToPlay;
+	eventToPlay.setEventName(event->getEventName());
+	eventToPlay.setAudioEventInfo(audioInfo);
+	eventToPlay.generateFilename();
+	if (!eventToPlay.getFilename().isEmpty())
+	{
+		PlaySound(eventToPlay.getFilename().str(), NULL, SND_ASYNC | SND_FILENAME | SND_PURGE);
+	}
 }
 void WBQtObject_SetPreviewBuildZone(int on)
 {

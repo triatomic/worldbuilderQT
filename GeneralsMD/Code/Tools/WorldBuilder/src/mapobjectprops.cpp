@@ -3984,28 +3984,22 @@ void MapObjectProps::qtSetSoundInt(int which, int value)
 
 int MapObjectProps::qtGetSoundPriorityCount(void)
 {
-	if (TheMapObjectProps == NULL)
-	{
-		return 0;
-	}
-	CComboBox *pCombo = (CComboBox *)TheMapObjectProps->GetDlgItem(IDC_PRIORITY_COMBO);
-	return pCombo ? pCombo->GetCount() : 0;
+	// == InitSound's `for (i = 0; i <= AP_CRITICAL; i++)` -- read the engine table directly
+	// rather than the never-created MFC combo (GetDlgItem is always NULL in the Qt build).
+	return AP_CRITICAL + 1;
 }
 
 int MapObjectProps::qtGetSoundPriorityName(int i, char *out, int cap)
 {
-	if (out == NULL || cap <= 0 || TheMapObjectProps == NULL)
+	if (out == NULL || cap <= 0)
 	{
 		return 0;
 	}
-	CComboBox *pCombo = (CComboBox *)TheMapObjectProps->GetDlgItem(IDC_PRIORITY_COMBO);
-	if (pCombo == NULL || i < 0 || i >= pCombo->GetCount())
+	if (i < 0 || i > AP_CRITICAL)
 	{
 		return 0;
 	}
-	CString text;
-	pCombo->GetLBText(i, text);
-	strncpy(out, (const char *)text, cap - 1);
+	strncpy(out, theAudioPriorityNames[i], cap - 1);
 	out[cap - 1] = 0;
 	return 1;
 }
