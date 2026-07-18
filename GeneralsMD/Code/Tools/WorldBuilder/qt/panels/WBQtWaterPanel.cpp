@@ -93,8 +93,15 @@ void WBQtWaterPanel::pushRefresh()
 	m_waterPolygon->setChecked(WBQtWater_GetCreatingWaterAreas() != 0);
 	m_spacing->setValue(WBQtWater_GetSpacing());
 
+	// Name + Make River show for ANY single selected polygon (== MFC updateTheUI); the height
+	// row is water-area-only, hidden for a plain polygon you might be about to Make River.
 	bool hasSel = (WBQtWater_HasSelection() != 0);
+	bool isWater = hasSel && (WBQtWater_IsWaterArea() != 0);
 	m_selectionBox->setVisible(hasSel);
+
+	m_ui->heightLabel->setVisible(isWater);
+	m_heightSlider->setVisible(isWater);
+	m_heightSpin->setVisible(isWater);
 
 	if (hasSel)
 	{
@@ -102,7 +109,10 @@ void WBQtWaterPanel::pushRefresh()
 		char buf[cap];
 		WBQtWater_GetName(buf, cap);
 		m_name->setEditText(QString::fromLatin1(buf));
-		setHeightRow(WBQtWater_GetHeight());
+		if (isWater)
+		{
+			setHeightRow(WBQtWater_GetHeight());
+		}
 		m_makeRiver->setChecked(WBQtWater_GetRiver() != 0);
 	}
 

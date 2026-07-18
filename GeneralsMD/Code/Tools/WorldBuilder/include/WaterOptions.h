@@ -100,7 +100,8 @@ public:
 	// PolygonTrigger this dialog does. Defined in WaterOptions.cpp; member statics so the height
 	// path can reuse the protected startUpdateHeight / updateHeight / endUpdateHeight helpers and
 	// the name / river paths can reuse the same logic as the MFC On* handlers.
-	static Bool qtHasSelection(void);
+	static Bool qtHasSelection(void);	// any single selected polygon (name + Make River)
+	static Bool qtIsWaterArea(void);	// that polygon is a water area (gates the height row)
 	static Int  qtGetSelectionHeight(void);
 	static void qtSetHeight(Int height);
 	static void qtSetHeightDragStep(Int height);	// slider drag: keep one undoable across ticks

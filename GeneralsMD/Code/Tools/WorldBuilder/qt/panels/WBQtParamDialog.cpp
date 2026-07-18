@@ -300,26 +300,16 @@ void WBQtParamDialog::accept()
 		text = m_edit->text();
 		if (m_list != NULL)
 		{
-			// The selection index only counts when it still matches the text (the user may
-			// have typed free text after picking a row) -- mirrors the combo's GetCurSel.
+			// The selection index only counts when the row's text EXACTLY matches the edit
+			// (== the MFC combo's GetWindowText/GetCurSel: OK stores exactly what was typed).
+			// We deliberately do NOT adopt the highlighted row just because the typed text is a
+			// substring of it -- that silently blocked creating a new FLAG/COUNTER whose name is
+			// a prefix of an existing one (typing "attack" while "attackCount" exists). These
+			// fields allow arbitrary values, so genuine free text is stored verbatim.
 			int row = m_list->currentRow();
 			if (row >= 0 && m_list->item(row)->text() == text)
 			{
 				sel = row;
-			}
-			else if (!text.isEmpty())
-			{
-				// The user typed a filter (e.g. "a2") without arrowing onto a row: if the
-				// text is a partial match of the highlighted (visible) row, commit that
-				// entry -- OK should use what the list is showing, not the raw search text.
-				// Genuine free text that matches no row is left as-is (these fields allow
-				// arbitrary values), so only adopt a row the text is actually a substring of.
-				if (row >= 0 && !m_list->item(row)->isHidden()
-					&& m_list->item(row)->text().contains(text, Qt::CaseInsensitive))
-				{
-					text = m_list->item(row)->text();
-					sel = row;
-				}
 			}
 		}
 	}

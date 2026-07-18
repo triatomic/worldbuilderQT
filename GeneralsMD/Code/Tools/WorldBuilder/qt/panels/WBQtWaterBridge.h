@@ -48,7 +48,8 @@ void WBQtWater_SetCreatingWaterAreas(int on);
 
 // Selection state: non-zero when a single water-area PolygonTrigger is selected (the only case
 // where the name / height / Make River controls are meaningful). Mirrors the updateTheUI branch.
-int  WBQtWater_HasSelection(void);
+int  WBQtWater_HasSelection(void);	// any single selected polygon (name + Make River shown)
+int  WBQtWater_IsWaterArea(void);	// that polygon is a water area (height row shown)
 
 // The selected trigger's name (IDC_WATERNAME_EDIT). GetName fills the current name; SetName
 // reuses the MFC OnChangeWaterEdit uniqueness logic (returns non-zero if applied, zero if the

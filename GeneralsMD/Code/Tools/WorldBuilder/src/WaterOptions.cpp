@@ -544,6 +544,14 @@ void WaterOptions::OnChangeSpacingEdit()
 // / Make River are meaningful), mirroring updateTheUI keying those controls off the trigger.
 Bool WaterOptions::qtHasSelection(void)
 {
+	// == MFC updateTheUI: the name box + Make River button are shown for ANY single selected
+	// polygon (Make River's whole point is turning a plain polygon into one). Only the HEIGHT
+	// row is water-area-only -- see qtIsWaterArea.
+	return WaypointOptions::getSingleSelectedPolygon() != NULL;
+}
+
+Bool WaterOptions::qtIsWaterArea(void)
+{
 	PolygonTrigger *theTrigger = WaypointOptions::getSingleSelectedPolygon();
 	if (theTrigger == NULL)
 	{

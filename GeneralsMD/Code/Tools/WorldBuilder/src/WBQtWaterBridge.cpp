@@ -113,6 +113,11 @@ int WBQtWater_HasSelection(void)
 	return WaterOptions::qtHasSelection() ? 1 : 0;
 }
 
+int WBQtWater_IsWaterArea(void)
+{
+	return WaterOptions::qtIsWaterArea() ? 1 : 0;
+}
+
 int WBQtWater_GetName(char *nameOut, int cap)
 {
 	PolygonTrigger *theTrigger = WaypointOptions::getSingleSelectedPolygon();
