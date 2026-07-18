@@ -39,6 +39,8 @@ private slots:
 	void onSpacingChanged(int v);
 	void onNameChanged();
 	void onHeightChanged(int v);
+	void onHeightSliderPressed();		// begin a slider drag (one undoable across it)
+	void onHeightSliderReleased();		// end the slider drag
 	void onMakeRiverToggled();
 
 private:
@@ -56,6 +58,7 @@ private:
 	QCheckBox *m_makeRiver;
 
 	bool m_updating;	// re-entrancy guard, mirrors MFC WaterOptions::m_updating
+	bool m_heightDragging;	// true between the slider's press and release (drag-step vs one-shot)
 
 	static WBQtWaterPanel *s_instance;
 };

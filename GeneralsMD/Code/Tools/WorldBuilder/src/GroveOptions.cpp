@@ -1054,6 +1054,15 @@ void GroveOptions::qtSetUsePropsOnly(int on)
 	}
 }
 
+void GroveOptions::qtRefreshSetNames(void)
+{
+	// Re-read the 20 set names from Grovesets.ini into the hidden MFC combo, exactly like the
+	// MFC ON_CBN_DROPDOWN handler (ResetContent + ReadString loop + restore SetNameIndex). The
+	// Qt panel then re-fills its own set-name combo from this refreshed MFC combo, so renames
+	// made via the Settings button (Notepad) show up without an app restart.
+	OnDropDownGroveSetName();
+}
+
 int GroveOptions::qtGetSetCount(void)
 {
 	CComboBox *pBox = (CComboBox*) GetDlgItem(IDC_Grove_SetName);

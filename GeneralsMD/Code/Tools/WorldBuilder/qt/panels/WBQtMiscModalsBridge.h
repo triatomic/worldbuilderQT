@@ -69,6 +69,7 @@ void WBQtExportScripts_Store(int waypoints, int triggers, int units, int teams, 
 int  WBQtFixTeamOwner_Run(void *teamsInfo, void *sidesList, void *frameHwnd, char *ownerOut, int cap);
 void WBQtFixOwnerData_GetPrompt(void *teamsInfo, char *buf, int cap);
 int  WBQtFixOwnerData_GetCount(void *sidesList);
+int  WBQtFixOwnerData_IsValid(void *sidesList, int i);	// == the "if (!si) { continue; }" guard
 void WBQtFixOwnerData_GetDisplay(void *sidesList, int i, char *buf, int cap);
 void WBQtFixOwnerData_GetInternal(void *sidesList, int i, char *buf, int cap);
 

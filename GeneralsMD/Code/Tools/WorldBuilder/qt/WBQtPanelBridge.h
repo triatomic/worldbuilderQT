@@ -161,9 +161,11 @@ int    WBQtRamp_GetMirrorXY(void);
 
 // Object list (MFC-side, WBQtObjectBridge): enumerate the template list to build the tree.
 int  WBQtObject_GetCount(void);
-// Fill the display path for the object at listIndex: its owning side, editor-sorting category,
-// and leaf (display) name. Buffers are cap bytes each. Returns non-zero on success.
-int  WBQtObject_GetEntry(int listIndex, char *sideOut, char *sortingOut, char *leafOut, int cap);
+// Fill the display path for the object at listIndex: an optional pre-side bucket (empty unless the
+// template is ES_TEST, in which case it is "TEST", mirroring the MFC pre-side tier), its owning
+// side, editor-sorting category, and leaf (display) name. Buffers are cap bytes each. Returns
+// non-zero on success.
+int  WBQtObject_GetEntry(int listIndex, char *preOut, char *sideOut, char *sortingOut, char *leafOut, int cap);
 // The full (unique) template name for listIndex -- used as the tree item's identity/tooltip.
 int  WBQtObject_GetFullName(int listIndex, char *nameOut, int cap);
 

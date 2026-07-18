@@ -174,7 +174,7 @@ namespace
 // The view model (mirrors the hidden controls updateTheUI seeded).
 struct QtmOther { AsciiString name; int allySel; int enemySel; };
 static std::vector<AsciiString> s_playerLabels;	// IDC_PLAYERS rows (side order)
-static AsciiString s_curName, s_curDisplay;
+static AsciiString s_curName, s_curDisplay, s_curFaction;
 static Bool s_curEditable = false, s_curIsComputer = false, s_relationsEnabled = false;
 static int s_curColorRGB = 0;
 static std::vector<AsciiString> s_factionNames; static int s_factionIdx = -1;
@@ -262,6 +262,10 @@ void PlayerListDlg::qtMRebuild(void)
 	s_factionIdx = -1;
 	{
 		AsciiString curFaction = pdict->getAsciiString(TheKey_playerFaction);
+		// Cache the stored faction so the Qt panel can show a free-typed faction that matches no
+		// list entry (s_factionIdx stays -1), mirroring MFC's SetCurSel(-1) leaving the combo's
+		// edit-control text intact.
+		s_curFaction = curFaction;
 		for (size_t i = 0; i < s_factionNames.size(); i++)
 		{
 			if (s_factionNames[i] == curFaction) { s_factionIdx = (int)i; break; }
@@ -478,6 +482,10 @@ void PlayerListDlg::qtGetEditText(int ctrlId, char *buf, int cap)
 	else if (ctrlId == IDC_PLAYERDISPLAYNAME)
 	{
 		copyOut(s_curDisplay.str(), buf, cap);
+	}
+	else if (ctrlId == IDC_PLAYERFACTION)
+	{
+		copyOut(s_curFaction.str(), buf, cap);
 	}
 }
 
@@ -859,6 +867,15 @@ extern "C" int WBQtPlayerListData_GetFactionIndex(void)
 {
 	PlayerListDlg *dlg = PlayerListDlg::qtInstance();
 	return (dlg != NULL) ? dlg->qtComboCurSel(IDC_PLAYERFACTION) : -1;
+}
+
+extern "C" void WBQtPlayerListData_GetFactionText(char *buf, int cap)
+{
+	PlayerListDlg *dlg = PlayerListDlg::qtInstance();
+	if (dlg != NULL)
+	{
+		dlg->qtGetEditText(IDC_PLAYERFACTION, buf, cap);
+	}
 }
 
 extern "C" int WBQtPlayerListData_GetColorCount(void)

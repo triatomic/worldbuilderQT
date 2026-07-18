@@ -67,6 +67,11 @@ WBQtPlayerListDialog::WBQtPlayerListDialog(QWidget *parent)
 	m_newButton = m_ui->newButton;
 	m_removeButton = m_ui->removeButton;
 
+	// == the MFC IDC_PLAYERFACTION (CBS_DROPDOWN): the faction combo is typable, so free text
+	// that matches no list entry can still be committed. applyTypeToFilter() makes it editable
+	// (and narrows the popup as you type); the rest of the dialog's combos stay pick-only.
+	WBQtComboStyle::applyTypeToFilter(m_factionCombo);
+
 	// MFC's combos are WS_VSCROLL: give every drop-down here a scrolling popup.
 	WBQtComboStyle::applyPopupScrollRecursive(this);
 
@@ -76,6 +81,13 @@ WBQtPlayerListDialog::WBQtPlayerListDialog(QWidget *parent)
 	connect(m_displayNameEdit, SIGNAL(textEdited(QString)), this, SLOT(onDisplayNameEdited(QString)));
 	connect(m_isComputerCheck, SIGNAL(toggled(bool)), this, SLOT(onIsComputerToggled(bool)));
 	connect(m_factionCombo, SIGNAL(activated(int)), this, SLOT(onFactionChanged(int)));
+	// == MFC's ON_CBN_EDITCHANGE(IDC_PLAYERFACTION): hand-typed text matches no list entry, so
+	// activated(int) never fires; commit it (the OnEditchangePlayerfaction sel==-1 path) when the
+	// edit finishes instead.
+	if (m_factionCombo->lineEdit() != NULL)
+	{
+		connect(m_factionCombo->lineEdit(), SIGNAL(editingFinished()), this, SLOT(onFactionTextCommitted()));
+	}
 	connect(m_colorCombo, SIGNAL(activated(int)), this, SLOT(onColorComboChanged(int)));
 	connect(m_colorButton, SIGNAL(clicked()), this, SLOT(onColorButton()));
 	connect(m_allies, SIGNAL(itemSelectionChanged()), this, SLOT(onAlliesChanged()));
@@ -135,7 +147,15 @@ void WBQtPlayerListDialog::refreshAll()
 	{
 		m_factionCombo->addItem(bridgeStrIdx(WBQtPlayerListData_GetFactionName, i));
 	}
-	m_factionCombo->setCurrentIndex(WBQtPlayerListData_GetFactionIndex());
+	int factionIndex = WBQtPlayerListData_GetFactionIndex();
+	m_factionCombo->setCurrentIndex(factionIndex);
+	if (factionIndex < 0 && m_factionCombo->lineEdit() != NULL)
+	{
+		// Free-typed faction (matches no template): setCurrentIndex(-1) blanked the editable
+		// combo's line edit, so restore the stored text -- == MFC's SetCurSel(-1) leaving the
+		// combo edit-control text intact.
+		m_factionCombo->setEditText(bridgeStr(WBQtPlayerListData_GetFactionText));
+	}
 
 	// color
 	int rgb = WBQtPlayerListData_GetColorRGB();
@@ -257,6 +277,20 @@ void WBQtPlayerListDialog::onFactionChanged(int index)
 		return;
 	}
 	QByteArray name = m_factionCombo->itemText(index).toLocal8Bit();
+	WBQtPlayerList_SetFaction(name.constData());
+	refreshAll();
+}
+
+void WBQtPlayerListDialog::onFactionTextCommitted()
+{
+	if (m_updating)
+	{
+		return;
+	}
+	// == OnEditchangePlayerfaction's sel==-1 branch: store the free-typed text verbatim. If the
+	// text happens to match a list entry activated(int) already handled it, but committing the
+	// same name again is harmless (the bridge just re-stores it).
+	QByteArray name = m_factionCombo->currentText().toLocal8Bit();
 	WBQtPlayerList_SetFaction(name.constData());
 	refreshAll();
 }

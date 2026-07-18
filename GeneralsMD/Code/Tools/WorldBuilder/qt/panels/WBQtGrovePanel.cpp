@@ -12,6 +12,7 @@
 #include <QLabel>
 #include <QPixmap>
 #include <QPushButton>
+#include <QShowEvent>
 #include <QSpinBox>
 
 WBQtGrovePanel *WBQtGrovePanel::s_instance = NULL;
@@ -143,6 +144,9 @@ void WBQtGrovePanel::fillTreeCombo(int type)
 void WBQtGrovePanel::fillSetCombo()
 {
 	// Caller has set m_updating (repopulation must not fire onSetNameChanged).
+	// Re-read Grovesets.ini into the hidden MFC combo first (== MFC's ON_CBN_DROPDOWN), so a set
+	// renamed via the Settings button shows up here without an app restart.
+	WBQtGrove_RefreshSetNames();
 	m_setName->clear();
 	const int cap = 256;
 	char nameBuf[cap];
@@ -306,6 +310,22 @@ void WBQtGrovePanel::onSaveSet()
 void WBQtGrovePanel::onOpenSettings()
 {
 	WBQtGrove_OpenSettings();
+	// The Settings button opens Grovesets.ini in Notepad for renaming sets. ShellExecute returns
+	// immediately (Notepad is async), so we can't re-read on its close here -- but the panel's
+	// showEvent picks up the renames the next time it is shown, and any set-name drop-down also
+	// re-reads via fillSetCombo(). Re-fill now too so a rename saved before this returns is seen.
+	m_updating = true;
+	fillSetCombo();
+	m_updating = false;
+}
+
+void WBQtGrovePanel::showEvent(QShowEvent *event)
+{
+	QWidget::showEvent(event);
+	// Re-read Grovesets.ini into the set-name combo (renames may have happened while hidden).
+	m_updating = true;
+	fillSetCombo();
+	m_updating = false;
 }
 
 void WBQtGrovePanel::pushRefresh()

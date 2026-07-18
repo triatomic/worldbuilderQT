@@ -32,6 +32,8 @@ extern "C" {
 // the popup-slider range (0 .. 255*MAP_HEIGHT_SCALE).
 int  WBQtWater_GetHeight(void);
 void WBQtWater_SetHeight(int height);
+void WBQtWater_SetHeightDragStep(int height);	// slider drag tick (one undoable across the drag)
+void WBQtWater_EndHeightScrub(void);			// slider release (close that undoable)
 int  WBQtWater_GetHeightMin(void);
 int  WBQtWater_GetHeightMax(void);
 

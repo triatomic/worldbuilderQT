@@ -29,6 +29,7 @@ private slots:
 	void onDisplayNameEdited(const QString &text);
 	void onIsComputerToggled(bool checked);
 	void onFactionChanged(int index);
+	void onFactionTextCommitted();
 	void onColorComboChanged(int index);
 	void onColorButton();
 	void onAlliesChanged();

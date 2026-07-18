@@ -88,6 +88,7 @@ int  WBQtTeamPage_GetCheck(int page, int ctrlId);
 void WBQtTeamPage_SetCheck(int page, int ctrlId, int check);
 int  WBQtTeamPage_IsEnabled(int page, int ctrlId);
 int  WBQtTeamPage_ComboCount(int page, int ctrlId);
+int  WBQtTeamGeneric_FilledCount(void);		// filled generic-script slots (compacted chain length)
 void WBQtTeamPage_ComboItem(int page, int ctrlId, int i, char *buf, int cap);
 void WBQtTeamPage_ComboSelectText(int page, int ctrlId, const char *text, int notify);
 void WBQtTeamPage_ClickButton(int page, int ctrlId);

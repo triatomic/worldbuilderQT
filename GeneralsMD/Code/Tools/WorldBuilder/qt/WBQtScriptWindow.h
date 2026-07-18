@@ -10,6 +10,7 @@
 #ifndef WB_QT_SCRIPT_WINDOW_H
 #define WB_QT_SCRIPT_WINDOW_H
 
+#include <QFont>
 #include <QIcon>
 #include <QTreeWidget>
 #include <QWidget>
@@ -92,6 +93,7 @@ private:
 	QIcon nodeIcon(int listType, int flags) const;	// pick the icon for a node's type + state
 	int  selectedListType() const;		// -1 if nothing selected
 	void selectByListType(int listType);
+	void applyCompressFont();			// == OnCompress: 14px "Segoe UI" on the tree when compressed
 
 	Ui::WBQtScriptWindow *m_ui;	// owns the static widget tree (WBQtScriptWindow.ui)
 
@@ -132,6 +134,9 @@ private:
 
 	int  m_lastFoundListType;	// find-next cursor (0 = start from top)
 	bool m_updating;			// re-entrancy guard while (re)building the tree / seeding
+
+	QFont m_treeDefaultFont;		// the tree's font before any Compress swap (for revert)
+	bool  m_treeDefaultFontValid;	// captured m_treeDefaultFont yet?
 
 	static WBQtScriptWindow *s_instance;
 };

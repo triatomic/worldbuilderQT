@@ -104,7 +104,14 @@ WBQtObjectPropsPanel::WBQtObjectPropsPanel(QWidget *owner)
 	connect(m_team, SIGNAL(currentIndexChanged(int)), this, SLOT(onTeamChanged(int)));
 	connect(m_health, SIGNAL(currentIndexChanged(int)), this, SLOT(onHealthChanged(int)));
 	connect(m_healthEdit, SIGNAL(editingFinished()), this, SLOT(onHealthEditChanged()));
-	connect(m_maxHPs, SIGNAL(editTextChanged(const QString &)), this, SLOT(onMaxHPsChanged()));
+	// == MFC's ON_CBN_KILLFOCUS + ON_CBN_SELENDOK: commit Max HP when editing ends or a list
+	// entry is picked, NOT on every keystroke -- typing "1500" otherwise wrote 1/15/150/1500 as
+	// four separate undoables.
+	connect(m_maxHPs, SIGNAL(activated(int)), this, SLOT(onMaxHPsChanged()));
+	if (m_maxHPs->lineEdit() != NULL)
+	{
+		connect(m_maxHPs->lineEdit(), SIGNAL(editingFinished()), this, SLOT(onMaxHPsChanged()));
+	}
 	connect(m_aggressiveness, SIGNAL(currentIndexChanged(int)), this, SLOT(onAggressivenessChanged(int)));
 	connect(m_veterancy, SIGNAL(currentIndexChanged(int)), this, SLOT(onVeterancyChanged(int)));
 	connect(m_enabled, SIGNAL(clicked()), this, SLOT(onFlagToggled()));
@@ -258,9 +265,16 @@ void WBQtObjectPropsPanel::pushRefresh()
 	// Team combo: always available for any selection (applies to all selected objects).
 	rebuildTeams();
 	int curTeam = WBQtObjectProps_GetCurTeam();
+	// == _DictToTeam's SetCurSel(i) where i can be -1: blank the combo when the object's owner
+	// team no longer exists, instead of leaving the previous object's team showing (which reads
+	// as if this object belonged to it). The blank is the cue for orphaned ownership.
 	if (curTeam >= 0 && curTeam < m_team->count())
 	{
 		m_team->setCurrentIndex(curTeam);
+	}
+	else
+	{
+		m_team->setCurrentIndex(-1);
 	}
 	m_team->setEnabled(selCount > 0);
 	m_generalBox->setEnabled(selCount > 0);

@@ -40,6 +40,9 @@ WBQtScriptWindow *WBQtScriptWindow::s_instance = NULL;
 
 // The list index the tree stores per node is the packed ListType int (opaque to Qt).
 static const int kListTypeRole = Qt::UserRole + 1;
+// The node's packed state flags (bit0=active, bit1=warnings, bit2=subroutine), so the
+// context menu can show the current active state as a check mark (== MFC CheckMenuItem).
+static const int kFlagsRole = Qt::UserRole + 2;
 
 //----------------------------------------------------------------------------------------
 // WBQtScriptTree
@@ -101,7 +104,8 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	: QWidget(NULL, Qt::Window),
 	  m_ui(new Ui::WBQtScriptWindow),
 	  m_lastFoundListType(0),
-	  m_updating(false)
+	  m_updating(false),
+	  m_treeDefaultFontValid(false)
 {
 	// Deliberately a STANDALONE top-level window (parent = NULL), NOT a child of the QWinWidget
 	// owner like the option panels. A QWinWidget-child reflects keyboard activation back to its
@@ -395,7 +399,20 @@ void WBQtScriptWindow::rebuildTree()
 		}
 		item->setText(0, QString::fromLatin1(labelBuf));
 		item->setData(0, kListTypeRole, listType);
-		item->setFlags(item->flags() | Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled);
+		item->setData(0, kFlagsRole, flags);
+		// == OnBegindragScriptTree's guard (a drag never starts on a PLAYER_TYPE row): players
+		// (depth 0) stay drop targets but aren't draggable, or dragging one pushed a do-nothing
+		// undo snapshot (qtMDropOn resolves neither script nor group and no-ops).
+		Qt::ItemFlags flagBits = item->flags() | Qt::ItemIsDropEnabled;
+		if (depth > 0)
+		{
+			flagBits |= Qt::ItemIsDragEnabled;
+		}
+		else
+		{
+			flagBits &= ~Qt::ItemIsDragEnabled;
+		}
+		item->setFlags(flagBits);
 		item->setIcon(0, nodeIcon(listType, flags));
 
 		// Visual state (script/group nodes only). Warnings -> red, inactive -> dimmed,
@@ -435,11 +452,39 @@ void WBQtScriptWindow::rebuildTree()
 
 	m_updating = false;
 
+	// == OnCompress: when the Compress flag is set, the MFC tree switches to a 14px "Segoe UI"
+	// font; otherwise it reverts to its default. Apply the same to the Qt tree.
+	applyCompressFont();
+
 	// Re-select the node that was selected before the rebuild (it keeps the same listType),
 	// so closing the Edit dialog leaves the just-edited script highlighted.
 	if (selectedType != -1)
 	{
 		selectByListType(selectedType);
+	}
+}
+
+// == OnCompress's font swap: 14px "Segoe UI" on the tree while compressed, the tree's
+// original font otherwise. We capture the default font once (m_treeDefaultFont) so the
+// revert restores exactly what the tree started with.
+void WBQtScriptWindow::applyCompressFont()
+{
+	if (!m_treeDefaultFontValid)
+	{
+		m_treeDefaultFont = m_tree->font();
+		m_treeDefaultFontValid = true;
+	}
+
+	const bool compressed = (WBQtScript_GetCheckbox(WBQT_SCK_COMPRESS) != 0);
+	if (compressed)
+	{
+		QFont f("Segoe UI");
+		f.setPixelSize(14);
+		m_tree->setFont(f);
+	}
+	else
+	{
+		m_tree->setFont(m_treeDefaultFont);
 	}
 }
 
@@ -771,6 +816,15 @@ void WBQtScriptWindow::onTreeContextMenu(const QPoint &pos)
 	QMenu menu(this);
 	QAction *actActivate = menu.addAction("Activate / Deactivate");
 	actActivate->setEnabled(hasScript || hasGroup);
+	// == ScriptDialog CSDTreeCtrl::OnRButtonDown: display a check mark for the current
+	// active state (only meaningful when the row is a script or group, matching MFC's
+	// friend_getCurScript()/friend_getCurGroup() guard). Bit 0 of the node flags is active.
+	if (hasScript || hasGroup)
+	{
+		const bool active = (item->data(0, kFlagsRole).toInt() & 1) != 0;
+		actActivate->setCheckable(true);
+		actActivate->setChecked(active);
+	}
 	menu.addSeparator();
 	QAction *actEdit = menu.addAction("Edit");
 	actEdit->setEnabled(hasScript || hasGroup);

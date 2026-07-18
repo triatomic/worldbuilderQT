@@ -128,6 +128,7 @@ void WBQtObjectPanel::rebuildTree(const QString &filter)
 	m_tree->clear();
 
 	const int cap = 256;
+	char preBuf[cap];
 	char sideBuf[cap];
 	char sortBuf[cap];
 	char leafBuf[cap];
@@ -139,7 +140,7 @@ void WBQtObjectPanel::rebuildTree(const QString &filter)
 
 	for (int i = 0; i < count; ++i)
 	{
-		if (!WBQtObject_GetEntry(i, sideBuf, sortBuf, leafBuf, cap))
+		if (!WBQtObject_GetEntry(i, preBuf, sideBuf, sortBuf, leafBuf, cap))
 		{
 			continue;
 		}
@@ -158,7 +159,15 @@ void WBQtObjectPanel::rebuildTree(const QString &filter)
 			}
 		}
 
-		QTreeWidgetItem *parent = findOrAddChild(NULL, QString::fromLatin1(sideBuf));
+		// Optional pre-side bucket (ES_TEST -> top-level "TEST"), then side, mirroring the MFC
+		// addObject() tier order: [pre-side] / side / sorting / leaf.
+		QTreeWidgetItem *parent = NULL;
+		QString pre = QString::fromLatin1(preBuf);
+		if (!pre.isEmpty())
+		{
+			parent = findOrAddChild(NULL, pre);
+		}
+		parent = findOrAddChild(parent, QString::fromLatin1(sideBuf));
 		QString sorting = QString::fromLatin1(sortBuf);
 		if (!sorting.isEmpty())
 		{

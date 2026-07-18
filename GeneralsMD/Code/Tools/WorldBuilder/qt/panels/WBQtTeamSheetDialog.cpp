@@ -279,9 +279,51 @@ void WBQtTeamSheetDialog::setupGenericTab()
 	QStringList scriptItems = readComboItems(page, IDC_TeamGeneric_Script1);
 	for (int i = 0; i < 16; i++)
 	{
-		m_ui->genericGrid->addWidget(new QLabel(QString("Script %1:").arg(i + 1), m_ui->genericTab), i, 0);
-		m_ui->genericGrid->addWidget(bindCombo(page, scriptIds[i], scriptItems, m_ui->genericTab, WB_QT_TEAMNOTIFY_SELCHANGE), i, 1);
+		QLabel *label = new QLabel(QString("Script %1:").arg(i + 1), m_ui->genericTab);
+		QComboBox *combo = bindCombo(page, scriptIds[i], scriptItems, m_ui->genericTab, WB_QT_TEAMNOTIFY_SELCHANGE);
+		m_ui->genericGrid->addWidget(label, i, 0);
+		m_ui->genericGrid->addWidget(combo, i, 1);
+		m_genericLabels[i] = label;
+		m_genericCombos[i] = combo;
+		// After a slot changes, the bridge compacts the chain -- re-seed + re-hide the rows so
+		// the displayed order matches (== TeamGeneric::OnScriptAdjust -> _dictToScripts).
+		connect(combo, static_cast<void (QComboBox::*)(int)>(&QComboBox::activated), this,
+			[this](int) { refreshGenericScripts(); });
 	}
 	m_ui->genericGrid->setColumnStretch(1, 1);
 	m_ui->genericGrid->setRowStretch(16, 1);
+
+	refreshGenericScripts();	// initial hide of the empty tail
+}
+
+void WBQtTeamSheetDialog::refreshGenericScripts()
+{
+	// == _dictToScripts: show the filled slots (their text re-read from the compacted chain),
+	// then the first empty slot as <none>, then hide every row after it.
+	const int filled = WBQtTeamGeneric_FilledCount();
+	const int page = WB_QT_TEAMPAGE_GENERIC;
+	static const int scriptIds[16] = {
+		IDC_TeamGeneric_Script1, IDC_TeamGeneric_Script2, IDC_TeamGeneric_Script3,
+		IDC_TeamGeneric_Script4, IDC_TeamGeneric_Script5, IDC_TeamGeneric_Script6,
+		IDC_TeamGeneric_Script7, IDC_TeamGeneric_Script8, IDC_TeamGeneric_Script9,
+		IDC_TeamGeneric_Script10, IDC_TeamGeneric_Script11, IDC_TeamGeneric_Script12,
+		IDC_TeamGeneric_Script13, IDC_TeamGeneric_Script14, IDC_TeamGeneric_Script15,
+		IDC_TeamGeneric_Script16
+	};
+	for (int i = 0; i < 16; i++)
+	{
+		// Rows up to and including the first empty slot stay visible; the rest hide.
+		const bool visible = (i <= filled);
+		m_genericLabels[i]->setVisible(visible);
+		m_genericCombos[i]->setVisible(visible);
+		if (visible)
+		{
+			char buf[256];
+			WBQtTeamPage_GetText(page, scriptIds[i], buf, sizeof(buf));
+			// Re-seed without re-notifying (blockSignals: this is a display sync, not an edit).
+			m_genericCombos[i]->blockSignals(true);
+			seedComboCurrent(m_genericCombos[i], QString::fromLocal8Bit(buf));
+			m_genericCombos[i]->blockSignals(false);
+		}
+	}
 }

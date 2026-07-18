@@ -107,6 +107,7 @@ class GroveOptions : public COptionsPanel
 		void qtSetAllowCliff(int on);
 		int  qtGetUsePropsOnly(void);
 		void qtSetUsePropsOnly(int on);
+		void qtRefreshSetNames(void);                      // re-read Grovesets.ini into the combo
 		int  qtGetSetCount(void);                          // number of named sets
 		int  qtGetSetName(int index, char *out, int cap);  // set-name combo entry text
 		int  qtGetCurrentSet(void);                        // current set selection

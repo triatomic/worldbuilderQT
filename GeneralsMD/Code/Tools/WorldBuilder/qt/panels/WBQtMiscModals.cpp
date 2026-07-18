@@ -57,6 +57,10 @@ WBQtShadowDialog::WBQtShadowDialog(QWidget *parent)
 
 	double r = 0.0, g = 0.0, b = 0.0, intensity = 0.0;
 	WBQtShadow_Get(&r, &g, &b, &intensity);
+	m_lastRed = r;
+	m_lastGreen = g;
+	m_lastBlue = b;
+	m_lastIntensity = intensity;
 	m_red->setText(QString::number(r, 'f', 2));
 	m_green->setText(QString::number(g, 'f', 2));
 	m_blue->setText(QString::number(b, 'f', 2));
@@ -88,20 +92,33 @@ void WBQtShadowDialog::onFieldChanged()
 
 void WBQtShadowDialog::apply()
 {
-	// == each EN_CHANGE handler: parse what parses, ignore the rest (they leave the member as
-	// last-good). We read all four, substituting the last-applied on a bad field is overkill;
-	// a failed toDouble yields 0.0 which matches sscanf-fail leaving the value only if it
-	// parsed -- so guard each field individually.
+	// == the four MFC EN_CHANGE handlers (OnChangeRaEdit/GaEdit/BaEdit/AlphaEdit): each parses only
+	// its own field with sscanf and, on success, updates its member and re-applies with the other
+	// three members' last-good values; a field that fails to parse leaves its member untouched. We
+	// mirror that here -- parse each field independently, update its last-good on success, and always
+	// apply, so one unparsable field no longer blocks live-apply of the others.
 	bool ok = false;
-	double r = m_red->text().toDouble(&ok);
-	if (!ok) return;
-	double g = m_green->text().toDouble(&ok);
-	if (!ok) return;
-	double b = m_blue->text().toDouble(&ok);
-	if (!ok) return;
-	double intensity = m_intensity->text().toDouble(&ok);
-	if (!ok) return;
-	WBQtShadow_Apply(r, g, b, intensity);
+	double v = m_red->text().toDouble(&ok);
+	if (ok)
+	{
+		m_lastRed = v;
+	}
+	v = m_green->text().toDouble(&ok);
+	if (ok)
+	{
+		m_lastGreen = v;
+	}
+	v = m_blue->text().toDouble(&ok);
+	if (ok)
+	{
+		m_lastBlue = v;
+	}
+	v = m_intensity->text().toDouble(&ok);
+	if (ok)
+	{
+		m_lastIntensity = v;
+	}
+	WBQtShadow_Apply(m_lastRed, m_lastGreen, m_lastBlue, m_lastIntensity);
 }
 
 // ===================== WBQtImpassableDialog =====================
@@ -298,6 +315,10 @@ WBQtFixTeamOwnerDialog::WBQtFixTeamOwnerDialog(void *teamsInfo, void *sidesList,
 	int count = WBQtFixOwnerData_GetCount(sidesList);
 	for (int i = 0; i < count; i++)
 	{
+		if (!WBQtFixOwnerData_IsValid(sidesList, i))
+		{
+			continue;	// == CFixTeamOwnerDialog::OnInitDialog's "if (!si) { continue; }"
+		}
 		buf[0] = 0;
 		WBQtFixOwnerData_GetDisplay(sidesList, i, buf, sizeof(buf));
 		QListWidgetItem *item = new QListWidgetItem(QString::fromLocal8Bit(buf), m_list);

@@ -103,6 +103,8 @@ public:
 	static Bool qtHasSelection(void);
 	static Int  qtGetSelectionHeight(void);
 	static void qtSetHeight(Int height);
+	static void qtSetHeightDragStep(Int height);	// slider drag: keep one undoable across ticks
+	static void qtEndHeightScrub(void);				// slider release: close that undoable
 	static void qtSetSpacing(Int spacing);
 	static void qtSetCreatingWaterAreas(Bool on);
 	static Bool qtSetName(const char *name);

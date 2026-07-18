@@ -716,10 +716,37 @@ void ScriptDialog::qtMToggleActive(void)
 	}
 }
 
-// == OnVerifyAll minus updateIcons.
+// == OnVerify minus updateIcons: try the per-map cache first, fall back to the slow
+// updateWarnings(true) only when no valid cache exists (matches OnVerify's fast path).
 void ScriptDialog::qtMVerify(void)
 {
-	updateWarnings(true);
+	// Flag to indicate if cache was successfully loaded
+	Bool loadedFromCache = false;
+
+	if (m_autoUpdateWarnings)
+	{
+		// Try loading cached warning state first
+		if (LoadScriptWarningsState())
+		{
+			DEBUG_LOG(("ScriptDialog: Loaded script warning state from cache.\n"));
+			loadedFromCache = true;
+		}
+		else
+		{
+			DEBUG_LOG(("ScriptDialog: No valid cache found. Will update warnings normally.\n"));
+		}
+
+		// If cache didn't load, fall back to the expensive update
+		if (!loadedFromCache)
+		{
+			updateWarnings(true);
+			DEBUG_LOG(("ScriptDialog: Ran updateWarnings(true) due to missing cache.\n"));
+		}
+	}
+	else
+	{
+		updateWarnings(true);
+	}
 }
 
 // == doDropOn keyed by the packed ListType ints directly (the MFC version resolves them

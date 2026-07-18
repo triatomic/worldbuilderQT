@@ -13,6 +13,7 @@
 
 class QCheckBox;
 class QComboBox;
+class QLabel;
 class QLineEdit;
 
 namespace Ui { class WBQtTeamSheetDialog; }	// generated from WBQtTeamSheetDialog.ui
@@ -33,6 +34,9 @@ private:
 	void setupReinforcementTab();
 	void setupBehaviorTab();
 	void setupGenericTab();
+	// Re-seed the 16 generic-script combos from the compacted hook chain and hide the rows
+	// past the first empty slot (== TeamGeneric::_dictToScripts).
+	void refreshGenericScripts();
 
 	// binding helpers (each wires the widget to the hidden page control); the
 	// widget-creating overloads serve the dynamic member/script row loops
@@ -47,6 +51,8 @@ private:
 
 	QLineEdit *m_nameEdit;
 	QComboBox *m_unitCombos[7];
+	QComboBox *m_genericCombos[16];		// the 16 generic-script combos (for live compaction)
+	QLabel    *m_genericLabels[16];		// their row labels (hidden together with the combos)
 };
 
 #endif // WB_QT_TEAMSHEET_DIALOG_H

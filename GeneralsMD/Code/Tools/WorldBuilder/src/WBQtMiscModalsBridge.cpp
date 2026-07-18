@@ -170,14 +170,19 @@ extern "C" int WBQtMacrotexture_GetCount(void)
 	}
 	FilenameList filenameList;
 	TheFileSystem->getFileListInDirectory(AsciiString(dirBuf), AsciiString("*.tga"), filenameList, FALSE);
-	for (FilenameList::iterator it = filenameList.begin(); it != filenameList.end(); ++it)
+	// == SelectMacrotexture::OnInitDialog: the "***Default" node (and the file nodes) are only
+	// inserted when the enumeration found at least one file. An empty ..\TestArt yields an empty list.
+	if (filenameList.size() > 0)
 	{
-		if (it->getLength() >= 5)
+		for (FilenameList::iterator it = filenameList.begin(); it != filenameList.end(); ++it)
 		{
-			s_macroTextures.push_back(*it);
+			if (it->getLength() >= 5)
+			{
+				s_macroTextures.push_back(*it);
+			}
 		}
+		s_macroTextures.push_back(AsciiString(K_MACRO_DEFAULT));
 	}
-	s_macroTextures.push_back(AsciiString(K_MACRO_DEFAULT));
 	return (int)s_macroTextures.size();
 }
 
@@ -345,6 +350,13 @@ extern "C" void WBQtFixOwnerData_GetPrompt(void *teamsInfo, char *buf, int cap)
 extern "C" int WBQtFixOwnerData_GetCount(void *sidesList)
 {
 	return static_cast<SidesList *>(sidesList)->getNumSides();
+}
+
+extern "C" int WBQtFixOwnerData_IsValid(void *sidesList, int i)
+{
+	// == CFixTeamOwnerDialog::OnInitDialog's "if (!si) { continue; }" guard: rows for a
+	// missing side must not be added to the list.
+	return (static_cast<SidesList *>(sidesList)->getSideInfo(i) != NULL) ? 1 : 0;
 }
 
 extern "C" void WBQtFixOwnerData_GetDisplay(void *sidesList, int i, char *buf, int cap)

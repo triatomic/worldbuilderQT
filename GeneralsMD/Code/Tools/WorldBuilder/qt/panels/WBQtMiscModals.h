@@ -44,6 +44,13 @@ private:
 	QLineEdit *m_green;
 	QLineEdit *m_blue;
 	QLineEdit *m_intensity;
+	// Last-good parsed values (== the MFC m_red/m_green/m_blue/m_intensity members). A field that
+	// fails to parse keeps its last-good value while the others still apply, mirroring the per-field
+	// EN_CHANGE handlers.
+	double m_lastRed;
+	double m_lastGreen;
+	double m_lastBlue;
+	double m_lastIntensity;
 };
 
 // Impassable Options: show-slope angle + Preview; the overlay is forced on for the lifetime.

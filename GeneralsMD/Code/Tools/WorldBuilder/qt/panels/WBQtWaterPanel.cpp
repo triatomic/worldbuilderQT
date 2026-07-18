@@ -16,7 +16,8 @@ WBQtWaterPanel *WBQtWaterPanel::s_instance = NULL;
 WBQtWaterPanel::WBQtWaterPanel(QWidget *owner)
 	: QWidget(owner, Qt::Tool),
 	  m_ui(new Ui::WBQtWaterPanel),
-	  m_updating(false)
+	  m_updating(false),
+	  m_heightDragging(false)
 {
 	// The static widget tree lives in WBQtWaterPanel.ui; bind the members the
 	// logic below uses, then wire what Designer can't express.
@@ -49,6 +50,10 @@ WBQtWaterPanel::WBQtWaterPanel(QWidget *owner)
 	connect(m_name->lineEdit(), SIGNAL(editingFinished()), this, SLOT(onNameChanged()));
 	connect(m_heightSlider, SIGNAL(valueChanged(int)), this, SLOT(onHeightChanged(int)));
 	connect(m_heightSpin, SIGNAL(valueChanged(int)), this, SLOT(onHeightChanged(int)));
+	// A slider drag batches all its ticks into one undoable (== the MFC popup-slider protocol);
+	// spinbox / typed changes stay one commit each.
+	connect(m_heightSlider, SIGNAL(sliderPressed()), this, SLOT(onHeightSliderPressed()));
+	connect(m_heightSlider, SIGNAL(sliderReleased()), this, SLOT(onHeightSliderReleased()));
 	connect(m_makeRiver, SIGNAL(clicked()), this, SLOT(onMakeRiverToggled()));
 
 	s_instance = this;
@@ -154,8 +159,28 @@ void WBQtWaterPanel::onHeightChanged(int v)
 	}
 	m_updating = true;
 	setHeightRow(v);
-	WBQtWater_SetHeight(v);	// drives the MovePolygonUndoable on the selected water-area trigger
+	if (m_heightDragging)
+	{
+		// Mid-drag: reuse one MovePolygonUndoable across every tick (closed on release).
+		WBQtWater_SetHeightDragStep(v);
+	}
+	else
+	{
+		// Spinbox / typed / keyboard step: one commit, like the MFC edit-box path.
+		WBQtWater_SetHeight(v);
+	}
 	m_updating = false;
+}
+
+void WBQtWaterPanel::onHeightSliderPressed()
+{
+	m_heightDragging = true;
+}
+
+void WBQtWaterPanel::onHeightSliderReleased()
+{
+	m_heightDragging = false;
+	WBQtWater_EndHeightScrub();	// == PopSliderFinished: close the drag's single undoable
 }
 
 void WBQtWaterPanel::onMakeRiverToggled()

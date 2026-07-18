@@ -58,6 +58,16 @@ void WBQtWater_SetHeight(int height)
 	WaterOptions::qtSetHeight(height);
 }
 
+void WBQtWater_SetHeightDragStep(int height)
+{
+	WaterOptions::qtSetHeightDragStep(height);
+}
+
+void WBQtWater_EndHeightScrub(void)
+{
+	WaterOptions::qtEndHeightScrub();
+}
+
 int WBQtWater_GetHeightMin(void)
 {
 	return 0;

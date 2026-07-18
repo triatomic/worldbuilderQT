@@ -43,6 +43,9 @@ int  WBQtPlayerListData_GetColorRGB(void);			// 0x00RRGGBB swatch color
 int  WBQtPlayerListData_GetFactionCount(void);
 void WBQtPlayerListData_GetFactionName(int i, char *buf, int cap);
 int  WBQtPlayerListData_GetFactionIndex(void);
+// The stored faction string (== the dict's TheKey_playerFaction). Lets the panel show a
+// free-typed faction that matches no list entry (GetFactionIndex() == -1).
+void WBQtPlayerListData_GetFactionText(char *buf, int cap);
 
 // color combo
 int  WBQtPlayerListData_GetColorCount(void);

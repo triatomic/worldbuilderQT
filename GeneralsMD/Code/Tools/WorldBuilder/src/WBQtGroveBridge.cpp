@@ -109,6 +109,14 @@ void WBQtGrove_SetUsePropsOnly(int on)
 	}
 }
 
+void WBQtGrove_RefreshSetNames(void)
+{
+	if (TheGroveOptions)
+	{
+		TheGroveOptions->qtRefreshSetNames();
+	}
+}
+
 int WBQtGrove_GetSetCount(void)
 {
 	return TheGroveOptions ? TheGroveOptions->qtGetSetCount() : 0;

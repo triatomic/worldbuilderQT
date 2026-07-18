@@ -128,7 +128,7 @@ int WBQtObject_GetCount(void)
 	return count;
 }
 
-int WBQtObject_GetEntry(int listIndex, char *sideOut, char *sortingOut, char *leafOut, int cap)
+int WBQtObject_GetEntry(int listIndex, char *preOut, char *sideOut, char *sortingOut, char *leafOut, int cap)
 {
 	MapObject *pObj = objectAtIndex(listIndex);
 	if (pObj == NULL)
@@ -139,10 +139,22 @@ int WBQtObject_GetEntry(int listIndex, char *sideOut, char *sortingOut, char *le
 	const ThingTemplate *tt = pObj->getThingTemplate();
 	if (tt != NULL)
 	{
-		// side / editor-sorting category / leaf, exactly like addObject().
+		// [pre-side] / side / editor-sorting category / leaf, exactly like addObject().
+		EditorSortingType es = tt->getEditorSorting();
+
+		// ES_TEST templates get a top-level "TEST" bucket ABOVE the side, matching the MFC
+		// pre-side tier (addObject: findOrAdd(parent, "TEST") before the by-side findOrAdd).
+		if (es == ES_TEST)
+		{
+			copyString(preOut, cap, "TEST");
+		}
+		else
+		{
+			copyString(preOut, cap, "");
+		}
+
 		copyString(sideOut, cap, tt->getDefaultOwningSide().str());
 
-		EditorSortingType es = tt->getEditorSorting();
 		if (es == ES_TEST)
 		{
 			copyString(sortingOut, cap, "TEST");
@@ -161,6 +173,7 @@ int WBQtObject_GetEntry(int listIndex, char *sideOut, char *sortingOut, char *le
 	else
 	{
 		// Legacy / test-model entries go under a single bucket, leaf = last path element.
+		copyString(preOut, cap, "");
 		copyString(sideOut, cap, "**TEST MODELS");
 		copyString(sortingOut, cap, "");
 		const char *full = pObj->getName().str();

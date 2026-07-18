@@ -1061,21 +1061,32 @@ namespace
 
 	void qtmGenericRebuildDict(void)
 	{
+		// == _scriptsToDict: pack the non-empty slots into a contiguous hook chain. Compact the
+		// slot buffer IN PLACE too (so index i is display row i), matching how _dictToScripts
+		// reads them back -- clearing slot 2 of 3 then slides slot 3 up into slot 2.
+		AsciiString compact[16];
 		int scriptNum = 0;
 		int i;
 		for (i = 0; i < 16; i++)
 		{
-			AsciiString keyName = qtmGenericHookKeyName(scriptNum);
-			if (s_qtGenericSlots[i].isEmpty())
+			if (!s_qtGenericSlots[i].isEmpty())
 			{
-				continue;
+				compact[scriptNum] = s_qtGenericSlots[i];
+				++scriptNum;
 			}
-			s_qtSheetDict->setAsciiString(NAMEKEY(keyName), s_qtGenericSlots[i]);
-			++scriptNum;
 		}
-		for ( ; scriptNum < 16; ++scriptNum)
+		for (i = 0; i < 16; i++)
 		{
-			AsciiString keyName = qtmGenericHookKeyName(scriptNum);
+			s_qtGenericSlots[i] = (i < scriptNum) ? compact[i] : AsciiString::TheEmptyString;
+		}
+
+		for (i = 0; i < scriptNum; i++)
+		{
+			s_qtSheetDict->setAsciiString(NAMEKEY(qtmGenericHookKeyName(i)), s_qtGenericSlots[i]);
+		}
+		for ( ; i < 16; i++)
+		{
+			AsciiString keyName = qtmGenericHookKeyName(i);
 			if (s_qtSheetDict->known(NAMEKEY(keyName), Dict::DICT_ASCIISTRING))
 			{
 				s_qtSheetDict->remove(NAMEKEY(keyName));
@@ -1100,6 +1111,20 @@ namespace
 		AsciiString missing;
 		missing.format("[???] %s", value.str());
 		copyOut(missing.str(), buf, cap);
+	}
+
+	// Like qtmComboDisplay, but a value that isn't in the catalog shows as <none> instead of the
+	// "[???] value" placeholder. == TeamReinforcement::OnInitDialog's transport combo, which (unlike
+	// the other combos) never adds a [???] row: a stored transport not found by FindStringExact just
+	// selects <none>.
+	void qtmComboDisplayNoPlaceholder(const std::vector<AsciiString> &cat, const AsciiString &value, char *buf, int cap)
+	{
+		if (value.isEmpty() || qtmCatFind(cat, value) < 0)
+		{
+			copyOut(NONE_STRING, buf, cap);
+			return;
+		}
+		copyOut(value.str(), buf, cap);
 	}
 
 	// Resolve an incoming combo selection back to the raw value ("<none>" -> empty,
@@ -1223,11 +1248,14 @@ extern "C" int WBQtTeamSheet_Open(void)
 	s_qtCatInteractions.push_back(AsciiString("Alert"));
 	s_qtCatInteractions.push_back(AsciiString("Aggressive"));
 
-	// == TeamReinforcement::OnInitDialog's gate seed: transport combo + exit enabled iff a
-	// transport is set (deploy-by starts checked in that case).
+	// == TeamReinforcement::OnInitDialog's gate seed: the transport combo + exit are enabled and
+	// deploy-by starts checked ONLY if the stored transport is actually present in the loaded
+	// transport list (MFC's FindStringExact). A stored name that isn't in the catalog gates as
+	// <none>/unchecked, exactly like the MFC page.
 	{
 		AsciiString transport = s_qtSheetDict->getAsciiString(TheKey_teamTransport, &exists);
-		s_qtSheetDeployBy = (exists && !transport.isEmpty());
+		s_qtSheetDeployBy = (exists && !transport.isEmpty()
+			&& qtmCatFind(s_qtCatTransports, transport) >= 0);
 	}
 
 	// == TeamIdentity::OnInitDialog: an absent teamExecutesActionsOnCreate is written false.
@@ -1328,7 +1356,15 @@ extern "C" void WBQtTeamPage_GetText(int page, int ctrlId, char *buf, int cap)
 		if (key != NAMEKEY_INVALID)
 		{
 			AsciiString value = s_qtSheetDict->getAsciiString(key, &exists);
-			qtmComboDisplay((ctrlId == IDC_TRANSPORT_COMBO) ? s_qtCatTransports : s_qtCatWaypointsRe, value, buf, cap);
+			if (ctrlId == IDC_TRANSPORT_COMBO)
+			{
+				// == the MFC transport combo, which never adds a [???] row: an unknown value shows <none>.
+				qtmComboDisplayNoPlaceholder(s_qtCatTransports, value, buf, cap);
+			}
+			else
+			{
+				qtmComboDisplay(s_qtCatWaypointsRe, value, buf, cap);
+			}
 		}
 		return;
 	}
@@ -1641,6 +1677,21 @@ extern "C" int WBQtTeamPage_ComboCount(int page, int ctrlId)
 {
 	const std::vector<AsciiString> *cat = qtmSheetCatalog(page, ctrlId);
 	return (cat != NULL) ? (int)cat->size() : 0;
+}
+
+// How many generic-script slots are filled (== the length of the compacted hook chain).
+// The sheet shows this many combos and hides the rest (== _dictToScripts's SW_HIDE tail).
+extern "C" int WBQtTeamGeneric_FilledCount(void)
+{
+	int n = 0;
+	for (int i = 0; i < 16; i++)
+	{
+		if (!s_qtGenericSlots[i].isEmpty())
+		{
+			++n;
+		}
+	}
+	return n;
 }
 
 extern "C" void WBQtTeamPage_ComboItem(int page, int ctrlId, int i, char *buf, int cap)

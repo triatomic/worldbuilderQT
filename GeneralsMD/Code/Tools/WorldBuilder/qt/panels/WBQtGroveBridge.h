@@ -58,6 +58,10 @@ void WBQtGrove_SetUsePropsOnly(int on);
 // Set-name combo (20 named sets). Count / entry text mirror the filled MFC combo. SelectSet
 // picks a set, persists the index, and loads that set's tree makeup + ratios (like the MFC
 // OnSelchangeGroveSetName). SaveSet / OpenSettings mirror the two buttons.
+// RefreshSetNames re-reads Grovesets.ini into the hidden MFC combo (== the MFC ON_CBN_DROPDOWN
+// handler), so renames made via the Settings button show up without an app restart; call it
+// before re-filling the panel's set-name combo.
+void WBQtGrove_RefreshSetNames(void);
 int  WBQtGrove_GetSetCount(void);
 int  WBQtGrove_GetSetName(int index, char *out, int cap);
 int  WBQtGrove_GetCurrentSet(void);

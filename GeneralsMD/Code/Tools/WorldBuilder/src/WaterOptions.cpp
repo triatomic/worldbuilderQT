@@ -578,6 +578,30 @@ void WaterOptions::qtSetHeight(Int height)
 	m_staticThis->endUpdateHeight();
 }
 
+// == MFC's PopSliderChanged/PopSliderFinished protocol: a slider DRAG keeps one
+// MovePolygonUndoable alive across all its ticks (startUpdateHeight's reuse guard makes the
+// repeat starts no-ops), so Ctrl+Z undoes the whole drag rather than one tick at a time.
+// qtSetHeightDragStep sets + updates but does NOT end; qtEndHeightScrub ends when the drag
+// finishes. Non-drag changes (spinbox, typed) keep using qtSetHeight (one commit each).
+void WaterOptions::qtSetHeightDragStep(Int height)
+{
+	m_waterHeight = height;
+	if (m_staticThis == NULL)
+	{
+		return;
+	}
+	m_staticThis->startUpdateHeight();	// reuses the live undoable after the first tick
+	m_staticThis->updateHeight();
+}
+
+void WaterOptions::qtEndHeightScrub(void)
+{
+	if (m_staticThis != NULL)
+	{
+		m_staticThis->endUpdateHeight();
+	}
+}
+
 // Store the point spacing (the global static), mirroring OnChangeSpacingEdit's accepted-value
 // case (the Qt spinbox has already parsed the int).
 void WaterOptions::qtSetSpacing(Int spacing)

@@ -35,6 +35,11 @@ public:
 
 	static WBQtGrovePanel *instance() { return s_instance; }
 
+protected:
+	// Re-read Grovesets.ini into the set-name combo each time the panel is shown, so a set
+	// renamed (via the Settings button / Notepad) while the panel was hidden shows up.
+	virtual void showEvent(QShowEvent *event);
+
 private slots:
 	void onSetNameChanged(int index);
 	void onTreeTypeChanged(int index);	// which row is inferred from the sender
