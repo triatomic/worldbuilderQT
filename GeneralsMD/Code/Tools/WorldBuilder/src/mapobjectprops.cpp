@@ -227,7 +227,10 @@ void MapObjectProps::_DictToTeam(void)
   i = -1;
   if (m_dictToEdit)
   {
-    name = m_dictToEdit->getAsciiString(TheKey_originalOwner);
+    // exists-checked (see qtGetCurTeam): objects without an originalOwner key must not
+    // assert; FindStringExact on the empty string then yields -1 -> blank combo, as before.
+    Bool ooExists = false;
+    name = m_dictToEdit->getAsciiString(TheKey_originalOwner, &ooExists);
     if (name == NEUTRAL_TEAM_INTERNAL_STR)
       name = NEUTRAL_TEAM_UI_STR;
     i = owner->FindStringExact(-1, name.str());
@@ -3254,7 +3257,15 @@ int MapObjectProps::qtGetCurTeam(void)
 	{
 		return -1;
 	}
-	AsciiString cur = TheMapObjectProps->m_dictToEdit->getAsciiString(TheKey_originalOwner);
+	// exists-checked: waypoints/roads and some scripted objects have no originalOwner key, and
+	// this runs on EVERY selection click -- an unchecked read pops the "dict key missing"
+	// assert per click on such objects. Missing -> -1 -> the panel blanks the Team combo.
+	Bool exists = false;
+	AsciiString cur = TheMapObjectProps->m_dictToEdit->getAsciiString(TheKey_originalOwner, &exists);
+	if (!exists)
+	{
+		return -1;
+	}
 	for (int i = 0; i < TheSidesList->getNumTeams(); i++)
 	{
 		if (TheSidesList->getTeamInfo(i)->getDict()->getAsciiString(TheKey_teamName) == cur)
