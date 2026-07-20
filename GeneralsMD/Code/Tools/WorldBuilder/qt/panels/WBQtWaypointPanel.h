@@ -63,7 +63,7 @@ private:
 	QLineEdit      *m_label2;
 	QLineEdit      *m_label3;
 	QCheckBox      *m_biDirectional;
-	QGroupBox      *m_helpBox;	// the read-only AI / train helper text (waypoint only)
+	QWidget        *m_helpBox;	// the train-labels reference block (waypoint only, like MFC)
 
 	bool m_updating;	// re-entrancy guard, mirrors MFC WaypointOptions::m_updating
 

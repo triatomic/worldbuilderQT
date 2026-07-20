@@ -34,7 +34,7 @@ WBQtWaypointPanel::WBQtWaypointPanel(QWidget *owner)
 	m_label2 = m_ui->label2;
 	m_label3 = m_ui->label3;
 	m_biDirectional = m_ui->biDirectional;
-	m_helpBox = m_ui->helpBox;
+	m_helpBox = m_ui->trainBlock;	// the train-labels reference block (MFC hides it for triggers)
 
 	// MFC's combos are WS_VSCROLL: give every drop-down here a scrolling popup.
 	WBQtComboStyle::applyPopupScrollRecursive(this);
@@ -98,7 +98,7 @@ void WBQtWaypointPanel::pushRefresh()
 	rebuildNamePresets(kind);
 	m_name->setEditText(QString::fromLatin1(buf));
 	m_name->setEnabled(kind != WBQT_WAYPOINT_KIND_NONE);
-	m_nameBox->setTitle((kind == WBQT_WAYPOINT_KIND_TRIGGER) ? "Area Name" : "Waypoint Name");
+	m_nameBox->setTitle((kind == WBQT_WAYPOINT_KIND_TRIGGER) ? "Area Name" : "Waypoint Name:");
 
 	bool isWaypoint = (kind == WBQT_WAYPOINT_KIND_WAYPOINT);
 	bool isLinked = isWaypoint && (WBQtWaypoint_IsLinked() != 0);
