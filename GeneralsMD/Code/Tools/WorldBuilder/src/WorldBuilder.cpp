@@ -682,6 +682,8 @@ BOOL CWorldBuilderApp::InitInstance()
 		MB_ICONEXCLAMATION | MB_OK
 	);
 
+	if (WBQtObject_GetTutorialPrompts())
+	{
 #ifdef RTS_HAS_QT
 	if (!WBQtToast_Show("Press F11 to enter full screen", 5000, 1))
 	{
@@ -694,6 +696,7 @@ BOOL CWorldBuilderApp::InitInstance()
 #ifdef RTS_HAS_QT
 	}
 #endif
+	}
 
 
 	// Load GameDirectory

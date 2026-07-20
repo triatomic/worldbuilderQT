@@ -513,7 +513,7 @@ void PointerTool::mouseDown(TTrackingMode m, CPoint viewPt, WbView* pView, CWorl
 			if (pView->picked(m_curObject, cpt, ctrlKey) == PICK_ARROW) {
 				m_rotating = true;
 
-				if(!g_PointerToolTip){
+				if(!g_PointerToolTip && WBQtObject_GetTutorialPrompts()){
 #ifdef RTS_HAS_QT
 					if (WBQtToast_Show("Hold Ctrl to rotate as a group.\nSee Edit tab for rotation options.", 20000, 1))
 					{

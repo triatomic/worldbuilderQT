@@ -47,7 +47,10 @@ void WBQtMainWindow::toggleFullscreen()
 	else
 	{
 		showFullScreen();
-		WBQtToast_Show("Press F11 or Escape to exit full screen", 20000, 1);
+		if (WBQtObject_GetTutorialPrompts())
+		{
+			WBQtToast_Show("Press F11 or Escape to exit full screen", 20000, 1);
+		}
 	}
 }
 

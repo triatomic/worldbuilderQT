@@ -16,6 +16,10 @@ extern "C" void WBQtConfig_SetNewSearch(int on);
 extern "C" int  WBQtObject_GetRenderParticles(void);
 extern "C" void WBQtObject_SetRenderParticles(int on);
 
+// Tutorial popups toggle (WBQtObjectBridge.cpp): the one-time hint toasts + Ctrl+A confirm.
+extern "C" int  WBQtObject_GetTutorialPrompts(void);
+extern "C" void WBQtObject_SetTutorialPrompts(int on);
+
 #include <QApplication>
 #include <QCheckBox>
 #include <QMessageBox>
@@ -112,6 +116,7 @@ WBQtEntityFinderDialog::WBQtEntityFinderDialog(void *frameHwnd)
 	m_undoSpin = m_ui->undoSpin;
 	m_launchCheck = m_ui->launchCheck;
 	m_newSearchCheck = m_ui->newSearchCheck;
+	m_tutorialPromptsCheck = m_ui->tutorialPromptsCheck;
 	m_renderParticlesCheck = m_ui->renderParticlesCheck;
 	m_toggleButton = m_ui->toggleButton;
 	m_hotkeyPanel = m_ui->hotkeyPanel;
@@ -220,6 +225,11 @@ WBQtEntityFinderDialog::WBQtEntityFinderDialog(void *frameHwnd)
 	m_newSearchCheck->setChecked(WBQtConfig_GetNewSearch() != 0);
 	m_newSearchCheck->blockSignals(false);
 	connect(m_newSearchCheck, SIGNAL(toggled(bool)), this, SLOT(onNewSearchToggled(bool)));
+
+	m_tutorialPromptsCheck->blockSignals(true);
+	m_tutorialPromptsCheck->setChecked(WBQtObject_GetTutorialPrompts() != 0);
+	m_tutorialPromptsCheck->blockSignals(false);
+	connect(m_tutorialPromptsCheck, SIGNAL(toggled(bool)), this, SLOT(onTutorialPromptsToggled(bool)));
 
 	m_renderParticlesCheck->blockSignals(true);
 	m_renderParticlesCheck->setChecked(WBQtObject_GetRenderParticles() != 0);
@@ -485,6 +495,12 @@ void WBQtEntityFinderDialog::onNewSearchToggled(bool on)
 {
 	// Persisted; the tree pickers read it when they are next opened.
 	WBQtConfig_SetNewSearch(on ? 1 : 0);
+}
+
+void WBQtEntityFinderDialog::onTutorialPromptsToggled(bool on)
+{
+	// Persisted; every hint site reads it live, so this takes effect immediately.
+	WBQtObject_SetTutorialPrompts(on ? 1 : 0);
 }
 
 void WBQtEntityFinderDialog::onRenderParticlesToggled(bool on)

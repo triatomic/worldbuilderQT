@@ -220,6 +220,19 @@ Search/Find click. Applies to windows opened after this is changed.</string>
          </widget>
         </item>
         <item>
+         <widget class="QCheckBox" name="tutorialPromptsCheck">
+          <property name="toolTip">
+           <string>Show the one-time hint popups (F11 full screen, Ctrl-click a
+waypoint/road to select connected, group-rotate) and the Ctrl+A
+"show whole map?" confirmation. Turn off once you know the shortcuts.
+Applies immediately. On by default.</string>
+          </property>
+          <property name="text">
+           <string>Show tutorial popups</string>
+          </property>
+         </widget>
+        </item>
+        <item>
          <widget class="QCheckBox" name="renderParticlesCheck">
           <property name="toolTip">
            <string>Preview live particle emitters in the viewport (a template's always-on

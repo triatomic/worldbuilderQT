@@ -13,6 +13,11 @@ extern "C" {
 // 0 when Qt is not up (the caller falls back to the MFC toast).
 int WBQtToast_Show(const char *text, int durationMs, int showOkButton);
 
+// Whether the one-time tutorial hints (these toasts + the Ctrl+A confirm) should be shown.
+// Persisted via the Entity Finder "Tutorial popups" checkbox; ON by default. Gate every hint
+// site on this so experienced users can silence them. (Defined in WBQtObjectBridge.cpp.)
+int WBQtObject_GetTutorialPrompts(void);
+
 #ifdef __cplusplus
 }
 #endif

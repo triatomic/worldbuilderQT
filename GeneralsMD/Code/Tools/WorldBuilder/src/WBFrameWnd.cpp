@@ -240,6 +240,10 @@ void CWB3dFrameWnd::EnterFullScreen()
     ::SetWindowPos(m_hWnd, HWND_TOP, 0, 0, screenWidth, screenHeight,
                    SWP_SHOWWINDOW | SWP_FRAMECHANGED);
 
+    if (!WBQtObject_GetTutorialPrompts())
+    {
+        return;	// tutorial hints off -- fullscreen still toggles, just no reminder toast
+    }
 #ifdef RTS_HAS_QT
     if (WBQtToast_Show("Press F11 or Escape to exit full screen", 20000, 1))
     {

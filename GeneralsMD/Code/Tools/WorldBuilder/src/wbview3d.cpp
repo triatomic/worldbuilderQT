@@ -4867,7 +4867,7 @@ BOOL WbView3d::OnEraseBkgnd(CDC* pDC)
 
 void WbView3d::OnViewShowentire3dmap() 
 {
-	if(m_showEntireMap){
+	if(m_showEntireMap && WBQtObject_GetTutorialPrompts()){
 		::MessageBeep(MB_ICONINFORMATION);
 		int response = ::AfxMessageBox(
 			"You may have accidentally pressed CTRL+A. Are you sure you want to toggle the full map view?", 

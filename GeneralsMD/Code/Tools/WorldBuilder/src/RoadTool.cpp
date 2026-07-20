@@ -162,7 +162,7 @@ void RoadTool::activate()
 	RoadOptions::updateSelection();
 	DrawObject::setDoBrushFeedback(false);
 
-	if(!g_roadSelectTooltip)
+	if(!g_roadSelectTooltip && WBQtObject_GetTutorialPrompts())
 	{
 #ifdef RTS_HAS_QT
 		if (WBQtToast_Show("Hold Ctrl and click a road point to select all connected road points. \n (All Object Icons must be viewable first.)", 20000, 1))

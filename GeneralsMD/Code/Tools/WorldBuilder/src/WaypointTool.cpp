@@ -72,7 +72,7 @@ void WaypointTool::activate()
 	DrawObject::setDoBrushFeedback(false);
 	m_isActive = true;
 
-	if(!g_waypointSelectTooltip)
+	if(!g_waypointSelectTooltip && WBQtObject_GetTutorialPrompts())
 	{
 #ifdef RTS_HAS_QT
 		if (WBQtToast_Show("Hold Ctrl and click a waypoint to select all connected waypoints.", 20000, 1))
