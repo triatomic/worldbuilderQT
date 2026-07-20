@@ -41,6 +41,7 @@ private slots:
 
 private:
 	void populateTree();
+	int buildTree(const QString &filter);	// build the category tree; filter empty => full list
 	void applyFilter(const QString &searchText, bool announce);	// shared by onSearch/onSearchLive
 	void selectCurrentType(QTreeWidgetItem *leaf);
 	void renderSentence();

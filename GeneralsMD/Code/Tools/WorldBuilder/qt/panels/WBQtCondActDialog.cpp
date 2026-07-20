@@ -133,20 +133,40 @@ bool WBQtCondActDialog::eventFilter(QObject *watched, QEvent *event)
 
 void WBQtCondActDialog::populateTree()
 {
+	buildTree(QString());	// empty filter == the full catalog
+}
+
+// Build the category tree from the templates' '/'-separated name paths (== the MFC
+// OnInitDialog/OnReset walk): each path builds sorted category folders with the leaf at the end,
+// and name2 (if any) adds a second leaf. When filter is non-empty, only templates whose name or
+// name2 contains it are included -- folders with no surviving leaf are never created, so the
+// result keeps the SAME nested tree design as the full list, just pruned to the matches (rather
+// than a flat list of full-path leaves). Returns the number of matching templates. This builds
+// structure only; the caller sets expansion (a filtered result expands so nested matches show).
+int WBQtCondActDialog::buildTree(const QString &filter)
+{
 	m_updating = true;
 	m_tree->clear();
 
-	// == the MFC OnInitDialog/OnReset walk: each template's '/'-separated name path builds
-	// sorted category folders with the leaf at the end; name2 (if any) adds a second leaf.
 	QHash<QString, QTreeWidgetItem *> folders;
 	QTreeWidgetItem *selLeaf = NULL;
 	int curType = WBQtCondActData_GetType(m_item, m_isAction);
 	int count = WBQtCondActData_GetTemplateCount(m_isAction);
+	int matchCount = 0;
 	for (int i = 0; i < count; i++)
 	{
+		QString name = templateName(m_isAction, i);
+		QString name2 = templateName2(m_isAction, i);
+		if (!filter.isEmpty()
+			&& !name.toLower().contains(filter)
+			&& !name2.toLower().contains(filter))
+		{
+			continue;
+		}
+		matchCount++;
 		for (int pass = 0; pass < 2; pass++)
 		{
-			QString path = (pass == 0) ? templateName(m_isAction, i) : templateName2(m_isAction, i);
+			QString path = (pass == 0) ? name : name2;
 			if (path.isEmpty())
 			{
 				continue;
@@ -194,6 +214,7 @@ void WBQtCondActDialog::populateTree()
 	m_tree->sortItems(0, Qt::AscendingOrder);
 	m_updating = false;
 	selectCurrentType(selLeaf);
+	return matchCount;
 }
 
 void WBQtCondActDialog::selectCurrentType(QTreeWidgetItem *leaf)
@@ -345,41 +366,15 @@ void WBQtCondActDialog::onSearch()
 
 void WBQtCondActDialog::applyFilter(const QString &searchText, bool announce)
 {
-	m_updating = true;
-	m_tree->clear();
-	QTreeWidgetItem *selLeaf = NULL;
-	int curType = WBQtCondActData_GetType(m_item, m_isAction);
-	int count = WBQtCondActData_GetTemplateCount(m_isAction);
-	int matchCount = 0;
-	for (int i = 0; i < count; i++)
+	// Rebuild the tree restricted to matches -- same nested category design as the full list, just
+	// pruned (not a flat full-path leaf list).
+	int matchCount = buildTree(searchText);
+	// A filtered tree starts collapsed, which would hide matches nested in folders -- expand it so
+	// every match is visible (the full unfiltered list keeps its default collapsed state).
+	m_tree->expandAll();
+	if (matchCount == 0 && announce)
 	{
-		QString name = templateName(m_isAction, i);
-		QString name2 = templateName2(m_isAction, i);
-		if (name.toLower().contains(searchText) || name2.toLower().contains(searchText))
-		{
-			QTreeWidgetItem *leaf = new QTreeWidgetItem(m_tree, QStringList(name));
-			leaf->setData(0, kTemplateRole, i);
-			if (i == curType)
-			{
-				selLeaf = leaf;
-				showHelpForType(i);
-			}
-			matchCount++;
-		}
-	}
-	m_tree->sortItems(0, Qt::AscendingOrder);
-	m_updating = false;
-
-	if (matchCount == 0)
-	{
-		if (announce)
-		{
-			QMessageBox::information(this, "Search", "No matches found.");
-		}
-	}
-	else
-	{
-		selectCurrentType(selLeaf);
+		QMessageBox::information(this, "Search", "No matches found.");
 	}
 }
 
