@@ -219,6 +219,17 @@ Search/Find click. Applies to windows opened after this is changed.</string>
           </property>
          </widget>
         </item>
+        <item>
+         <widget class="QCheckBox" name="renderParticlesCheck">
+          <property name="toolTip">
+           <string>Preview live particle emitters in the viewport (a template's always-on
+emitters + placed particle systems). Applies on the next WorldBuilder restart. Off by default.</string>
+          </property>
+          <property name="text">
+           <string>Render particles in the viewport (restart to apply)</string>
+          </property>
+         </widget>
+        </item>
        </layout>
       </widget>
      </item>

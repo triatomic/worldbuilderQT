@@ -75,6 +75,7 @@
 #include "W3DDevice/GameClient/W3DShaderManager.h"
 #include "W3DDevice/GameClient/W3DDynamicLight.h"
 #include "WBHeightMap.h"
+#include "WBParticleRuntime.h"
 #include "W3DDevice/GameClient/W3DScene.h"
 #include "W3DDevice/Common/W3DConvert.h"
 #include "W3DDevice/GameClient/W3DShadow.h"
@@ -1088,7 +1089,10 @@ void WbView3d::init3dScene()
 void WbView3d::resetRenderObjects()
 {
 	if (!m_scene) return;
-	if (TheW3DShadowManager) {	
+	// Live particle emitters aren't in m_scene, so the scene-iterator teardown below won't touch
+	// them -- destroy them explicitly (invalObjectInView(NULL) recreates them right after).
+	WBParticleRuntime::destroyAllEmitters();
+	if (TheW3DShadowManager) {
 		TheW3DShadowManager->removeAllShadows();
 	}
 	
@@ -2091,6 +2095,13 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 
 			m_scene->Add_Render_Object(renderObj);
 
+			// Live particle preview: (re)create this object's emitters now that its render obj is
+			// positioned, so attached emitters can read their bone world-transforms from it.
+			// No-op unless "Render Particles" is on.
+			if (WBParticleRuntime::isEnabled()) {
+				WBParticleRuntime::createEmittersForObject(pMapObj, renderObj, loc.x, loc.y, loc.z);
+			}
+
 			REF_PTR_RELEASE(renderObj); // belongs to m_scene now.
 		} else if (renderObj) {
 			m_scene->Remove_Render_Object(renderObj);
@@ -2105,6 +2116,10 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 		if (tTemplate && tTemplate->isKindOf(KINDOF_OPTIMIZED_TREE)) {
 			updateAllTrees = true;
 		}
+	}
+	if (!found && pMapObjIn) {
+		// The object is gone from the list (deleted/moved) -- drop any live emitters it had.
+		WBParticleRuntime::destroyEmittersForObject(pMapObjIn);
 	}
 	if (!found && pMapObjIn && pMapObjIn->getRenderObj()) {
 		if( m_showShadows ) {
@@ -2899,6 +2914,11 @@ void WbView3d::redraw(void)
 		m_buildRedMultiplier = 0;
 	}
 
+	// Advance + tick the particle preview and queue its render, mirroring the game's
+	// "update then render" order (W3DDisplay). Must run before render()'s WW3D flush, where
+	// the queued particles actually draw. No-op unless "Render Particles" is on.
+	WBParticleRuntime::tick();
+
 	// updateVisibleMapObjects();
 	render();
 	m_time = ::GetTickCount();
@@ -3466,7 +3486,17 @@ int WbView3d::OnCreate(LPCREATESTRUCT lpCreateStruct)
 
 	m_timer = SetTimer(0, UPDATE_TIME, NULL);
 
-	initWW3D();	
+	initWW3D();
+
+	// Live particle preview: a startup-only opt-in (read once here, after the asset/particle
+	// subsystems exist). It is NOT toggled at runtime -- standing the particle runtime up/down
+	// live proved fragile, so the checkbox only writes the profile flag and asks for a restart;
+	// this is where the flag actually takes effect. Default OFF.
+	if (AfxGetApp()->GetProfileInt("ObjectOptionPanel", "RenderParticles", 0) != 0)
+	{
+		WBParticleRuntime::setEnabled(true);
+	}
+
 	TheWritableGlobalData->m_useCloudMap = AfxGetApp()->GetProfileInt("GameOptions", "cloudMap", 0);
 	AfxGetApp()->WriteProfileInt("GameOptions", "cloudMap", TheGlobalData->m_useCloudMap);	// Just in case it wasn't already there
  	m_partialMapSize = AfxGetApp()->GetProfileInt("GameOptions", "partialMapSize", 97);
@@ -4748,7 +4778,10 @@ void WbView3d::OnTimer(UINT nIDEvent)
 												(TheWaterTracksRenderSystem->getWaveCount() > 0 ||
 												 TheWaterTracksRenderSystem->hasPreviewWave()));
 
-		if (!interacting && !changed && !fallbackDue && !wavesActive)
+		// Live particle emitters animate every frame too -- keep repainting while any exist.
+		Bool particlesActive = WBParticleRuntime::hasActiveEmitters();
+
+		if (!interacting && !changed && !fallbackDue && !wavesActive && !particlesActive)
 			return;		// static view: leave the last frame + its GDI text on screen
 	}
 

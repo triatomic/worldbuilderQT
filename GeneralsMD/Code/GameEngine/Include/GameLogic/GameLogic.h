@@ -136,7 +136,9 @@ public:
 	Real getHeight( void );													///< Returns the height of the world
 
 	Bool isInGameLogicUpdate( void ) const { return m_isInUpdate; }
-	UnsignedInt getFrame( void );										///< Returns the current simulation frame number
+	// virtual so the WorldBuilder editor can supply its own frame clock (WBParticleRuntime)
+	// without standing up the real simulation -- the game keeps the base m_frame implementation.
+	virtual UnsignedInt getFrame( void );						///< Returns the current simulation frame number
 	UnsignedInt getCRC( Int mode = CRC_CACHED, AsciiString deepCRCFileName = AsciiString::TheEmptyString );		///< Returns the CRC
 
 	void setObjectIDCounter( ObjectID nextObjID ) { m_nextObjID = nextObjID; }

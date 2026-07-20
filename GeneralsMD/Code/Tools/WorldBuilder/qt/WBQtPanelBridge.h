@@ -198,6 +198,8 @@ void WBQtObject_SetPreviewBuildZone(int on);
 int  WBQtObject_GetPreviewBuildZone(void);
 void WBQtObject_SetUseWaterHeight(int on);
 int  WBQtObject_GetUseWaterHeight(void);
+void WBQtObject_SetRenderParticles(int on);	// live particle preview (WBParticleRuntime)
+int  WBQtObject_GetRenderParticles(void);
 
 // Place-all-in-category: one click places the whole tree category (side + editor
 // sorting) of the selected object as a single undoable grid (ObjectTool reads it).

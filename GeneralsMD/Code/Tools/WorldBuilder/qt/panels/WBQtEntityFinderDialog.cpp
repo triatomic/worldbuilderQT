@@ -12,8 +12,13 @@
 extern "C" int  WBQtConfig_GetNewSearch(void);
 extern "C" void WBQtConfig_SetNewSearch(int on);
 
+// Render Particles toggle (WBQtObjectBridge.cpp): startup-only live particle preview.
+extern "C" int  WBQtObject_GetRenderParticles(void);
+extern "C" void WBQtObject_SetRenderParticles(int on);
+
 #include <QApplication>
 #include <QCheckBox>
+#include <QMessageBox>
 #include <QCloseEvent>
 #include <QComboBox>
 #include <QDesktopServices>
@@ -107,6 +112,7 @@ WBQtEntityFinderDialog::WBQtEntityFinderDialog(void *frameHwnd)
 	m_undoSpin = m_ui->undoSpin;
 	m_launchCheck = m_ui->launchCheck;
 	m_newSearchCheck = m_ui->newSearchCheck;
+	m_renderParticlesCheck = m_ui->renderParticlesCheck;
 	m_toggleButton = m_ui->toggleButton;
 	m_hotkeyPanel = m_ui->hotkeyPanel;
 	m_searchEdit = m_ui->searchEdit;
@@ -214,6 +220,11 @@ WBQtEntityFinderDialog::WBQtEntityFinderDialog(void *frameHwnd)
 	m_newSearchCheck->setChecked(WBQtConfig_GetNewSearch() != 0);
 	m_newSearchCheck->blockSignals(false);
 	connect(m_newSearchCheck, SIGNAL(toggled(bool)), this, SLOT(onNewSearchToggled(bool)));
+
+	m_renderParticlesCheck->blockSignals(true);
+	m_renderParticlesCheck->setChecked(WBQtObject_GetRenderParticles() != 0);
+	m_renderParticlesCheck->blockSignals(false);
+	connect(m_renderParticlesCheck, SIGNAL(toggled(bool)), this, SLOT(onRenderParticlesToggled(bool)));
 
 	populateFonts();
 	populateResolutions();
@@ -474,6 +485,16 @@ void WBQtEntityFinderDialog::onNewSearchToggled(bool on)
 {
 	// Persisted; the tree pickers read it when they are next opened.
 	WBQtConfig_SetNewSearch(on ? 1 : 0);
+}
+
+void WBQtEntityFinderDialog::onRenderParticlesToggled(bool on)
+{
+	// Startup-only opt-in: persist the choice; the particle runtime stands up during WbView3d
+	// init, so it takes effect on the next WB launch.
+	WBQtObject_SetRenderParticles(on ? 1 : 0);
+	QMessageBox::information(this, "Render Particles",
+		on ? "Particle preview will be ON the next time you start WorldBuilder."
+		   : "Particle preview will be OFF the next time you start WorldBuilder.");
 }
 
 void WBQtEntityFinderDialog::onFontChanged(int index)

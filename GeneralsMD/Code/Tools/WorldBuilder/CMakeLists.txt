@@ -98,6 +98,8 @@ set(WORLDBUILDER_SRC
     "src/WBFontAtlas.cpp"
     "src/WBFrameWnd.cpp"
     "src/WBHeightMap.cpp"
+    "src/WBParticleRuntime.cpp"
+    "include/WBParticleRuntime.h"
     "src/WBPopupSlider.cpp"
     "src/WBQtHostBridge.cpp"
     "src/WBQtFeatherBridge.cpp"

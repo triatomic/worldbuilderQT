@@ -443,6 +443,18 @@ int WBQtObject_GetUseWaterHeight(void)
 	return ::AfxGetApp()->GetProfileInt("ObjectOptionPanel", "UseWaterHeight", 1);
 }
 
+// Render Particles: a STARTUP-only opt-in. The particle runtime stands up during WbView3d
+// init (OnCreate) when the flag is set; toggling it live proved fragile, so this only persists
+// the choice -- it takes effect on the next WB launch. Persisted OFF by default.
+void WBQtObject_SetRenderParticles(int on)
+{
+	::AfxGetApp()->WriteProfileInt("ObjectOptionPanel", "RenderParticles", on ? 1 : 0);
+}
+int WBQtObject_GetRenderParticles(void)
+{
+	return ::AfxGetApp()->GetProfileInt("ObjectOptionPanel", "RenderParticles", 0);
+}
+
 // Place-all-in-category: the checkbox drives the ObjectOptions static that ObjectTool
 // reads on mouse-up; the setter persists it (same profile section as the other toggles).
 void WBQtObject_SetPlaceAll(int on)
