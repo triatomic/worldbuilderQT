@@ -76,6 +76,9 @@
 #include "W3DDevice/GameClient/W3DDynamicLight.h"
 #include "WBHeightMap.h"
 #include "WBParticleRuntime.h"
+// Render Particles toggle (WBQtObjectBridge.cpp): the startup-only live-preview flag. Declared
+// locally so this file needn't pull in the Qt-linkage bridge header just for one accessor.
+extern "C" int WBQtObject_GetRenderParticles(void);
 #include "W3DDevice/GameClient/W3DScene.h"
 #include "W3DDevice/Common/W3DConvert.h"
 #include "W3DDevice/GameClient/W3DShadow.h"
@@ -2097,10 +2100,8 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 
 			// Live particle preview: (re)create this object's emitters now that its render obj is
 			// positioned, so attached emitters can read their bone world-transforms from it.
-			// No-op unless "Render Particles" is on.
-			if (WBParticleRuntime::isEnabled()) {
-				WBParticleRuntime::createEmittersForObject(pMapObj, renderObj, loc.x, loc.y, loc.z);
-			}
+			// Self-guards (no-op unless "Render Particles" is on), like the destroy hooks.
+			WBParticleRuntime::createEmittersForObject(pMapObj, renderObj, loc.x, loc.y, loc.z);
 
 			REF_PTR_RELEASE(renderObj); // belongs to m_scene now.
 		} else if (renderObj) {
@@ -3492,7 +3493,7 @@ int WbView3d::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	// subsystems exist). It is NOT toggled at runtime -- standing the particle runtime up/down
 	// live proved fragile, so the checkbox only writes the profile flag and asks for a restart;
 	// this is where the flag actually takes effect. Default OFF.
-	if (AfxGetApp()->GetProfileInt("ObjectOptionPanel", "RenderParticles", 0) != 0)
+	if (WBQtObject_GetRenderParticles() != 0)
 	{
 		WBParticleRuntime::setEnabled(true);
 	}

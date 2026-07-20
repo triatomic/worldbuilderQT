@@ -147,6 +147,20 @@ namespace
 	typedef std::map<MapObject *, IDList> EmitterMap;
 	EmitterMap s_emitters;
 
+	// Destroy the manager's systems for one tracked ID list (the manager isn't in m_scene, so it
+	// isn't auto-cleaned). Guards on the manager being present.
+	void destroyIDList( const IDList &ids )
+	{
+		if (TheParticleSystemManager == NULL)
+		{
+			return;
+		}
+		for (size_t i = 0; i < ids.size(); ++i)
+		{
+			TheParticleSystemManager->destroyParticleSystemByID( ids[i] );
+		}
+	}
+
 	// Spawn one emitter from a template at a world position; record its ID under obj.
 	void spawnEmitter( MapObject *obj, const ParticleSystemTemplate *tmpl, const Coord3D &pos )
 	{
@@ -175,16 +189,32 @@ namespace
 		AsciiString bone;
 	};
 
-	void collectAlwaysOnTemplates( const ThingTemplate *tt, std::vector<AttachedEmitter> &out )
+	// A template's always-on emitter set is immutable for the process life, but
+	// createEmittersForObject runs per placed object on every render rebuild (invalObjectInView(NULL)
+	// walks every object on ~20 events). Compute it once per distinct template and cache it, so
+	// repeat instances are a map lookup instead of a fresh module walk + vector build each time.
+	typedef std::vector<AttachedEmitter> AttachedList;
+	typedef std::map<const ThingTemplate *, AttachedList> AttachedCache;
+	AttachedCache s_attachedCache;
+
+	const AttachedList &collectAlwaysOnTemplates( const ThingTemplate *tt )
 	{
+		static const AttachedList empty;
 		if (tt == NULL)
 		{
-			return;
+			return empty;
 		}
+		AttachedCache::iterator cached = s_attachedCache.find( tt );
+		if (cached != s_attachedCache.end())
+		{
+			return cached->second;
+		}
+
+		AttachedList &out = s_attachedCache[tt];
 		const ModuleInfo &draws = tt->getDrawModuleInfo();
 		for (int i = 0; i < draws.getCount(); ++i)
 		{
-			const W3DModelDrawModuleData *md = dynamic_cast<const W3DModelDrawModuleData *>( draws.getNthData( i ) );
+			const W3DModelDrawModuleData *md = draws.getNthData( i )->getAsW3DModelDrawModuleData();
 			if (md == NULL || md->m_conditionStates.empty())
 			{
 				continue;
@@ -201,6 +231,7 @@ namespace
 				}
 			}
 		}
+		return out;
 	}
 }
 
@@ -346,8 +377,7 @@ void createEmittersForObject(MapObject *obj, RenderObjClass *renderObj,
 	// their bone. Get_Bone_Transform gives the bone's WORLD matrix (the render obj is already
 	// positioned); an unknown bone falls back to Get_Transform (the object origin), so a bad
 	// bone name still shows the emitter rather than dropping it.
-	std::vector<AttachedEmitter> attached;
-	collectAlwaysOnTemplates( obj->getThingTemplate(), attached );
+	const AttachedList &attached = collectAlwaysOnTemplates( obj->getThingTemplate() );
 	for (size_t i = 0; i < attached.size(); ++i)
 	{
 		Coord3D pos = origin;
@@ -370,27 +400,15 @@ void destroyEmittersForObject(MapObject *obj)
 	{
 		return;
 	}
-	if (TheParticleSystemManager != NULL)
-	{
-		for (size_t i = 0; i < it->second.size(); ++i)
-		{
-			TheParticleSystemManager->destroyParticleSystemByID( it->second[i] );
-		}
-	}
+	destroyIDList( it->second );
 	s_emitters.erase( it );
 }
 
 void destroyAllEmitters()
 {
-	if (TheParticleSystemManager != NULL)
+	for (EmitterMap::iterator it = s_emitters.begin(); it != s_emitters.end(); ++it)
 	{
-		for (EmitterMap::iterator it = s_emitters.begin(); it != s_emitters.end(); ++it)
-		{
-			for (size_t i = 0; i < it->second.size(); ++i)
-			{
-				TheParticleSystemManager->destroyParticleSystemByID( it->second[i] );
-			}
-		}
+		destroyIDList( it->second );
 	}
 	s_emitters.clear();
 }
