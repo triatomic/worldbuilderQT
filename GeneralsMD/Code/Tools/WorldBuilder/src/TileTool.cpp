@@ -1326,10 +1326,15 @@ void BigTileTool::setHeight(Int height)
 }
 
 /// Shows the terrain materials options panel.
-void BigTileTool::activate() 
+void BigTileTool::activate()
 {
 	CMainFrame::GetMainFrame()->showOptionsDialog(IDD_TERRAIN_MATERIAL);
 	TerrainMaterial::setToolOptions(false);
+	// Restore the brush width from the persisted setting. setToolOptions may have forced the size
+	// edit to "1" (a single-cell tool like the eyedropper was last active) and its Qt refresh reads
+	// that stale box, so re-seed from the saved TileToolWidth and push it back through the edit box
+	// the tools + Qt panel read -- otherwise the width reverts after an eyedropper/single-cell swap.
+	m_currentWidth = getTileToolWidth();
 	TerrainMaterial::setWidth(m_currentWidth);
 	TerrainMaterial::setHeight(m_currentHeight);
 	DrawObject::setDoBrushFeedback(true);
@@ -1341,4 +1346,10 @@ void BigTileTool::activate()
 		// square
 		DrawObject::setBrushFeedbackParms(true, m_currentWidth, 0, m_currentHeight);
 	}
+
+#ifdef RTS_HAS_QT
+	// setToolOptions already pushed the (possibly stale) tool state to the Qt panel before we
+	// restored the width above, so re-push now that the size edit holds the real width.
+	TerrainMaterial::qtRefreshToolState();
+#endif
 }
