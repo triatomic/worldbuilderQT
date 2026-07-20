@@ -25,8 +25,8 @@ WBQtWaterPanel::WBQtWaterPanel(QWidget *owner)
 
 	m_waterPolygon = m_ui->waterPolygon;
 	m_spacing = m_ui->spacing;
-	m_selectionBox = m_ui->selectionBox;
 	m_name = m_ui->name;
+	m_heightLabel = m_ui->heightLabel;
 	m_heightSlider = m_ui->heightSlider;
 	m_heightSpin = m_ui->heightSpin;
 	m_makeRiver = m_ui->makeRiver;
@@ -55,6 +55,7 @@ WBQtWaterPanel::WBQtWaterPanel(QWidget *owner)
 	connect(m_heightSlider, SIGNAL(sliderPressed()), this, SLOT(onHeightSliderPressed()));
 	connect(m_heightSlider, SIGNAL(sliderReleased()), this, SLOT(onHeightSliderReleased()));
 	connect(m_makeRiver, SIGNAL(clicked()), this, SLOT(onMakeRiverToggled()));
+	connect(m_ui->waveEditorBtn, SIGNAL(clicked()), this, SLOT(onOpenWaveEditor()));
 
 	s_instance = this;
 }
@@ -93,15 +94,19 @@ void WBQtWaterPanel::pushRefresh()
 	m_waterPolygon->setChecked(WBQtWater_GetCreatingWaterAreas() != 0);
 	m_spacing->setValue(WBQtWater_GetSpacing());
 
-	// Name + Make River show for ANY single selected polygon (== MFC updateTheUI); the height
-	// row is water-area-only, hidden for a plain polygon you might be about to Make River.
+	// Like MFC updateTheUI, every group stays visible; the selection only drives populate +
+	// enable. Name + Activate (Make River) apply to ANY single selected polygon; the height
+	// row is water-area-only (a plain polygon you might be about to Activate into a river has
+	// no height to edit yet).
 	bool hasSel = (WBQtWater_HasSelection() != 0);
 	bool isWater = hasSel && (WBQtWater_IsWaterArea() != 0);
-	m_selectionBox->setVisible(hasSel);
 
-	m_ui->heightLabel->setVisible(isWater);
-	m_heightSlider->setVisible(isWater);
-	m_heightSpin->setVisible(isWater);
+	m_name->setEnabled(hasSel);
+	m_makeRiver->setEnabled(hasSel);	// == IDC_MAKE_RIVER EnableWindow(theTrigger != NULL)
+
+	m_heightLabel->setEnabled(isWater);
+	m_heightSlider->setEnabled(isWater);
+	m_heightSpin->setEnabled(isWater);
 
 	if (hasSel)
 	{
@@ -109,11 +114,16 @@ void WBQtWaterPanel::pushRefresh()
 		char buf[cap];
 		WBQtWater_GetName(buf, cap);
 		m_name->setEditText(QString::fromLatin1(buf));
-		if (isWater)
-		{
-			setHeightRow(WBQtWater_GetHeight());
-		}
 		m_makeRiver->setChecked(WBQtWater_GetRiver() != 0);
+	}
+	else
+	{
+		m_name->setEditText(QString());
+		m_makeRiver->setChecked(false);
+	}
+	if (isWater)
+	{
+		setHeightRow(WBQtWater_GetHeight());
 	}
 
 	m_updating = false;
@@ -126,6 +136,11 @@ void WBQtWaterPanel::onWaterPolygonToggled()
 		return;
 	}
 	WBQtWater_SetCreatingWaterAreas(m_waterPolygon->isChecked() ? 1 : 0);
+}
+
+void WBQtWaterPanel::onOpenWaveEditor()
+{
+	WBQtWater_OpenWaveEditorTool();
 }
 
 void WBQtWaterPanel::onSpacingChanged(int v)

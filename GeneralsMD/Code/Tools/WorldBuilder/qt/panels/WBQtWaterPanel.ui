@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>320</width>
-    <height>300</height>
+    <height>470</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -15,95 +15,145 @@
   </property>
   <layout class="QVBoxLayout" name="rootLayout">
    <item>
-    <widget class="QGroupBox" name="toolBox">
+    <widget class="QGroupBox" name="nameBox">
      <property name="title">
-      <string>Tool</string>
+      <string>Water Area Name:</string>
      </property>
-     <layout class="QVBoxLayout" name="toolLay">
+     <layout class="QVBoxLayout" name="nameLay">
       <item>
-       <widget class="QCheckBox" name="waterPolygon">
-        <property name="text">
-         <string>Water Polygon</string>
+       <widget class="QComboBox" name="name">
+        <property name="editable">
+         <bool>true</bool>
+        </property>
+        <property name="insertPolicy">
+         <enum>QComboBox::NoInsert</enum>
         </property>
        </widget>
-      </item>
-      <item>
-       <layout class="QHBoxLayout" name="spacingRow" stretch="0,1">
-        <item>
-         <widget class="QLabel" name="spacingLabel">
-          <property name="text">
-           <string>Point Spacing:</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QSpinBox" name="spacing">
-          <property name="maximum">
-           <number>1000000</number>
-          </property>
-         </widget>
-        </item>
-       </layout>
       </item>
      </layout>
     </widget>
    </item>
    <item>
-    <widget class="QGroupBox" name="selectionBox">
+    <widget class="QGroupBox" name="heightBox">
      <property name="title">
-      <string>Selected Water Area</string>
+      <string>Water Height:</string>
      </property>
-     <layout class="QVBoxLayout" name="selLay">
+     <layout class="QHBoxLayout" name="heightRow" stretch="0,1,0">
       <item>
-       <layout class="QHBoxLayout" name="nameRow" stretch="0,1">
-        <item>
-         <widget class="QLabel" name="nameLabel">
-          <property name="text">
-           <string>Name:</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QComboBox" name="name">
-          <property name="editable">
-           <bool>true</bool>
-          </property>
-          <property name="insertPolicy">
-           <enum>QComboBox::NoInsert</enum>
-          </property>
-         </widget>
-        </item>
-       </layout>
+       <widget class="QLabel" name="heightLabel">
+        <property name="text">
+         <string>Water height (feet):</string>
+        </property>
+       </widget>
       </item>
       <item>
-       <layout class="QHBoxLayout" name="heightRow" stretch="0,1,0">
-        <item>
-         <widget class="QLabel" name="heightLabel">
-          <property name="text">
-           <string>Height:</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QSlider" name="heightSlider">
-          <property name="orientation">
-           <enum>Qt::Horizontal</enum>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QSpinBox" name="heightSpin">
-          <property name="maximum">
-           <number>65535</number>
-          </property>
-         </widget>
-        </item>
-       </layout>
+       <widget class="QSlider" name="heightSlider">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
       </item>
+      <item>
+       <widget class="QSpinBox" name="heightSpin">
+        <property name="maximum">
+         <number>65535</number>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QCheckBox" name="waterPolygon">
+     <property name="text">
+      <string>Fill Mode</string>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="spacingBox">
+     <property name="title">
+      <string>Point spacing for water polygons and rivers.</string>
+     </property>
+     <layout class="QVBoxLayout" name="spacingLay">
+      <item>
+       <widget class="QSpinBox" name="spacing">
+        <property name="maximum">
+         <number>100000</number>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="spacingHint">
+        <property name="text">
+         <string>&gt; Increase the value for less water points
+( Its not recommended to put so many water points - due to performance reasons )
+[ 100 - for river / less value for default water]</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="riverBox">
+     <property name="title">
+      <string>River</string>
+     </property>
+     <layout class="QVBoxLayout" name="riverLay">
       <item>
        <widget class="QCheckBox" name="makeRiver">
         <property name="text">
-         <string>Make River</string>
+         <string>Activate</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="riverHint1">
+        <property name="text">
+         <string>&gt; Select a water point, then click Activate* (the selected point determines the river flow direction)
+&gt; Keep clicking Activate* to preview other river direction</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="riverHint2">
+        <property name="text">
+         <string>&gt; To control the speed of the river you need to space out the water points (in fill mode, or manually move them in the map if its already placed)</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="wavesBox">
+     <property name="title">
+      <string>Want to create waves?</string>
+     </property>
+     <layout class="QVBoxLayout" name="wavesLay">
+      <item>
+       <widget class="QPushButton" name="waveEditorBtn">
+        <property name="text">
+         <string>Open Wave Editor</string>
+        </property>
+        <property name="autoDefault">
+         <bool>false</bool>
         </property>
        </widget>
       </item>

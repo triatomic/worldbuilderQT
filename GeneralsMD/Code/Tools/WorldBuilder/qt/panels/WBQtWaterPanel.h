@@ -16,6 +16,7 @@
 class QCheckBox;
 class QComboBox;
 class QGroupBox;
+class QLabel;
 class QSlider;
 class QSpinBox;
 
@@ -42,6 +43,7 @@ private slots:
 	void onHeightSliderPressed();		// begin a slider drag (one undoable across it)
 	void onHeightSliderReleased();		// end the slider drag
 	void onMakeRiverToggled();
+	void onOpenWaveEditor();			// activate the in-editor Wave Editor tool
 
 private:
 	void setHeightRow(int v);	// keep the height slider + spinbox in lockstep (caller guards)
@@ -51,8 +53,8 @@ private:
 	QCheckBox *m_waterPolygon;
 	QSpinBox  *m_spacing;
 
-	QGroupBox *m_selectionBox;	// name + height + Make River (shown only for a water-area trigger)
 	QComboBox *m_name;
+	QLabel    *m_heightLabel;
 	QSlider   *m_heightSlider;
 	QSpinBox  *m_heightSpin;
 	QCheckBox *m_makeRiver;

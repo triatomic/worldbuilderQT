@@ -61,6 +61,7 @@ int  WBQtWater_SetName(const char *name);
 // OnMakeRiver (setRiver + the flow-direction reorder when turning it on).
 int  WBQtWater_GetRiver(void);
 void WBQtWater_SetRiver(int on);
+void WBQtWater_OpenWaveEditorTool(void);	// activate the in-editor Wave Editor tool
 
 // Forward (Qt-side, WBQtWaterPanel.cpp): WaterOptions::update() / updateTheUI fire this so the
 // Qt panel re-reads on water-area selection.

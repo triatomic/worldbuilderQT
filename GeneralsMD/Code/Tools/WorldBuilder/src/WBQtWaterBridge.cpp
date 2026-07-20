@@ -150,5 +150,17 @@ void WBQtWater_SetRiver(int on)
 	WaterOptions::qtSetRiver(on != 0);
 }
 
+// Declared in qt/WBQtShortcuts.h; posts a WM_COMMAND to the main frame, the same delivery a
+// toolbar button uses. We only need the one symbol here, so declare it locally.
+extern "C" void WBQtShortcuts_PostCommandUnchecked(int commandId);
+
+void WBQtWater_OpenWaveEditorTool(void)
+{
+	// The "Want to create waves?" button activates the in-editor Wave Editor TOOL (paint waves
+	// on the map), == selecting ID_WAVE_EDITOR_TOOL from the toolbar -- not the old
+	// "jump to the game in wave-edit mode" launch.
+	WBQtShortcuts_PostCommandUnchecked(ID_WAVE_EDITOR_TOOL);
+}
+
 }
 #endif
