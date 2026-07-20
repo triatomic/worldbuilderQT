@@ -39,18 +39,28 @@ WBQtGrovePanel::WBQtGrovePanel(QWidget *owner)
 	m_usePropsOnly = m_ui->usePropsOnly;
 	m_preview = m_ui->preview;	// object preview thumbnail (of the last-touched tree combo)
 
-	// The 11 tree-type rows: a template combo + a weight spinbox each, added under
-	// the .ui's Type/Weight header row.
+	// The 11 tree rows, laid out like the MFC dialog: the narrow % edit LEFT of the type
+	// combo, rows 1-10 under the "% / Tree Type" header, and row 11 inside the
+	// "Other Props:" group (IDC_Grove_Type11/Per11 live there in the .rc).
 	for (int t = 1; t <= TREES_PER_SET; ++t)
 	{
 		int i = t - 1;
-		m_treeType[i] = new QComboBox(m_ui->treesBox);
+		m_treeType[i] = new QComboBox(this);
 		m_treeType[i]->setProperty(kRowProperty, t);
-		m_weight[i] = new QSpinBox(m_ui->treesBox);
+		m_weight[i] = new QSpinBox(this);
 		m_weight[i]->setRange(0, 1000000);
 		m_weight[i]->setProperty(kRowProperty, t);
-		m_ui->treesGrid->addWidget(m_treeType[i], t, 0);
-		m_ui->treesGrid->addWidget(m_weight[i], t, 1);
+		m_weight[i]->setMaximumWidth(48);	// == the 20-DLU MFC percent edit
+		if (t < TREES_PER_SET)
+		{
+			m_ui->treesGrid->addWidget(m_weight[i], t, 0);
+			m_ui->treesGrid->addWidget(m_treeType[i], t, 1);
+		}
+		else
+		{
+			m_ui->otherGrid->addWidget(m_weight[i], 0, 0);
+			m_ui->otherGrid->addWidget(m_treeType[i], 0, 1);
+		}
 	}
 
 	// MFC's combos are WS_VSCROLL: give every drop-down here a scrolling popup.
@@ -81,7 +91,7 @@ WBQtGrovePanel::WBQtGrovePanel(QWidget *owner)
 	connect(m_allowWater, SIGNAL(clicked()), this, SLOT(onAllowWaterToggled()));
 	connect(m_allowCliff, SIGNAL(clicked()), this, SLOT(onAllowCliffToggled()));
 	connect(m_usePropsOnly, SIGNAL(clicked()), this, SLOT(onUsePropsOnlyToggled()));
-	connect(m_ui->saveBtn, SIGNAL(clicked()), this, SLOT(onSaveSet()));
+	// No Save Set button: the MFC dialog ships it NOT WS_VISIBLE | WS_DISABLED (dead code).
 	connect(m_ui->settingsBtn, SIGNAL(clicked()), this, SLOT(onOpenSettings()));
 
 	s_instance = this;
@@ -300,11 +310,6 @@ void WBQtGrovePanel::onUsePropsOnlyToggled()
 	m_updating = true;
 	refreshTotal();
 	m_updating = false;
-}
-
-void WBQtGrovePanel::onSaveSet()
-{
-	WBQtGrove_SaveSet();
 }
 
 void WBQtGrovePanel::onOpenSettings()

@@ -7,50 +7,53 @@
   </property>
   <layout class="QVBoxLayout" name="rootLayout">
    <item>
-    <layout class="QHBoxLayout" name="setRow" stretch="0,1,0,0">
-     <item>
-      <widget class="QLabel" name="setLabel">
-       <property name="text">
-        <string>Set:</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QComboBox" name="setName"/>
-     </item>
-     <item>
-      <widget class="QPushButton" name="saveBtn">
-       <property name="text">
-        <string>Save</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="settingsBtn">
-       <property name="text">
-        <string>Settings</string>
-       </property>
-      </widget>
-     </item>
-    </layout>
-   </item>
-   <item>
-    <widget class="QGroupBox" name="treesBox">
+    <widget class="QGroupBox" name="setBox">
      <property name="title">
-      <string>Tree types &amp; weights</string>
+      <string>Grove Set:</string>
      </property>
-     <layout class="QGridLayout" name="treesGrid">
+     <layout class="QGridLayout" name="setGrid" columnstretch="1,0">
       <item row="0" column="0">
-       <widget class="QLabel" name="typeHeaderLabel">
-        <property name="text">
-         <string>Type</string>
+       <widget class="QComboBox" name="setName"/>
+      </item>
+      <item row="0" column="1" rowspan="3">
+       <widget class="QLabel" name="preview">
+        <property name="minimumSize">
+         <size>
+          <width>86</width>
+          <height>78</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>86</width>
+          <height>78</height>
+         </size>
+        </property>
+        <property name="frameShape">
+         <enum>QFrame::Box</enum>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
         </property>
        </widget>
       </item>
-      <item row="0" column="1">
-       <widget class="QLabel" name="weightHeaderLabel">
+      <item row="1" column="0">
+       <widget class="QLabel" name="tipLabel">
         <property name="text">
-         <string>Weight</string>
+         <string>Tip: Share your grove presets (Grovesets.ini) with friends.</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QPushButton" name="settingsBtn">
+        <property name="text">
+         <string>Open Grove Settings</string>
+        </property>
+        <property name="autoDefault">
+         <bool>false</bool>
         </property>
        </widget>
       </item>
@@ -58,95 +61,122 @@
     </widget>
    </item>
    <item>
-    <layout class="QHBoxLayout" name="totalRow" stretch="0,1">
-     <item>
-      <widget class="QLabel" name="totalCaptionLabel">
+    <layout class="QGridLayout" name="treesGrid" columnstretch="0,1">
+     <item row="0" column="0">
+      <widget class="QLabel" name="percentHeaderLabel">
        <property name="text">
-        <string>Total weight:</string>
+        <string>%</string>
        </property>
       </widget>
      </item>
-     <item>
+     <item row="0" column="1">
+      <widget class="QLabel" name="typeHeaderLabel">
+       <property name="text">
+        <string>Tree Type</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="otherBox">
+     <property name="title">
+      <string>Other Props:</string>
+     </property>
+     <layout class="QVBoxLayout" name="otherLay">
+      <item>
+       <layout class="QGridLayout" name="otherGrid" columnstretch="0,1"/>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="usePropsOnly">
+        <property name="text">
+         <string>Spawn Only Props</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <layout class="QGridLayout" name="totalsGrid" columnstretch="0,0,1">
+     <item row="0" column="0">
       <widget class="QLabel" name="total">
+       <property name="minimumSize">
+        <size>
+         <width>54</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="frameShape">
+        <enum>QFrame::StyledPanel</enum>
+       </property>
        <property name="text">
         <string>0</string>
        </property>
       </widget>
      </item>
-    </layout>
-   </item>
-   <item>
-    <layout class="QHBoxLayout" name="numRow" stretch="0,1">
-     <item>
+     <item row="0" column="1">
+      <widget class="QLabel" name="totalCaptionLabel">
+       <property name="text">
+        <string>% Total</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="2">
+      <widget class="QCheckBox" name="allowWater">
+       <property name="text">
+        <string>Allow Water Placement</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QSpinBox" name="numTrees">
+       <property name="maximum">
+        <number>100000</number>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
       <widget class="QLabel" name="numTreesLabel">
        <property name="text">
-        <string>Number of trees:</string>
+        <string>Total Object Count</string>
        </property>
       </widget>
      </item>
-     <item>
-      <widget class="QSpinBox" name="numTrees">
-       <property name="minimum">
-        <number>0</number>
-       </property>
-       <property name="maximum">
-        <number>1000000</number>
+     <item row="1" column="2">
+      <widget class="QCheckBox" name="allowCliff">
+       <property name="text">
+        <string>Allow Impassable Placement</string>
        </property>
       </widget>
      </item>
     </layout>
    </item>
    <item>
-    <widget class="QGroupBox" name="placeBox">
+    <widget class="QGroupBox" name="noteBox">
      <property name="title">
-      <string>Placement</string>
+      <string>Developer Note:</string>
      </property>
-     <layout class="QVBoxLayout" name="placeLay">
+     <layout class="QVBoxLayout" name="noteLay">
       <item>
-       <widget class="QCheckBox" name="allowWater">
+       <widget class="QLabel" name="noteLabel">
         <property name="text">
-         <string>Allow water placement</string>
+         <string>Left click to place a tree, left click and drag to place mutiple trees with randomization.</string>
         </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QCheckBox" name="allowCliff">
-        <property name="text">
-         <string>Allow cliff placement</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QCheckBox" name="usePropsOnly">
-        <property name="text">
-         <string>Use props only</string>
+        <property name="wordWrap">
+         <bool>true</bool>
         </property>
        </widget>
       </item>
      </layout>
     </widget>
    </item>
-   <item alignment="Qt::AlignHCenter">
-    <widget class="QLabel" name="preview">
-     <property name="minimumSize">
-      <size>
-       <width>128</width>
-       <height>128</height>
-      </size>
+   <item>
+    <spacer name="bottomSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
      </property>
-     <property name="maximumSize">
-      <size>
-       <width>128</width>
-       <height>128</height>
-      </size>
-     </property>
-     <property name="frameShape">
-      <enum>QFrame::Box</enum>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignCenter</set>
-     </property>
-    </widget>
+    </spacer>
    </item>
   </layout>
  </widget>

@@ -48,7 +48,6 @@ private slots:
 	void onAllowWaterToggled();
 	void onAllowCliffToggled();
 	void onUsePropsOnlyToggled();
-	void onSaveSet();
 	void onOpenSettings();
 
 private:
