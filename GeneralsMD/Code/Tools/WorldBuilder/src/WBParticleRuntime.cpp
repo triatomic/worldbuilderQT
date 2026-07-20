@@ -233,6 +233,104 @@ namespace
 		}
 		return out;
 	}
+
+	// One emitter to place: its template + the world position it should sit at. Both the initial
+	// spawn (createEmittersForObject) and the drag-move reposition build this SAME ordered list from
+	// one source, so the systems recorded per object stay index-aligned with it.
+	struct Placement
+	{
+		const ParticleSystemTemplate *tmpl;
+		Coord3D pos;
+	};
+
+	// Build the ordered emitter placement list for an object: (a) its standalone particle-system
+	// marker (if any), then (b) each always-on attached emitter at its bone world position. renderObj
+	// (may be NULL) is the positioned render object attached emitters read their bone transform from;
+	// origin is the terrain-adjusted object origin used for the marker and for unresolved bones.
+	void computeEmitterPlacements( MapObject *obj, RenderObjClass *renderObj, const Coord3D &origin,
+		std::vector<Placement> &out )
+	{
+		// (a) Standalone placed particle system: a marker whose dict names a particle template.
+		Dict *props = obj->getProperties();
+		if (props != NULL)
+		{
+			static const NameKeyType key = TheNameKeyGenerator->nameToKey( "particleSystemName" );
+			Bool exists = FALSE;
+			AsciiString name = props->getAsciiString( key, &exists );
+			if (exists && !name.isEmpty() && TheParticleSystemManager != NULL)
+			{
+				const ParticleSystemTemplate *tmpl = TheParticleSystemManager->findTemplate( name );
+				if (tmpl != NULL)
+				{
+					Placement p;
+					p.tmpl = tmpl;
+					p.pos = origin;
+					out.push_back( p );
+				}
+			}
+		}
+
+		// (b) Always-on emitters attached to the object's template's default draw state, placed at
+		// their bone. Get_Bone_Transform gives the bone's WORLD matrix (the render obj is already
+		// positioned); an unknown bone falls back to Get_Transform (the object origin), so a bad
+		// bone name still shows the emitter rather than dropping it.
+		const AttachedList &attached = collectAlwaysOnTemplates( obj->getThingTemplate() );
+		for (size_t i = 0; i < attached.size(); ++i)
+		{
+			Placement p;
+			p.tmpl = attached[i].tmpl;
+			p.pos = origin;
+			if (renderObj != NULL && !attached[i].bone.isEmpty() && !attached[i].bone.isNone())
+			{
+				const Matrix3D &bx = renderObj->Get_Bone_Transform( attached[i].bone.str() );
+				Vector3 t = bx.Get_Translation();
+				p.pos.x = t.X;
+				p.pos.y = t.Y;
+				p.pos.z = t.Z;
+			}
+			out.push_back( p );
+		}
+	}
+
+	// Try to MOVE this object's existing emitters to the given placements instead of respawning.
+	// Succeeds only when the tracked set is present, matches the new placement count, and every
+	// tracked system is still alive -- a finite-lifetime emitter that expired mid-drag has been
+	// removed by the manager, so its ID is stale and repositioning can't bring it back (that would
+	// leave it dead after the drag). On any of those, returns false so the caller does a full
+	// rebuild that respawns the whole set. Placement order matches spawn order, so IDs align.
+	bool tryRepositionInPlace( MapObject *obj, const std::vector<Placement> &places )
+	{
+		if (TheParticleSystemManager == NULL)
+		{
+			return false;
+		}
+		EmitterMap::iterator it = s_emitters.find( obj );
+		if (it == s_emitters.end() || places.empty() || it->second.size() != places.size())
+		{
+			return false;
+		}
+
+		// Resolve every tracked system first: only move once we know the whole set is alive (a
+		// partial move into a stale set can't be aligned). findParticleSystem is an O(N) scan, so
+		// cache the resolved pointers here rather than looking each up twice.
+		std::vector<ParticleSystem *> live;
+		live.reserve( places.size() );
+		for (size_t i = 0; i < it->second.size(); ++i)
+		{
+			ParticleSystem *sys = TheParticleSystemManager->findParticleSystem( it->second[i] );
+			if (sys == NULL || sys->isDestroyed())
+			{
+				return false;
+			}
+			live.push_back( sys );
+		}
+
+		for (size_t i = 0; i < live.size(); ++i)
+		{
+			live[i]->setPosition( &places[i].pos );
+		}
+		return true;
+	}
 }
 
 namespace WBParticleRuntime
@@ -345,51 +443,37 @@ void setEnabled(bool on)
 	}
 }
 
-void createEmittersForObject(MapObject *obj, RenderObjClass *renderObj,
+void placeEmittersForObject(MapObject *obj, RenderObjClass *renderObj,
 	float worldX, float worldY, float worldZ)
 {
 	if (!s_enabled || obj == NULL)
 	{
 		return;
 	}
-	// Rebuild: drop any emitters this object already had.
-	destroyEmittersForObject( obj );
 
 	Coord3D origin;		// the object origin: standalone-marker position + bone fallback
 	origin.x = worldX;
 	origin.y = worldY;
 	origin.z = worldZ;
 
-	// (a) Standalone placed particle system: a marker whose dict names a particle template.
-	Dict *props = obj->getProperties();
-	if (props != NULL)
+	std::vector<Placement> places;
+	computeEmitterPlacements( obj, renderObj, origin, places );
+
+	// If this object already has a live emitter set that still matches its template, MOVE the
+	// systems in place instead of respawning -- so a drag-move keeps its in-flight particles and
+	// doesn't visibly reset every mouse-tick. Otherwise (first placement, changed set, or any
+	// tracked system expired) fall through to a full rebuild. Deciding here keeps callers from
+	// having to know the move-vs-rebuild policy.
+	if (tryRepositionInPlace( obj, places ))
 	{
-		static const NameKeyType key = TheNameKeyGenerator->nameToKey( "particleSystemName" );
-		Bool exists = FALSE;
-		AsciiString name = props->getAsciiString( key, &exists );
-		if (exists && !name.isEmpty() && TheParticleSystemManager != NULL)
-		{
-			spawnEmitter( obj, TheParticleSystemManager->findTemplate( name ), origin );
-		}
+		return;
 	}
 
-	// (b) Always-on emitters attached to the object's template's default draw state, placed at
-	// their bone. Get_Bone_Transform gives the bone's WORLD matrix (the render obj is already
-	// positioned); an unknown bone falls back to Get_Transform (the object origin), so a bad
-	// bone name still shows the emitter rather than dropping it.
-	const AttachedList &attached = collectAlwaysOnTemplates( obj->getThingTemplate() );
-	for (size_t i = 0; i < attached.size(); ++i)
+	// Full rebuild: drop any stale emitters and respawn the whole set fresh.
+	destroyEmittersForObject( obj );
+	for (size_t i = 0; i < places.size(); ++i)
 	{
-		Coord3D pos = origin;
-		if (renderObj != NULL && !attached[i].bone.isEmpty() && !attached[i].bone.isNone())
-		{
-			const Matrix3D &bx = renderObj->Get_Bone_Transform( attached[i].bone.str() );
-			Vector3 t = bx.Get_Translation();
-			pos.x = t.X;
-			pos.y = t.Y;
-			pos.z = t.Z;
-		}
-		spawnEmitter( obj, attached[i].tmpl, pos );
+		spawnEmitter( obj, places[i].tmpl, places[i].pos );
 	}
 }
 

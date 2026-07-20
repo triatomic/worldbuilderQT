@@ -33,13 +33,18 @@ namespace WBParticleRuntime
 	void setEnabled(bool on);
 	bool isEnabled();
 
-	// Create the emitters a placed object should show (standalone marker + always-on attached).
-	// renderObj (may be NULL) is the object's positioned W3D render object: attached emitters read
-	// their bone's world transform from it, so this MUST be called AFTER renderObj->Set_Transform.
-	// worldX/Y/Z (terrain-adjusted object origin) is the fallback position for the standalone
-	// marker and for any bone that can't be resolved. No-op when disabled or the object carries no
-	// particle systems. Safe to call again for the same object (rebuilds it).
-	void createEmittersForObject(MapObject *obj, RenderObjClass *renderObj,
+	// Place (or re-place) the emitters a placed object should show: its standalone particle-system
+	// marker plus the always-on emitters its template's DEFAULT draw state carries. renderObj (may
+	// be NULL) is the object's positioned W3D render object -- attached emitters read their bone's
+	// world transform from it, so this MUST be called AFTER renderObj->Set_Transform. worldX/Y/Z
+	// (terrain-adjusted object origin) is the fallback position for the marker and for any bone that
+	// can't be resolved.
+	//
+	// If the object already has live emitters that still match its template, they are MOVED in place
+	// (keeping their in-flight particles, so a drag-move doesn't visibly reset them); otherwise the
+	// set is rebuilt from scratch. Callers don't choose -- just call this whenever the object's
+	// position/state may have changed. No-op when disabled or the object carries no particle systems.
+	void placeEmittersForObject(MapObject *obj, RenderObjClass *renderObj,
 		float worldX, float worldY, float worldZ);
 
 	// Destroy every emitter tracked for this object (called when it moves/changes/deletes).

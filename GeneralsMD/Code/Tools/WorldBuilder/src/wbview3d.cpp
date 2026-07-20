@@ -2098,10 +2098,12 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 
 			m_scene->Add_Render_Object(renderObj);
 
-			// Live particle preview: (re)create this object's emitters now that its render obj is
-			// positioned, so attached emitters can read their bone world-transforms from it.
+			// Live particle preview: place this object's emitters now that its render obj is
+			// positioned, so attached emitters can read their bone world-transforms from it. This
+			// moves existing emitters in place when it can (so a drag-move doesn't reset them each
+			// tick -- the "re-rendering" flicker) and rebuilds otherwise; the caller doesn't decide.
 			// Self-guards (no-op unless "Render Particles" is on), like the destroy hooks.
-			WBParticleRuntime::createEmittersForObject(pMapObj, renderObj, loc.x, loc.y, loc.z);
+			WBParticleRuntime::placeEmittersForObject(pMapObj, renderObj, loc.x, loc.y, loc.z);
 
 			REF_PTR_RELEASE(renderObj); // belongs to m_scene now.
 		} else if (renderObj) {
