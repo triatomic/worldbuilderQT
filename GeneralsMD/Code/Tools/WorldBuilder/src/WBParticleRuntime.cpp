@@ -125,6 +125,29 @@ namespace
 			}
 			return 0.0f;
 		}
+		// The wave editor's render path calls TheTerrainLogic->isUnderwater() whenever a
+		// TheTerrainLogic exists; the base implementation walks polygon-trigger / water-grid state
+		// WB never fully stands up, so it crashes here. WB was designed to run that path with
+		// TheTerrainLogic == NULL (it then seats waves via the wave system's own water-height hook),
+		// but installing this shim for particles makes TheTerrainLogic non-NULL and reroutes the
+		// wave editor into the crashing base path. Override it to report the flat global water level
+		// (the same fallback the wave renderer uses when no editor water hook is set), which is
+		// crash-free and needs no game water state. Per-area water seating is unaffected when
+		// particles are off (TheTerrainLogic stays NULL and the editor hook is used as before).
+		virtual Bool isUnderwater( Real x, Real y, Real *waterZ = NULL, Real *terrainZ = NULL )
+		{
+			const Real wh = TheGlobalData->m_waterPositionZ;
+			const Real gh = getGroundHeight( x, y );
+			if (waterZ != NULL)
+			{
+				*waterZ = wh;
+			}
+			if (terrainZ != NULL)
+			{
+				*terrainZ = gh;
+			}
+			return gh < wh;
+		}
 	};
 
 	// ------------------------------------------------------------------------------------------
