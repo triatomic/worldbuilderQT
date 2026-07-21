@@ -10,6 +10,7 @@
 #ifndef WB_QT_SCRIPT_WINDOW_H
 #define WB_QT_SCRIPT_WINDOW_H
 
+#include <QByteArray>
 #include <QFont>
 #include <QIcon>
 #include <QTreeWidget>
@@ -20,6 +21,7 @@ class QLineEdit;
 class QPlainTextEdit;
 class QPushButton;
 class QTextBrowser;
+class QTimer;
 class QUrl;
 class WBQtScriptWindow;
 
@@ -78,6 +80,9 @@ private slots:
 	void onSaveNow();
 	void onCheckboxToggled();
 	void onFind();
+	void onSearchTextChanged(const QString &text);	// live filter when NewSearch is on (debounced)
+	void onSearchDebounce();						// the debounce timer fired -> apply the filter
+	void onFilterChanged();							// a Show: chip toggled
 	void onTreeContextMenu(const QPoint &pos);
 	void onTreeDoubleClicked(QTreeWidgetItem *item, int column);
 	void onReferenceClicked(const QUrl &url);
@@ -94,6 +99,25 @@ private:
 	int  selectedListType() const;		// -1 if nothing selected
 	void selectByListType(int listType);
 	void applyCompressFont();			// == OnCompress: 14px "Segoe UI" on the tree when compressed
+	// Hide tree rows that don't match the current search text AND the active Show: chips (a folder
+	// stays visible if any descendant matches). No-op producing a fully-shown tree when nothing is
+	// filtering. filterActive() is true iff any filter is in effect; textFilterActive() iff the
+	// search box (NewSearch on, non-empty) is contributing.
+	void applyFilters();
+	bool filterActive() const;
+	bool textFilterActive() const;
+
+	// The active filter criteria, resolved once per applyFilters and passed down the recursion so
+	// each node doesn't re-query the widgets. flags bits: bit0 active, bit1 warnings, bit3 easy,
+	// bit4 normal, bit5 hard.
+	struct FilterState
+	{
+		bool useText;
+		QByteArray needle;
+		bool wantWarn, wantActive, wantInactive, wantEasy, wantNormal, wantHard;
+	};
+	bool nodeSelfMatches(QTreeWidgetItem *item, const FilterState &fs) const;
+	bool filterItemRec(QTreeWidgetItem *item, const FilterState &fs);
 
 	Ui::WBQtScriptWindow *m_ui;	// owns the static widget tree (WBQtScriptWindow.ui)
 
@@ -102,6 +126,15 @@ private:
 	QTextBrowser *m_comment;	// browser, not edit: the "[Referenced in]" names are links
 	QLineEdit   *m_search;
 	QPushButton *m_findBtn;
+	QTimer      *m_searchDebounce;	// coalesces keystrokes so the live filter scans once per pause
+
+	// "Show:" filter chips (narrow the tree by state). Warnings/Active/Inactive/difficulty.
+	QCheckBox   *m_filterWarnings;
+	QCheckBox   *m_filterActive;
+	QCheckBox   *m_filterInactive;
+	QCheckBox   *m_filterEasy;
+	QCheckBox   *m_filterNormal;
+	QCheckBox   *m_filterHard;
 
 	// Option checkboxes (indexed by WBQT_SCK_*).
 	QCheckBox   *m_ckCompress;

@@ -442,6 +442,73 @@ extern "C" int WBQtScriptEdit_ConditionCopy(void *script, int row)
 	return qtFindConditionRow(pScript, pSelOr, pCopy);
 }
 
+// ---- cross-script clipboard (app lifetime) ----
+// Copying a condition/action stashes a duplicate here; pasting duplicates it back into the target
+// script. Kept as raw Condition*/ScriptAction* owned by the bridge, freed when replaced. Separate
+// holders keep conditions and actions type-safe: a condition can only paste into a conditions list,
+// an action only into an actions list.
+static Condition   *s_clipCondition = NULL;
+static ScriptAction *s_clipAction   = NULL;
+
+extern "C" int WBQtScriptEdit_ConditionHasClipboard(void)
+{
+	return (s_clipCondition != NULL) ? 1 : 0;
+}
+
+extern "C" int WBQtScriptEdit_ConditionCopyToClipboard(void *script, int row)
+{
+	Script *pScript = static_cast<Script *>(script);
+	OrCondition *pSelOr = NULL;
+	Condition *pSelCond = NULL;
+	if (!qtResolveConditionRow(pScript, row, &pSelOr, &pSelCond) || pSelCond == NULL)
+	{
+		return -1;	// no condition selected (an OR header row, or nothing)
+	}
+	if (s_clipCondition != NULL)
+	{
+		s_clipCondition->deleteInstance();
+	}
+	s_clipCondition = pSelCond->duplicate();
+	return 1;
+}
+
+extern "C" int WBQtScriptEdit_ConditionPasteFromClipboard(void *script, int row)
+{
+	if (s_clipCondition == NULL)
+	{
+		return -1;
+	}
+	Script *pScript = static_cast<Script *>(script);
+	OrCondition *pSelOr = NULL;
+	Condition *pSelCond = NULL;
+	qtResolveConditionRow(pScript, row, &pSelOr, &pSelCond);	// pSelOr may be the row's OR group
+	if (pSelOr == NULL)
+	{
+		// No selection resolved: paste into the first OR group (create one if the script has none,
+		// matching how New seeds an OrCondition).
+		pSelOr = pScript->getOrCondition();
+		if (pSelOr == NULL)
+		{
+			pSelOr = newInstance( OrCondition );
+			pScript->setOrCondition(pSelOr);
+		}
+	}
+	Condition *pCopy = s_clipCondition->duplicate();	// keep the clipboard for repeat pastes
+	if (pSelCond != NULL)
+	{
+		// Insert right after the selected condition.
+		pCopy->setNextCondition(pSelCond->getNext());
+		pSelCond->setNextCondition(pCopy);
+	}
+	else
+	{
+		// No condition selected in this group: append to its head.
+		pCopy->setNextCondition(pSelOr->getFirstAndCondition());
+		pSelOr->setFirstAndCondition(pCopy);
+	}
+	return qtFindConditionRow(pScript, pSelOr, pCopy);
+}
+
 extern "C" int WBQtScriptEdit_ConditionDelete(void *script, int row)
 {
 	// == ScriptConditionsDlg::OnDelete (select the previous row, clamped to 0).
@@ -809,6 +876,49 @@ extern "C" int WBQtScriptEdit_ActionCopy(void *script, int isFalse, int index)
 	pCopy->setNextAction(pSel->getNext());
 	pSel->setNextAction(pCopy);
 	return qtClampActionIndex(pScript, isFalse, index + 1);
+}
+
+extern "C" int WBQtScriptEdit_ActionHasClipboard(void)
+{
+	return (s_clipAction != NULL) ? 1 : 0;
+}
+
+extern "C" int WBQtScriptEdit_ActionCopyToClipboard(void *script, int isFalse, int index)
+{
+	Script *pScript = static_cast<Script *>(script);
+	ScriptAction *pSel = qtActionAt(pScript, isFalse, index);
+	if (pSel == NULL)
+	{
+		return -1;
+	}
+	if (s_clipAction != NULL)
+	{
+		s_clipAction->deleteInstance();
+	}
+	s_clipAction = pSel->duplicate();
+	return 1;
+}
+
+extern "C" int WBQtScriptEdit_ActionPasteFromClipboard(void *script, int isFalse, int index)
+{
+	if (s_clipAction == NULL)
+	{
+		return -1;
+	}
+	Script *pScript = static_cast<Script *>(script);
+	ScriptAction *pSel = qtActionAt(pScript, isFalse, index);
+	ScriptAction *pCopy = s_clipAction->duplicate();	// keep the clipboard for repeat pastes
+	if (pSel != NULL)
+	{
+		pCopy->setNextAction(pSel->getNext());
+		pSel->setNextAction(pCopy);
+	}
+	else
+	{
+		pCopy->setNextAction(qtGetActionHead(pScript, isFalse));
+		qtSetActionHead(pScript, isFalse, pCopy);
+	}
+	return qtClampActionIndex(pScript, isFalse, (pSel != NULL) ? index + 1 : 0);
 }
 
 extern "C" int WBQtScriptEdit_ActionDelete(void *script, int isFalse, int index)

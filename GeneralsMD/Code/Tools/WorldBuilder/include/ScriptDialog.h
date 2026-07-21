@@ -128,6 +128,9 @@ public:
 	// returns the next node (label + deep-content match) after fromListType, or 0 if none.
 	void qtDropOn(int dragListType, int targetListType);
 	int  qtFindNext(const char *text, int fromListType, int *outListType);
+	// Live tree filter: does this node match the search text (label or, for a script, deep scan)?
+	// label is the node's already-formatted tree label; empty text matches everything.
+	int  qtNodeMatches(int listTypeInt, const char *text, const char *label);
 	// 9c: recompute warnings (== OnVerifyAll) and toggle the current script/group active
 	// flag (== OnScriptActivate). The Qt window rebuilds after to pick up the new flags.
 	void qtVerify(void);
@@ -243,6 +246,7 @@ protected:
 	AsciiString incrementStringNumber(const AsciiString& input);
 	void applySmartCopyIncrement(Script* pScr);
 	AsciiString buildReferencedInTag(Script *pScript); ///< "[Referenced in] : ..." (empty if none/disabled)
+	AsciiString buildUsesTag(Script *pScript); ///< "[Uses] : ..." (scripts pScript calls; empty if none/disabled)
 
 	virtual BOOL PreTranslateMessage(MSG* pMsg);
 

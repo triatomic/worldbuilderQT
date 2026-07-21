@@ -5,7 +5,7 @@
   <property name="windowTitle">
    <string>Script Editor</string>
   </property>
-  <layout class="QVBoxLayout" name="rootLayout" stretch="0,0,1,0,0,0">
+  <layout class="QVBoxLayout" name="rootLayout" stretch="0,0,0,1,0,0,0">
    <item>
     <widget class="QGroupBox" name="optBox">
      <property name="title">
@@ -127,6 +127,75 @@
         <string>Find Next</string>
        </property>
       </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="filterRow">
+     <item>
+      <widget class="QLabel" name="filterLabel">
+       <property name="text">
+        <string>Show:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="filterWarnings">
+       <property name="toolTip">
+        <string>Show only scripts (and their folders) that have warnings.</string>
+       </property>
+       <property name="text">
+        <string>Warnings</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="filterActive">
+       <property name="toolTip">
+        <string>Show only active scripts.</string>
+       </property>
+       <property name="text">
+        <string>Active</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="filterInactive">
+       <property name="toolTip">
+        <string>Show only inactive scripts.</string>
+       </property>
+       <property name="text">
+        <string>Inactive</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="filterEasy">
+       <property name="text">
+        <string>Easy</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="filterNormal">
+       <property name="text">
+        <string>Normal</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="filterHard">
+       <property name="text">
+        <string>Hard</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="filterSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+      </spacer>
      </item>
     </layout>
    </item>

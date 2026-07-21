@@ -66,6 +66,13 @@ int  WBQtScriptEdit_ConditionCopy(void *script, int row);
 int  WBQtScriptEdit_ConditionDelete(void *script, int row);
 int  WBQtScriptEdit_ConditionMoveUp(void *script, int row);
 int  WBQtScriptEdit_ConditionMoveDown(void *script, int row);
+// Cross-script clipboard (app lifetime). CopyToClipboard stashes a duplicate of the selected
+// condition; PasteFromClipboard inserts a duplicate into `script` after the selected row (or at
+// the head if none). HasClipboard reports whether a condition is on the clipboard (for enabling
+// the Paste button). Returns the row to select after the rebuild, or -1 on no-op.
+int  WBQtScriptEdit_ConditionHasClipboard(void);
+int  WBQtScriptEdit_ConditionCopyToClipboard(void *script, int row);
+int  WBQtScriptEdit_ConditionPasteFromClipboard(void *script, int row);
 
 // --- Actions tabs (isFalse: 0 = "if true" list, 1 = "if false" list) ---
 int  WBQtScriptEditData_GetActionCount(void *script, int isFalse);
@@ -78,6 +85,11 @@ int  WBQtScriptEdit_ActionCopy(void *script, int isFalse, int index);
 int  WBQtScriptEdit_ActionDelete(void *script, int isFalse, int index);
 int  WBQtScriptEdit_ActionMoveUp(void *script, int isFalse, int index);
 int  WBQtScriptEdit_ActionMoveDown(void *script, int isFalse, int index);
+// Cross-script clipboard (app lifetime), same-type as the condition clipboard. An action can paste
+// into either action list (isFalse 0/1). HasClipboard is for enabling the Paste button.
+int  WBQtScriptEdit_ActionHasClipboard(void);
+int  WBQtScriptEdit_ActionCopyToClipboard(void *script, int isFalse, int index);
+int  WBQtScriptEdit_ActionPasteFromClipboard(void *script, int isFalse, int index);
 // Move the action to the other list (true<->false); returns 0 (select the top) or -1.
 int  WBQtScriptEdit_ActionMoveToOther(void *script, int isFalse, int index);
 

@@ -47,6 +47,8 @@ private slots:
 	void onNew();
 	void onEdit();
 	void onCopy();
+	void onCopyClipboard();		// Ctrl+C: stash to the cross-script clipboard
+	void onPasteClipboard();	// Ctrl+V: paste from the cross-script clipboard
 	void onDelete();
 	void onOr();
 	void onMoveToOther();

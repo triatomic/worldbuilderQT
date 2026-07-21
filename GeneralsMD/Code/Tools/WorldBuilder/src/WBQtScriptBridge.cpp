@@ -1373,6 +1373,12 @@ int WBQtScript_FindNext(const char *text, int fromListType, int *outListType)
 	return (dlg != NULL) ? dlg->qtFindNext(text, fromListType, outListType) : 0;
 }
 
+int WBQtScript_NodeMatches(int listType, const char *text, const char *label)
+{
+	ScriptDialog *dlg = ScriptDialog::qtInstance();
+	return (dlg != NULL) ? dlg->qtNodeMatches(listType, text, label) : 1;
+}
+
 void WBQtScript_Verify(void)
 {
 	ScriptDialog *dlg = ScriptDialog::qtInstance();

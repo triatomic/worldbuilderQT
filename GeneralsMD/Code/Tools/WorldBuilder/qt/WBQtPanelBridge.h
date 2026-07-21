@@ -249,6 +249,8 @@ void WBQtScript_Cancel(void);	// == OnCancel (discard)
 // (non-zero return on a hit); fromListType 0 starts from the top.
 void WBQtScript_DropOn(int dragListType, int targetListType);
 int  WBQtScript_FindNext(const char *text, int fromListType, int *outListType);
+// Live tree filter: 1 if the node (label, or script deep-scan) matches text; empty text => 1.
+int  WBQtScript_NodeMatches(int listType, const char *text, const char *label);
 // 9c: recompute warnings (Verify) and toggle the current selection's active flag.
 void WBQtScript_Verify(void);
 void WBQtScript_ToggleActive(void);

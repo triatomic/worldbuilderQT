@@ -14,6 +14,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QShortcut>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QRadioButton>
@@ -108,6 +109,17 @@ WBQtScriptEditListTab::WBQtScriptEditListTab(void *script, Mode mode, QWidget *p
 	connect(m_moveDownButton, SIGNAL(clicked()), this, SLOT(onMoveDown()));
 	connect(m_smartCopyCheck, SIGNAL(toggled(bool)), this, SLOT(onSmartCopyToggled(bool)));
 	connect(m_commentEdit, SIGNAL(textChanged()), this, SLOT(onCommentChanged()));
+
+	// Ctrl+C / Ctrl+V: copy the selected condition/action to the cross-script clipboard and paste
+	// it (into any script's matching list). WidgetShortcut = active only while THIS list has focus,
+	// so Ctrl+C/V keep their text meaning in the comment box. Same-type is enforced by the bridge:
+	// a condition list only has a condition clipboard, an action list only an action clipboard.
+	QShortcut *copySc = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_C), m_list);
+	copySc->setContext(Qt::WidgetShortcut);
+	connect(copySc, SIGNAL(activated()), this, SLOT(onCopyClipboard()));
+	QShortcut *pasteSc = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_V), m_list);
+	pasteSc->setContext(Qt::WidgetShortcut);
+	connect(pasteSc, SIGNAL(activated()), this, SLOT(onPasteClipboard()));
 
 	// Initial fill: the conditions page selected row 1 (the first condition) in OnInitDialog;
 	// the actions pages started at the top.
@@ -260,6 +272,36 @@ void WBQtScriptEditListTab::onCopy()
 	else
 	{
 		newRow = WBQtScriptEdit_ActionCopy(m_script, (m_mode == ModeActionsFalse) ? 1 : 0, currentRow());
+	}
+	if (newRow >= 0)
+	{
+		reload(newRow);
+	}
+}
+
+void WBQtScriptEditListTab::onCopyClipboard()
+{
+	// Stash the selected item to the app-lifetime clipboard (no list change, so no reload).
+	if (m_mode == ModeConditions)
+	{
+		WBQtScriptEdit_ConditionCopyToClipboard(m_script, currentRow());
+	}
+	else
+	{
+		WBQtScriptEdit_ActionCopyToClipboard(m_script, (m_mode == ModeActionsFalse) ? 1 : 0, currentRow());
+	}
+}
+
+void WBQtScriptEditListTab::onPasteClipboard()
+{
+	int newRow;
+	if (m_mode == ModeConditions)
+	{
+		newRow = WBQtScriptEdit_ConditionPasteFromClipboard(m_script, currentRow());
+	}
+	else
+	{
+		newRow = WBQtScriptEdit_ActionPasteFromClipboard(m_script, (m_mode == ModeActionsFalse) ? 1 : 0, currentRow());
 	}
 	if (newRow >= 0)
 	{

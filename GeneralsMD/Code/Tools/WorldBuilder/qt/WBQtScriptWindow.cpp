@@ -12,6 +12,7 @@
 #include <QDropEvent>
 #include <QFont>
 #include <QLineEdit>
+#include <QList>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
@@ -24,6 +25,7 @@
 #include <QStringList>
 #include <QStyle>
 #include <QTextBrowser>
+#include <QTimer>
 #include <QTreeWidgetItemIterator>
 #include <QUrl>
 #include <QWindow>
@@ -40,8 +42,9 @@ WBQtScriptWindow *WBQtScriptWindow::s_instance = NULL;
 
 // The list index the tree stores per node is the packed ListType int (opaque to Qt).
 static const int kListTypeRole = Qt::UserRole + 1;
-// The node's packed state flags (bit0=active, bit1=warnings, bit2=subroutine), so the
-// context menu can show the current active state as a check mark (== MFC CheckMenuItem).
+// The node's packed state flags (bit0=active, bit1=warnings, bit2=subroutine, bit3=easy,
+// bit4=normal, bit5=hard), so the context menu can show the current active state as a check
+// mark (== MFC CheckMenuItem) and the Show: chips can filter by state without re-querying.
 static const int kFlagsRole = Qt::UserRole + 2;
 
 //----------------------------------------------------------------------------------------
@@ -136,6 +139,12 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 
 	// --- Search row ---
 	m_search = m_ui->search;
+	m_filterWarnings = m_ui->filterWarnings;
+	m_filterActive = m_ui->filterActive;
+	m_filterInactive = m_ui->filterInactive;
+	m_filterEasy = m_ui->filterEasy;
+	m_filterNormal = m_ui->filterNormal;
+	m_filterHard = m_ui->filterHard;
 	m_findBtn = m_ui->findBtn;
 
 	// --- Middle: tree | (description over comment) ---
@@ -191,6 +200,19 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	connect(m_tree, SIGNAL(itemSelectionChanged()), this, SLOT(onTreeSelectionChanged()));
 	connect(m_findBtn, SIGNAL(clicked()), this, SLOT(onFind()));
 	connect(m_search, SIGNAL(returnPressed()), this, SLOT(onFind()));
+	connect(m_search, SIGNAL(textChanged(const QString &)), this, SLOT(onSearchTextChanged(const QString &)));
+	// Debounce the live filter: each keystroke restarts a short single-shot timer, so a burst of
+	// typing runs the (deep-scanning) filter once when typing pauses instead of on every character.
+	m_searchDebounce = new QTimer(this);
+	m_searchDebounce->setSingleShot(true);
+	m_searchDebounce->setInterval(180);
+	connect(m_searchDebounce, SIGNAL(timeout()), this, SLOT(onSearchDebounce()));
+	connect(m_filterWarnings, SIGNAL(toggled(bool)), this, SLOT(onFilterChanged()));
+	connect(m_filterActive, SIGNAL(toggled(bool)), this, SLOT(onFilterChanged()));
+	connect(m_filterInactive, SIGNAL(toggled(bool)), this, SLOT(onFilterChanged()));
+	connect(m_filterEasy, SIGNAL(toggled(bool)), this, SLOT(onFilterChanged()));
+	connect(m_filterNormal, SIGNAL(toggled(bool)), this, SLOT(onFilterChanged()));
+	connect(m_filterHard, SIGNAL(toggled(bool)), this, SLOT(onFilterChanged()));
 	connect(m_newFolder, SIGNAL(clicked()), this, SLOT(onNewFolder()));
 	connect(m_newScript, SIGNAL(clicked()), this, SLOT(onNewScript()));
 	connect(m_editScript, SIGNAL(clicked()), this, SLOT(onEditScript()));
@@ -462,6 +484,10 @@ void WBQtScriptWindow::rebuildTree()
 	{
 		selectByListType(selectedType);
 	}
+
+	// A command (new/copy/delete/edit) rebuilds the tree; re-apply the filters so hidden rows stay
+	// hidden across the rebuild instead of all reappearing. No-op when nothing is filtering.
+	applyFilters();
 }
 
 // == OnCompress's font swap: 14px "Segoe UI" on the tree while compressed, the tree's
@@ -494,6 +520,19 @@ void WBQtScriptWindow::resetForNewSession()
 	if (m_search != NULL)
 	{
 		m_search->clear();
+	}
+	// Clear the Show: filter chips so a new session starts unfiltered. Block signals so this
+	// doesn't fire applyFilters mid-reset (the tree isn't rebuilt yet).
+	QCheckBox *chips[6] = { m_filterWarnings, m_filterActive, m_filterInactive,
+		m_filterEasy, m_filterNormal, m_filterHard };
+	for (int i = 0; i < 6; ++i)
+	{
+		if (chips[i] != NULL)
+		{
+			chips[i]->blockSignals(true);
+			chips[i]->setChecked(false);
+			chips[i]->blockSignals(false);
+		}
 	}
 	seedCheckboxes();	// pick up any persisted-setting changes
 }
@@ -545,22 +584,34 @@ void WBQtScriptWindow::updateButtonStates()
 	m_removeDebug->setEnabled(hasScript);
 }
 
-// Escape the comment text for rich text and turn each script name after the
-// "[Referenced in] : " marker (the names run to the end -- the tag is appended last)
-// into a wbref: link, so the detail pane can jump to the referencing script.
+// Escape the comment text for rich text and turn each script name on a reference line
+// ("[Referenced in] : <names>" -- who calls this script -- or "[Uses] : <names>" -- who this
+// script calls) into a wbref: link, so the detail pane can jump to that script. Done per line so
+// both tags (now separated by a blank line) linkify independently.
 static QString wbLinkifyReferences(const QString &comment)
 {
-	const QString marker = "[Referenced in] : ";
-	const int at = comment.indexOf(marker);
-	QString html;
-	if (at == -1)
+	const char *const markers[2] = { "[Referenced in] : ", "[Uses] : " };
+	QStringList lines = comment.split("\n");
+	for (int li = 0; li < lines.size(); ++li)
 	{
-		html = comment.toHtmlEscaped();
-	}
-	else
-	{
-		html = comment.left(at + marker.size()).toHtmlEscaped();
-		const QStringList names = comment.mid(at + marker.size()).split(", ");
+		const QString &line = lines.at(li);
+		int mi = -1;
+		for (int m = 0; m < 2; ++m)
+		{
+			if (line.startsWith(markers[m]))
+			{
+				mi = m;
+				break;
+			}
+		}
+		if (mi == -1)
+		{
+			lines[li] = line.toHtmlEscaped();
+			continue;
+		}
+		const QString marker = markers[mi];
+		QString html = marker.toHtmlEscaped();
+		const QStringList names = line.mid(marker.size()).split(", ");
 		for (int i = 0; i < names.size(); ++i)
 		{
 			if (i > 0)
@@ -571,9 +622,9 @@ static QString wbLinkifyReferences(const QString &comment)
 				+ QString::fromLatin1(QUrl::toPercentEncoding(names.at(i)))
 				+ "\">" + names.at(i).toHtmlEscaped() + "</a>";
 		}
+		lines[li] = html;
 	}
-	html.replace("\n", "<br>");
-	return html;
+	return lines.join("<br>");
 }
 
 void WBQtScriptWindow::updateDetail()
@@ -880,6 +931,147 @@ void WBQtScriptWindow::onFind()
 	{
 		m_lastFoundListType = 0;
 		QApplication::beep();
+	}
+}
+
+void WBQtScriptWindow::onSearchTextChanged(const QString &text)
+{
+	// Live filter, only when NewSearch is on (same toggle as the tree pickers). Off = the classic
+	// find-next-on-Enter behaviour, so text does nothing here (the Show: chips still work).
+	if (m_updating || WBQtConfig_GetNewSearch() == 0)
+	{
+		return;
+	}
+	// Clearing the box should un-filter instantly; a partial edit debounces (the filter deep-scans
+	// every script, so we don't want to run it on each keystroke of a fast typist).
+	if (text.trimmed().isEmpty())
+	{
+		m_searchDebounce->stop();
+		applyFilters();
+	}
+	else
+	{
+		m_searchDebounce->start();	// restart the single-shot; fires after the typing pause
+	}
+}
+
+void WBQtScriptWindow::onSearchDebounce()
+{
+	applyFilters();
+}
+
+void WBQtScriptWindow::onFilterChanged()
+{
+	if (m_updating)
+	{
+		return;
+	}
+	applyFilters();
+}
+
+bool WBQtScriptWindow::textFilterActive() const
+{
+	// The text box only filters when NewSearch is on (else it's the classic find-next behaviour).
+	return (WBQtConfig_GetNewSearch() != 0)
+		&& m_search != NULL && !m_search->text().trimmed().isEmpty();
+}
+
+bool WBQtScriptWindow::filterActive() const
+{
+	return textFilterActive()
+		|| m_filterWarnings->isChecked() || m_filterActive->isChecked()
+		|| m_filterInactive->isChecked() || m_filterEasy->isChecked()
+		|| m_filterNormal->isChecked() || m_filterHard->isChecked();
+}
+
+// Does this one node pass the search text AND the Show: chips? Folders/players carry no difficulty
+// of their own, so a difficulty chip never self-matches them -- they survive only via a matching
+// descendant. Flags: bit0 active, bit1 warnings, bit3 easy, bit4 normal, bit5 hard.
+bool WBQtScriptWindow::nodeSelfMatches(QTreeWidgetItem *item, const FilterState &fs) const
+{
+	const int flags = item->data(0, kFlagsRole).toInt();
+	if (fs.useText)
+	{
+		const int listType = item->data(0, kListTypeRole).toInt();
+		QByteArray label = item->text(0).toLatin1();
+		if (WBQtScript_NodeMatches(listType, fs.needle.constData(), label.constData()) == 0)
+		{
+			return false;
+		}
+	}
+	if (fs.wantWarn && (flags & 2) == 0)
+	{
+		return false;
+	}
+	if (fs.wantActive && (flags & 1) == 0)
+	{
+		return false;
+	}
+	if (fs.wantInactive && (flags & 1) != 0)
+	{
+		return false;
+	}
+	if (fs.wantEasy || fs.wantNormal || fs.wantHard)
+	{
+		const bool diffOk = (fs.wantEasy && (flags & 8))
+			|| (fs.wantNormal && (flags & 16))
+			|| (fs.wantHard && (flags & 32));
+		if (!diffOk)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+// Post-order: hide item unless it self-matches or has a visible descendant; returns its visibility
+// so the parent can decide its own. Expands a node kept alive only by a matching descendant so the
+// match shows. One pass, no side tables.
+bool WBQtScriptWindow::filterItemRec(QTreeWidgetItem *item, const FilterState &fs)
+{
+	bool anyChild = false;
+	for (int c = 0; c < item->childCount(); ++c)
+	{
+		if (filterItemRec(item->child(c), fs))
+		{
+			anyChild = true;
+		}
+	}
+	const bool self = nodeSelfMatches(item, fs);
+	const bool visible = self || anyChild;
+	item->setHidden(!visible);
+	if (visible && anyChild)
+	{
+		item->setExpanded(true);	// open folders/players so the matching scripts show
+	}
+	return visible;
+}
+
+void WBQtScriptWindow::applyFilters()
+{
+	// Nothing filtering: show the whole tree.
+	if (!filterActive())
+	{
+		for (QTreeWidgetItemIterator it(m_tree); *it; ++it)
+		{
+			(*it)->setHidden(false);
+		}
+		return;
+	}
+
+	FilterState fs;
+	fs.useText = textFilterActive();
+	fs.needle = fs.useText ? m_search->text().trimmed().toLatin1() : QByteArray();
+	fs.wantWarn = m_filterWarnings->isChecked();
+	fs.wantActive = m_filterActive->isChecked();
+	fs.wantInactive = m_filterInactive->isChecked();
+	fs.wantEasy = m_filterEasy->isChecked();
+	fs.wantNormal = m_filterNormal->isChecked();
+	fs.wantHard = m_filterHard->isChecked();
+
+	for (int i = 0; i < m_tree->topLevelItemCount(); ++i)
+	{
+		filterItemRec(m_tree->topLevelItem(i), fs);
 	}
 }
 

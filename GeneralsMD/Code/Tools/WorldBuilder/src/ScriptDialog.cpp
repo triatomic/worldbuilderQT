@@ -459,6 +459,81 @@ AsciiString ScriptDialog::buildReferencedInTag(Script *pScript)
 	return usedByTag;
 }
 
+// Collect the SCRIPT / SCRIPT_SUBROUTINE parameter names off one parameter-bearing node (a
+// Condition or a ScriptAction -- both expose getNumParameters/getParameter, so a template serves
+// both) into usesList, comma-separated, skipping empties, self-calls and dupes. Templated rather
+// than sharing a base because Condition and ScriptAction have none.
+template <class T>
+static void collectScriptRefTargets(T *node, const AsciiString &selfName,
+	AsciiString &usesList, Bool &found)
+{
+	for (int p = 0; p < node->getNumParameters(); ++p)
+	{
+		Parameter *param = node->getParameter(p);
+		if (param == NULL)
+		{
+			continue;
+		}
+		if (param->getParameterType() != Parameter::SCRIPT &&
+			param->getParameterType() != Parameter::SCRIPT_SUBROUTINE)
+		{
+			continue;
+		}
+		AsciiString target = param->getString();
+		if (target.isEmpty() || target == selfName || alreadyListed(usesList, target))
+		{
+			continue;
+		}
+		if (found) { usesList.concat(", "); }
+		else { found = true; }
+		usesList.concat(target);
+	}
+}
+
+/** The reverse of buildReferencedInTag: the "[Uses] : ..." tag listing the OTHER scripts that
+pScript itself calls -- i.e. the script names in its own condition/action SCRIPT / SCRIPT_SUBROUTINE
+parameters. Empty when it calls no scripts (or when 'Disable references' is on). Skips self-calls
+and de-dupes. The names are rendered as clickable links by the Qt detail pane, same as
+[Referenced in]. */
+AsciiString ScriptDialog::buildUsesTag(Script *pScript)
+{
+	AsciiString usesList;
+	Bool found = false;
+	if (m_bDisableReferences || pScript == NULL)
+	{
+		return usesList;
+	}
+	AsciiString selfName = pScript->getName();
+
+	// Conditions.
+	for (OrCondition *pOr = pScript->getOrCondition(); pOr != NULL; pOr = pOr->getNextOrCondition())
+	{
+		for (Condition *c = pOr->getFirstAndCondition(); c != NULL; c = c->getNext())
+		{
+			collectScriptRefTargets(c, selfName, usesList, found);
+		}
+	}
+
+	// Actions (both the true and false lists chain through getAction/getFalseAction).
+	for (int pass = 0; pass < 2; ++pass)
+	{
+		ScriptAction *a = (pass == 0) ? pScript->getAction() : pScript->getFalseAction();
+		for (; a != NULL; a = a->getNext())
+		{
+			collectScriptRefTargets(a, selfName, usesList, found);
+		}
+	}
+
+	if (found)
+	{
+		AsciiString temp;
+		temp.concat("[Uses] : ");
+		temp.concat(usesList);
+		usesList = temp;
+	}
+	return usesList;
+}
+
 void ScriptDialog::OnSelchangedScriptTree(NMHDR* pNMHDR, LRESULT* pResult) 
 {
 	NM_TREEVIEW* pNMTreeView = (NM_TREEVIEW*)pNMHDR;
@@ -3652,13 +3727,17 @@ namespace {
 }
 
 namespace {
-	enum { QT_NODE_ACTIVE = 1, QT_NODE_WARNINGS = 2, QT_NODE_SUBROUTINE = 4 };
+	enum { QT_NODE_ACTIVE = 1, QT_NODE_WARNINGS = 2, QT_NODE_SUBROUTINE = 4,
+	       QT_NODE_EASY = 8, QT_NODE_NORMAL = 16, QT_NODE_HARD = 32 };
 	int qtScriptFlags(Script *pScr)
 	{
 		int f = 0;
 		if (pScr->isActive()) { f |= QT_NODE_ACTIVE; }
 		if (pScr->hasWarnings()) { f |= QT_NODE_WARNINGS; }
 		if (pScr->isSubroutine()) { f |= QT_NODE_SUBROUTINE; }
+		if (pScr->isEasy()) { f |= QT_NODE_EASY; }
+		if (pScr->isNormal()) { f |= QT_NODE_NORMAL; }
+		if (pScr->isHard()) { f |= QT_NODE_HARD; }
 		return f;
 	}
 	int qtGroupFlags(ScriptGroup *pGroup)
@@ -4013,6 +4092,34 @@ int ScriptDialog::qtFindNext(const char *text, int fromListType, int *outListTyp
 	return 1;
 }
 
+int ScriptDialog::qtNodeMatches(int listTypeInt, const char *text, const char *label)
+{
+	// == the per-node test inside QtFindVisitor, exposed for the Qt window's live tree filter:
+	// a node matches if the text is in its (already-formatted) label, or -- for a script node --
+	// in the deep scan of its comment/UI text/parameters. Empty text matches everything.
+	if (text == NULL || text[0] == 0)
+	{
+		return 1;
+	}
+	AsciiString needle = text;
+	if (label != NULL && qtContainsNoCase(label, needle.str()))
+	{
+		return 1;
+	}
+	ListType lt;
+	lt.IntToList(listTypeInt);
+	if (lt.m_objType == ListType::SCRIPT_IN_PLAYER_TYPE ||
+		lt.m_objType == ListType::SCRIPT_IN_GROUP_TYPE)
+	{
+		int saved = qtGetSelection();
+		qtSetSelection(listTypeInt);
+		Bool match = qtScriptDeepMatches(qtCurScript(), needle);
+		qtSetSelection(saved);
+		return match ? 1 : 0;
+	}
+	return 0;
+}
+
 void ScriptDialog::qtVerify(void)
 {
 	// == OnVerifyAll: recompute all script/group warning flags. The Qt window rebuilds after,
@@ -4081,7 +4188,14 @@ void ScriptDialog::qtGetDetail(int listTypeInt, char *descOut, int descCap, char
 			scriptComment.concat(actionComment);
 			scriptComment.concat("\n\n");
 		}
-		scriptComment.concat(buildReferencedInTag(pScript));
+		AsciiString referencedIn = buildReferencedInTag(pScript);
+		AsciiString uses = buildUsesTag(pScript);
+		scriptComment.concat(referencedIn);
+		if (!referencedIn.isEmpty() && !uses.isEmpty())
+		{
+			scriptComment.concat("\n\n");	// separate the two reference tags onto their own lines
+		}
+		scriptComment.concat(uses);
 		scriptComment = parseLineBreaks(scriptComment);
 		if (commentOut != NULL && commentCap > 0)
 		{
