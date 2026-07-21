@@ -134,8 +134,11 @@ public:
 	// Find/replace across every script's condition/action parameter VALUES. Returns the match
 	// count. doReplace 0 = count only; 1 = rewrite matches to `replace` (snapshots for undo first,
 	// only when there's a match). matchCase / wholeValue toggle case sensitivity and exact-value.
+	// Resolve a packed ListType to its Script* without disturbing the tree selection (NULL if none).
+	Script *qtScriptForListType(int listType);
+	// scopeListType -1 = all scripts; else limit to that one selected script.
 	int  qtScriptReplace(const char *find, const char *replace,
-		int matchCase, int wholeValue, int doReplace);
+		int matchCase, int wholeValue, int doReplace, int scopeListType = -1);
 	// Navigate to the next script (tree order, after fromListType) with a matching PARAMETER value
 	// -- same scope as qtScriptReplace, so the replace bar's Next/Prev agrees with its count.
 	int  qtFindNextParamMatch(int fromListType, const char *find,
@@ -143,7 +146,7 @@ public:
 	// Autocomplete: distinct parameter values containing `substr` (case-insensitive), each with its
 	// use count, written as "value\tcount\n" lines into buf (most-used first). Returns the total
 	// distinct count (may exceed what fit in buf).
-	int  qtCollectParamValues(const char *substr, char *buf, int cap);
+	int  qtCollectParamValues(const char *substr, char *buf, int cap, int scopeListType = -1);
 	// 9c: recompute warnings (== OnVerifyAll) and toggle the current script/group active
 	// flag (== OnScriptActivate). The Qt window rebuilds after to pick up the new flags.
 	void qtVerify(void);
@@ -175,6 +178,8 @@ public:
 	void qtMNewScript(void);
 	void qtMEditScript(void);
 	void qtMCopyScript(void);
+	int  qtMRenameSelection(const char *newName);	// rename the current script/group in place (undoable)
+	void qtGetSelectionName(char *buf, int cap);	// the current script/group's bare name (rename prefill)
 	void qtMDelete(void);
 	void qtMAddDebug(void);
 	void qtMRemoveDebug(void);
@@ -260,6 +265,7 @@ protected:
 	void applySmartCopyIncrement(Script* pScr);
 	AsciiString buildReferencedInTag(Script *pScript); ///< "[Referenced in] : ..." (empty if none/disabled)
 	AsciiString buildUsesTag(Script *pScript); ///< "[Uses] : ..." (scripts pScript calls; empty if none/disabled)
+	AsciiString buildParamTypeTag(Script *pScript, int paramType, const char *label); ///< "<label>v1, v2" of one param type
 
 	virtual BOOL PreTranslateMessage(MSG* pMsg);
 

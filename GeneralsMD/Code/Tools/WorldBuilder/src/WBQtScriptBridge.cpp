@@ -7,6 +7,7 @@
 #include "resource.h"				// IDD_ScriptDialog (used in ScriptDialog.h's IDD enum)
 #include "Lib/BaseType.h"
 #include "WorldBuilderDoc.h"		// MapObject (ScriptDialog.h has a MapObject* member)
+#include "wbview3d.h"				// WbView3d::setCenterInView + MAP_XY_FACTOR (entity jump)
 #include "GameLogic/PolygonTrigger.h"	// PolygonTrigger (ditto)
 #include "ScriptDialog.h"
 #include "MainFrm.h"
@@ -21,6 +22,7 @@
 #include "qt/WBQtPanelBridge.h"
 #include "qt/panels/WBQtScriptEditBridge.h"	// WBQtScriptEdit_Run (new/edit script sheet)
 #include "qt/panels/WBQtParamBridge.h"		// WBQtEditGroup_Run (edit folder dialog)
+#include "qt/panels/WBQtEntityFinderBridge.h"	// WBQtEntityFinder_FindByName (entity-jump lookup)
 
 #include <vector>
 
@@ -515,6 +517,67 @@ void ScriptDialog::qtMCopyScript(void)
 			pSL->addGroup(pNewGroup, insertIndex);
 		}
 	}
+}
+
+// The current script/group's bare name (for pre-filling the rename dialog). Empty for a player row.
+void ScriptDialog::qtGetSelectionName(char *buf, int cap)
+{
+	if (buf == NULL || cap <= 0)
+	{
+		return;
+	}
+	buf[0] = 0;
+	AsciiString name;
+	Script *pScript = getCurScript();
+	ScriptGroup *pGroup = getCurGroup();
+	if (pScript != NULL)
+	{
+		name = pScript->getName();
+	}
+	else if (pGroup != NULL)
+	{
+		name = pGroup->getName();
+	}
+	strncpy(buf, name.str(), cap - 1);
+	buf[cap - 1] = 0;
+}
+
+// Rename the current script or group in place (== the edit dialog's name field, without opening
+// it). Snapshots for undo, sets the name, and refreshes warnings like any edit. Returns 1 if a
+// node was renamed. Empty names are rejected (the tree would show a blank row).
+int ScriptDialog::qtMRenameSelection(const char *newName)
+{
+	if (newName == NULL || newName[0] == 0)
+	{
+		return 0;
+	}
+	AsciiString name = newName;
+	Script *pScript = getCurScript();
+	ScriptGroup *pGroup = getCurGroup();
+	if (pScript != NULL)
+	{
+		if (pScript->getName() == name)
+		{
+			return 0;	// no change
+		}
+		qtPushUndoSnapshot();
+		pScript->setName(name);
+	}
+	else if (pGroup != NULL && m_curSelection.m_objType == ListType::GROUP_TYPE)
+	{
+		if (pGroup->getName() == name)
+		{
+			return 0;
+		}
+		qtPushUndoSnapshot();
+		pGroup->setName(name);
+	}
+	else
+	{
+		return 0;	// nothing renameable selected (a player row)
+	}
+	updateWarnings(true);	// names appear in [Referenced in]/[Uses] scans
+	return 1;
 }
 
 // == OnDelete minus the tree refresh (the m_curSelection fixups are already inline).
@@ -1312,6 +1375,78 @@ void WBQtScript_Delete(void)
 	}
 }
 
+int WBQtScript_RenameSelection(const char *newName)
+{
+	ScriptDialog *dlg = ScriptDialog::qtInstance();
+	return (dlg != NULL) ? dlg->qtMRenameSelection(newName) : 0;
+}
+
+void WBQtScript_GetSelectionName(char *buf, int cap)
+{
+	ScriptDialog *dlg = ScriptDialog::qtInstance();
+	if (dlg != NULL)
+	{
+		dlg->qtGetSelectionName(buf, cap);
+	}
+	else if (buf != NULL && cap > 0)
+	{
+		buf[0] = 0;
+	}
+}
+
+// "Confirm before deleting a script/folder" preference (default ON). Persisted in the script
+// dialog's profile section, matching the other script-editor toggles. The Qt Delete path reads it
+// and shows a confirm box; unchecking "don't ask again" writes 0.
+int WBQtScript_GetConfirmDelete(void)
+{
+	return ::AfxGetApp()->GetProfileInt(SCRIPT_DIALOG_SECTION, "ConfirmDelete", 1);
+}
+void WBQtScript_SetConfirmDelete(int on)
+{
+	::AfxGetApp()->WriteProfileInt(SCRIPT_DIALOG_SECTION, "ConfirmDelete", on ? 1 : 0);
+}
+
+// Select a named map entity (a placed unit, isWaypoint 0; or a waypoint, isWaypoint 1) in the 3D
+// view and center on it -- used by the script detail pane's clickable [Uses] entity links. Clears
+// the current selection first, like a normal pick. Returns 1 if found. (== WBQtEntityFinder_CenterOn
+// but it also selects the object, not just centers.)
+int WBQtScript_SelectEntity(const char *name, int isWaypoint)
+{
+	if (name == NULL || name[0] == 0)
+	{
+		return 0;
+	}
+	// Reuse the entity-finder's shared name-match walk so the two stay in lockstep.
+	MapObject *found = (MapObject *)WBQtEntityFinder_FindByName(name, isWaypoint);
+	if (found == NULL)
+	{
+		return 0;
+	}
+
+	// Clear the current selection, then select the target (== a single pick).
+	for (MapObject *obj = MapObject::getFirstMapObject(); obj != NULL; obj = obj->getNext())
+	{
+		if (obj->isSelected())
+		{
+			obj->setSelected(false);
+		}
+	}
+	found->setSelected(true);
+
+	CWorldBuilderDoc *pDoc = CWorldBuilderDoc::GetActiveDoc();
+	if (pDoc != NULL)
+	{
+		pDoc->invalObject(found);
+	}
+	WbView3d *p3View = CWorldBuilderDoc::GetActive3DView();
+	if (p3View != NULL)
+	{
+		const Coord3D *pos = found->getLocation();
+		p3View->setCenterInView(pos->x / MAP_XY_FACTOR, pos->y / MAP_XY_FACTOR);
+	}
+	return 1;
+}
+
 int WBQtScript_FindScriptByName(const char *name)
 {
 	ScriptDialog *dlg = ScriptDialog::qtInstance();
@@ -1380,10 +1515,11 @@ int WBQtScript_NodeMatches(int listType, const char *text, const char *label)
 }
 
 int WBQtScript_ReplaceInParams(const char *find, const char *replace,
-	int matchCase, int wholeValue, int doReplace)
+	int matchCase, int wholeValue, int doReplace, int scopeListType)
 {
 	ScriptDialog *dlg = ScriptDialog::qtInstance();
-	return (dlg != NULL) ? dlg->qtScriptReplace(find, replace, matchCase, wholeValue, doReplace) : 0;
+	return (dlg != NULL)
+		? dlg->qtScriptReplace(find, replace, matchCase, wholeValue, doReplace, scopeListType) : 0;
 }
 
 int WBQtScript_FindNextParamMatch(int fromListType, const char *find,
@@ -1394,10 +1530,10 @@ int WBQtScript_FindNextParamMatch(int fromListType, const char *find,
 		? dlg->qtFindNextParamMatch(fromListType, find, matchCase, wholeValue, outListType) : 0;
 }
 
-int WBQtScript_CollectParamValues(const char *substr, char *buf, int cap)
+int WBQtScript_CollectParamValues(const char *substr, char *buf, int cap, int scopeListType)
 {
 	ScriptDialog *dlg = ScriptDialog::qtInstance();
-	return (dlg != NULL) ? dlg->qtCollectParamValues(substr, buf, cap) : 0;
+	return (dlg != NULL) ? dlg->qtCollectParamValues(substr, buf, cap, scopeListType) : 0;
 }
 
 void WBQtScript_Verify(void)

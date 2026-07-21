@@ -231,39 +231,52 @@ extern "C" void WBQtEntityFinderData_GetWaypoint(int i, char *bufOut, int cap)
 }
 
 // == CAboutDlg::OnCenterOnSelected.
-extern "C" void WBQtEntityFinder_CenterOn(const char *name, int isWaypoint)
+// Resolve an entity name to its placed MapObject: a named unit (isWaypoint 0, matched on
+// TheKey_objectName) or a named waypoint (isWaypoint 1). Returns NULL if not on the map. The one
+// name-match walk shared by CenterOn (center-only) and the script editor's SelectEntity
+// (select+center) so their match rules can't drift. Returned as void* so it crosses the plain-C
+// bridge; callers cast back to MapObject*.
+extern "C" void *WBQtEntityFinder_FindByName(const char *name, int isWaypoint)
 {
 	if (name == NULL || name[0] == 0)
 	{
-		return;
+		return NULL;
 	}
 	AsciiString wanted(name);
-	MapObject *mapObject = MapObject::getFirstMapObject();
-	while (mapObject)
+	for (MapObject *obj = MapObject::getFirstMapObject(); obj != NULL; obj = obj->getNext())
 	{
 		Bool match = false;
 		if (!isWaypoint)
 		{
-			Bool exists;
-			AsciiString objName = mapObject->getProperties()->getAsciiString(TheKey_objectName, &exists);
+			Bool exists = false;
+			AsciiString objName = obj->getProperties()->getAsciiString(TheKey_objectName, &exists);
 			match = (exists && !objName.isEmpty() && objName == wanted);
 		}
-		else if (mapObject->isWaypoint())
+		else if (obj->isWaypoint())
 		{
-			AsciiString wayName = mapObject->getWaypointName();
+			AsciiString wayName = obj->getWaypointName();
 			match = (!wayName.isEmpty() && wayName == wanted);
 		}
 		if (match)
 		{
-			const Coord3D *objectPosition = mapObject->getLocation();
-			WbView3d *p3View = CWorldBuilderDoc::GetActive3DView();
-			if (p3View)
-			{
-				p3View->setCenterInView(objectPosition->x / MAP_XY_FACTOR, objectPosition->y / MAP_XY_FACTOR);
-			}
-			return;
+			return obj;
 		}
-		mapObject = mapObject->getNext();
+	}
+	return NULL;
+}
+
+extern "C" void WBQtEntityFinder_CenterOn(const char *name, int isWaypoint)
+{
+	MapObject *obj = (MapObject *)WBQtEntityFinder_FindByName(name, isWaypoint);
+	if (obj == NULL)
+	{
+		return;
+	}
+	WbView3d *p3View = CWorldBuilderDoc::GetActive3DView();
+	if (p3View != NULL)
+	{
+		const Coord3D *pos = obj->getLocation();
+		p3View->setCenterInView(pos->x / MAP_XY_FACTOR, pos->y / MAP_XY_FACTOR);
 	}
 }
 

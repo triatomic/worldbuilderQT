@@ -73,6 +73,8 @@ private slots:
 	void onCopyScript();
 	void onDelete();
 	void onDeleteShortcut();
+	void onRename();			// rename the selected script/folder (a prefilled input dialog)
+	void onDuplicateShortcut();	// Ctrl+D: duplicate the selected script/folder (== Copy)
 	void onUndo();
 	void onRedo();
 	void onVerify();
@@ -89,7 +91,9 @@ private slots:
 	void onSearchDebounce();						// the debounce timer fired -> apply the filter
 	void onFilterChanged();							// a Show: chip toggled
 	// Inline find/replace bar (Ctrl+H): rename a parameter value across every script.
-	void onToggleReplaceBar();		// Ctrl+H: show/hide the bar
+	void onToggleReplaceBar();		// Ctrl+H / Replace... button: show/hide the bar (all scripts)
+	void onOpenReplaceScoped();		// "In script" button: open the bar scoped to the selection
+	void onReplaceScopeToggled(bool on);	// "This script only" checkbox
 	void onReplaceCriteriaChanged();	// find text or a toggle changed -> debounce a recount + suggestions
 	void onReplaceDebounce();		// the debounce fired -> recount + refresh suggestions
 	void onReplaceNext();
@@ -137,6 +141,7 @@ private:
 	void refreshReplaceCount();			// recompute the match count label + button enable states
 	void refreshReplaceSuggestions();	// repopulate the Find autocomplete from the current text
 	void refreshReplaceValueList();		// repopulate the Replace autocomplete (all values; built rarely)
+	int  replaceScope() const;			// the scope listType for find/replace: -1 all, else the selected script
 	void stepReplaceMatch(int dir);		// select the next (+1) / previous (-1) script containing a match
 	void applyReplaceSelection(int listType);	// select + sync the found match (shared by Next/Prev)
 	QByteArray replaceFindText() const;	// trimmed find text as latin1 (empty if none)
@@ -156,7 +161,11 @@ private:
 	QLineEdit   *m_replaceWith;
 	QToolButton *m_replaceMatchCase;
 	QToolButton *m_replaceWholeValue;
+	QCheckBox   *m_replaceScopeCheck;	// "This script only"
 	QLabel      *m_replaceCount;
+	// When scoped, the listType of the script the bar is pinned to (captured when scope turns on,
+	// so it stays fixed as you click matches). -1 when unscoped.
+	int          m_replaceScopeListType;
 	QCompleter       *m_replaceCompleter;	// Find autocomplete: parameter values matching the text
 	QStandardItemModel *m_replaceSuggestModel;	// 2 cols: value | "(count)" -- only col 0 is inserted
 	QCompleter       *m_replaceWithCompleter;	// Replace autocomplete: all existing parameter values

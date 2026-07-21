@@ -106,7 +106,7 @@
     </widget>
    </item>
    <item>
-    <layout class="QHBoxLayout" name="searchRow" stretch="0,1,0">
+    <layout class="QHBoxLayout" name="searchRow" stretch="0,1,0,0,0">
      <item>
       <widget class="QLabel" name="searchLabel">
        <property name="text">
@@ -125,6 +125,26 @@
       <widget class="QPushButton" name="findBtn">
        <property name="text">
         <string>Find Next</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="replaceBtn">
+       <property name="toolTip">
+        <string>Find/replace parameter values across all scripts (Ctrl+H).</string>
+       </property>
+       <property name="text">
+        <string>Replace&#8230;</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="replaceScopedBtn">
+       <property name="toolTip">
+        <string>Find/replace parameter values in the selected script only.</string>
+       </property>
+       <property name="text">
+        <string>In script</string>
        </property>
       </widget>
      </item>
@@ -149,7 +169,7 @@
        <number>0</number>
       </property>
       <item>
-       <layout class="QHBoxLayout" name="replaceFindRow" stretch="1,0,0,0,0,0,0">
+       <layout class="QHBoxLayout" name="replaceFindRow" stretch="1,0,0,0,0,0,0,0">
         <item>
          <widget class="QLineEdit" name="replaceFind">
           <property name="placeholderText">
@@ -180,6 +200,16 @@
           </property>
           <property name="checkable">
            <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="replaceScopeCheck">
+          <property name="toolTip">
+           <string>Limit the find/replace to the currently selected script only.</string>
+          </property>
+          <property name="text">
+           <string>This script only</string>
           </property>
          </widget>
         </item>

@@ -242,6 +242,14 @@ void WBQtScript_NewScript(void);
 void WBQtScript_EditScript(void);
 void WBQtScript_CopyScript(void);
 void WBQtScript_Delete(void);
+// Rename the current script/folder in place (undoable). Returns 1 if renamed, 0 on empty/no-change.
+int  WBQtScript_RenameSelection(const char *newName);
+void WBQtScript_GetSelectionName(char *buf, int cap);	// current selection's bare name (rename prefill)
+// "Confirm before delete" preference (default 1). The Qt Delete path reads it; a "don't ask again".
+int  WBQtScript_GetConfirmDelete(void);
+void WBQtScript_SetConfirmDelete(int on);
+// Select + center a named map entity (isWaypoint 0 = placed unit, 1 = waypoint). Returns 1 if found.
+int  WBQtScript_SelectEntity(const char *name, int isWaypoint);
 void WBQtScript_Commit(void);	// == OnOK  (commit the working model, save)
 void WBQtScript_Cancel(void);	// == OnCancel (discard)
 // 9b: drag-drop reorder/move (reuses doDropOn incl. Ctrl auto-merge) and search. Both listType
@@ -251,16 +259,17 @@ void WBQtScript_DropOn(int dragListType, int targetListType);
 int  WBQtScript_FindNext(const char *text, int fromListType, int *outListType);
 // Live tree filter: 1 if the node (label, or script deep-scan) matches text; empty text => 1.
 int  WBQtScript_NodeMatches(int listType, const char *text, const char *label);
-// Find/replace across every script's condition/action parameter values. Returns the match count.
+// Find/replace across script condition/action parameter values. Returns the match count.
 // doReplace 0 = count only; 1 = rewrite matches (undoable). matchCase/wholeValue toggle the mode.
+// scopeListType -1 = all scripts; else a packed ListType limiting to that one selected script.
 int  WBQtScript_ReplaceInParams(const char *find, const char *replace,
-	int matchCase, int wholeValue, int doReplace);
+	int matchCase, int wholeValue, int doReplace, int scopeListType);
 // Next script (tree order, after fromListType) with a matching parameter value; 1 + outListType, or 0.
 int  WBQtScript_FindNextParamMatch(int fromListType, const char *find,
 	int matchCase, int wholeValue, int *outListType);
 // Autocomplete: distinct parameter values containing substr, as "value\tcount\n" lines (most-used
-// first) in buf. Returns the total distinct count.
-int  WBQtScript_CollectParamValues(const char *substr, char *buf, int cap);
+// first) in buf. Returns the total distinct count. scopeListType -1 = all; else that one script.
+int  WBQtScript_CollectParamValues(const char *substr, char *buf, int cap, int scopeListType);
 // 9c: recompute warnings (Verify) and toggle the current selection's active flag.
 void WBQtScript_Verify(void);
 void WBQtScript_ToggleActive(void);

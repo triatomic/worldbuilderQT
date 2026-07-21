@@ -33,6 +33,9 @@ void WBQtEntityFinderData_GetWaypoint(int i, char *bufOut, int cap);
 
 // Center the 3D view on the named object/waypoint (== CAboutDlg::OnCenterOnSelected).
 void WBQtEntityFinder_CenterOn(const char *name, int isWaypoint);
+// Resolve an entity name to its placed MapObject (as void*), or NULL. Shared name-match walk used
+// by CenterOn and the script editor's entity-jump. isWaypoint 0 = unit, 1 = waypoint.
+void *WBQtEntityFinder_FindByName(const char *name, int isWaypoint);
 
 // Dialog font choices (single source of truth in DialogFont.cpp; applies on restart).
 int  WBQtEntityFinderData_GetFontCount(void);

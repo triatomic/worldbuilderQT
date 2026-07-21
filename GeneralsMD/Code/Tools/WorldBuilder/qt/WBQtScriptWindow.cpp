@@ -13,10 +13,12 @@
 #include <QCompleter>
 #include <QDropEvent>
 #include <QFont>
+#include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
 #include <QList>
 #include <QMenu>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPixmap>
@@ -157,7 +159,9 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	m_replaceWith = m_ui->replaceWith;
 	m_replaceMatchCase = m_ui->replaceMatchCase;
 	m_replaceWholeValue = m_ui->replaceWholeValue;
+	m_replaceScopeCheck = m_ui->replaceScopeCheck;
 	m_replaceCount = m_ui->replaceCount;
+	m_replaceScopeListType = -1;
 
 	// Autocomplete the Find box with the distinct parameter values in the map. A 2-column model
 	// (value | "(count)") drives it: the popup shows both columns, but the completer inserts only
@@ -268,6 +272,9 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	// steps to the next match; Esc closes it.
 	QShortcut *replaceSc = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_H), this);
 	connect(replaceSc, SIGNAL(activated()), this, SLOT(onToggleReplaceBar()));
+	connect(m_ui->replaceBtn, SIGNAL(clicked()), this, SLOT(onToggleReplaceBar()));
+	connect(m_ui->replaceScopedBtn, SIGNAL(clicked()), this, SLOT(onOpenReplaceScoped()));
+	connect(m_replaceScopeCheck, SIGNAL(toggled(bool)), this, SLOT(onReplaceScopeToggled(bool)));
 	connect(m_replaceFind, SIGNAL(textChanged(const QString &)), this, SLOT(onReplaceCriteriaChanged()));
 	connect(m_replaceFind, SIGNAL(returnPressed()), this, SLOT(onReplaceNext()));
 	connect(m_replaceMatchCase, SIGNAL(toggled(bool)), this, SLOT(onReplaceCriteriaChanged()));
@@ -318,6 +325,12 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	QShortcut *redoSc2 = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_Y), m_tree);
 	redoSc2->setContext(Qt::WidgetShortcut);
 	connect(redoSc2, SIGNAL(activated()), this, SLOT(onRedo()));
+	QShortcut *renameSc = new QShortcut(QKeySequence(Qt::Key_F2), m_tree);
+	renameSc->setContext(Qt::WidgetShortcut);
+	connect(renameSc, SIGNAL(activated()), this, SLOT(onRename()));
+	QShortcut *dupSc = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_D), m_tree);
+	dupSc->setContext(Qt::WidgetShortcut);
+	connect(dupSc, SIGNAL(activated()), this, SLOT(onDuplicateShortcut()));
 
 	connect(m_ckCompress, SIGNAL(clicked()), this, SLOT(onCheckboxToggled()));
 	connect(m_ckNewIcons, SIGNAL(clicked()), this, SLOT(onCheckboxToggled()));
@@ -607,6 +620,10 @@ void WBQtScriptWindow::resetForNewSession()
 		m_replaceBar->setVisible(false);
 		m_replaceFind->clear();
 		m_replaceWith->clear();
+		m_replaceScopeCheck->blockSignals(true);
+		m_replaceScopeCheck->setChecked(false);
+		m_replaceScopeCheck->blockSignals(false);
+		m_replaceScopeListType = -1;
 	}
 	seedCheckboxes();	// pick up any persisted-setting changes
 }
@@ -664,15 +681,27 @@ void WBQtScriptWindow::updateButtonStates()
 // both tags (now separated by a blank line) linkify independently.
 static QString wbLinkifyReferences(const QString &comment)
 {
-	const char *const markers[2] = { "[Referenced in] : ", "[Uses] : " };
+	// Each reference-tag marker maps its comma-separated names to a link URL scheme:
+	//   wbref:<script>        -> jump to a script in the tree (onReferenceClicked)
+	//   wbent:unit:<name>     -> select+center the named placed unit in the 3D view
+	//   wbent:wp:<name>       -> select+center the named waypoint
+	struct Marker { const char *text; const char *scheme; };
+	static const Marker markers[] = {
+		{ "[Referenced in] : ", "wbref:" },
+		{ "[Uses] : ",          "wbref:" },
+		{ "[Units] : ",         "wbent:unit:" },
+		{ "[Waypoints] : ",     "wbent:wp:" }
+	};
+	const int nMarkers = (int)(sizeof(markers) / sizeof(markers[0]));
+
 	QStringList lines = comment.split("\n");
 	for (int li = 0; li < lines.size(); ++li)
 	{
 		const QString &line = lines.at(li);
 		int mi = -1;
-		for (int m = 0; m < 2; ++m)
+		for (int m = 0; m < nMarkers; ++m)
 		{
-			if (line.startsWith(markers[m]))
+			if (line.startsWith(markers[m].text))
 			{
 				mi = m;
 				break;
@@ -683,7 +712,8 @@ static QString wbLinkifyReferences(const QString &comment)
 			lines[li] = line.toHtmlEscaped();
 			continue;
 		}
-		const QString marker = markers[mi];
+		const QString marker = markers[mi].text;
+		const QString scheme = markers[mi].scheme;
 		QString html = marker.toHtmlEscaped();
 		const QStringList names = line.mid(marker.size()).split(", ");
 		for (int i = 0; i < names.size(); ++i)
@@ -692,7 +722,7 @@ static QString wbLinkifyReferences(const QString &comment)
 			{
 				html += ", ";
 			}
-			html += "<a href=\"wbref:"
+			html += "<a href=\"" + scheme
 				+ QString::fromLatin1(QUrl::toPercentEncoding(names.at(i)))
 				+ "\">" + names.at(i).toHtmlEscaped() + "</a>";
 		}
@@ -722,6 +752,26 @@ void WBQtScriptWindow::updateDetail()
 
 void WBQtScriptWindow::onReferenceClicked(const QUrl &url)
 {
+	// wbent:unit:<name> / wbent:wp:<name> -> select + center the entity in the 3D view. Parse from
+	// the full URL string (not url.path(): the "unit:"/"wp:" kind looks like a nested scheme to QUrl).
+	const QString full = url.toString(QUrl::FullyDecoded);
+	if (full.startsWith("wbent:"))
+	{
+		const QString rest = full.mid(6);	// after "wbent:"
+		const int colon = rest.indexOf(':');
+		if (colon <= 0)
+		{
+			return;
+		}
+		const QString kind = rest.left(colon);
+		QByteArray name = rest.mid(colon + 1).toLatin1();
+		if (WBQtScript_SelectEntity(name.constData(), kind == QLatin1String("wp") ? 1 : 0) == 0)
+		{
+			QApplication::beep();	// not on the map (renamed/deleted since the script was written)
+		}
+		return;
+	}
+
 	if (url.scheme() != QLatin1String("wbref"))
 	{
 		return;
@@ -799,6 +849,23 @@ void WBQtScriptWindow::onCopyScript()
 void WBQtScriptWindow::onDelete()
 {
 	pushSelectionToDialog();
+	// Confirm (once) before deleting -- deletes aren't obvious to undo. A "Don't ask again"
+	// checkbox persists the choice via WBQtScript_SetConfirmDelete (default on).
+	if (WBQtScript_GetConfirmDelete() != 0)
+	{
+		QMessageBox box(QMessageBox::Question, "Delete",
+			"Delete the selected script/folder?", QMessageBox::Yes | QMessageBox::No, this);
+		QCheckBox *dontAsk = new QCheckBox("Don't ask again", &box);
+		box.setCheckBox(dontAsk);
+		if (box.exec() != QMessageBox::Yes)
+		{
+			return;
+		}
+		if (dontAsk->isChecked())
+		{
+			WBQtScript_SetConfirmDelete(0);
+		}
+	}
 	WBQtScript_Delete();
 	rebuildTree();
 	updateButtonStates();
@@ -811,6 +878,47 @@ void WBQtScriptWindow::onDeleteShortcut()
 	if (m_delete->isEnabled())
 	{
 		onDelete();
+	}
+}
+
+void WBQtScriptWindow::onRename()
+{
+	pushSelectionToDialog();
+	if (WBQtScript_HasScript() == 0 && WBQtScript_HasGroup() == 0)
+	{
+		return;	// a player row -- nothing to rename
+	}
+	char nameBuf[512];
+	nameBuf[0] = 0;
+	WBQtScript_GetSelectionName(nameBuf, sizeof(nameBuf));
+
+	bool ok = false;
+	const QString title = (WBQtScript_HasGroup() != 0) ? "Rename Folder" : "Rename Script";
+	QString newName = QInputDialog::getText(this, title, "Name:", QLineEdit::Normal,
+		QString::fromLatin1(nameBuf), &ok);
+	if (!ok)
+	{
+		return;
+	}
+	newName = newName.trimmed();
+	if (newName.isEmpty())
+	{
+		return;
+	}
+	if (WBQtScript_RenameSelection(newName.toLatin1().constData()) != 0)
+	{
+		rebuildTree();
+		updateButtonStates();
+		updateDetail();
+	}
+}
+
+void WBQtScriptWindow::onDuplicateShortcut()
+{
+	// Ctrl+D duplicates in place, exactly like the Copy button/menu.
+	if (m_copyScript->isEnabled())
+	{
+		onCopyScript();
 	}
 }
 
@@ -939,6 +1047,10 @@ void WBQtScriptWindow::onTreeContextMenu(const QPoint &pos)
 	bool hasGroup = (WBQtScript_HasGroup() != 0);
 
 	QMenu menu(this);
+	// Creation (always available; insert relative to the clicked node).
+	QAction *actNewScript = menu.addAction("New Script");
+	QAction *actNewFolder = menu.addAction("New Folder");
+	menu.addSeparator();
 	QAction *actActivate = menu.addAction("Activate / Deactivate");
 	actActivate->setEnabled(hasScript || hasGroup);
 	// == ScriptDialog CSDTreeCtrl::OnRButtonDown: display a check mark for the current
@@ -953,7 +1065,9 @@ void WBQtScriptWindow::onTreeContextMenu(const QPoint &pos)
 	menu.addSeparator();
 	QAction *actEdit = menu.addAction("Edit");
 	actEdit->setEnabled(hasScript || hasGroup);
-	QAction *actCopy = menu.addAction("Copy");
+	QAction *actRename = menu.addAction("Rename\tF2");
+	actRename->setEnabled(hasScript || hasGroup);
+	QAction *actCopy = menu.addAction("Duplicate\tCtrl+D");
 	actCopy->setEnabled(hasScript || hasGroup);
 	QAction *actDelete = menu.addAction("Delete");
 	actDelete->setEnabled(hasScript || hasGroup);
@@ -964,8 +1078,11 @@ void WBQtScriptWindow::onTreeContextMenu(const QPoint &pos)
 	actRemoveDebug->setEnabled(hasScript);
 
 	QAction *chosen = menu.exec(m_tree->viewport()->mapToGlobal(pos));
-	if (chosen == actActivate) { onToggleActive(); }
+	if (chosen == actNewScript) { onNewScript(); }
+	else if (chosen == actNewFolder) { onNewFolder(); }
+	else if (chosen == actActivate) { onToggleActive(); }
 	else if (chosen == actEdit) { onEditScript(); }
+	else if (chosen == actRename) { onRename(); }
 	else if (chosen == actCopy) { onCopyScript(); }
 	else if (chosen == actDelete) { onDelete(); }
 	else if (chosen == actAddDebug) { onAddDebug(); }
@@ -1041,6 +1158,7 @@ QByteArray WBQtScriptWindow::replaceFindText() const
 	return m_replaceFind->text().trimmed().toLatin1();
 }
 
+// Show the find/replace bar (creating focus + seeding) if not already visible; refresh its state.
 void WBQtScriptWindow::onToggleReplaceBar()
 {
 	const bool show = !m_replaceBar->isVisible();
@@ -1060,20 +1178,62 @@ void WBQtScriptWindow::onToggleReplaceBar()
 	}
 }
 
+void WBQtScriptWindow::onOpenReplaceScoped()
+{
+	// "In script": pin the bar to the selected script and open it. Do nothing if no script is
+	// selected.
+	pushSelectionToDialog();
+	if (WBQtScript_HasScript() == 0)
+	{
+		QApplication::beep();
+		return;
+	}
+	m_replaceScopeListType = selectedListType();		// pin (or re-pin) to the current selection
+	m_replaceScopeCheck->setChecked(true);				// idempotent; onReplaceScopeToggled is a no-op re-pin
+	if (m_replaceBar->isVisible())
+	{
+		onReplaceCriteriaChanged();
+		m_replaceFind->setFocus();
+		m_replaceFind->selectAll();
+	}
+	else
+	{
+		onToggleReplaceBar();	// opens + focuses + selects + refreshes
+	}
+}
+
+void WBQtScriptWindow::onReplaceScopeToggled(bool on)
+{
+	// Pin to the selected script when turning scope on; clear the pin when off.
+	m_replaceScopeListType = on ? selectedListType() : -1;
+	if (!m_updating)
+	{
+		onReplaceCriteriaChanged();
+	}
+}
+
+int WBQtScriptWindow::replaceScope() const
+{
+	// m_replaceScopeListType is the single source of truth: -1 when unscoped, else the pinned
+	// script. onReplaceScopeToggled keeps it in step with the checkbox (clears it to -1 on uncheck).
+	return m_replaceScopeListType;
+}
+
 void WBQtScriptWindow::onReplaceClose()
 {
 	m_replaceBar->setVisible(false);
 	m_tree->setFocus();
 }
 
-// Collect the distinct parameter values containing `substr` from the model, parsing the bridge's
-// "value\tcount\n" wire format into parallel value/count lists (count may be empty).
-static void parseParamValueLines(const char *substr, QStringList &values, QStringList &counts)
+// Collect the distinct parameter values containing `substr` from the model (limited to scopeListType,
+// -1 = all), parsing the bridge's "value\tcount\n" wire format into parallel value/count lists.
+static void parseParamValueLines(const char *substr, int scopeListType,
+	QStringList &values, QStringList &counts)
 {
 	const int cap = 16384;
 	static char buf[cap];
 	buf[0] = 0;
-	WBQtScript_CollectParamValues(substr, buf, cap);
+	WBQtScript_CollectParamValues(substr, buf, cap, scopeListType);
 	const QStringList lines = QString::fromLatin1(buf).split('\n', QString::SkipEmptyParts);
 	for (int i = 0; i < lines.size(); ++i)
 	{
@@ -1099,7 +1259,7 @@ void WBQtScriptWindow::refreshReplaceCount()
 	{
 		count = WBQtScript_ReplaceInParams(find.constData(), NULL,
 			m_replaceMatchCase->isChecked() ? 1 : 0,
-			m_replaceWholeValue->isChecked() ? 1 : 0, 0);
+			m_replaceWholeValue->isChecked() ? 1 : 0, 0, replaceScope());
 		m_replaceCount->setText(QString("%1 parameter value%2").arg(count).arg(count == 1 ? "" : "s"));
 	}
 	// Prev/Next/Replace All only make sense with matches.
@@ -1129,7 +1289,7 @@ void WBQtScriptWindow::refreshReplaceSuggestions()
 	// Find completer: distinct parameter values CONTAINING the current text, as a 2-column model
 	// (value | "(count)"); the completer inserts only column 0, so the count is display-only.
 	QStringList values, counts;
-	parseParamValueLines(replaceFindText().constData(), values, counts);
+	parseParamValueLines(replaceFindText().constData(), replaceScope(), values, counts);
 	m_replaceSuggestModel->clear();
 	for (int i = 0; i < values.size(); ++i)
 	{
@@ -1142,11 +1302,11 @@ void WBQtScriptWindow::refreshReplaceSuggestions()
 
 void WBQtScriptWindow::refreshReplaceValueList()
 {
-	// Replace completer: the FULL set of existing values (rename-to targets). Rebuilt only when the
-	// bar opens and after a replace -- NOT on Find keystrokes -- so the full scan stays off the
-	// typing hot path.
+	// Replace completer: the FULL set of existing values across ALL scripts (rename-to targets -- you
+	// may want to rename to a value used elsewhere, even in scoped mode). Rebuilt only when the bar
+	// opens and after a replace -- NOT on Find keystrokes -- so the full scan stays off the typing path.
 	QStringList values, counts;
-	parseParamValueLines("", values, counts);
+	parseParamValueLines("", -1, values, counts);
 	m_replaceWithModel->setStringList(values);
 }
 
@@ -1173,6 +1333,13 @@ void WBQtScriptWindow::stepReplaceMatch(int dir)
 	QByteArray find = replaceFindText();
 	if (find.isEmpty())
 	{
+		return;
+	}
+	// Scoped to one script: there's a single match location -- just (re)select the pinned script.
+	const int scope = replaceScope();
+	if (scope >= 0)
+	{
+		applyReplaceSelection(scope);
 		return;
 	}
 	const int matchCase = m_replaceMatchCase->isChecked() ? 1 : 0;
@@ -1216,7 +1383,7 @@ void WBQtScriptWindow::onReplaceAll()
 	QByteArray repl = m_replaceWith->text().toLatin1();
 	int n = WBQtScript_ReplaceInParams(find.constData(), repl.constData(),
 		m_replaceMatchCase->isChecked() ? 1 : 0,
-		m_replaceWholeValue->isChecked() ? 1 : 0, 1);
+		m_replaceWholeValue->isChecked() ? 1 : 0, 1, replaceScope());
 	if (n > 0)
 	{
 		rebuildTree();

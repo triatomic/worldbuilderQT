@@ -538,7 +538,88 @@ AsciiString ScriptDialog::buildUsesTag(Script *pScript)
 	return usesList;
 }
 
-void ScriptDialog::OnSelchangedScriptTree(NMHDR* pNMHDR, LRESULT* pResult) 
+namespace {
+	// The one per-script parameter walk: visit every parameter of a script's conditions and both
+	// action lists (true + false), in order. Visitor is any struct with
+	// `void visit(Parameter *param, const AsciiString &value)`. All the tag/find/replace/count
+	// operations funnel through this so they scan identical scope.
+	template <class Visitor>
+	void forEachStringParamInScript(Script *pScr, Visitor &v)
+	{
+		for (OrCondition *pOr = pScr->getOrCondition(); pOr != NULL; pOr = pOr->getNextOrCondition())
+		{
+			for (Condition *c = pOr->getFirstAndCondition(); c != NULL; c = c->getNext())
+			{
+				for (int p = 0; p < c->getNumParameters(); ++p)
+				{
+					Parameter *param = c->getParameter(p);
+					if (param != NULL)
+					{
+						v.visit(param, param->getString());
+					}
+				}
+			}
+		}
+		for (int pass = 0; pass < 2; ++pass)
+		{
+			ScriptAction *a = (pass == 0) ? pScr->getAction() : pScr->getFalseAction();
+			for (; a != NULL; a = a->getNext())
+			{
+				for (int p = 0; p < a->getNumParameters(); ++p)
+				{
+					Parameter *param = a->getParameter(p);
+					if (param != NULL)
+					{
+						v.visit(param, param->getString());
+					}
+				}
+			}
+		}
+	}
+
+	// Visitor: collect the distinct values of one parameter type into a comma-separated list.
+	struct ParamTypeCollector
+	{
+		Parameter::ParameterType type;
+		AsciiString list;
+		Bool found;
+		ParamTypeCollector() : found(false) {}
+		void visit(Parameter *param, const AsciiString &value)
+		{
+			if (param->getParameterType() != type || value.isEmpty() || alreadyListed(list, value))
+			{
+				return;
+			}
+			if (found) { list.concat(", "); }
+			else { found = true; }
+			list.concat(value);
+		}
+	};
+}
+
+/** "[label] : ..." tag listing the distinct values of one parameter type this script references --
+used for the clickable map-entity links (UNIT -> placed units, WAYPOINT -> waypoints). Empty when
+none, or when 'Disable references' is on. */
+AsciiString ScriptDialog::buildParamTypeTag(Script *pScript, int paramType, const char *label)
+{
+	if (m_bDisableReferences || pScript == NULL)
+	{
+		return AsciiString::TheEmptyString;
+	}
+	ParamTypeCollector v;
+	v.type = (Parameter::ParameterType)paramType;
+	forEachStringParamInScript(pScript, v);
+	if (!v.found)
+	{
+		return AsciiString::TheEmptyString;
+	}
+	AsciiString out;
+	out.concat(label);
+	out.concat(v.list);
+	return out;
+}
+
+void ScriptDialog::OnSelchangedScriptTree(NMHDR* pNMHDR, LRESULT* pResult)
 {
 	NM_TREEVIEW* pNMTreeView = (NM_TREEVIEW*)pNMHDR;
 	CTreeCtrl *pTree = (CTreeCtrl*)GetDlgItem(IDC_SCRIPT_TREE);
@@ -4185,44 +4266,9 @@ namespace {
 		return out;
 	}
 
-	// The one per-script parameter walk: visit every string parameter of a script's conditions and
-	// both action lists (true + false), in order. Visitor is any struct with
-	// `void visit(Parameter *param, const AsciiString &value)`. All the find/replace/count/tally
-	// operations funnel through this so they scan identical scope. (Node param loop is inlined here
-	// since T's only differ in the outer chaining, not the param access.)
-	template <class Visitor>
-	void forEachStringParamInScript(Script *pScr, Visitor &v)
-	{
-		for (OrCondition *pOr = pScr->getOrCondition(); pOr != NULL; pOr = pOr->getNextOrCondition())
-		{
-			for (Condition *c = pOr->getFirstAndCondition(); c != NULL; c = c->getNext())
-			{
-				for (int p = 0; p < c->getNumParameters(); ++p)
-				{
-					Parameter *param = c->getParameter(p);
-					if (param != NULL)
-					{
-						v.visit(param, param->getString());
-					}
-				}
-			}
-		}
-		for (int pass = 0; pass < 2; ++pass)
-		{
-			ScriptAction *a = (pass == 0) ? pScr->getAction() : pScr->getFalseAction();
-			for (; a != NULL; a = a->getNext())
-			{
-				for (int p = 0; p < a->getNumParameters(); ++p)
-				{
-					Parameter *param = a->getParameter(p);
-					if (param != NULL)
-					{
-						v.visit(param, param->getString());
-					}
-				}
-			}
-		}
-	}
+	// forEachStringParamInScript (the shared per-script parameter walk) is defined higher up in this
+	// TU, next to the reference-tag builders that also use it; the find/replace/count visitors below
+	// reuse that same definition.
 
 	// Visitor: count matches, and (when doReplace) rewrite via friend_setString -- whole-value
 	// swaps the value entirely, substring splices the find text out.
@@ -4256,8 +4302,20 @@ namespace {
 	}
 }
 
+// Resolve a packed-ListType node to its Script* without disturbing the real tree selection. NULL
+// if the listType isn't a (still-valid) script. Resolving a listType only exists as a side effect
+// of setting the selection, so this saves/sets/reads/restores m_curSelection.
+Script *ScriptDialog::qtScriptForListType(int listType)
+{
+	int saved = qtGetSelection();
+	qtSetSelection(listType);
+	Script *pScr = qtCurScript();
+	qtSetSelection(saved);
+	return pScr;
+}
+
 int ScriptDialog::qtScriptReplace(const char *find, const char *replace,
-	int matchCase, int wholeValue, int doReplace)
+	int matchCase, int wholeValue, int doReplace, int scopeListType)
 {
 	if (find == NULL || find[0] == 0)
 	{
@@ -4270,7 +4328,7 @@ int ScriptDialog::qtScriptReplace(const char *find, const char *replace,
 	// only if there is at least one match (so an empty replace doesn't pollute the undo stack).
 	if (doReplace)
 	{
-		int total = qtScriptReplace(find, replace, matchCase, wholeValue, 0);
+		int total = qtScriptReplace(find, replace, matchCase, wholeValue, 0, scopeListType);
 		if (total == 0)
 		{
 			return 0;
@@ -4279,22 +4337,34 @@ int ScriptDialog::qtScriptReplace(const char *find, const char *replace,
 	}
 
 	int hits = 0;
-	for (int i = 0; i < m_sides.getNumSides(); ++i)
+	if (scopeListType >= 0)
 	{
-		ScriptList *pSL = m_sides.getSideInfo(i)->getScriptList();
-		if (pSL == NULL)
+		// Scoped: just the one selected script.
+		Script *pScr = qtScriptForListType(scopeListType);
+		if (pScr != NULL)
 		{
-			continue;
+			hits = qtReplaceInScript(pScr, findStr, replStr, matchCase != 0, wholeValue != 0, doReplace != 0);
 		}
-		for (Script *s = pSL->getScript(); s != NULL; s = s->getNext())
+	}
+	else
+	{
+		for (int i = 0; i < m_sides.getNumSides(); ++i)
 		{
-			hits += qtReplaceInScript(s, findStr, replStr, matchCase != 0, wholeValue != 0, doReplace != 0);
-		}
-		for (ScriptGroup *g = pSL->getScriptGroup(); g != NULL; g = g->getNext())
-		{
-			for (Script *s = g->getScript(); s != NULL; s = s->getNext())
+			ScriptList *pSL = m_sides.getSideInfo(i)->getScriptList();
+			if (pSL == NULL)
+			{
+				continue;
+			}
+			for (Script *s = pSL->getScript(); s != NULL; s = s->getNext())
 			{
 				hits += qtReplaceInScript(s, findStr, replStr, matchCase != 0, wholeValue != 0, doReplace != 0);
+			}
+			for (ScriptGroup *g = pSL->getScriptGroup(); g != NULL; g = g->getNext())
+			{
+				for (Script *s = g->getScript(); s != NULL; s = s->getNext())
+				{
+					hits += qtReplaceInScript(s, findStr, replStr, matchCase != 0, wholeValue != 0, doReplace != 0);
+				}
 			}
 		}
 	}
@@ -4402,7 +4472,7 @@ namespace {
 	}
 }
 
-int ScriptDialog::qtCollectParamValues(const char *substr, char *buf, int cap)
+int ScriptDialog::qtCollectParamValues(const char *substr, char *buf, int cap, int scopeListType)
 {
 	if (buf != NULL && cap > 0)
 	{
@@ -4411,22 +4481,34 @@ int ScriptDialog::qtCollectParamValues(const char *substr, char *buf, int cap)
 	// Tally distinct values (containing substr) with their use counts.
 	AsciiString sub = (substr != NULL) ? substr : "";
 	std::map<AsciiString, int> counts;
-	for (int i = 0; i < m_sides.getNumSides(); ++i)
+	if (scopeListType >= 0)
 	{
-		ScriptList *pSL = m_sides.getSideInfo(i)->getScriptList();
-		if (pSL == NULL)
+		// Scoped: just the one selected script.
+		Script *pScr = qtScriptForListType(scopeListType);
+		if (pScr != NULL)
 		{
-			continue;
+			qtTallyScriptParams(pScr, sub, counts);
 		}
-		for (Script *s = pSL->getScript(); s != NULL; s = s->getNext())
+	}
+	else
+	{
+		for (int i = 0; i < m_sides.getNumSides(); ++i)
 		{
-			qtTallyScriptParams(s, sub, counts);
-		}
-		for (ScriptGroup *g = pSL->getScriptGroup(); g != NULL; g = g->getNext())
-		{
-			for (Script *s = g->getScript(); s != NULL; s = s->getNext())
+			ScriptList *pSL = m_sides.getSideInfo(i)->getScriptList();
+			if (pSL == NULL)
+			{
+				continue;
+			}
+			for (Script *s = pSL->getScript(); s != NULL; s = s->getNext())
 			{
 				qtTallyScriptParams(s, sub, counts);
+			}
+			for (ScriptGroup *g = pSL->getScriptGroup(); g != NULL; g = g->getNext())
+			{
+				for (Script *s = g->getScript(); s != NULL; s = s->getNext())
+				{
+					qtTallyScriptParams(s, sub, counts);
+				}
 			}
 		}
 	}
@@ -4529,14 +4611,25 @@ void ScriptDialog::qtGetDetail(int listTypeInt, char *descOut, int descCap, char
 			scriptComment.concat(actionComment);
 			scriptComment.concat("\n\n");
 		}
-		AsciiString referencedIn = buildReferencedInTag(pScript);
-		AsciiString uses = buildUsesTag(pScript);
-		scriptComment.concat(referencedIn);
-		if (!referencedIn.isEmpty() && !uses.isEmpty())
+		// Reference tags, each on its own line: who calls this script, what scripts it calls, and
+		// the map entities (units/waypoints) it names -- all clickable in the Qt detail pane.
+		AsciiString refTags[4];
+		refTags[0] = buildReferencedInTag(pScript);
+		refTags[1] = buildUsesTag(pScript);
+		refTags[2] = buildParamTypeTag(pScript, Parameter::UNIT, "[Units] : ");
+		refTags[3] = buildParamTypeTag(pScript, Parameter::WAYPOINT, "[Waypoints] : ");
+		for (int t = 0; t < 4; ++t)
 		{
-			scriptComment.concat("\n\n");	// separate the two reference tags onto their own lines
+			if (refTags[t].isEmpty())
+			{
+				continue;
+			}
+			if (!scriptComment.isEmpty() && scriptComment.getCharAt(scriptComment.getLength() - 1) != '\n')
+			{
+				scriptComment.concat("\n\n");
+			}
+			scriptComment.concat(refTags[t]);
 		}
-		scriptComment.concat(uses);
 		scriptComment = parseLineBreaks(scriptComment);
 		if (commentOut != NULL && commentCap > 0)
 		{
