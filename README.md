@@ -22,7 +22,7 @@ You must own the game. The C&C Ultimate Collection is available on
 [EA App](https://www.ea.com/en-gb/games/command-and-conquer/command-and-conquer-the-ultimate-collection/buy/pc)
 or [Steam](https://store.steampowered.com/bundle/39394/Command__Conquer_The_Ultimate_Collection/).
 
-## New usage?
+## New usage
 
 The Qt WorldBuilder adds a batch of Script Editor quality-of-life features — live tree search and
 state filters, F2 rename / Ctrl+D duplicate, a fuller right-click menu, copy/paste of conditions
