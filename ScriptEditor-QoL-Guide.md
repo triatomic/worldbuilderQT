@@ -109,7 +109,7 @@ comments are never touched.
 
 ---
 
-## Worked example — rename a unit everywhere
+## Work example — rename a unit everywhere
 
 You renamed a unit on the map from `GLAInfantry01` to `GLA_Rifle_01`, and now
 several scripts reference the old name.
