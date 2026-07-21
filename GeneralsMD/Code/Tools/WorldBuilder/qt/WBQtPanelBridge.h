@@ -251,6 +251,16 @@ void WBQtScript_DropOn(int dragListType, int targetListType);
 int  WBQtScript_FindNext(const char *text, int fromListType, int *outListType);
 // Live tree filter: 1 if the node (label, or script deep-scan) matches text; empty text => 1.
 int  WBQtScript_NodeMatches(int listType, const char *text, const char *label);
+// Find/replace across every script's condition/action parameter values. Returns the match count.
+// doReplace 0 = count only; 1 = rewrite matches (undoable). matchCase/wholeValue toggle the mode.
+int  WBQtScript_ReplaceInParams(const char *find, const char *replace,
+	int matchCase, int wholeValue, int doReplace);
+// Next script (tree order, after fromListType) with a matching parameter value; 1 + outListType, or 0.
+int  WBQtScript_FindNextParamMatch(int fromListType, const char *find,
+	int matchCase, int wholeValue, int *outListType);
+// Autocomplete: distinct parameter values containing substr, as "value\tcount\n" lines (most-used
+// first) in buf. Returns the total distinct count.
+int  WBQtScript_CollectParamValues(const char *substr, char *buf, int cap);
 // 9c: recompute warnings (Verify) and toggle the current selection's active flag.
 void WBQtScript_Verify(void);
 void WBQtScript_ToggleActive(void);

@@ -7,10 +7,13 @@
 
 #include <QApplication>
 #include <QBrush>
+#include <QAbstractItemView>
 #include <QCheckBox>
 #include <QColor>
+#include <QCompleter>
 #include <QDropEvent>
 #include <QFont>
+#include <QLabel>
 #include <QLineEdit>
 #include <QList>
 #include <QMenu>
@@ -22,10 +25,14 @@
 #include <QSet>
 #include <QShortcut>
 #include <QSplitter>
+#include <QStandardItemModel>
 #include <QStringList>
+#include <QStringListModel>
 #include <QStyle>
 #include <QTextBrowser>
 #include <QTimer>
+#include <QToolButton>
+#include <QTreeView>
 #include <QTreeWidgetItemIterator>
 #include <QUrl>
 #include <QWindow>
@@ -145,6 +152,49 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	m_filterEasy = m_ui->filterEasy;
 	m_filterNormal = m_ui->filterNormal;
 	m_filterHard = m_ui->filterHard;
+	m_replaceBar = m_ui->replaceBar;
+	m_replaceFind = m_ui->replaceFind;
+	m_replaceWith = m_ui->replaceWith;
+	m_replaceMatchCase = m_ui->replaceMatchCase;
+	m_replaceWholeValue = m_ui->replaceWholeValue;
+	m_replaceCount = m_ui->replaceCount;
+
+	// Autocomplete the Find box with the distinct parameter values in the map. A 2-column model
+	// (value | "(count)") drives it: the popup shows both columns, but the completer inserts only
+	// column 0 -- so clicking a suggestion fills Find with the bare value, never the "(count)".
+	m_replaceSuggestModel = new QStandardItemModel(this);
+	m_replaceCompleter = new QCompleter(m_replaceSuggestModel, this);
+	m_replaceCompleter->setCaseSensitivity(Qt::CaseInsensitive);
+	m_replaceCompleter->setCompletionMode(QCompleter::UnfilteredPopupCompletion);	// we filter model-side
+	{
+		// A tree-view popup so both columns (value | count) show; column 0 is what's inserted.
+		QTreeView *popup = new QTreeView;
+		popup->setRootIsDecorated(false);
+		popup->setHeaderHidden(true);
+		popup->setSelectionBehavior(QAbstractItemView::SelectRows);
+		m_replaceCompleter->setPopup(popup);
+		popup->setColumnWidth(0, 240);
+	}
+	m_replaceCompleter->setCompletionColumn(0);	// insert the value, not the count column
+	m_replaceFind->setCompleter(m_replaceCompleter);
+	connect(m_replaceCompleter, SIGNAL(activated(const QString &)),
+		this, SLOT(onReplaceSuggestionPicked(const QString &)));
+
+	// The Replace box completes over ALL existing parameter values (no counts) -- so you can rename
+	// TO a value that already exists in the map, picked from the list. Qt filters this one by prefix.
+	m_replaceWithModel = new QStringListModel(this);
+	m_replaceWithCompleter = new QCompleter(m_replaceWithModel, this);
+	m_replaceWithCompleter->setCaseSensitivity(Qt::CaseInsensitive);
+	m_replaceWithCompleter->setFilterMode(Qt::MatchContains);
+	m_replaceWith->setCompleter(m_replaceWithCompleter);
+
+	// Debounce the Find box: each keystroke walks every script's params (count + suggestions), so
+	// coalesce a typing burst into one walk per pause, mirroring the tree-search debounce.
+	m_replaceDebounce = new QTimer(this);
+	m_replaceDebounce->setSingleShot(true);
+	m_replaceDebounce->setInterval(180);
+	connect(m_replaceDebounce, SIGNAL(timeout()), this, SLOT(onReplaceDebounce()));
+
 	m_findBtn = m_ui->findBtn;
 
 	// --- Middle: tree | (description over comment) ---
@@ -213,6 +263,22 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	connect(m_filterEasy, SIGNAL(toggled(bool)), this, SLOT(onFilterChanged()));
 	connect(m_filterNormal, SIGNAL(toggled(bool)), this, SLOT(onFilterChanged()));
 	connect(m_filterHard, SIGNAL(toggled(bool)), this, SLOT(onFilterChanged()));
+
+	// Inline find/replace bar. Ctrl+H toggles it; the criteria recount live; Enter in the find box
+	// steps to the next match; Esc closes it.
+	QShortcut *replaceSc = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_H), this);
+	connect(replaceSc, SIGNAL(activated()), this, SLOT(onToggleReplaceBar()));
+	connect(m_replaceFind, SIGNAL(textChanged(const QString &)), this, SLOT(onReplaceCriteriaChanged()));
+	connect(m_replaceFind, SIGNAL(returnPressed()), this, SLOT(onReplaceNext()));
+	connect(m_replaceMatchCase, SIGNAL(toggled(bool)), this, SLOT(onReplaceCriteriaChanged()));
+	connect(m_replaceWholeValue, SIGNAL(toggled(bool)), this, SLOT(onReplaceCriteriaChanged()));
+	connect(m_ui->replaceNext, SIGNAL(clicked()), this, SLOT(onReplaceNext()));
+	connect(m_ui->replacePrev, SIGNAL(clicked()), this, SLOT(onReplacePrev()));
+	connect(m_ui->replaceAll, SIGNAL(clicked()), this, SLOT(onReplaceAll()));
+	connect(m_ui->replaceClose, SIGNAL(clicked()), this, SLOT(onReplaceClose()));
+	QShortcut *replaceEsc = new QShortcut(QKeySequence(Qt::Key_Escape), m_replaceBar);
+	replaceEsc->setContext(Qt::WidgetWithChildrenShortcut);
+	connect(replaceEsc, SIGNAL(activated()), this, SLOT(onReplaceClose()));
 	connect(m_newFolder, SIGNAL(clicked()), this, SLOT(onNewFolder()));
 	connect(m_newScript, SIGNAL(clicked()), this, SLOT(onNewScript()));
 	connect(m_editScript, SIGNAL(clicked()), this, SLOT(onEditScript()));
@@ -533,6 +599,14 @@ void WBQtScriptWindow::resetForNewSession()
 			chips[i]->setChecked(false);
 			chips[i]->blockSignals(false);
 		}
+	}
+	// Hide + clear the find/replace bar so a new session starts without it.
+	if (m_replaceBar != NULL)
+	{
+		m_replaceDebounce->stop();
+		m_replaceBar->setVisible(false);
+		m_replaceFind->clear();
+		m_replaceWith->clear();
 	}
 	seedCheckboxes();	// pick up any persisted-setting changes
 }
@@ -958,6 +1032,199 @@ void WBQtScriptWindow::onSearchTextChanged(const QString &text)
 void WBQtScriptWindow::onSearchDebounce()
 {
 	applyFilters();
+}
+
+// ---- inline find/replace bar (Ctrl+H) ----
+
+QByteArray WBQtScriptWindow::replaceFindText() const
+{
+	return m_replaceFind->text().trimmed().toLatin1();
+}
+
+void WBQtScriptWindow::onToggleReplaceBar()
+{
+	const bool show = !m_replaceBar->isVisible();
+	m_replaceBar->setVisible(show);
+	if (show)
+	{
+		// Seed from the current search text if the find box is empty, then focus + select it.
+		if (m_replaceFind->text().isEmpty())
+		{
+			m_replaceFind->setText(m_search->text().trimmed());
+		}
+		m_replaceFind->setFocus();
+		m_replaceFind->selectAll();
+		refreshReplaceCount();
+		refreshReplaceSuggestions();
+		refreshReplaceValueList();	// build the rename-to list once here, not per keystroke
+	}
+}
+
+void WBQtScriptWindow::onReplaceClose()
+{
+	m_replaceBar->setVisible(false);
+	m_tree->setFocus();
+}
+
+// Collect the distinct parameter values containing `substr` from the model, parsing the bridge's
+// "value\tcount\n" wire format into parallel value/count lists (count may be empty).
+static void parseParamValueLines(const char *substr, QStringList &values, QStringList &counts)
+{
+	const int cap = 16384;
+	static char buf[cap];
+	buf[0] = 0;
+	WBQtScript_CollectParamValues(substr, buf, cap);
+	const QStringList lines = QString::fromLatin1(buf).split('\n', QString::SkipEmptyParts);
+	for (int i = 0; i < lines.size(); ++i)
+	{
+		const QStringList cols = lines.at(i).split('\t');
+		if (cols.isEmpty())
+		{
+			continue;
+		}
+		values << cols.at(0);
+		counts << (cols.size() >= 2 ? cols.at(1) : QString());
+	}
+}
+
+void WBQtScriptWindow::refreshReplaceCount()
+{
+	QByteArray find = replaceFindText();
+	int count = 0;
+	if (find.isEmpty())
+	{
+		m_replaceCount->setText("No results");
+	}
+	else
+	{
+		count = WBQtScript_ReplaceInParams(find.constData(), NULL,
+			m_replaceMatchCase->isChecked() ? 1 : 0,
+			m_replaceWholeValue->isChecked() ? 1 : 0, 0);
+		m_replaceCount->setText(QString("%1 parameter value%2").arg(count).arg(count == 1 ? "" : "s"));
+	}
+	// Prev/Next/Replace All only make sense with matches.
+	m_ui->replaceNext->setEnabled(count > 0);
+	m_ui->replacePrev->setEnabled(count > 0);
+	m_ui->replaceAll->setEnabled(count > 0);
+}
+
+void WBQtScriptWindow::onReplaceCriteriaChanged()
+{
+	if (m_updating)
+	{
+		return;
+	}
+	// Each keystroke walks every script's params; coalesce a typing burst into one walk per pause.
+	m_replaceDebounce->start();
+}
+
+void WBQtScriptWindow::onReplaceDebounce()
+{
+	refreshReplaceCount();
+	refreshReplaceSuggestions();
+}
+
+void WBQtScriptWindow::refreshReplaceSuggestions()
+{
+	// Find completer: distinct parameter values CONTAINING the current text, as a 2-column model
+	// (value | "(count)"); the completer inserts only column 0, so the count is display-only.
+	QStringList values, counts;
+	parseParamValueLines(replaceFindText().constData(), values, counts);
+	m_replaceSuggestModel->clear();
+	for (int i = 0; i < values.size(); ++i)
+	{
+		QList<QStandardItem *> row;
+		row << new QStandardItem(values.at(i));
+		row << new QStandardItem(counts.at(i).isEmpty() ? QString() : QString("(%1)").arg(counts.at(i)));
+		m_replaceSuggestModel->appendRow(row);
+	}
+}
+
+void WBQtScriptWindow::refreshReplaceValueList()
+{
+	// Replace completer: the FULL set of existing values (rename-to targets). Rebuilt only when the
+	// bar opens and after a replace -- NOT on Find keystrokes -- so the full scan stays off the
+	// typing hot path.
+	QStringList values, counts;
+	parseParamValueLines("", values, counts);
+	m_replaceWithModel->setStringList(values);
+}
+
+void WBQtScriptWindow::onReplaceSuggestionPicked(const QString &)
+{
+	// The completer already inserted column 0 (the bare value) into the Find box; just recount.
+	refreshReplaceCount();
+}
+
+void WBQtScriptWindow::applyReplaceSelection(int listType)
+{
+	m_lastFoundListType = listType;
+	selectByListType(listType);
+	WBQtScript_SetSelection(listType);
+	updateButtonStates();
+	updateDetail();
+}
+
+void WBQtScriptWindow::stepReplaceMatch(int dir)
+{
+	// Navigate to the next/prev script that has a matching PARAMETER value -- the exact scope the
+	// count + Replace act on, so nav and count agree. dir is +1 (next) or -1 (prev); the model walk
+	// is forward-only, so prev restarts from the top (a full step-back would need a reverse walk).
+	QByteArray find = replaceFindText();
+	if (find.isEmpty())
+	{
+		return;
+	}
+	const int matchCase = m_replaceMatchCase->isChecked() ? 1 : 0;
+	const int whole = m_replaceWholeValue->isChecked() ? 1 : 0;
+	const int from = (dir < 0) ? 0 : m_lastFoundListType;	// prev: restart from top (forward-only)
+	int out = 0;
+	bool ok = WBQtScript_FindNextParamMatch(from, find.constData(), matchCase, whole, &out) != 0;
+	if (!ok && from != 0)
+	{
+		// Hit the end -> wrap to the top and try once more.
+		m_lastFoundListType = 0;
+		ok = WBQtScript_FindNextParamMatch(0, find.constData(), matchCase, whole, &out) != 0;
+	}
+	if (ok)
+	{
+		applyReplaceSelection(out);
+	}
+	else
+	{
+		QApplication::beep();
+	}
+}
+
+void WBQtScriptWindow::onReplaceNext()
+{
+	stepReplaceMatch(1);
+}
+
+void WBQtScriptWindow::onReplacePrev()
+{
+	stepReplaceMatch(-1);
+}
+
+void WBQtScriptWindow::onReplaceAll()
+{
+	QByteArray find = replaceFindText();
+	if (find.isEmpty())
+	{
+		return;
+	}
+	QByteArray repl = m_replaceWith->text().toLatin1();
+	int n = WBQtScript_ReplaceInParams(find.constData(), repl.constData(),
+		m_replaceMatchCase->isChecked() ? 1 : 0,
+		m_replaceWholeValue->isChecked() ? 1 : 0, 1);
+	if (n > 0)
+	{
+		rebuildTree();
+		updateButtonStates();
+		updateDetail();
+		refreshReplaceValueList();	// the value set changed -> refresh rename-to targets
+	}
+	refreshReplaceCount();
 }
 
 void WBQtScriptWindow::onFilterChanged()

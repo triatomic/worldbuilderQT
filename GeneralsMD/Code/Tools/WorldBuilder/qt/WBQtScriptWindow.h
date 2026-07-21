@@ -17,11 +17,16 @@
 #include <QWidget>
 
 class QCheckBox;
+class QCompleter;
+class QLabel;
 class QLineEdit;
+class QStandardItemModel;
+class QStringListModel;
 class QPlainTextEdit;
 class QPushButton;
 class QTextBrowser;
 class QTimer;
+class QToolButton;
 class QUrl;
 class WBQtScriptWindow;
 
@@ -83,6 +88,15 @@ private slots:
 	void onSearchTextChanged(const QString &text);	// live filter when NewSearch is on (debounced)
 	void onSearchDebounce();						// the debounce timer fired -> apply the filter
 	void onFilterChanged();							// a Show: chip toggled
+	// Inline find/replace bar (Ctrl+H): rename a parameter value across every script.
+	void onToggleReplaceBar();		// Ctrl+H: show/hide the bar
+	void onReplaceCriteriaChanged();	// find text or a toggle changed -> debounce a recount + suggestions
+	void onReplaceDebounce();		// the debounce fired -> recount + refresh suggestions
+	void onReplaceNext();
+	void onReplacePrev();
+	void onReplaceAll();
+	void onReplaceClose();
+	void onReplaceSuggestionPicked(const QString &text);	// completer choice -> fill Find with the value
 	void onTreeContextMenu(const QPoint &pos);
 	void onTreeDoubleClicked(QTreeWidgetItem *item, int column);
 	void onReferenceClicked(const QUrl &url);
@@ -119,6 +133,14 @@ private:
 	bool nodeSelfMatches(QTreeWidgetItem *item, const FilterState &fs) const;
 	bool filterItemRec(QTreeWidgetItem *item, const FilterState &fs);
 
+	// Find/replace bar helpers.
+	void refreshReplaceCount();			// recompute the match count label + button enable states
+	void refreshReplaceSuggestions();	// repopulate the Find autocomplete from the current text
+	void refreshReplaceValueList();		// repopulate the Replace autocomplete (all values; built rarely)
+	void stepReplaceMatch(int dir);		// select the next (+1) / previous (-1) script containing a match
+	void applyReplaceSelection(int listType);	// select + sync the found match (shared by Next/Prev)
+	QByteArray replaceFindText() const;	// trimmed find text as latin1 (empty if none)
+
 	Ui::WBQtScriptWindow *m_ui;	// owns the static widget tree (WBQtScriptWindow.ui)
 
 	WBQtScriptTree *m_tree;
@@ -127,6 +149,19 @@ private:
 	QLineEdit   *m_search;
 	QPushButton *m_findBtn;
 	QTimer      *m_searchDebounce;	// coalesces keystrokes so the live filter scans once per pause
+
+	// Inline find/replace bar widgets (from the .ui).
+	QWidget     *m_replaceBar;
+	QLineEdit   *m_replaceFind;
+	QLineEdit   *m_replaceWith;
+	QToolButton *m_replaceMatchCase;
+	QToolButton *m_replaceWholeValue;
+	QLabel      *m_replaceCount;
+	QCompleter       *m_replaceCompleter;	// Find autocomplete: parameter values matching the text
+	QStandardItemModel *m_replaceSuggestModel;	// 2 cols: value | "(count)" -- only col 0 is inserted
+	QCompleter       *m_replaceWithCompleter;	// Replace autocomplete: all existing parameter values
+	QStringListModel *m_replaceWithModel;
+	QTimer           *m_replaceDebounce;	// coalesces Find keystrokes so the param walk runs once per pause
 
 	// "Show:" filter chips (narrow the tree by state). Warnings/Active/Inactive/difficulty.
 	QCheckBox   *m_filterWarnings;

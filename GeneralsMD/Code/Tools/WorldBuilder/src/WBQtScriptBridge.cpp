@@ -1379,6 +1379,27 @@ int WBQtScript_NodeMatches(int listType, const char *text, const char *label)
 	return (dlg != NULL) ? dlg->qtNodeMatches(listType, text, label) : 1;
 }
 
+int WBQtScript_ReplaceInParams(const char *find, const char *replace,
+	int matchCase, int wholeValue, int doReplace)
+{
+	ScriptDialog *dlg = ScriptDialog::qtInstance();
+	return (dlg != NULL) ? dlg->qtScriptReplace(find, replace, matchCase, wholeValue, doReplace) : 0;
+}
+
+int WBQtScript_FindNextParamMatch(int fromListType, const char *find,
+	int matchCase, int wholeValue, int *outListType)
+{
+	ScriptDialog *dlg = ScriptDialog::qtInstance();
+	return (dlg != NULL)
+		? dlg->qtFindNextParamMatch(fromListType, find, matchCase, wholeValue, outListType) : 0;
+}
+
+int WBQtScript_CollectParamValues(const char *substr, char *buf, int cap)
+{
+	ScriptDialog *dlg = ScriptDialog::qtInstance();
+	return (dlg != NULL) ? dlg->qtCollectParamValues(substr, buf, cap) : 0;
+}
+
 void WBQtScript_Verify(void)
 {
 	ScriptDialog *dlg = ScriptDialog::qtInstance();

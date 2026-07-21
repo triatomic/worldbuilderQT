@@ -5,7 +5,7 @@
   <property name="windowTitle">
    <string>Script Editor</string>
   </property>
-  <layout class="QVBoxLayout" name="rootLayout" stretch="0,0,0,1,0,0,0">
+  <layout class="QVBoxLayout" name="rootLayout" stretch="0,0,0,0,1,0,0,0">
    <item>
     <widget class="QGroupBox" name="optBox">
      <property name="title">
@@ -129,6 +129,122 @@
       </widget>
      </item>
     </layout>
+   </item>
+   <item>
+    <widget class="QWidget" name="replaceBar" native="true">
+     <property name="visible">
+      <bool>false</bool>
+     </property>
+     <layout class="QVBoxLayout" name="replaceBarLay">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <layout class="QHBoxLayout" name="replaceFindRow" stretch="1,0,0,0,0,0,0">
+        <item>
+         <widget class="QLineEdit" name="replaceFind">
+          <property name="placeholderText">
+           <string>Find parameter value across all scripts</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QToolButton" name="replaceMatchCase">
+          <property name="toolTip">
+           <string>Match case</string>
+          </property>
+          <property name="text">
+           <string>Aa</string>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QToolButton" name="replaceWholeValue">
+          <property name="toolTip">
+           <string>Whole value only (the entire parameter must equal the text)</string>
+          </property>
+          <property name="text">
+           <string>=</string>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="replaceCount">
+          <property name="text">
+           <string>No results</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QToolButton" name="replacePrev">
+          <property name="toolTip">
+           <string>Previous match</string>
+          </property>
+          <property name="text">
+           <string>&#8593;</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QToolButton" name="replaceNext">
+          <property name="toolTip">
+           <string>Next match</string>
+          </property>
+          <property name="text">
+           <string>&#8595;</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QToolButton" name="replaceClose">
+          <property name="toolTip">
+           <string>Close (Esc)</string>
+          </property>
+          <property name="text">
+           <string>&#215;</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="replaceReplRow" stretch="1,0">
+        <item>
+         <widget class="QLineEdit" name="replaceWith">
+          <property name="placeholderText">
+           <string>Replace with</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="replaceAll">
+          <property name="toolTip">
+           <string>Replace every matching parameter value across all scripts (undoable).</string>
+          </property>
+          <property name="text">
+           <string>Replace All</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
    </item>
    <item>
     <layout class="QHBoxLayout" name="filterRow">

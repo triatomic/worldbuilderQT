@@ -131,6 +131,19 @@ public:
 	// Live tree filter: does this node match the search text (label or, for a script, deep scan)?
 	// label is the node's already-formatted tree label; empty text matches everything.
 	int  qtNodeMatches(int listTypeInt, const char *text, const char *label);
+	// Find/replace across every script's condition/action parameter VALUES. Returns the match
+	// count. doReplace 0 = count only; 1 = rewrite matches to `replace` (snapshots for undo first,
+	// only when there's a match). matchCase / wholeValue toggle case sensitivity and exact-value.
+	int  qtScriptReplace(const char *find, const char *replace,
+		int matchCase, int wholeValue, int doReplace);
+	// Navigate to the next script (tree order, after fromListType) with a matching PARAMETER value
+	// -- same scope as qtScriptReplace, so the replace bar's Next/Prev agrees with its count.
+	int  qtFindNextParamMatch(int fromListType, const char *find,
+		int matchCase, int wholeValue, int *outListType);
+	// Autocomplete: distinct parameter values containing `substr` (case-insensitive), each with its
+	// use count, written as "value\tcount\n" lines into buf (most-used first). Returns the total
+	// distinct count (may exceed what fit in buf).
+	int  qtCollectParamValues(const char *substr, char *buf, int cap);
 	// 9c: recompute warnings (== OnVerifyAll) and toggle the current script/group active
 	// flag (== OnScriptActivate). The Qt window rebuilds after to pick up the new flags.
 	void qtVerify(void);

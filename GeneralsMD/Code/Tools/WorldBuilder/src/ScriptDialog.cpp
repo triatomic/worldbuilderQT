@@ -52,6 +52,10 @@
 
 // This is used to allow sounds to be played via PlaySound
 #include <mmsystem.h>
+#include <map>
+#include <vector>
+#include <utility>
+#include <algorithm>
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -1898,6 +1902,14 @@ Bool ScriptDialog::updateIcons(HTREEITEM hItem)
 	const ListType saveList = m_curSelection;
 	Bool warnings = false;
 	CTreeCtrl *pTree = (CTreeCtrl*)GetDlgItem(IDC_SCRIPT_TREE);
+	// In the Qt-inverted build the MFC dialog is hidden and its tree control is never populated, so
+	// GetChildItem would AV. The Qt window owns the visible tree and rebuilds it from the model
+	// after any edit, so the MFC icon walk is unnecessary there -- bail if the control isn't a live
+	// window. (Warning flags are computed by updateWarnings, not here.)
+	if (pTree == NULL || !::IsWindow(pTree->GetSafeHwnd()))
+	{
+		return false;
+	}
 	HTREEITEM child = pTree->GetChildItem(hItem);
 
 	while (child != NULL) {
@@ -4118,6 +4130,335 @@ int ScriptDialog::qtNodeMatches(int listTypeInt, const char *text, const char *l
 		return match ? 1 : 0;
 	}
 	return 0;
+}
+
+namespace {
+	// Does the string-valued parameter's value match `find`? whole = the WHOLE value must equal
+	// find; otherwise substring. matchCase toggles case sensitivity. Numeric params carry an empty
+	// m_string, so they never match -- no type allowlist needed.
+	Bool qtParamValueMatches(const AsciiString &value, const AsciiString &find,
+		Bool matchCase, Bool whole)
+	{
+		if (value.isEmpty())
+		{
+			return false;
+		}
+		if (whole)
+		{
+			return matchCase ? (value == find)
+			                 : (strcmpi(value.str(), find.str()) == 0);
+		}
+		if (matchCase)
+		{
+			return strstr(value.str(), find.str()) != NULL;
+		}
+		return qtContainsNoCase(value.str(), find.str());
+	}
+
+	// Replace occurrences of `find` with `repl` in a string (substring mode) honouring matchCase.
+	AsciiString qtReplaceInString(const AsciiString &value, const AsciiString &find,
+		const AsciiString &repl, Bool matchCase)
+	{
+		AsciiString out;
+		const char *s = value.str();
+		const int flen = find.getLength();
+		if (flen == 0)
+		{
+			return value;
+		}
+		while (*s != 0)
+		{
+			Bool hit = matchCase ? (strncmp(s, find.str(), flen) == 0)
+			                     : (strnicmp(s, find.str(), flen) == 0);
+			if (hit)
+			{
+				out.concat(repl);
+				s += flen;
+			}
+			else
+			{
+				char one[2] = { *s, 0 };
+				out.concat(one);
+				++s;
+			}
+		}
+		return out;
+	}
+
+	// The one per-script parameter walk: visit every string parameter of a script's conditions and
+	// both action lists (true + false), in order. Visitor is any struct with
+	// `void visit(Parameter *param, const AsciiString &value)`. All the find/replace/count/tally
+	// operations funnel through this so they scan identical scope. (Node param loop is inlined here
+	// since T's only differ in the outer chaining, not the param access.)
+	template <class Visitor>
+	void forEachStringParamInScript(Script *pScr, Visitor &v)
+	{
+		for (OrCondition *pOr = pScr->getOrCondition(); pOr != NULL; pOr = pOr->getNextOrCondition())
+		{
+			for (Condition *c = pOr->getFirstAndCondition(); c != NULL; c = c->getNext())
+			{
+				for (int p = 0; p < c->getNumParameters(); ++p)
+				{
+					Parameter *param = c->getParameter(p);
+					if (param != NULL)
+					{
+						v.visit(param, param->getString());
+					}
+				}
+			}
+		}
+		for (int pass = 0; pass < 2; ++pass)
+		{
+			ScriptAction *a = (pass == 0) ? pScr->getAction() : pScr->getFalseAction();
+			for (; a != NULL; a = a->getNext())
+			{
+				for (int p = 0; p < a->getNumParameters(); ++p)
+				{
+					Parameter *param = a->getParameter(p);
+					if (param != NULL)
+					{
+						v.visit(param, param->getString());
+					}
+				}
+			}
+		}
+	}
+
+	// Visitor: count matches, and (when doReplace) rewrite via friend_setString -- whole-value
+	// swaps the value entirely, substring splices the find text out.
+	struct ReplaceVisitor
+	{
+		AsciiString find, repl;
+		Bool matchCase, whole, doReplace;
+		int hits;
+		ReplaceVisitor() : hits(0) {}
+		void visit(Parameter *param, const AsciiString &value)
+		{
+			if (!qtParamValueMatches(value, find, matchCase, whole))
+			{
+				return;
+			}
+			++hits;
+			if (doReplace)
+			{
+				param->friend_setString(whole ? repl : qtReplaceInString(value, find, repl, matchCase));
+			}
+		}
+	};
+
+	int qtReplaceInScript(Script *pScr, const AsciiString &find, const AsciiString &repl,
+		Bool matchCase, Bool whole, Bool doReplace)
+	{
+		ReplaceVisitor v;
+		v.find = find; v.repl = repl; v.matchCase = matchCase; v.whole = whole; v.doReplace = doReplace;
+		forEachStringParamInScript(pScr, v);
+		return v.hits;
+	}
+}
+
+int ScriptDialog::qtScriptReplace(const char *find, const char *replace,
+	int matchCase, int wholeValue, int doReplace)
+{
+	if (find == NULL || find[0] == 0)
+	{
+		return 0;
+	}
+	AsciiString findStr = find;
+	AsciiString replStr = (replace != NULL) ? replace : "";
+
+	// A count pass (doReplace == 0) never mutates; a replace pass snapshots for undo first, but
+	// only if there is at least one match (so an empty replace doesn't pollute the undo stack).
+	if (doReplace)
+	{
+		int total = qtScriptReplace(find, replace, matchCase, wholeValue, 0);
+		if (total == 0)
+		{
+			return 0;
+		}
+		qtPushUndoSnapshot();
+	}
+
+	int hits = 0;
+	for (int i = 0; i < m_sides.getNumSides(); ++i)
+	{
+		ScriptList *pSL = m_sides.getSideInfo(i)->getScriptList();
+		if (pSL == NULL)
+		{
+			continue;
+		}
+		for (Script *s = pSL->getScript(); s != NULL; s = s->getNext())
+		{
+			hits += qtReplaceInScript(s, findStr, replStr, matchCase != 0, wholeValue != 0, doReplace != 0);
+		}
+		for (ScriptGroup *g = pSL->getScriptGroup(); g != NULL; g = g->getNext())
+		{
+			for (Script *s = g->getScript(); s != NULL; s = s->getNext())
+			{
+				hits += qtReplaceInScript(s, findStr, replStr, matchCase != 0, wholeValue != 0, doReplace != 0);
+			}
+		}
+	}
+
+	if (doReplace && hits > 0)
+	{
+		updateWarnings(true);	// parameters changed -> refresh warning flags (== a normal edit)
+		updateIcons(TVI_ROOT);
+	}
+	return hits;
+}
+
+namespace {
+	// Tree-order walk that stops at the first SCRIPT node AFTER `fromInt` whose parameter values
+	// match -- so Next/Prev in the replace bar navigates exactly the scripts the count/replace act
+	// on (param values), not the broader deep-scan the plain find-next uses.
+	struct QtParamFindVisitor : public QtNodeVisitor {
+		ScriptDialog *dlg; AsciiString find; Bool matchCase, whole; int fromInt;
+		Bool passedFrom; Bool found; int result;
+		QtParamFindVisitor(ScriptDialog *d, const AsciiString &f, Bool mc, Bool wh, int from)
+			: dlg(d), find(f), matchCase(mc), whole(wh), fromInt(from),
+			  passedFrom(from == 0), found(false), result(0) {}
+		virtual void visit(int, int listTypeInt, int, const AsciiString &)
+		{
+			if (found)
+			{
+				return;
+			}
+			if (!passedFrom)
+			{
+				if (listTypeInt == fromInt)
+				{
+					passedFrom = true;
+				}
+				return;
+			}
+			ListType lt;
+			lt.IntToList(listTypeInt);
+			if (lt.m_objType != ListType::SCRIPT_IN_PLAYER_TYPE &&
+				lt.m_objType != ListType::SCRIPT_IN_GROUP_TYPE)
+			{
+				return;
+			}
+			int saved = dlg->qtGetSelection();
+			dlg->qtSetSelection(listTypeInt);
+			Script *pScr = dlg->qtCurScript();
+			Bool match = (pScr != NULL) &&
+				(qtReplaceInScript(pScr, find, AsciiString::TheEmptyString, matchCase, whole, false) > 0);
+			dlg->qtSetSelection(saved);
+			if (match)
+			{
+				found = true;
+				result = listTypeInt;
+			}
+		}
+	};
+}
+
+int ScriptDialog::qtFindNextParamMatch(int fromListType, const char *find,
+	int matchCase, int wholeValue, int *outListType)
+{
+	if (find == NULL || find[0] == 0)
+	{
+		return 0;
+	}
+	QtParamFindVisitor fv(this, AsciiString(find), matchCase != 0, wholeValue != 0, fromListType);
+	qtWalkModel(m_sides, m_bCleanScriptName, fv);
+	if (!fv.found)
+	{
+		return 0;
+	}
+	if (outListType != NULL)
+	{
+		*outListType = fv.result;
+	}
+	return 1;
+}
+
+namespace {
+	// Visitor: tally distinct string param values (containing `sub`, case-insensitive) into counts.
+	// Rides the shared forEachStringParamInScript walk so it scans the same scope as replace/count.
+	struct TallyVisitor
+	{
+		AsciiString sub;
+		std::map<AsciiString, int> *counts;
+		void visit(Parameter *, const AsciiString &value)
+		{
+			if (value.isEmpty())
+			{
+				return;
+			}
+			if (!sub.isEmpty() && !qtContainsNoCase(value.str(), sub.str()))
+			{
+				return;
+			}
+			(*counts)[value] += 1;
+		}
+	};
+	void qtTallyScriptParams(Script *pScr, const AsciiString &sub, std::map<AsciiString, int> &counts)
+	{
+		TallyVisitor v;
+		v.sub = sub;
+		v.counts = &counts;
+		forEachStringParamInScript(pScr, v);
+	}
+}
+
+int ScriptDialog::qtCollectParamValues(const char *substr, char *buf, int cap)
+{
+	if (buf != NULL && cap > 0)
+	{
+		buf[0] = 0;
+	}
+	// Tally distinct values (containing substr) with their use counts.
+	AsciiString sub = (substr != NULL) ? substr : "";
+	std::map<AsciiString, int> counts;
+	for (int i = 0; i < m_sides.getNumSides(); ++i)
+	{
+		ScriptList *pSL = m_sides.getSideInfo(i)->getScriptList();
+		if (pSL == NULL)
+		{
+			continue;
+		}
+		for (Script *s = pSL->getScript(); s != NULL; s = s->getNext())
+		{
+			qtTallyScriptParams(s, sub, counts);
+		}
+		for (ScriptGroup *g = pSL->getScriptGroup(); g != NULL; g = g->getNext())
+		{
+			for (Script *s = g->getScript(); s != NULL; s = s->getNext())
+			{
+				qtTallyScriptParams(s, sub, counts);
+			}
+		}
+	}
+
+	// Sort by count descending, then name, so the most-used values surface first. std::map is
+	// name-sorted; flip into a vector keyed by (-count, name).
+	std::vector<std::pair<int, AsciiString> > ordered;
+	for (std::map<AsciiString, int>::const_iterator it = counts.begin(); it != counts.end(); ++it)
+	{
+		ordered.push_back(std::make_pair(-it->second, it->first));
+	}
+	std::sort(ordered.begin(), ordered.end());
+
+	// Emit "value\tcount\n" per entry into buf (truncating cleanly at the cap). Returns the total
+	// number of distinct values (may exceed what fit).
+	AsciiString out;
+	for (size_t i = 0; i < ordered.size(); ++i)
+	{
+		AsciiString line;
+		line.format("%s\t%d\n", ordered[i].second.str(), -ordered[i].first);
+		if (buf != NULL && (int)(out.getLength() + line.getLength()) >= cap)
+		{
+			break;	// no room for this line -- stop before overflowing
+		}
+		out.concat(line);
+	}
+	if (buf != NULL && cap > 0)
+	{
+		strncpy(buf, out.str(), cap - 1);
+		buf[cap - 1] = 0;
+	}
+	return (int)ordered.size();
 }
 
 void ScriptDialog::qtVerify(void)
