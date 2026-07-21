@@ -7,6 +7,7 @@
 #include <QDialog>
 
 class QLabel;
+class QLineEdit;
 class QTreeWidget;
 class QTreeWidgetItem;
 
@@ -23,8 +24,12 @@ public:
 
 private slots:
 	void onCurrentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
+	void onSearch();
+	void onSearchLive(const QString &text);	// NewSearch: live filter, no beep / no message box
+	void onReset();
 
 private:
+	int populate(const QString &filter);	// (re)build the tree; returns the number of leaves added
 	void selectTexClass(int texClass);
 	void refreshPreview(int texClass);
 
@@ -32,6 +37,7 @@ private:
 
 	int m_picked;
 	QTreeWidget *m_tree;
+	QLineEdit *m_searchEdit;
 	QLabel *m_nameLabel;
 	QLabel *m_preview;
 };

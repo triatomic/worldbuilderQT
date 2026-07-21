@@ -352,6 +352,7 @@ if(RTS_ENABLE_WORLDBUILDER_QT)
         "qt/WBQtComboStyle.h"
         "qt/WBQtTreeStyle.cpp"
         "qt/WBQtTreeStyle.h"
+        "qt/WBQtNameMatch.h"
         "qt/WBQtWindowPos.cpp"
         "qt/WBQtWindowPos.h"
         "qt/WBQtPanelBridge.h"

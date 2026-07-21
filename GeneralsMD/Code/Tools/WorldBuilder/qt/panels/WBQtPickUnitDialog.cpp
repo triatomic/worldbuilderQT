@@ -6,6 +6,7 @@
 #include "WBQtPickUnitBridge.h"
 #include "WBQtPreviewImage.h"
 #include "WBQtTreeStyle.h"
+#include "WBQtNameMatch.h"
 
 // NewSearch toggle (WBQtObjectBridge.cpp): live-filter search when on.
 extern "C" int WBQtConfig_GetNewSearch(void);
@@ -59,22 +60,24 @@ WBQtPickUnitDialog::WBQtPickUnitDialog(bool replaceMode, const QString &missingN
 	m_preview = m_ui->preview;
 	WBQtTreeStyle::applyTreeLines(m_tree);
 
+	// The missing-name label shows only in replace mode; the search row shows in BOTH modes.
+	// (The MFC replace dialog had no search box; the Qt one adds it to match the pick dialog and
+	// the other "replace missing" pickers -- searching a big object list beats scrolling it.)
 	if (replaceMode)
 	{
-		m_ui->searchRow->hide();	// the MFC replace dialog hooks no search buttons
 		m_ui->missingLabel->setText(missingName);
 	}
 	else
 	{
 		m_ui->missingLabel->hide();
-		m_searchEdit = m_ui->searchEdit;
-		connect(m_ui->findButton, SIGNAL(clicked()), this, SLOT(onSearch()));
-		connect(m_ui->resetButton, SIGNAL(clicked()), this, SLOT(onReset()));
-		if (WBQtConfig_GetNewSearch() != 0)
-		{
-			// NewSearch: filter live as the user types (Find button still works).
-			connect(m_searchEdit, SIGNAL(textChanged(QString)), this, SLOT(onSearchLive(QString)));
-		}
+	}
+	m_searchEdit = m_ui->searchEdit;
+	connect(m_ui->findButton, SIGNAL(clicked()), this, SLOT(onSearch()));
+	connect(m_ui->resetButton, SIGNAL(clicked()), this, SLOT(onReset()));
+	if (WBQtConfig_GetNewSearch() != 0)
+	{
+		// NewSearch: filter live as the user types (Find button still works).
+		connect(m_searchEdit, SIGNAL(textChanged(QString)), this, SLOT(onSearchLive(QString)));
 	}
 
 	connect(m_tree, SIGNAL(currentItemChanged(QTreeWidgetItem*,QTreeWidgetItem*)),
@@ -116,6 +119,11 @@ WBQtPickUnitDialog::WBQtPickUnitDialog(bool replaceMode, const QString &missingN
 	}
 
 	populate(QString());
+	if (replaceMode)
+	{
+		// Pre-select the closest existing unit to the missing name (leaves carry role 1).
+		WBQtNameMatch::selectBestMatch(m_tree, missingName, kLeafRole, 1);
+	}
 
 	resize(replaceMode ? QSize(380, 540) : QSize(320, 620));
 }

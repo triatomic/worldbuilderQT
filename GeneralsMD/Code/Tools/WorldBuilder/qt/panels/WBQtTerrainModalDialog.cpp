@@ -7,6 +7,10 @@
 #include "WBQtTerrainModalBridge.h"
 #include "WBQtTerrainMaterialBridge.h"
 #include "WBQtTreeStyle.h"
+#include "WBQtNameMatch.h"
+
+// NewSearch toggle (WBQtObjectBridge.cpp): live-filter search when on.
+extern "C" int WBQtConfig_GetNewSearch(void);
 
 // Stage 1 phase 3: modal-dialog parent (active modal if nested, else main window). WBQtBridge.cpp.
 QWidget *WBQt_DialogParent(void);
@@ -15,6 +19,8 @@ QWidget *WBQt_DialogParent(void);
 #include <QHash>
 #include <QImage>
 #include <QLabel>
+#include <QLineEdit>
+#include <QMessageBox>
 #include <QPixmap>
 #include <QPushButton>
 #include <QTreeWidget>
@@ -41,21 +47,53 @@ WBQtTerrainModalDialog::WBQtTerrainModalDialog(const QString &missingPath, QWidg
 	m_ui->setupUi(this);
 
 	m_tree = m_ui->tree;
+	m_searchEdit = m_ui->searchEdit;
 	m_nameLabel = m_ui->nameLabel;
 	m_preview = m_ui->preview;
 
 	m_ui->missingPathLabel->setText(missingPath);	// ctor arg, so set at runtime
+	// The missing path is "class/.../leaf"; the suggestion matches on its final component.
+	const QString missingLeaf = missingPath.section('/', -1).section('\\', -1);
 	WBQtTreeStyle::applyTreeLines(m_tree);
 
 	connect(m_ui->okButton, SIGNAL(clicked()), this, SLOT(accept()));
 	connect(m_ui->cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
 
-	// == updateTextures: build [class or **LegacyGDF/path] / leaf from the bridge rows.
-	// WBQtTerrainModal_Run built the rows (with the real heightmap) before constructing
-	// the dialog; the ctor only reads them back.
+	// A search row (matching the Pick/Replace Unit dialogs) filters the class-grouped texture
+	// tree by name -- searching a big texture list beats scrolling it. The MFC dialog had none.
+	connect(m_ui->findButton, SIGNAL(clicked()), this, SLOT(onSearch()));
+	connect(m_ui->resetButton, SIGNAL(clicked()), this, SLOT(onReset()));
+	if (WBQtConfig_GetNewSearch() != 0)
+	{
+		connect(m_searchEdit, SIGNAL(textChanged(QString)), this, SLOT(onSearchLive(QString)));
+	}
+
+	connect(m_tree, SIGNAL(currentItemChanged(QTreeWidgetItem*,QTreeWidgetItem*)),
+			this, SLOT(onCurrentItemChanged(QTreeWidgetItem*,QTreeWidgetItem*)));
+
+	populate(QString());
+	// Prefer a strong name match to the missing texture (the useful start for a "replace missing"
+	// pick); only when none clears the bar fall back to the default class (first unused, == the
+	// MFC dialog). Ordered this way, the default's currentItemChanged side effects fire only when
+	// they're the final selection -- not seeded then immediately superseded.
+	if (!WBQtNameMatch::selectBestMatch(m_tree, missingLeaf, kLeafRole, 0))
+	{
+		selectTexClass(WBQtTerrainModalData_GetInitialSelection());
+	}
+}
+
+// == updateTextures: build [class or **LegacyGDF/path] / leaf from the bridge rows.
+// WBQtTerrainModal_Run built the rows (with the real heightmap) before constructing the dialog;
+// this only reads them back. A non-empty filter keeps only leaves whose name contains it
+// case-insensitively (== the unit picker's OnSearch substring match). Returns the leaf count.
+int WBQtTerrainModalDialog::populate(const QString &filter)
+{
+	m_tree->clear();
+	const QString lowerFilter = filter.toLower();
 	QHash<QString, QTreeWidgetItem *> folders;
 	char group[kNameCap];
 	char leaf[kNameCap];
+	int matches = 0;
 	for (int i = 0; ; i++)
 	{
 		group[0] = 0;
@@ -65,6 +103,11 @@ WBQtTerrainModalDialog::WBQtTerrainModalDialog(const QString &missingPath, QWidg
 		if (texClass < 0 && leaf[0] == 0)
 		{
 			break;
+		}
+		QString leafName = QString::fromLocal8Bit(leaf);
+		if (!lowerFilter.isEmpty() && !leafName.toLower().contains(lowerFilter))
+		{
+			continue;
 		}
 		QStringList parts = QString::fromLocal8Bit(group).split('/', QString::SkipEmptyParts);
 		QTreeWidgetItem *parentItem = NULL;
@@ -89,14 +132,51 @@ WBQtTerrainModalDialog::WBQtTerrainModalDialog(const QString &missingPath, QWidg
 			}
 			parentItem = folder;
 		}
-		QTreeWidgetItem *item = new QTreeWidgetItem(parentItem, QStringList(QString::fromLocal8Bit(leaf)));
+		QTreeWidgetItem *item = new QTreeWidgetItem(parentItem, QStringList(leafName));
 		item->setData(0, kLeafRole, texClass);
+		matches++;
 	}
+	return matches;
+}
 
-	connect(m_tree, SIGNAL(currentItemChanged(QTreeWidgetItem*,QTreeWidgetItem*)),
-			this, SLOT(onCurrentItemChanged(QTreeWidgetItem*,QTreeWidgetItem*)));
+void WBQtTerrainModalDialog::onSearch()
+{
+	// == the unit picker's OnSearch: empty text beeps and restores the full list; no matches
+	// informs; matches show expanded.
+	QString filter = m_searchEdit->text();
+	if (filter.isEmpty())
+	{
+		QApplication::beep();
+		populate(QString());
+		return;
+	}
+	if (populate(filter) == 0)
+	{
+		QMessageBox::information(this, "Search", "No matches found.");
+	}
+	else
+	{
+		m_tree->expandAll();
+	}
+}
 
-	selectTexClass(WBQtTerrainModalData_GetInitialSelection());
+void WBQtTerrainModalDialog::onSearchLive(const QString &text)
+{
+	// NewSearch: filter live -- empty box restores the full list, no beep / no message box.
+	if (text.trimmed().isEmpty())
+	{
+		populate(QString());
+		return;
+	}
+	if (populate(text) > 0)
+	{
+		m_tree->expandAll();
+	}
+}
+
+void WBQtTerrainModalDialog::onReset()
+{
+	populate(QString());
 }
 
 WBQtTerrainModalDialog::~WBQtTerrainModalDialog()
