@@ -83,6 +83,13 @@ namespace
 		p.setColor(QPalette::Disabled, QPalette::WindowText, disabled);
 		p.setColor(QPalette::Disabled, QPalette::Text, disabled);
 		p.setColor(QPalette::Disabled, QPalette::ButtonText, disabled);
+		// Make disabled buttons read as recessed/inactive, not just "same button with greyer text".
+		// Fusion falls back to the enabled Button colour for disabled buttons unless we set this, so
+		// only the text dimmed before. A darker face (sunk toward Base) makes the button look
+		// pressed-in / switched-off. Done via the PALETTE (not a QPushButton stylesheet) so Fusion
+		// still draws the native button and NOTHING resizes -- a QSS button rule overrides Qt's
+		// metrics and shrank buttons elsewhere.
+		p.setColor(QPalette::Disabled, QPalette::Button, QColor(32, 32, 34));
 		// Kill the "etched" disabled-text ghost: styles draw disabled text twice, with a
 		// second copy offset (1,1) in the Disabled Light colour. Light defaults to near-white,
 		// so on the dark theme disabled menu items rendered BRIGHTER than enabled ones.
@@ -130,6 +137,8 @@ namespace
 		}
 
 		// Re-apply after the style change (setStyle clears the app stylesheet on some styles).
+		// The recessed disabled-button look is done via the dark palette (Disabled/Button), not a
+		// stylesheet, so it doesn't touch button geometry.
 		qApp->setStyleSheet(WB_GROUPBOX_QSS);
 
 		const QWidgetList tops = qApp->topLevelWidgets();
