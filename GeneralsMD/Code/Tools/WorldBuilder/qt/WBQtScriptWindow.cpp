@@ -4,6 +4,7 @@
 #include "WBQtPanelBridge.h"
 #include "WBQtTreeStyle.h"
 #include "WBQtWindowPos.h"
+#include "WBQtTheme.h"
 
 #include <QApplication>
 #include <QBrush>
@@ -1571,6 +1572,10 @@ extern "C" void WBQtScript_Open(void *frameHwnd, int x, int y)
 	::SetForegroundWindow(h);
 	::SetFocus(h);
 	win->setFocus(Qt::ActiveWindowFocusReason);
+	// Re-apply the title-bar theme after show: the global show-time filter themes each window
+	// once, but setting the transient parent above can recreate the native HWND and drop the DWM
+	// dark attribute, leaving the caption light. Re-set it unconditionally here.
+	WBQtTheme::applyTitleBarTheme(h);
 }
 
 extern "C" int WBQtScript_IsOpen(void)

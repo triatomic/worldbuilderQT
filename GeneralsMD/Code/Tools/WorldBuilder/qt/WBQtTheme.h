@@ -41,6 +41,12 @@ namespace WBQtTheme
 	// MFC main frame, whose client chrome is Qt but whose caption is Win32. Applied
 	// immediately and re-applied on every theme switch.
 	void registerNativeTopLevel(void *hwnd);
+
+	// One-shot: set a single window's title bar to match the current theme, now. Unlike the
+	// global show-time filter (which themes each window once and marks it done), this re-applies
+	// unconditionally -- for a window whose native HWND may be recreated after its first show
+	// (e.g. changing owner / transient parent drops the DWM dark attribute).
+	void applyTitleBarTheme(void *hwnd);
 }
 
 #endif // WB_QT_THEME_H

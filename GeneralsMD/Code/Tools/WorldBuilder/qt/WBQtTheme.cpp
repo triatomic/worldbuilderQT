@@ -339,3 +339,12 @@ void WBQtTheme::registerNativeTopLevel(void *hwnd)
 		setWindowDarkTitleBar(s_nativeTopLevel, effectiveDark());
 	}
 }
+
+void WBQtTheme::applyTitleBarTheme(void *hwnd)
+{
+	HWND h = reinterpret_cast<HWND>(hwnd);
+	if (h != NULL && ::IsWindow(h))
+	{
+		setWindowDarkTitleBar(h, effectiveDark());
+	}
+}
