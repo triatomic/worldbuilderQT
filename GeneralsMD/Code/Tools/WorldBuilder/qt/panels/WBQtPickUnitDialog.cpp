@@ -44,10 +44,13 @@ WBQtPickUnitDialog::WBQtPickUnitDialog(bool replaceMode, const QString &missingN
 	m_replaceMode(replaceMode),
 	m_panelMode(false),
 	m_panelFactionOnly(0),
+	m_missingName(missingName),
+	m_matchIndex(-1),
 	m_searchEdit(NULL),
 	m_tree(NULL),
 	m_preview(NULL),
-	m_cancelButton(NULL)
+	m_cancelButton(NULL),
+	m_findNextButton(NULL)
 {
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
@@ -78,6 +81,17 @@ WBQtPickUnitDialog::WBQtPickUnitDialog(bool replaceMode, const QString &missingN
 	{
 		// NewSearch: filter live as the user types (Find button still works).
 		connect(m_searchEdit, SIGNAL(textChanged(QString)), this, SLOT(onSearchLive(QString)));
+	}
+	// "Find Next" (search row) steps through the other close name matches -- replace mode only, so
+	// it hides in pick mode. The suggestion pre-selects the best match; this cycles the runners-up.
+	m_findNextButton = m_ui->findNextButton;
+	if (replaceMode)
+	{
+		connect(m_findNextButton, SIGNAL(clicked()), this, SLOT(onFindNextMatch()));
+	}
+	else
+	{
+		m_findNextButton->hide();
 	}
 
 	connect(m_tree, SIGNAL(currentItemChanged(QTreeWidgetItem*,QTreeWidgetItem*)),
@@ -121,8 +135,22 @@ WBQtPickUnitDialog::WBQtPickUnitDialog(bool replaceMode, const QString &missingN
 	populate(QString());
 	if (replaceMode)
 	{
-		// Pre-select the closest existing unit to the missing name (leaves carry role 1).
-		WBQtNameMatch::selectBestMatch(m_tree, missingName, kLeafRole, 1);
+		// Rank the close name matches (best-first; leaves carry role 1) and keep their NAMES, so a
+		// later search/reset that rebuilds the tree can't dangle them. Pre-select the best and arm
+		// "Find Next" to step through the rest.
+		const QList<QTreeWidgetItem *> ranked = WBQtNameMatch::rankMatches(m_tree, missingName, kLeafRole, 1);
+		for (int i = 0; i < ranked.size(); ++i)
+		{
+			m_matchNames.append(ranked.at(i)->text(0));
+		}
+		if (!m_matchNames.isEmpty())
+		{
+			selectMatch(0);
+		}
+		if (m_findNextButton != NULL)
+		{
+			m_findNextButton->setEnabled(m_matchNames.size() > 1);
+		}
 	}
 
 	resize(replaceMode ? QSize(380, 540) : QSize(320, 620));
@@ -246,6 +274,36 @@ void WBQtPickUnitDialog::onReset()
 {
 	// == PickUnitDialog::OnReset: repopulate the full list (the search text stays).
 	populate(QString());
+}
+
+// Select + scroll to the ranked match at `index` and remember the cursor. The match is looked up
+// by name in the CURRENT tree (m_matchNames stores names, not pointers), so it survives a tree
+// rebuild; if a substring Search has filtered that name out, there's simply nothing to select.
+void WBQtPickUnitDialog::selectMatch(int index)
+{
+	if (index < 0 || index >= m_matchNames.size())
+	{
+		return;
+	}
+	m_matchIndex = index;
+	const QList<QTreeWidgetItem *> found =
+		m_tree->findItems(m_matchNames.at(index), Qt::MatchExactly | Qt::MatchRecursive);
+	if (!found.isEmpty())
+	{
+		m_tree->setCurrentItem(found.first());
+		m_tree->scrollToItem(found.first());
+	}
+}
+
+// Step to the next close name match, wrapping past the end back to the best. The ranked list is
+// built once at open and cycles the name-similarity matches to the missing unit.
+void WBQtPickUnitDialog::onFindNextMatch()
+{
+	if (m_matchNames.isEmpty())
+	{
+		return;
+	}
+	selectMatch((m_matchIndex + 1) % m_matchNames.size());
 }
 
 void WBQtPickUnitDialog::onIgnore()

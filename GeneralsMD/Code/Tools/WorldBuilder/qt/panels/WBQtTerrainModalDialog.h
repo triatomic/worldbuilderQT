@@ -5,9 +5,11 @@
 #define WB_QT_TERRAINMODAL_DIALOG_H
 
 #include <QDialog>
+#include <QStringList>
 
 class QLabel;
 class QLineEdit;
+class QPushButton;
 class QTreeWidget;
 class QTreeWidgetItem;
 
@@ -27,17 +29,25 @@ private slots:
 	void onSearch();
 	void onSearchLive(const QString &text);	// NewSearch: live filter, no beep / no message box
 	void onReset();
+	void onFindNextMatch();	// step to the next close name match
 
 private:
 	int populate(const QString &filter);	// (re)build the tree; returns the number of leaves added
 	void selectTexClass(int texClass);
 	void refreshPreview(int texClass);
+	// Select + scroll to the match at m_matchNames[index] and remember the cursor.
+	void selectMatch(int index);
 
 	Ui::WBQtTerrainModalDialog *m_ui;	// owns the static widget tree (WBQtTerrainModalDialog.ui)
 
 	int m_picked;
+	// Close name matches to the missing texture by NAME (best-first) and the cursor into them for
+	// "Find Next". Names, not item pointers, so a tree rebuild (search/reset) can't dangle them.
+	QStringList m_matchNames;
+	int m_matchIndex;
 	QTreeWidget *m_tree;
 	QLineEdit *m_searchEdit;
+	QPushButton *m_findNextButton;
 	QLabel *m_nameLabel;
 	QLabel *m_preview;
 };

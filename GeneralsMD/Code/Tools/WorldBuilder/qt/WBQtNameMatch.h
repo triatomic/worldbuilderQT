@@ -9,10 +9,13 @@
 #ifndef WB_QT_NAME_MATCH_H
 #define WB_QT_NAME_MATCH_H
 
+#include <QList>
 #include <QString>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QVector>
+
+#include <algorithm>
 
 namespace WBQtNameMatch
 {
@@ -68,41 +71,70 @@ namespace WBQtNameMatch
 		return 1.0f - (float(dist) / float(maxLen));
 	}
 
-	// Replace-missing suggestion: scan a QTreeWidget for the leaf whose name is most similar to
-	// `target` and, if the best clears `threshold`, select + scroll to it (so the user usually just
-	// confirms) and return true. A "leaf" is a top-level-0 item carrying an int in role `leafRole`
-	// that is >= `leafMin` (folders store a smaller sentinel). Returns false (selecting nothing) on
-	// an empty target or when nothing clears the bar, so a caller can fall back to its own default
-	// selection. The catalogs are small, so a single linear pass is fine.
-	inline bool selectBestMatch(QTreeWidget *tree, const QString &target,
+	// One scored leaf, for ranking (see rankMatches).
+	struct ScoredLeaf
+	{
+		QTreeWidgetItem *item;
+		float score;
+	};
+
+	// Sort predicate: higher score first (ties keep tree order, which std::stable_sort preserves).
+	inline bool scoredLeafBetter(const ScoredLeaf &a, const ScoredLeaf &b)
+	{
+		return a.score > b.score;
+	}
+
+	// Collect every leaf whose name is at least `threshold` similar to `target`, sorted best-first.
+	// A "leaf" is a top-level-0 item carrying an int in role `leafRole` that is >= `leafMin` (folders
+	// store a smaller sentinel). Empty when the target is empty or nothing clears the bar. The
+	// dialogs use this to pre-select the closest match and let a "Find Next" button step through the
+	// runners-up. Catalogs are small (and the >= threshold set is smaller), so this is cheap.
+	inline QList<QTreeWidgetItem *> rankMatches(QTreeWidget *tree, const QString &target,
 		int leafRole, int leafMin, float threshold = kSuggestThreshold)
 	{
+		QList<QTreeWidgetItem *> out;
 		if (tree == NULL || target.isEmpty())
 		{
-			return false;
+			return out;
 		}
-		QTreeWidgetItem *best = NULL;
-		float bestScore = 0.0f;
+		QVector<ScoredLeaf> scored;
 		QTreeWidgetItemIterator it(tree);
 		while (*it)
 		{
 			if ((*it)->data(0, leafRole).toInt() >= leafMin)
 			{
 				const float score = similarity(target, (*it)->text(0));
-				if (score > bestScore)
+				if (score >= threshold)
 				{
-					bestScore = score;
-					best = *it;
+					ScoredLeaf s;
+					s.item = *it;
+					s.score = score;
+					scored.push_back(s);
 				}
 			}
 			++it;
 		}
-		if (best == NULL || bestScore < threshold)
+		std::stable_sort(scored.begin(), scored.end(), scoredLeafBetter);
+		for (int i = 0; i < scored.size(); ++i)
+		{
+			out.push_back(scored[i].item);
+		}
+		return out;
+	}
+
+	// Replace-missing suggestion: select + scroll to the leaf whose name is most similar to `target`
+	// (if any clears `threshold`) and return true; else select nothing and return false, so a caller
+	// can fall back to its own default selection. Thin wrapper over rankMatches (the top-ranked hit).
+	inline bool selectBestMatch(QTreeWidget *tree, const QString &target,
+		int leafRole, int leafMin, float threshold = kSuggestThreshold)
+	{
+		const QList<QTreeWidgetItem *> ranked = rankMatches(tree, target, leafRole, leafMin, threshold);
+		if (ranked.isEmpty())
 		{
 			return false;
 		}
-		tree->setCurrentItem(best);
-		tree->scrollToItem(best);
+		tree->setCurrentItem(ranked.first());
+		tree->scrollToItem(ranked.first());
 		return true;
 	}
 }
