@@ -73,6 +73,8 @@ reference lines:
 - **[Units]** / **[Waypoints]** — the placed units and waypoints this script
   names in its parameters. Click one to **select it in the 3D view and center the
   camera on it**. (If it was renamed or deleted since, you'll just hear a beep.)
+- **[Missing]** — the object types this script references that **don't exist in
+  the current game data** (see section 7).
 
 ## 6. Find/replace parameter values across scripts
 
@@ -106,6 +108,36 @@ The bar:
 
 Only **parameter values** are searched/replaced — script names, folder names, and
 comments are never touched.
+
+## 7. [Missing] object references — click to fix
+
+When you open a map authored against different game data (another mod), its
+scripts may reference objects that don't exist in yours — those scripts get
+warning icons, and empty values show as `???` in the script text.
+
+- Select such a script: the detail pane lists the broken references on a
+  **[Missing]** line (e.g. `[Missing] : GLAInfantryHijacker, ???`). Object lists
+  defined by the map's own scripts are never flagged.
+- **Click a missing name** — the script's Edit dialog opens directly on the tab
+  (Conditions / Actions if true / Actions if false) that contains the first
+  condition or action naming it, with that row already selected. No hunting.
+
+### The object picker suggests the fix
+
+When you edit an object parameter (the **Edit Object Parameter** tree dialog),
+it now helps you repair broken references:
+
+- A **Search / Find / Reset** row filters the object tree by name as you type
+  (with NewSearch on).
+- On open, the picker **auto-matches the current value**: a valid object is
+  selected in the tree; a *missing* one pre-selects its **closest existing
+  name** — usually the renamed equivalent you're looking for.
+- **Find Next** / **^** (or **F3** / **Shift+F3**) cycle through the other close
+  name matches, best first, wrapping around.
+
+So the full repair flow for a broken script is: click the name under
+**[Missing]** → the Edit dialog lands on the broken row → open the parameter →
+the picker suggests the replacement → OK.
 
 ---
 

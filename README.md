@@ -27,7 +27,9 @@ or [Steam](https://store.steampowered.com/bundle/39394/Command__Conquer_The_Ulti
 The Qt WorldBuilder adds a batch of Script Editor quality-of-life features — live tree search and
 state filters, F2 rename / Ctrl+D duplicate, a fuller right-click menu, copy/paste of conditions
 and actions between scripts, clickable reference links (including jump-to-entity in the 3D view),
-and a find/replace bar for renaming parameter values across all scripts (or just the selected one).
+a find/replace bar for renaming parameter values across all scripts (or just the selected one),
+and a repair flow for maps from other mods: clickable **[Missing]** object references that jump to
+the broken condition/action, with the object picker auto-suggesting the closest existing name.
 
 See **[ScriptEditor-QoL-Guide.md](ScriptEditor-QoL-Guide.md)** for how to use each of them, with a
 worked example.
