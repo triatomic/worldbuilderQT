@@ -3594,10 +3594,6 @@ void WbView3d::OnPaint()
 	// inside the frame in render(), so we must NOT also draw them here.
 	if (m_labelRenderer == 1) {
 		drawLabels(hdc);
-		// Record the view state we just painted, so OnTimer can skip repaints (and
-		// thus the strobe-inducing buffer flip) until something actually changes.
-		m_lastGdiPaintKey = buildLabelKey();
-		m_haveGdiPaintKey = true;
 	} else if (m_doRectFeedback) {
 		// Old (D3DX) mode draws labels inside the D3D frame and never passes an HDC to
 		// drawLabels, so the drag-select box (a GDI ::FrameRect) would never appear. Draw
@@ -3607,6 +3603,14 @@ void WbView3d::OnPaint()
 		::FrameRect(hdc, &m_feedbackBox, (HBRUSH)brush.GetSafeHandle());
 	}
 	::EndPaint(m_hWnd, &ps);
+	// Record the view state we just painted, so OnTimer can skip timer repaints until
+	// something actually changes (all renderer modes -- see the idle skip in OnTimer;
+	// in GDI mode this also suppresses the strobe-inducing buffer flip). Not on the
+	// first paint: redraw() was skipped, so nothing was actually rendered yet.
+	if (!m_firstPaint) {
+		m_lastGdiPaintKey = buildLabelKey();
+		m_haveGdiPaintKey = true;
+	}
 	if (m_firstPaint) {
 		CMainFrame::GetMainFrame()->adjustWindowSize();
 		m_firstPaint = false;
@@ -4763,16 +4767,18 @@ void WbView3d::OnTimer(UINT nIDEvent)
 	if (getLastDrawTime()+UPDATE_TIME >= ::GetTickCount())
 		return;		// throttle: at most one repaint per UPDATE_TIME
 
-	// GDI label mode coalesces idle repaints to suppress the strobe (see header).
-	// Repaint only when the view actually changed, an interaction is in progress,
-	// or the low-rate fallback elapsed. D3DX mode always free-runs.
-	if (m_labelRenderer == 1) {
-		const UINT GDI_IDLE_FALLBACK_MS = 5000;	// max stale-frame time when "idle"
+	// Idle repaint coalescing (all renderer modes): the timer free-runs at ~60 Hz, but a
+	// static view produces byte-identical frames, so skip the repaint until something
+	// actually changes, an interaction is in progress, or the low-rate fallback elapses.
+	// Originally GDI-mode-only (to suppress its strobe); the same change detection is
+	// equally valid for the D3DX and Atlas modes, which simply hold their last frame.
+	{
+		const UINT IDLE_FALLBACK_MS = 5000;	// max stale-frame time when "idle"
 
 		Bool interacting = (m_trackingMode != TRACK_NONE) || PointerTool::isMouseDown();
 		LabelCacheKey key = buildLabelKey();
 		Bool changed = !m_haveGdiPaintKey || !(key == m_lastGdiPaintKey);
-		Bool fallbackDue = (getLastDrawTime() + GDI_IDLE_FALLBACK_MS) < ::GetTickCount();
+		Bool fallbackDue = (getLastDrawTime() + IDLE_FALLBACK_MS) < ::GetTickCount();
 
 		// Water-track waves animate every frame and their overlay lines live in
 		// OnPaint, so the view is not actually "static" while any wave exists -
@@ -4784,8 +4790,17 @@ void WbView3d::OnTimer(UINT nIDEvent)
 		// Live particle emitters animate every frame too -- keep repainting while any exist.
 		Bool particlesActive = WBParticleRuntime::hasActiveEmitters();
 
-		if (!interacting && !changed && !fallbackDue && !wavesActive && !particlesActive)
-			return;		// static view: leave the last frame + its GDI text on screen
+		// Mouse-tracking overlays that move WITHOUT a button held or a camera change:
+		// the ruler readout, the drag-select rect, and the object-tool placement ghost.
+		// None of them are covered by the paint key, so keep free-running while active.
+		Bool overlayActive = (m_doRulerFeedback != RULER_NONE) || m_doRectFeedback ||
+			m_showObjToolTrackingObj;
+
+		if (!interacting && !changed && !fallbackDue && !wavesActive && !particlesActive &&
+			!overlayActive)
+		{
+			return;		// static view: leave the last frame (+ any GDI text) on screen
+		}
 	}
 
 	Invalidate(false);
