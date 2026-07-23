@@ -442,6 +442,32 @@ WBQtScriptEditDialog::~WBQtScriptEditDialog()
 	delete m_ui;
 }
 
+void WBQtScriptEditDialog::applyInitialFocus(int tab, int row)
+{
+	if (tab < 0 || tab >= m_tabs->count())
+	{
+		return;
+	}
+	m_tabs->setCurrentIndex(tab);
+	WBQtScriptEditListTab *page = NULL;
+	if (tab == 1)
+	{
+		page = m_conditionsTab;
+	}
+	else if (tab == 2)
+	{
+		page = m_trueTab;
+	}
+	else if (tab == 3)
+	{
+		page = m_falseTab;
+	}
+	if (page != NULL)
+	{
+		page->reload(row);
+	}
+}
+
 void WBQtScriptEditDialog::wirePropertiesTab()
 {
 	m_nameEdit = m_ui->nameEdit;
@@ -609,8 +635,29 @@ void WBQtScriptEditDialog::onSecondsChanged(int value)
 
 // ===================== the modal entry point =====================
 
+namespace
+{
+	// One-shot initial tab/row for the next Run (WBQtScriptEdit_SetInitialFocus); -1 = none.
+	int s_initialFocusTab = -1;
+	int s_initialFocusRow = -1;
+}
+
+extern "C" void WBQtScriptEdit_SetInitialFocus(int tab, int row)
+{
+	s_initialFocusTab = tab;
+	s_initialFocusRow = row;
+}
+
 extern "C" int WBQtScriptEdit_Run(void *script, void * /*frameHwnd*/)
 {
+	// Snapshot + clear the one-shot initial focus FIRST, unconditionally: the "one-shot"
+	// guarantee lives entirely here, so a pending focus can never leak into a later
+	// unrelated Run no matter which path the caller took to reach us.
+	const int initialTab = s_initialFocusTab;
+	const int initialRow = s_initialFocusRow;
+	s_initialFocusTab = -1;
+	s_initialFocusRow = -1;
+
 	if (script == NULL)
 	{
 		return 0;
@@ -627,6 +674,10 @@ extern "C" int WBQtScriptEdit_Run(void *script, void * /*frameHwnd*/)
 	// Stage 1 phase 3: Qt ApplicationModal fences every Qt window incl. the hosted viewport
 	// (QWinHost WindowBlocked), so the old EnableWindow(frame) discipline is gone.
 	dlg.setWindowModality(Qt::ApplicationModal);
+	if (initialTab >= 0)
+	{
+		dlg.applyInitialFocus(initialTab, initialRow);
+	}
 	// Register our HWND so the MFC EditCondition/EditAction modals the bridge pops are owned
 	// by (and disable) this dialog.
 	WBQtScriptEdit_SetModalOwner(reinterpret_cast<void *>(dlg.winId()));

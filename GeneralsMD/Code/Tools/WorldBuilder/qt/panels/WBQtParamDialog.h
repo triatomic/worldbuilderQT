@@ -8,6 +8,8 @@
 
 #include <QDialog>
 
+#include "WBQtNameMatch.h"	// MatchCursor: the object picker's Find Next / "^" match stepper
+
 class QCheckBox;
 class QGroupBox;
 class QLineEdit;
@@ -90,13 +92,23 @@ public:
 
 private slots:
 	void onCurrentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
+	void onSearch();
+	void onSearchLive(const QString &text);	// NewSearch: live filter, no beep / no message box
+	void onReset();
+	void onFindNextMatch();	// step to the next close name match to the current value
+	void onFindPrevMatch();	// step to the previous close name match
 
 private:
+	int populate(const QString &filter);	// (re)build the tree; returns the number of leaves added
+
 	Ui::WBQtObjectPickDialog *m_ui;	// owns the static widget tree (WBQtObjectPickDialog.ui)
 
 	void *m_parameter;
+	// The close name matches to the current value (best-first) for "Find Next" / "^" to cycle.
+	WBQtNameMatch::MatchCursor m_matches;
 	QTreeWidget *m_tree;
 	QLineEdit *m_edit;
+	QLineEdit *m_searchEdit;
 };
 
 // The group editor: name / active / subroutine (== EditGroup).

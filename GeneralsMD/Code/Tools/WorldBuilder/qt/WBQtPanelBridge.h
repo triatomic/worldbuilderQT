@@ -306,6 +306,12 @@ int  WBQtScript_Redo(void);
 // returns the packed ListType int, or -1 when no script has that name.
 int  WBQtScript_FindScriptByName(const char *name);
 
+// Locate the first condition/action of the CURRENT script carrying an OBJECT_TYPE parameter
+// with this value ("???" matches empty values): tabOut = the edit dialog's tab (1=Conditions,
+// 2=Actions if true, 3=Actions if false), rowOut = the row in that tab's list. Returns 1 when
+// found, 0 otherwise. Backs the detail pane's clickable "[Missing]" links.
+int  WBQtScript_FindObjectParamLocation(const char *value, int *tabOut, int *rowOut);
+
 // Forward (Qt-side, WBQtScriptWindow): open/close the Qt Script window. WBQtScript_Open is
 // called from CMainFrame::onEditScripts after the hidden MFC dialog is created; it builds
 // the window rooted in frameHwnd. WBQtScript_Close tears it down. IsOpen/Focus let

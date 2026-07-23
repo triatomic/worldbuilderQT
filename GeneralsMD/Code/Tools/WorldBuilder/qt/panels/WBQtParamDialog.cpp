@@ -10,6 +10,9 @@
 #include "WBQtScriptWindow.h"
 #include "WBQtTreeStyle.h"
 
+// NewSearch toggle (WBQtObjectBridge.cpp): live-filter search when on.
+extern "C" int WBQtConfig_GetNewSearch(void);
+
 // Stage 1 phase 3: modal-dialog parent (active modal if nested, else main window). WBQtBridge.cpp.
 QWidget *WBQt_DialogParent(void);
 
@@ -23,7 +26,9 @@ QWidget *WBQt_DialogParent(void);
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMessageBox>
 #include <QPushButton>
+#include <QShortcut>
 #include <QTreeWidget>
 
 #include <qt_windows.h>
@@ -412,11 +417,49 @@ WBQtObjectPickDialog::WBQtObjectPickDialog(void *parameter, QWidget *parent)
 	connect(m_ui->okButton, SIGNAL(clicked()), this, SLOT(accept()));
 	connect(m_ui->cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
 
-	// == EditObjectParameter::OnInitDialog/addObject: [TEST/]side/editor-sorting/name.
+	// Search row (matching the Replace Missing dialogs): substring filter over the catalog,
+	// plus "Find Next" / "^" (and F3 / Shift+F3) cycling the close name matches to the
+	// CURRENT value -- for a missing object that steps through the likely replacements.
+	m_searchEdit = m_ui->searchEdit;
+	connect(m_ui->findButton, SIGNAL(clicked()), this, SLOT(onSearch()));
+	connect(m_ui->resetButton, SIGNAL(clicked()), this, SLOT(onReset()));
+	if (WBQtConfig_GetNewSearch() != 0)
+	{
+		connect(m_searchEdit, SIGNAL(textChanged(QString)), this, SLOT(onSearchLive(QString)));
+	}
+	connect(m_ui->findNextButton, SIGNAL(clicked()), this, SLOT(onFindNextMatch()));
+	connect(m_ui->findPrevButton, SIGNAL(clicked()), this, SLOT(onFindPrevMatch()));
+	QShortcut *nextSc = new QShortcut(QKeySequence(Qt::Key_F3), this);
+	connect(nextSc, SIGNAL(activated()), this, SLOT(onFindNextMatch()));
+	QShortcut *prevSc = new QShortcut(QKeySequence(Qt::SHIFT + Qt::Key_F3), this);
+	connect(prevSc, SIGNAL(activated()), this, SLOT(onFindPrevMatch()));
+
+	connect(m_tree, SIGNAL(currentItemChanged(QTreeWidgetItem*,QTreeWidgetItem*)),
+			this, SLOT(onCurrentItemChanged(QTreeWidgetItem*,QTreeWidgetItem*)));
+
+	populate(QString());
+
+	// Rank the close name matches to the current value into the cursor and pre-select the
+	// best: an existing value ranks itself first (selects it in the tree); a MISSING value
+	// pre-selects its closest existing name, so the user usually just confirms the fix.
+	WBQtNameMatch::armMatchCursor(m_matches, m_tree, QString::fromLocal8Bit(current), kLeafRole, 1,
+		m_ui->findNextButton, m_ui->findPrevButton);
+
+	resize(420, 560);
+}
+
+// == EditObjectParameter::OnInitDialog/addObject: [TEST/]side/editor-sorting/name, plus the
+// script-defined object lists under their own folder. A non-empty filter keeps only leaves whose
+// name contains it case-insensitively (== the other pickers' substring match). Returns the count.
+int WBQtObjectPickDialog::populate(const QString &filter)
+{
+	m_tree->clear();
+	const QString lowerFilter = filter.toLower();
 	QHash<QString, QTreeWidgetItem *> folders;
 	char name[kTextCap];
 	char side[256];
 	char sorting[256];
+	int matches = 0;
 	int count = WBQtParamData_GetTemplateCount();
 	for (int i = 0; i < count; i++)
 	{
@@ -426,6 +469,11 @@ WBQtObjectPickDialog::WBQtObjectPickDialog(void *parameter, QWidget *parent)
 		int isTest = 0;
 		if (WBQtParamData_GetTemplateInfo(i, name, sizeof(name), side, sizeof(side),
 				sorting, sizeof(sorting), &isTest) == 0)
+		{
+			continue;
+		}
+		QString leafName = QString::fromLocal8Bit(name);
+		if (!lowerFilter.isEmpty() && !leafName.toLower().contains(lowerFilter))
 		{
 			continue;
 		}
@@ -457,27 +505,86 @@ WBQtObjectPickDialog::WBQtObjectPickDialog(void *parameter, QWidget *parent)
 			}
 			parentItem = folder;
 		}
-		QTreeWidgetItem *leaf = new QTreeWidgetItem(parentItem, QStringList(QString::fromLocal8Bit(name)));
+		QTreeWidgetItem *leaf = new QTreeWidgetItem(parentItem, QStringList(leafName));
 		leaf->setData(0, kLeafRole, 1);
+		matches++;
 	}
 
 	// == addObjectLists: the script-defined object lists under their own folder.
-	QTreeWidgetItem *listsFolder = new QTreeWidgetItem(m_tree, QStringList("Object Lists"));
-	listsFolder->setData(0, kLeafRole, 0);
+	QTreeWidgetItem *listsFolder = NULL;
 	int listCount = WBQtParamData_GetObjectListCount();
 	for (int i = 0; i < listCount; i++)
 	{
 		name[0] = 0;
 		WBQtParamData_GetObjectList(i, name, sizeof(name));
-		QTreeWidgetItem *leaf = new QTreeWidgetItem(listsFolder, QStringList(QString::fromLocal8Bit(name)));
+		QString leafName = QString::fromLocal8Bit(name);
+		if (!lowerFilter.isEmpty() && !leafName.toLower().contains(lowerFilter))
+		{
+			continue;
+		}
+		if (listsFolder == NULL)
+		{
+			listsFolder = new QTreeWidgetItem(m_tree, QStringList("Object Lists"));
+			listsFolder->setData(0, kLeafRole, 0);
+		}
+		QTreeWidgetItem *leaf = new QTreeWidgetItem(listsFolder, QStringList(leafName));
 		leaf->setData(0, kLeafRole, 1);
+		matches++;
 	}
 
 	m_tree->sortItems(0, Qt::AscendingOrder);
-	connect(m_tree, SIGNAL(currentItemChanged(QTreeWidgetItem*,QTreeWidgetItem*)),
-			this, SLOT(onCurrentItemChanged(QTreeWidgetItem*,QTreeWidgetItem*)));
+	return matches;
+}
 
-	resize(420, 560);
+void WBQtObjectPickDialog::onSearch()
+{
+	// == the other pickers' OnSearch: empty text beeps and restores the full list; no matches
+	// informs; matches show expanded.
+	QString filter = m_searchEdit->text();
+	if (filter.isEmpty())
+	{
+		QApplication::beep();
+		populate(QString());
+		return;
+	}
+	if (populate(filter) == 0)
+	{
+		QMessageBox::information(this, "Search", "No matches found.");
+	}
+	else
+	{
+		m_tree->expandAll();
+	}
+}
+
+void WBQtObjectPickDialog::onSearchLive(const QString &text)
+{
+	// NewSearch: filter live -- empty box restores the full list, no beep / no message box.
+	if (text.trimmed().isEmpty())
+	{
+		populate(QString());
+		return;
+	}
+	if (populate(text) > 0)
+	{
+		m_tree->expandAll();
+	}
+}
+
+void WBQtObjectPickDialog::onReset()
+{
+	populate(QString());
+}
+
+// Step to the next / previous close name match, wrapping around.
+void WBQtObjectPickDialog::onFindNextMatch()
+{
+	WBQtNameMatch::stepMatchCursor(m_matches, m_tree, 1);
+}
+
+void WBQtObjectPickDialog::onFindPrevMatch()
+{
+	WBQtNameMatch::stepMatchCursor(m_matches, m_tree, -1);
 }
 
 WBQtObjectPickDialog::~WBQtObjectPickDialog()

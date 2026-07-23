@@ -5,6 +5,7 @@
 #include "WBQtTreeStyle.h"
 #include "WBQtWindowPos.h"
 #include "WBQtTheme.h"
+#include "panels/WBQtScriptEditBridge.h"	// SetInitialFocus: the [Missing] link jump
 
 #include <QApplication>
 #include <QBrush>
@@ -686,12 +687,14 @@ static QString wbLinkifyReferences(const QString &comment)
 	//   wbref:<script>        -> jump to a script in the tree (onReferenceClicked)
 	//   wbent:unit:<name>     -> select+center the named placed unit in the 3D view
 	//   wbent:wp:<name>       -> select+center the named waypoint
+	//   wbmiss:<name>         -> open the Edit dialog on the condition/action naming it
 	struct Marker { const char *text; const char *scheme; };
 	static const Marker markers[] = {
 		{ "[Referenced in] : ", "wbref:" },
 		{ "[Uses] : ",          "wbref:" },
 		{ "[Units] : ",         "wbent:unit:" },
-		{ "[Waypoints] : ",     "wbent:wp:" }
+		{ "[Waypoints] : ",     "wbent:wp:" },
+		{ "[Missing] : ",       "wbmiss:" }
 	};
 	const int nMarkers = (int)(sizeof(markers) / sizeof(markers[0]));
 
@@ -756,6 +759,26 @@ void WBQtScriptWindow::onReferenceClicked(const QUrl &url)
 	// wbent:unit:<name> / wbent:wp:<name> -> select + center the entity in the 3D view. Parse from
 	// the full URL string (not url.path(): the "unit:"/"wp:" kind looks like a nested scheme to QUrl).
 	const QString full = url.toString(QUrl::FullyDecoded);
+
+	// wbmiss:<name> -> open the Edit dialog on the tab + row of the first condition/action that
+	// names the missing object, so the fix is one click away. Parse from the full string ("???"
+	// would read as a query to QUrl's path()).
+	if (full.startsWith("wbmiss:"))
+	{
+		pushSelectionToDialog();	// the [Missing] tag belongs to the selected script
+		const QByteArray name = full.mid(7).toLatin1();
+		int tab = -1;
+		int row = -1;
+		if (WBQtScript_FindObjectParamLocation(name.constData(), &tab, &row) == 0)
+		{
+			QApplication::beep();	// already fixed / stale detail pane
+			return;
+		}
+		WBQtScriptEdit_SetInitialFocus(tab, row);
+		onEditScript();
+		return;
+	}
+
 	if (full.startsWith("wbent:"))
 	{
 		const QString rest = full.mid(6);	// after "wbent:"

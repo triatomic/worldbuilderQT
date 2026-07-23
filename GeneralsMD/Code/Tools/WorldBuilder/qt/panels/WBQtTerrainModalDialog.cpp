@@ -90,23 +90,11 @@ WBQtTerrainModalDialog::WBQtTerrainModalDialog(const QString &missingPath, QWidg
 	// none clears the bar fall back to the default class (first unused, == the MFC dialog).
 	// Ordered so the default's currentItemChanged side effects fire only when it's the final
 	// selection -- not seeded then immediately superseded.
-	const QList<QTreeWidgetItem *> ranked = WBQtNameMatch::rankMatches(m_tree, missingLeaf, kLeafRole, 0);
-	QStringList names;
-	for (int i = 0; i < ranked.size(); ++i)
-	{
-		names.append(ranked.at(i)->text(0));
-	}
-	m_matches.reset(names);
-	if (!m_matches.isEmpty())
-	{
-		WBQtNameMatch::selectLeafByName(m_tree, m_matches.current());
-	}
-	else
+	if (!WBQtNameMatch::armMatchCursor(m_matches, m_tree, missingLeaf, kLeafRole, 0,
+			m_findNextButton, m_findPrevButton))
 	{
 		selectTexClass(WBQtTerrainModalData_GetInitialSelection());
 	}
-	m_findNextButton->setEnabled(m_matches.size() > 1);
-	m_findPrevButton->setEnabled(m_matches.size() > 1);
 }
 
 // == updateTextures: build [class or **LegacyGDF/path] / leaf from the bridge rows.
@@ -206,22 +194,15 @@ void WBQtTerrainModalDialog::onReset()
 	populate(QString());
 }
 
-// Step to the next close name match, wrapping past the end back to the best.
+// Step to the next / previous close name match, wrapping around.
 void WBQtTerrainModalDialog::onFindNextMatch()
 {
-	if (!m_matches.isEmpty())
-	{
-		WBQtNameMatch::selectLeafByName(m_tree, m_matches.step(1));
-	}
+	WBQtNameMatch::stepMatchCursor(m_matches, m_tree, 1);
 }
 
-// Step to the previous close name match, wrapping past the best to the last.
 void WBQtTerrainModalDialog::onFindPrevMatch()
 {
-	if (!m_matches.isEmpty())
-	{
-		WBQtNameMatch::selectLeafByName(m_tree, m_matches.step(-1));
-	}
+	WBQtNameMatch::stepMatchCursor(m_matches, m_tree, -1);
 }
 
 WBQtTerrainModalDialog::~WBQtTerrainModalDialog()

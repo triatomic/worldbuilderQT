@@ -595,6 +595,46 @@ namespace {
 			list.concat(value);
 		}
 	};
+
+	// Visitor: collect the distinct OBJECT_TYPE values that don't resolve in the current data set
+	// (a map from another mod references templates this game data doesn't have; the script text
+	// shows them as their raw name, or "???" when the value is empty). getWarningText is the same
+	// existence check that drives the warning icons -- it accepts both templates and the script's
+	// own object lists, so those never get flagged. (Its isAction flag only affects COUNTER/FLAG
+	// params, never OBJECT_TYPE, so FALSE is safe for both conditions and actions here.)
+	struct MissingObjectCollector
+	{
+		AsciiString list;
+		Bool found;
+		MissingObjectCollector() : found(false) {}
+		void visit(Parameter *param, const AsciiString &value)
+		{
+			if (param->getParameterType() != Parameter::OBJECT_TYPE)
+			{
+				return;
+			}
+			AsciiString shown = value;
+			if (shown.isEmpty())
+			{
+				shown = "???";	// == Parameter::getUiText's empty-value placeholder
+			}
+			else if (TheThingFactory->findTemplate(shown) != NULL)
+			{
+				return;	// template exists -- the O(1) common case (this runs per selection click)
+			}
+			else if (EditParameter::getWarningText(param, FALSE).isEmpty())
+			{
+				return;	// exists as a script object list -- not missing (getWarningText's verdict)
+			}
+			if (alreadyListed(list, shown))
+			{
+				return;
+			}
+			if (found) { list.concat(", "); }
+			else { found = true; }
+			list.concat(shown);
+		}
+	};
 }
 
 /** "[label] : ..." tag listing the distinct values of one parameter type this script references --
@@ -615,6 +655,27 @@ AsciiString ScriptDialog::buildParamTypeTag(Script *pScript, int paramType, cons
 	}
 	AsciiString out;
 	out.concat(label);
+	out.concat(v.list);
+	return out;
+}
+
+/** "[Missing] : ..." tag listing the object types this script references that don't exist in the
+current data set (a map authored against different game data). Empty when none, or when 'Disable
+references' is on. */
+AsciiString ScriptDialog::buildMissingTag(Script *pScript)
+{
+	if (m_bDisableReferences || pScript == NULL)
+	{
+		return AsciiString::TheEmptyString;
+	}
+	MissingObjectCollector v;
+	forEachStringParamInScript(pScript, v);
+	if (!v.found)
+	{
+		return AsciiString::TheEmptyString;
+	}
+	AsciiString out;
+	out.concat("[Missing] : ");
 	out.concat(v.list);
 	return out;
 }
@@ -4611,14 +4672,16 @@ void ScriptDialog::qtGetDetail(int listTypeInt, char *descOut, int descCap, char
 			scriptComment.concat(actionComment);
 			scriptComment.concat("\n\n");
 		}
-		// Reference tags, each on its own line: who calls this script, what scripts it calls, and
-		// the map entities (units/waypoints) it names -- all clickable in the Qt detail pane.
-		AsciiString refTags[4];
+		// Reference tags, each on its own line: who calls this script, what scripts it calls, the
+		// map entities (units/waypoints) it names -- all clickable in the Qt detail pane -- and the
+		// object types it references that don't exist in the current data set.
+		AsciiString refTags[5];
 		refTags[0] = buildReferencedInTag(pScript);
 		refTags[1] = buildUsesTag(pScript);
 		refTags[2] = buildParamTypeTag(pScript, Parameter::UNIT, "[Units] : ");
 		refTags[3] = buildParamTypeTag(pScript, Parameter::WAYPOINT, "[Waypoints] : ");
-		for (int t = 0; t < 4; ++t)
+		refTags[4] = buildMissingTag(pScript);
+		for (int t = 0; t < 5; ++t)
 		{
 			if (refTags[t].isEmpty())
 			{

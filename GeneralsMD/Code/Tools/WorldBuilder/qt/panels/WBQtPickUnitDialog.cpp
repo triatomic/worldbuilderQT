@@ -149,19 +149,8 @@ WBQtPickUnitDialog::WBQtPickUnitDialog(bool replaceMode, const QString &missingN
 	{
 		// Rank the close name matches (best-first; leaves carry role 1) into the cursor, pre-select
 		// the best, and arm "Find Next" / "^" to step through the rest.
-		const QList<QTreeWidgetItem *> ranked = WBQtNameMatch::rankMatches(m_tree, missingName, kLeafRole, 1);
-		QStringList names;
-		for (int i = 0; i < ranked.size(); ++i)
-		{
-			names.append(ranked.at(i)->text(0));
-		}
-		m_matches.reset(names);
-		if (!m_matches.isEmpty())
-		{
-			WBQtNameMatch::selectLeafByName(m_tree, m_matches.current());
-		}
-		m_findNextButton->setEnabled(m_matches.size() > 1);
-		m_findPrevButton->setEnabled(m_matches.size() > 1);
+		WBQtNameMatch::armMatchCursor(m_matches, m_tree, missingName, kLeafRole, 1,
+			m_findNextButton, m_findPrevButton);
 	}
 
 	resize(replaceMode ? QSize(380, 540) : QSize(320, 620));
@@ -287,23 +276,16 @@ void WBQtPickUnitDialog::onReset()
 	populate(QString());
 }
 
-// Step to the next close name match, wrapping past the end back to the best. The ranked list is
-// built once at open and cycles the name-similarity matches to the missing unit.
+// Step to the next / previous close name match, wrapping around. The ranked list is built once
+// at open and cycles the name-similarity matches to the missing unit.
 void WBQtPickUnitDialog::onFindNextMatch()
 {
-	if (!m_matches.isEmpty())
-	{
-		WBQtNameMatch::selectLeafByName(m_tree, m_matches.step(1));
-	}
+	WBQtNameMatch::stepMatchCursor(m_matches, m_tree, 1);
 }
 
-// Step to the previous close name match, wrapping past the best to the last.
 void WBQtPickUnitDialog::onFindPrevMatch()
 {
-	if (!m_matches.isEmpty())
-	{
-		WBQtNameMatch::selectLeafByName(m_tree, m_matches.step(-1));
-	}
+	WBQtNameMatch::stepMatchCursor(m_matches, m_tree, -1);
 }
 
 void WBQtPickUnitDialog::onIgnore()

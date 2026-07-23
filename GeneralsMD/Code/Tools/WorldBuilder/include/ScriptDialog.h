@@ -266,6 +266,7 @@ protected:
 	AsciiString buildReferencedInTag(Script *pScript); ///< "[Referenced in] : ..." (empty if none/disabled)
 	AsciiString buildUsesTag(Script *pScript); ///< "[Uses] : ..." (scripts pScript calls; empty if none/disabled)
 	AsciiString buildParamTypeTag(Script *pScript, int paramType, const char *label); ///< "<label>v1, v2" of one param type
+	AsciiString buildMissingTag(Script *pScript); ///< "[Missing] : ..." object types absent from the current data (empty if none/disabled)
 
 	virtual BOOL PreTranslateMessage(MSG* pMsg);
 

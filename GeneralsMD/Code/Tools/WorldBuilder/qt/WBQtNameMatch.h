@@ -9,6 +9,7 @@
 #ifndef WB_QT_NAME_MATCH_H
 #define WB_QT_NAME_MATCH_H
 
+#include <QAbstractButton>
 #include <QList>
 #include <QString>
 #include <QStringList>
@@ -187,6 +188,46 @@ namespace WBQtNameMatch
 		QStringList m_names;
 		int m_index;
 	};
+
+	// The pickers' shared arming sequence: rank the close name matches to `target` (best-first,
+	// leaves per leafRole/leafMin), load their names into the cursor, pre-select the best in the
+	// tree, and enable the Find Next / "^" buttons only when there's more than one to cycle.
+	// Returns true when at least one match cleared the bar (callers with a fallback selection --
+	// e.g. the texture dialog's default class -- check this).
+	inline bool armMatchCursor(MatchCursor &cursor, QTreeWidget *tree, const QString &target,
+		int leafRole, int leafMin, QAbstractButton *nextButton, QAbstractButton *prevButton)
+	{
+		const QList<QTreeWidgetItem *> ranked = rankMatches(tree, target, leafRole, leafMin);
+		QStringList names;
+		for (int i = 0; i < ranked.size(); ++i)
+		{
+			names.append(ranked.at(i)->text(0));
+		}
+		cursor.reset(names);
+		if (!cursor.isEmpty())
+		{
+			selectLeafByName(tree, cursor.current());
+		}
+		if (nextButton != NULL)
+		{
+			nextButton->setEnabled(cursor.size() > 1);
+		}
+		if (prevButton != NULL)
+		{
+			prevButton->setEnabled(cursor.size() > 1);
+		}
+		return !cursor.isEmpty();
+	}
+
+	// The Find Next / "^" slot body: step the cursor (dir = +1 / -1, wrap-around) and select the
+	// new current match in the tree. No-op while the cursor is empty.
+	inline void stepMatchCursor(MatchCursor &cursor, QTreeWidget *tree, int dir)
+	{
+		if (!cursor.isEmpty())
+		{
+			selectLeafByName(tree, cursor.step(dir));
+		}
+	}
 }
 
 #endif // WB_QT_NAME_MATCH_H

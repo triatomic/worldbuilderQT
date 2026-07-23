@@ -347,6 +347,84 @@ extern "C" int WBQtScriptEditData_GetConditionRow(void *script, int row, char *b
 	return -1;
 }
 
+// Does this parameter carry `value` as an OBJECT_TYPE? "???" (the ui placeholder the [Missing]
+// tag shows for empty values) matches an empty parameter string.
+static Bool paramCarriesObjectValue(Parameter *param, const AsciiString &value, Bool wantEmpty)
+{
+	if (param == NULL || param->getParameterType() != Parameter::OBJECT_TYPE)
+	{
+		return false;
+	}
+	if (wantEmpty)
+	{
+		return param->getString().isEmpty();
+	}
+	return param->getString() == value;
+}
+
+// Locate the first condition/action of the CURRENT script carrying an OBJECT_TYPE parameter with
+// this value ("???" matches empty values). tabOut = the edit dialog's tab (1=Conditions,
+// 2=Actions if true, 3=Actions if false); rowOut = the row in that tab's list. Lives HERE, next
+// to GetConditionRow/qtResolveConditionRow, because the conditions half must count the
+// *** IF ***/*** OR *** header rows exactly the way those enumerate them -- if the list's row
+// model ever changes, all of them change together. Returns 1 when found, 0 otherwise. Backs the
+// detail pane's [Missing] links (declared in qt/WBQtPanelBridge.h).
+extern "C" int WBQtScript_FindObjectParamLocation(const char *value, int *tabOut, int *rowOut)
+{
+	if (tabOut != NULL) { *tabOut = -1; }
+	if (rowOut != NULL) { *rowOut = -1; }
+	ScriptDialog *dlg = ScriptDialog::qtInstance();
+	Script *pScript = (dlg != NULL) ? dlg->qtCurScript() : NULL;
+	if (pScript == NULL || value == NULL)
+	{
+		return 0;
+	}
+	AsciiString wanted(value);
+	Bool wantEmpty = (wanted == "???");
+
+	// Conditions: rows mirror the edit dialog's list (an IF/OR header row per OrCondition,
+	// == GetConditionRow above).
+	int row = 0;
+	for (OrCondition *pOr = pScript->getOrCondition(); pOr != NULL; pOr = pOr->getNextOrCondition())
+	{
+		row++;	// the *** IF *** / *** OR *** header row
+		for (Condition *c = pOr->getFirstAndCondition(); c != NULL; c = c->getNext())
+		{
+			for (int p = 0; p < c->getNumParameters(); ++p)
+			{
+				if (paramCarriesObjectValue(c->getParameter(p), wanted, wantEmpty))
+				{
+					if (tabOut != NULL) { *tabOut = 1; }
+					if (rowOut != NULL) { *rowOut = row; }
+					return 1;
+				}
+			}
+			row++;
+		}
+	}
+
+	// Action lists: plain 0-based indexes (tab 2 = if true, tab 3 = if false).
+	for (int pass = 0; pass < 2; ++pass)
+	{
+		int index = 0;
+		ScriptAction *a = (pass == 0) ? pScript->getAction() : pScript->getFalseAction();
+		for (; a != NULL; a = a->getNext())
+		{
+			for (int p = 0; p < a->getNumParameters(); ++p)
+			{
+				if (paramCarriesObjectValue(a->getParameter(p), wanted, wantEmpty))
+				{
+					if (tabOut != NULL) { *tabOut = 2 + pass; }
+					if (rowOut != NULL) { *rowOut = index; }
+					return 1;
+				}
+			}
+			index++;
+		}
+	}
+	return 0;
+}
+
 extern "C" int WBQtScriptEdit_ConditionNew(void *script, int row)
 {
 	// == ScriptConditionsDlg::OnNew.

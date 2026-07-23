@@ -87,6 +87,10 @@ public:
 	explicit WBQtScriptEditDialog(void *script, QWidget *parent = 0);
 	virtual ~WBQtScriptEditDialog();
 
+	// Open on `tab` (0=Properties, 1=Conditions, 2=Actions if true, 3=Actions if false) with
+	// `row` selected in that tab's list -- the [Missing] link jump (WBQtScriptEdit_SetInitialFocus).
+	void applyInitialFocus(int tab, int row);
+
 private slots:
 	void onTabChanged(int index);
 	void onNameChanged(const QString &text);

@@ -41,6 +41,11 @@ extern "C" {
 // 0 if cancelled. The window title is the script's name (live-updates as it is edited).
 int WBQtScriptEdit_Run(void *script, void *frameHwnd);
 
+// One-shot: the NEXT WBQtScriptEdit_Run opens on this tab (0=Properties, 1=Conditions,
+// 2=Actions if true, 3=Actions if false) with `row` selected in that tab's list; cleared after
+// use. Backs the detail pane's [Missing] links, which jump straight to the offending row.
+void WBQtScriptEdit_SetInitialFocus(int tab, int row);
+
 // ================= Qt -> MFC (implemented in src/WBQtScriptEditBridge.cpp) =================
 
 // --- Properties tab ---
