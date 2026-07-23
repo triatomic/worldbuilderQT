@@ -23,6 +23,7 @@ QWidget *WBQt_DialogParent(void);
 #include <QMessageBox>
 #include <QPixmap>
 #include <QPushButton>
+#include <QShortcut>
 #include <QTreeWidget>
 
 #include <qt_windows.h>
@@ -38,8 +39,7 @@ namespace
 WBQtTerrainModalDialog::WBQtTerrainModalDialog(const QString &missingPath, QWidget *parent)
 	: QDialog(parent),
 	m_ui(new Ui::WBQtTerrainModalDialog),
-	m_picked(-1),
-	m_matchIndex(-1)
+	m_picked(-1)
 {
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
@@ -50,6 +50,7 @@ WBQtTerrainModalDialog::WBQtTerrainModalDialog(const QString &missingPath, QWidg
 	m_tree = m_ui->tree;
 	m_searchEdit = m_ui->searchEdit;
 	m_findNextButton = m_ui->findNextButton;
+	m_findPrevButton = m_ui->findPrevButton;
 	m_nameLabel = m_ui->nameLabel;
 	m_preview = m_ui->preview;
 
@@ -69,33 +70,43 @@ WBQtTerrainModalDialog::WBQtTerrainModalDialog(const QString &missingPath, QWidg
 	{
 		connect(m_searchEdit, SIGNAL(textChanged(QString)), this, SLOT(onSearchLive(QString)));
 	}
-	// "Find Next" steps through the other close name matches; the suggestion below pre-selects the
-	// best. Disabled when there are zero or one matches to cycle.
+	// "Find Next" / "^" step forward/back through the close name matches; the suggestion below
+	// pre-selects the best. Disabled when there are zero or one matches to cycle.
 	connect(m_findNextButton, SIGNAL(clicked()), this, SLOT(onFindNextMatch()));
+	connect(m_findPrevButton, SIGNAL(clicked()), this, SLOT(onFindPrevMatch()));
+	// F3 / Shift+F3 = next / previous match (the standard find-next convention). The dialog is
+	// modal, so the main window's F3 (Border Tool) accelerator can't fire anyway -- no conflict.
+	QShortcut *nextSc = new QShortcut(QKeySequence(Qt::Key_F3), this);
+	connect(nextSc, SIGNAL(activated()), this, SLOT(onFindNextMatch()));
+	QShortcut *prevSc = new QShortcut(QKeySequence(Qt::SHIFT + Qt::Key_F3), this);
+	connect(prevSc, SIGNAL(activated()), this, SLOT(onFindPrevMatch()));
 
 	connect(m_tree, SIGNAL(currentItemChanged(QTreeWidgetItem*,QTreeWidgetItem*)),
 			this, SLOT(onCurrentItemChanged(QTreeWidgetItem*,QTreeWidgetItem*)));
 
 	populate(QString());
 	// Rank the close name matches to the missing texture (best-first; leaves carry texClass >= 0)
-	// and keep their NAMES, so a later search/reset can't dangle them. Prefer a strong match as the
-	// start for a "replace missing" pick; only when none clears the bar fall back to the default
-	// class (first unused, == the MFC dialog). Ordered so the default's currentItemChanged side
-	// effects fire only when it's the final selection -- not seeded then immediately superseded.
+	// into the cursor. Prefer a strong match as the start for a "replace missing" pick; only when
+	// none clears the bar fall back to the default class (first unused, == the MFC dialog).
+	// Ordered so the default's currentItemChanged side effects fire only when it's the final
+	// selection -- not seeded then immediately superseded.
 	const QList<QTreeWidgetItem *> ranked = WBQtNameMatch::rankMatches(m_tree, missingLeaf, kLeafRole, 0);
+	QStringList names;
 	for (int i = 0; i < ranked.size(); ++i)
 	{
-		m_matchNames.append(ranked.at(i)->text(0));
+		names.append(ranked.at(i)->text(0));
 	}
-	if (!m_matchNames.isEmpty())
+	m_matches.reset(names);
+	if (!m_matches.isEmpty())
 	{
-		selectMatch(0);
+		WBQtNameMatch::selectLeafByName(m_tree, m_matches.current());
 	}
 	else
 	{
 		selectTexClass(WBQtTerrainModalData_GetInitialSelection());
 	}
-	m_findNextButton->setEnabled(m_matchNames.size() > 1);
+	m_findNextButton->setEnabled(m_matches.size() > 1);
+	m_findPrevButton->setEnabled(m_matches.size() > 1);
 }
 
 // == updateTextures: build [class or **LegacyGDF/path] / leaf from the bridge rows.
@@ -195,33 +206,22 @@ void WBQtTerrainModalDialog::onReset()
 	populate(QString());
 }
 
-// Select + scroll to the ranked match at `index` and remember the cursor. The match is looked up
-// by name in the CURRENT tree (m_matchNames stores names, not pointers), so it survives a tree
-// rebuild; if a substring Search has filtered that name out, there's simply nothing to select.
-void WBQtTerrainModalDialog::selectMatch(int index)
-{
-	if (index < 0 || index >= m_matchNames.size())
-	{
-		return;
-	}
-	m_matchIndex = index;
-	const QList<QTreeWidgetItem *> found =
-		m_tree->findItems(m_matchNames.at(index), Qt::MatchExactly | Qt::MatchRecursive);
-	if (!found.isEmpty())
-	{
-		m_tree->setCurrentItem(found.first());
-		m_tree->scrollToItem(found.first());
-	}
-}
-
 // Step to the next close name match, wrapping past the end back to the best.
 void WBQtTerrainModalDialog::onFindNextMatch()
 {
-	if (m_matchNames.isEmpty())
+	if (!m_matches.isEmpty())
 	{
-		return;
+		WBQtNameMatch::selectLeafByName(m_tree, m_matches.step(1));
 	}
-	selectMatch((m_matchIndex + 1) % m_matchNames.size());
+}
+
+// Step to the previous close name match, wrapping past the best to the last.
+void WBQtTerrainModalDialog::onFindPrevMatch()
+{
+	if (!m_matches.isEmpty())
+	{
+		WBQtNameMatch::selectLeafByName(m_tree, m_matches.step(-1));
+	}
 }
 
 WBQtTerrainModalDialog::~WBQtTerrainModalDialog()

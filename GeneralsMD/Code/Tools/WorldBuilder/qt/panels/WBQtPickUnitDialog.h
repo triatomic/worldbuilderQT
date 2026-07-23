@@ -5,8 +5,9 @@
 #define WB_QT_PICKUNIT_DIALOG_H
 
 #include <QDialog>
-#include <QStringList>
 #include <QVector>
+
+#include "WBQtNameMatch.h"	// MatchCursor: the Find Next / "^" match stepper
 
 class QLabel;
 class QLineEdit;
@@ -47,13 +48,12 @@ private slots:
 	void onReset();
 	void onIgnore();
 	void onFindNextMatch();	// replace mode: step to the next close name match
+	void onFindPrevMatch();	// replace mode: step to the previous close name match
 	void onCurrentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
 
 private:
 	int populate(const QString &filter);	// returns the number of leaves added
 	void refreshPreview(const QString &name);
-	// Replace mode: select + scroll to the match at m_matchNames[index] and remember the cursor.
-	void selectMatch(int index);
 
 	Ui::WBQtPickUnitDialog *m_ui;	// owns the static widget tree (WBQtPickUnitDialog.ui)
 
@@ -63,15 +63,14 @@ private:
 	int m_panelFactionOnly;
 	QString m_pickedName;
 	QString m_missingName;	// replace mode: the name being replaced (drives the match list)
-	// Replace mode: close name matches by NAME (best-first) and the cursor into them for "Find
-	// Next". Names, not item pointers, so a tree rebuild (search/reset) can't dangle them.
-	QStringList m_matchNames;
-	int m_matchIndex;
+	// Replace mode: the close name matches (best-first) for "Find Next" / "^" to cycle.
+	WBQtNameMatch::MatchCursor m_matches;
 	QLineEdit *m_searchEdit;
 	QTreeWidget *m_tree;
 	QLabel *m_preview;
 	QPushButton *m_cancelButton;
 	QPushButton *m_findNextButton;
+	QPushButton *m_findPrevButton;
 };
 
 #endif // WB_QT_PICKUNIT_DIALOG_H

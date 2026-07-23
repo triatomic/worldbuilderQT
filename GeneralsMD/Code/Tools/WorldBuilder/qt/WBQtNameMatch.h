@@ -11,6 +11,7 @@
 
 #include <QList>
 #include <QString>
+#include <QStringList>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QVector>
@@ -137,6 +138,55 @@ namespace WBQtNameMatch
 		tree->scrollToItem(ranked.first());
 		return true;
 	}
+
+	// Select + scroll to the (first) leaf whose text is exactly `name` in the CURRENT tree. The
+	// replace dialogs track their matches by name, not item pointer, so a rebuild (search/reset)
+	// can't dangle them; if a substring filter hid the name, there's simply nothing to select.
+	inline void selectLeafByName(QTreeWidget *tree, const QString &name)
+	{
+		const QList<QTreeWidgetItem *> found =
+			tree->findItems(name, Qt::MatchExactly | Qt::MatchRecursive);
+		if (!found.isEmpty())
+		{
+			tree->setCurrentItem(found.first());
+			tree->scrollToItem(found.first());
+		}
+	}
+
+	// Cursor over the ranked match names, backing the replace dialogs' "Find Next" / "^" buttons:
+	// holds the best-first name list plus the current position, and steps through it with
+	// wrap-around in either direction. Kept by name (see selectLeafByName) so tree rebuilds are
+	// harmless.
+	class MatchCursor
+	{
+	public:
+		MatchCursor() : m_index(0) {}
+
+		void reset(const QStringList &names)
+		{
+			m_names = names;
+			m_index = 0;
+		}
+
+		bool isEmpty() const { return m_names.isEmpty(); }
+		int size() const { return m_names.size(); }
+
+		// Callers must check isEmpty() first.
+		const QString &current() const { return m_names.at(m_index); }
+
+		// Step forward (dir = +1) or back (dir = -1) with wrap-around; returns the new current
+		// name. Callers must check isEmpty() first.
+		const QString &step(int dir)
+		{
+			const int n = m_names.size();
+			m_index = (m_index + dir + n) % n;
+			return m_names.at(m_index);
+		}
+
+	private:
+		QStringList m_names;
+		int m_index;
+	};
 }
 
 #endif // WB_QT_NAME_MATCH_H

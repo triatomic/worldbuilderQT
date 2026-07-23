@@ -5,7 +5,8 @@
 #define WB_QT_TERRAINMODAL_DIALOG_H
 
 #include <QDialog>
-#include <QStringList>
+
+#include "WBQtNameMatch.h"	// MatchCursor: the Find Next / "^" match stepper
 
 class QLabel;
 class QLineEdit;
@@ -30,24 +31,22 @@ private slots:
 	void onSearchLive(const QString &text);	// NewSearch: live filter, no beep / no message box
 	void onReset();
 	void onFindNextMatch();	// step to the next close name match
+	void onFindPrevMatch();	// step to the previous close name match
 
 private:
 	int populate(const QString &filter);	// (re)build the tree; returns the number of leaves added
 	void selectTexClass(int texClass);
 	void refreshPreview(int texClass);
-	// Select + scroll to the match at m_matchNames[index] and remember the cursor.
-	void selectMatch(int index);
 
 	Ui::WBQtTerrainModalDialog *m_ui;	// owns the static widget tree (WBQtTerrainModalDialog.ui)
 
 	int m_picked;
-	// Close name matches to the missing texture by NAME (best-first) and the cursor into them for
-	// "Find Next". Names, not item pointers, so a tree rebuild (search/reset) can't dangle them.
-	QStringList m_matchNames;
-	int m_matchIndex;
+	// The close name matches to the missing texture (best-first) for "Find Next" / "^" to cycle.
+	WBQtNameMatch::MatchCursor m_matches;
 	QTreeWidget *m_tree;
 	QLineEdit *m_searchEdit;
 	QPushButton *m_findNextButton;
+	QPushButton *m_findPrevButton;
 	QLabel *m_nameLabel;
 	QLabel *m_preview;
 };
