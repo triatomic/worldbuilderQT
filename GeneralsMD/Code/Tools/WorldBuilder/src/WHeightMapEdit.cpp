@@ -1519,9 +1519,14 @@ void WorldHeightMapEdit::autoBlendOut(Int xIndex, Int yIndex, Int globalEdgeClas
 		pProcessed[i] = false;
 	}
 
-	// --- Compute the bounding box of the region to reblend ---
+	// --- Clear any stale blends of our class in the affected area before re-blending. ---
+	// IMPORTANT: the primary (m_blendTileNdxes) and secondary/3-way (m_extraBlendTileNdxes)
+	// layers must be cleared TOGETHER whenever either one references curTileClass. Clearing
+	// only the primary layer leaves a stale extra-blend entry behind; blendSpecificTiles()
+	// decides whether a new blend goes into the primary or extra slot purely by testing
+	// whether m_blendTileNdxes[ndx] is already non-zero, so an orphaned extra-blend value
+	// combines with a freshly-written primary blend to produce a bogus 3-way blend.
 	if((hvGap || dGap) || revalidateBlends){
-		Int minX = m_width, maxX = 0, minY = m_height, maxY = 0;
 		for (CProcessNode* n = pProcessedNodes; n; n = n->m_next) {
 			int ndx = (n->m_y * m_width) + n->m_x;
 			if (m_blendTileNdxes[ndx] > 0) {
@@ -1530,16 +1535,15 @@ void WorldHeightMapEdit::autoBlendOut(Int xIndex, Int yIndex, Int globalEdgeClas
 				if (blendClass == curTileClass)
 					m_blendTileNdxes[ndx] = 0;
 			}
+			if (m_extraBlendTileNdxes[ndx] > 0) {
+				int extraBlendClass = getTextureClassFromNdx(
+					m_blendedTiles[m_extraBlendTileNdxes[ndx]].blendNdx);
+				if (extraBlendClass == curTileClass)
+					m_extraBlendTileNdxes[ndx] = 0;
+			}
 		}
 
-
-		// Add 1-tile margin so we also clear adjacent blends
-		minX = max(0, minX - 1);
-		minY = max(0, minY - 1);
-		maxX = min(m_width - 1, maxX + 1);
-		maxY = min(m_height - 1, maxY + 1);
-
-		// --- Clear only blends in this bounded area ---
+		// --- Clear only blends in the 1-tile margin around each processed node ---
 		for (CProcessNode* za = pProcessedNodes; za; za = za->m_next) {
 			for (int dy = -1; dy <= 1; ++dy) {
 				int y = za->m_y + dy;
@@ -1554,59 +1558,16 @@ void WorldHeightMapEdit::autoBlendOut(Int xIndex, Int yIndex, Int globalEdgeClas
 						if (blendClass == curTileClass)
 							m_blendTileNdxes[ndx] = 0;
 					}
+					if (m_extraBlendTileNdxes[ndx] > 0) {
+						int extraBlendClass = getTextureClassFromNdx(
+							m_blendedTiles[m_extraBlendTileNdxes[ndx]].blendNdx);
+						if (extraBlendClass == curTileClass)
+							m_extraBlendTileNdxes[ndx] = 0;
+					}
 				}
 			}
 		}
 	}
-
-
-    // ===========================
-    // Clear 3-way blends in 6x6 area if requested
-    // ===========================
-	// if (false) {
-// ===========================
-// // Clear 3-way blends in 6x6 area with extra gaps
-// // ===========================
-// const int regionSize = 6;
-// for (j = yIndex; j < yIndex + regionSize; ++j) {
-//     if (j < 0 || j >= m_height) continue;
-//     for (i = xIndex; i < xIndex + regionSize; ++i) {
-//         if (i < 0 || i >= m_width) continue;
-//         Int ndx = j * m_width + i;
-//         if (m_blendTileNdxes[ndx] > 0) {
-//             TBlendTileInfo &blend = m_blendedTiles[m_blendTileNdxes[ndx]];
-//             int activeDirections = 0;
-//             if (blend.horiz) activeDirections++;
-//             if (blend.vert) activeDirections++;
-//             if (blend.rightDiagonal) activeDirections++;
-//             if (blend.leftDiagonal) activeDirections++;
-            
-//             if (activeDirections >= 3) {
-//                 TRACE("Clearing 3-way blend at tile (%d,%d) with %d active directions\n", i, j, activeDirections);
-
-//                 // Clear the 3-way blend tile itself
-//                 m_blendTileNdxes[ndx] = 0;
-
-//                 // Clear a 1-tile radius around it to create gaps
-//                 for (int dy = -1; dy <= 1; ++dy) {
-//                     int y2 = j + dy;
-//                     if (y2 < 0 || y2 >= m_height) continue;
-//                     for (int dx = -1; dx <= 1; ++dx) {
-//                         int x2 = i + dx;
-//                         if (x2 < 0 || x2 >= m_width) continue;
-//                         Int nIdx = y2 * m_width + x2;
-//                         if (nIdx == ndx) continue; // skip center (already cleared)
-//                         if (m_blendTileNdxes[nIdx] != 0) {
-//                             TRACE("  Clearing neighbor blend at (%d,%d)\n", x2, y2);
-//                             m_blendTileNdxes[nIdx] = 0;
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-//     }
-// }
-// 	// }
 
 
 	pNodesToProcess = pProcessedNodes;
@@ -2033,41 +1994,9 @@ Bool WorldHeightMapEdit::optimizeTiles(void)
 
 				curBlendInfo.blendNdx = getBlendTileNdxForClass(x,y,curBlendInfo.blendNdx);
 
-				// --- Disconnected/self blend removal
-				bool disconnected = false;
-
-				// Self-blend check (compare tile indices)
-				// if (curBlendInfo.blendNdx == m_tileNdxes[i]) {
-				// 	disconnected = true;
-				// }
-				// else {
-				// 	// Manual neighbor check using snapshot
-				// 	// <-- changed to 8-direction neighbors to preserve corner blends -->
-				// 	static const int dx[8] = { -1, 1, 0, 0, -1, -1, 1, 1 };
-				// 	static const int dy[8] = { 0, 0, -1, 1, -1, 1, -1, 1 };
-				// 	int neighborX = -1;
-				// 	int neighborY = -1;
-				// 	int wantedClass = blendInfo[blendNdx].blendNdx;
-				// 	bool found = false;
-				// 	int k;
-				// 	for (k = 0; k < 8; ++k) {
-				// 		int nx = x + dx[k];
-				// 		int ny = y + dy[k];
-				// 		if (nx < 0 || ny < 0 || nx >= m_width || ny >= m_height) continue;
-				// 		int ndx = ny * m_width + nx;
-				// 		if (tileClassSnapshot[ndx] == wantedClass) {
-				// 			neighborX = nx;
-				// 			neighborY = ny;
-				// 			found = true;
-				// 			break;
-				// 		}
-				// 	}
-				// 	if (!found) disconnected = true;
-				// }
-
-				if (disconnected) {
-					// DEBUG_LOG(("optimizeTiles: removed disconnected blend at (%d,%d) [blend class=%d, base=%d]\n",
-					// 	x, y, blendInfo[blendNdx].blendNdx, texClass));
+				if (curBlendInfo.blendNdx == m_tileNdxes[i])
+				{	//Tile index same as blend index would mean same texture
+					//blending into itself.  Should not happen.
 					newBlendNdx = 0;
 				}
 				else
@@ -3913,4 +3842,4 @@ void WorldHeightMapEdit::findBoundaryNear(Coord3D *pt, float okDistance, Int *ou
 	
 	(*outNdx) = -1;
 	(*outHandle) = -1;
-} 
+}
