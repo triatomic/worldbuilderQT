@@ -61,6 +61,7 @@ Int TerrainMaterial::m_paintMode(1);
 
 TerrainMaterial::TerrainMaterial(CWnd* pParent /*=NULL*/) :
 	m_updating(false),
+	m_suppressWidthEditSave(false),
 	m_lastTool(""),
 	m_currentWidth(BigTileTool::getTileToolWidth()),
 	m_currentHeight(0)
@@ -200,7 +201,6 @@ void TerrainMaterial::setToolOptions(Bool singleCell, Bool floodfill)
 		if (m_staticThis->m_lastTool != newTool) {
 			m_staticThis->m_lastTool = newTool;
 			BigTileTool::setWidth(BigTileTool::getTileToolWidth());
-			m_staticThis->m_suppressWidthEditSave = false;
 		}
 
 		CButton* mirrorToggle = (CButton*)m_staticThis->GetDlgItem(IDC_TOGGLE_MIRROR);
@@ -294,6 +294,13 @@ void TerrainMaterial::setToolOptions(Bool singleCell, Bool floodfill)
 			m_raiseOnly = false;
 		}
 
+		// Clear the save-suppression on EVERY path, not just the tool-changed one. A right-click
+		// pan transiently swaps to the hand tool and swapping back re-activates the SAME tool, so
+		// the changed-tool branch never runs and the flag used to stay stuck true -- after which
+		// OnChangeSizeEdit stopped calling setTileToolWidth and the user's brush size was never
+		// persisted, so the next activate() re-seeded from the stale saved value and the size
+		// appeared to reset.
+		m_staticThis->m_suppressWidthEditSave = false;
 		m_staticThis->m_updating = false;
 	}
 #ifdef RTS_HAS_QT
