@@ -19,6 +19,7 @@ int  WBQtBuildList_GetBuildCount(void)             { return BuildList::qtGetBuil
 int  WBQtBuildList_GetBuildName(int i, char *o, int c){ return BuildList::qtGetBuildName(i, o, c); }
 int  WBQtBuildList_GetCurBuild(void)               { return BuildList::qtGetCurBuild(); }
 void WBQtBuildList_SetCurBuild(int i)              { BuildList::qtSetCurBuild(i); }
+void WBQtBuildList_SetCurBuildNoRefresh(int i)     { BuildList::qtSetCurBuildNoRefresh(i); }
 
 int    WBQtBuildList_HasCurBuild(void)             { return BuildList::qtHasCurBuild(); }
 double WBQtBuildList_GetAngle(void)                { return BuildList::qtGetAngle(); }

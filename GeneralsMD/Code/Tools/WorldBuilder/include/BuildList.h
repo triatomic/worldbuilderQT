@@ -116,6 +116,10 @@ public:
 	static int  qtGetBuildName(int i, char *out, int cap);
 	static int  qtGetCurBuild(void);
 	static void qtSetCurBuild(int i);
+	// As qtSetCurBuild, but without running OnSelchangeBuildList (which pushes a full panel
+	// refresh). Use when only re-pointing the "current" building before writing an attribute --
+	// the refresh would overwrite the edit-in-progress with the stored value.
+	static void qtSetCurBuildNoRefresh(int i);
 	// Current building's attributes.
 	static int    qtHasCurBuild(void);
 	static double qtGetAngle(void);

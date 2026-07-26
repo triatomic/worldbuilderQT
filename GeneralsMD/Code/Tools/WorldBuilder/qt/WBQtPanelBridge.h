@@ -77,6 +77,9 @@ int  WBQtBuildList_GetBuildCount(void);
 int  WBQtBuildList_GetBuildName(int i, char *out, int cap);
 int  WBQtBuildList_GetCurBuild(void);
 void WBQtBuildList_SetCurBuild(int i);
+// Re-point the current building without pushing a panel refresh; use before writing an attribute
+// so the refresh does not overwrite the value being edited.
+void WBQtBuildList_SetCurBuildNoRefresh(int i);
 int    WBQtBuildList_HasCurBuild(void);
 double WBQtBuildList_GetAngle(void);
 double WBQtBuildList_GetZ(void);

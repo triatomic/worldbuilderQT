@@ -1087,6 +1087,19 @@ void BuildList::qtSetCurBuild(int i)
 	m_staticThis->OnSelchangeBuildList();
 }
 
+// Re-point the current building WITHOUT the OnSelchangeBuildList side effects. That handler ends
+// in WBQtBuildList_PushRefresh(), which repopulates the Qt panel from the stored BuildListInfo --
+// so calling it on the way IN to an attribute write (angle / Z / already-built / rebuilds) reset
+// the spin box to the old value before the new one was ever stored, and the edit appeared to be
+// ignored. Selection changes still go through qtSetCurBuild, which does want the refresh.
+void BuildList::qtSetCurBuildNoRefresh(int i)
+{
+	if (m_staticThis == NULL) { return; }
+	m_staticThis->m_curBuildList = i;
+	CListBox *pList = (CListBox *)m_staticThis->GetDlgItem(IDC_BUILD_LIST);
+	if (pList != NULL) { pList->SetCurSel(i); }
+}
+
 int BuildList::qtHasCurBuild(void)
 {
 	return (qtBuildAt(qtGetCurSide(), qtGetCurBuild()) != NULL) ? 1 : 0;

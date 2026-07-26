@@ -242,7 +242,7 @@ void WBQtBuildListPanel::onAngleChanged(double v)
 	{
 		return;
 	}
-	WBQtBuildList_SetCurBuild(m_buildList->currentRow());
+	WBQtBuildList_SetCurBuildNoRefresh(m_buildList->currentRow());
 	WBQtBuildList_SetAngle(v);
 }
 
@@ -252,7 +252,7 @@ void WBQtBuildListPanel::onZChanged(double v)
 	{
 		return;
 	}
-	WBQtBuildList_SetCurBuild(m_buildList->currentRow());
+	WBQtBuildList_SetCurBuildNoRefresh(m_buildList->currentRow());
 	WBQtBuildList_SetZ(v);
 }
 
@@ -262,7 +262,7 @@ void WBQtBuildListPanel::onAlreadyBuiltToggled()
 	{
 		return;
 	}
-	WBQtBuildList_SetCurBuild(m_buildList->currentRow());
+	WBQtBuildList_SetCurBuildNoRefresh(m_buildList->currentRow());
 	WBQtBuildList_SetAlreadyBuilt(m_alreadyBuilt->isChecked() ? 1 : 0);
 }
 
@@ -272,7 +272,7 @@ void WBQtBuildListPanel::onRebuildsChanged()
 	{
 		return;
 	}
-	WBQtBuildList_SetCurBuild(m_buildList->currentRow());
+	WBQtBuildList_SetCurBuildNoRefresh(m_buildList->currentRow());
 	int idx = m_rebuilds->currentIndex();
 	if (idx == 6)
 	{
@@ -308,7 +308,7 @@ void WBQtBuildListPanel::onRebuildsTextCommitted()
 	{
 		return;	// non-numeric -- ignore, like sscanf failing
 	}
-	WBQtBuildList_SetCurBuild(m_buildList->currentRow());
+	WBQtBuildList_SetCurBuildNoRefresh(m_buildList->currentRow());
 	WBQtBuildList_SetRebuilds(nr);
 }
 
