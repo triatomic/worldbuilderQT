@@ -281,53 +281,67 @@ BEGIN
     END
     POPUP "&View"
     BEGIN
+        MENUITEM "Show Terrain",                ID_VIEW_SHOW_TERRAIN
         MENUITEM "Show Roads And Bridges",      ID_VIEW_SHOWROADS
         MENUITEM "Show Water Mesh\tCtrl+E",     ID_VIEW_SHOWWATER
-        MENUITEM "Show Terrain",                ID_VIEW_SHOW_TERRAIN
+        MENUITEM "Show Models \tAlt+5",         ID_VIEW_SHOWMODELS
+        MENUITEM SEPARATOR
         MENUITEM "Show Object Icons \tAlt+1",   ID_VIEW_SHOW_OBJECTS
         MENUITEM "Show Waypoints\tAlt+2",       ID_VIEW_SHOWWAYPOINTS
         MENUITEM "Show Trigger Areas\tAlt+3",   ID_VIEW_SHOWPOLYGONTRIGGERS
-        MENUITEM "Show Shadows",                ID_VIEW_SHOWSHADOWS
         MENUITEM "Show Labels \tAlt+4",         ID_VIEW_LABELS
-        MENUITEM "Show Labels Extra",           ID_VIEW_LABELS_EXTRA
-        MENUITEM "Show Models \tAlt+5",         ID_VIEW_SHOWMODELS
-        MENUITEM "Show Sub Models",             ID_VIEW_SHOWSUBDRAW
-        MENUITEM "Show Bounding Boxes\tAlt+6",  ID_VIEW_BOUNDINGBOXES
-        MENUITEM "Show Sight Ranges\tAlt+7",    ID_VIEW_SIGHTRANGES
-        MENUITEM "Show Weapon Ranges\tAlt+8",   ID_VIEW_WEAPONRANGES
-        MENUITEM "Show Garrisoned",             ID_VIEW_GARRISONED
         MENUITEM "Show Map Boundaries\tAlt+9",  ID_VIEW_SHOWMAPBOUNDARIES
-        MENUITEM "Show Wave Lines",             ID_VIEW_SHOWWAVELINES
-        MENUITEM "Show Ruler Grid\tCtrl+Q",     ID_VIEW_RULERGRID
-        MENUITEM SEPARATOR
-        MENUITEM "Use Fixed Colored Waypoints \tAlt+0", ID_VIEW_FIXEDCOLOREDWAYPOINTS
-        MENUITEM "Show Tracing Overlay",        ID_VIEW_SHOWTRACINGOVERLAY
-        MENUITEM "Show Base Radius From Player Spawn Points", ID_VIEW_SHOWBASERADIUS
-        MENUITEM "Show Letterbox",              ID_SHOW_LETTERBOX
-        MENUITEM "Show Sound Flags",            ID_VIEW_SHOWAMBIENTSOUNDS
-        MENUITEM "Show Sound Circles",          ID_VIEW_SHOW_SOUND_CIRCLES
-        MENUITEM SEPARATOR
-        MENUITEM "Highlight Test Art",          ID_HIGHLIGHT_TESTART
-        MENUITEM SEPARATOR
         MENUITEM "Show Impassable Areas\tCtrl+I", ID_VIEW_SHOWIMPASSABLEAREAS
-        MENUITEM SEPARATOR
-        MENUITEM "Show Wireframe 3D View\tCtrl+W", ID_VIEW_SHOWWIREFRAME
-        MENUITEM "Show Full Wireframe",         ID_VIEW_SHOWFULLWIREFRAME
-        MENUITEM "Show Object Selection Overlay", ID_VIEW_SHOWSELECTIONOVERLAY
         MENUITEM "Show From Top Down View\tCtrl+F", ID_VIEW_SHOWTOPDOWNVIEW
-        MENUITEM "Show 3-Way Blends in White",  ID_VIEW_SHOWEXTRABLENDS
-        MENUITEM "Show Clouds\tCtrl+U",         ID_VIEW_SHOWCLOUDS
-        MENUITEM "Show Soft Water",             ID_VIEW_SHOWSOFTWATER
-        MENUITEM "Show Macrotexture",           ID_VIEW_SHOWMACROTEXTURE
         MENUITEM SEPARATOR
-        MENUITEM "Snap To Grid\tCtrl+Shft+G",   ID_VIEW_SNAPTOGRID
-        MENUITEM SEPARATOR
-        MENUITEM "Show Brush Feedback",         ID_VIEW_BRUSHFEEDBACK
-        MENUITEM SEPARATOR
-        MENUITEM "&Toolbar",                    ID_VIEW_TOOLBAR
-        MENUITEM "&Status Bar",                 ID_VIEW_STATUS_BAR
-        MENUITEM "Layers List",                 ID_VIEW_LAYERS_LIST
-        MENUITEM "Minimap",                     ID_VIEW_MINIMAP
+        POPUP "Models"
+        BEGIN
+            MENUITEM "Show Sub Models",             ID_VIEW_SHOWSUBDRAW
+            MENUITEM "Animate Models",              ID_VIEW_ANIMATEMODELS
+            MENUITEM "Show Shadows",                ID_VIEW_SHOWSHADOWS
+            MENUITEM "Show Garrisoned",             ID_VIEW_GARRISONED
+            MENUITEM "Show Bounding Boxes\tAlt+6",  ID_VIEW_BOUNDINGBOXES
+        END
+        POPUP "Ranges && Radii"
+        BEGIN
+            MENUITEM "Show Sight Ranges\tAlt+7",    ID_VIEW_SIGHTRANGES
+            MENUITEM "Show Weapon Ranges\tAlt+8",   ID_VIEW_WEAPONRANGES
+            MENUITEM "Show Base Radius From Player Spawn Points", ID_VIEW_SHOWBASERADIUS
+            MENUITEM "Show Sound Circles",          ID_VIEW_SHOW_SOUND_CIRCLES
+            MENUITEM "Show Sound Flags",            ID_VIEW_SHOWAMBIENTSOUNDS
+        END
+        POPUP "Terrain && Water"
+        BEGIN
+            MENUITEM "Show Wave Lines",             ID_VIEW_SHOWWAVELINES
+            MENUITEM "Show Soft Water",             ID_VIEW_SHOWSOFTWATER
+            MENUITEM "Show Clouds\tCtrl+U",         ID_VIEW_SHOWCLOUDS
+            MENUITEM "Show Macrotexture",           ID_VIEW_SHOWMACROTEXTURE
+            MENUITEM "Show 3-Way Blends in White",  ID_VIEW_SHOWEXTRABLENDS
+        END
+        POPUP "Wireframe && Overlays"
+        BEGIN
+            MENUITEM "Show Wireframe 3D View\tCtrl+W", ID_VIEW_SHOWWIREFRAME
+            MENUITEM "Show Full Wireframe",         ID_VIEW_SHOWFULLWIREFRAME
+            MENUITEM "Show Object Selection Overlay", ID_VIEW_SHOWSELECTIONOVERLAY
+            MENUITEM "Show Tracing Overlay",        ID_VIEW_SHOWTRACINGOVERLAY
+            MENUITEM "Show Letterbox",              ID_SHOW_LETTERBOX
+            MENUITEM "Highlight Test Art",          ID_HIGHLIGHT_TESTART
+        END
+        POPUP "Guides && Grid"
+        BEGIN
+            MENUITEM "Show Ruler Grid\tCtrl+Q",     ID_VIEW_RULERGRID
+            MENUITEM "Snap To Grid\tCtrl+Shft+G",   ID_VIEW_SNAPTOGRID
+            MENUITEM "Show Brush Feedback",         ID_VIEW_BRUSHFEEDBACK
+            MENUITEM "Use Fixed Colored Waypoints \tAlt+0", ID_VIEW_FIXEDCOLOREDWAYPOINTS
+            MENUITEM "Show Labels Extra",           ID_VIEW_LABELS_EXTRA
+        END
+        POPUP "Panels"
+        BEGIN
+            MENUITEM "&Toolbar",                    ID_VIEW_TOOLBAR
+            MENUITEM "&Status Bar",                 ID_VIEW_STATUS_BAR
+            MENUITEM "Layers List",                 ID_VIEW_LAYERS_LIST
+            MENUITEM "Minimap",                     ID_VIEW_MINIMAP
+        END
         MENUITEM SEPARATOR
     END
     POPUP "&Level Of Detail"

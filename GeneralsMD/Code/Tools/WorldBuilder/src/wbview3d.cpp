@@ -644,6 +644,8 @@ WbView3d::WbView3d() :
 	m_showSelectionOverlay(false),
 	m_projection(false),
 	m_showShadows(false),
+	m_animateModels(false),
+	m_animatedModelCount(0),
 	m_firstPaint(true),
 	m_groundLevel(10),
 	m_curTrackingZ(10),
@@ -1095,6 +1097,9 @@ void WbView3d::resetRenderObjects()
 	// Live particle emitters aren't in m_scene, so the scene-iterator teardown below won't touch
 	// them -- destroy them explicitly (invalObjectInView(NULL) recreates them right after).
 	WBParticleRuntime::destroyAllEmitters();
+	// The scene (and every animation applied to it) is about to be torn down; the rebuild that
+	// follows re-counts as it re-applies.
+	m_animatedModelCount = 0;
 	if (TheW3DShadowManager) {
 		TheW3DShadowManager->removeAllShadows();
 	}
@@ -2009,6 +2014,32 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 												// 		cleanName.str(), modelName.str()));
 												// DumpSubObjects(subRenderObj, modelName.str()); // <-- dump list once
 											// }
+										}
+									}
+
+									// "Animate Models" (View menu): play the model's animation for states
+									// declared AnimationMode = LOOP. Only LOOP is handled on purpose -- ONCE
+									// / MANUAL / the backwards + pingpong modes are driven by game logic that
+									// does not exist in WB, so they are left on their static pose.
+									// WW3D::Sync() is already called every redraw(), so W3D advances the
+									// animation itself once it is set here.
+									if (m_animateModels && info != NULL &&
+										info->m_mode == RenderObjClass::ANIM_MODE_LOOP &&
+										!info->m_animations.empty())
+									{
+										// Resolve the anim through WB's OWN asset manager. The obvious call,
+										// W3DAnimationInfo::getAnimHandle(), goes through the static
+										// W3DDisplay::m_assetManager, which WB never sets (it is normally
+										// NULL) -- see the same trap documented in WBParticleRuntime. Look
+										// the animation up by name here instead so no global is involved.
+										HAnimClass* anim = m_assetManager->Get_HAnim(
+											info->m_animations[0].getName().str());
+										if (anim)
+										{
+											subRenderObj->Set_Animation(anim, 0.0f, RenderObjClass::ANIM_MODE_LOOP);
+											// Get_HAnim returns an addrefed handle; Set_Animation adds its own.
+											anim->Release_Ref();
+											++m_animatedModelCount;
 										}
 									}
 
@@ -3260,6 +3291,8 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_PARTIALMAPSIZE_128X128, OnUpdateViewPartialmapsize128x128)
 	ON_COMMAND(ID_VIEW_SHOWMODELS, OnViewShowModels)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_SHOWMODELS, OnUpdateViewShowModels)
+	ON_COMMAND(ID_VIEW_ANIMATEMODELS, OnViewAnimateModels)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_ANIMATEMODELS, OnUpdateViewAnimateModels)
 	ON_COMMAND(ID_VIEW_BOUNDINGBOXES, OnViewBoundingBoxes)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_BOUNDINGBOXES, OnUpdateViewBoundingBoxes)
 	ON_COMMAND(ID_VIEW_SIGHTRANGES, OnViewSightRanges)
@@ -3510,6 +3543,9 @@ int WbView3d::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	m_showAmbientSounds = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowAmbientSounds", 0);
 	m_showBaseRadius = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowBaseRadius", 1);
 	m_showSubDraw = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowSubDraw", 1);
+	// Default OFF: looping animations keep the viewport repainting every frame (see the
+	// idle-skip in OnTimer), so this is opt-in rather than a silent perf cost.
+	m_animateModels = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "AnimateModels", 0);
 	m_showSoundCircles = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowSoundCircles", 0);
 	m_showRulerGrid = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowRulerGrid", 1);
 	m_showTracingOverlay = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowTracingOverlay", 0);
@@ -4790,6 +4826,13 @@ void WbView3d::OnTimer(UINT nIDEvent)
 		// Live particle emitters animate every frame too -- keep repainting while any exist.
 		Bool particlesActive = WBParticleRuntime::hasActiveEmitters();
 
+		// Looping model animations (View > Animate Models) advance off WW3D::Sync in redraw(), so
+		// the view is never really "static" while any are playing -- keep repainting or they would
+		// freeze until the idle fallback fires. Gated on the count actually applied by the last
+		// scene build, not just the menu toggle, so enabling the option on a map with no LOOP
+		// models still idles (matching wavesActive / particlesActive, which query real state).
+		Bool modelAnimsActive = m_animateModels && (m_animatedModelCount > 0);
+
 		// Mouse-tracking overlays that move WITHOUT a button held or a camera change:
 		// the ruler readout, the drag-select rect, and the object-tool placement ghost.
 		// None of them are covered by the paint key, so keep free-running while active.
@@ -4797,7 +4840,7 @@ void WbView3d::OnTimer(UINT nIDEvent)
 			m_showObjToolTrackingObj;
 
 		if (!interacting && !changed && !fallbackDue && !wavesActive && !particlesActive &&
-			!overlayActive)
+			!overlayActive && !modelAnimsActive)
 		{
 			return;		// static view: leave the last frame (+ any GDI text) on screen
 		}
@@ -5088,6 +5131,21 @@ void WbView3d::OnViewShowModels()
 void WbView3d::OnUpdateViewShowModels(CCmdUI* pCmdUI) 
 {
 	pCmdUI->SetCheck(getShowModels()?1:0);
+}
+
+void WbView3d::OnViewAnimateModels()
+{
+	m_animateModels = !m_animateModels;
+	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "AnimateModels", m_animateModels?1:0);
+	// The animation is applied when the render object is built, so rebuild the scene for the
+	// toggle to affect objects that are already placed (not just newly-added ones).
+	resetRenderObjects();
+	invalObjectInView(NULL);
+}
+
+void WbView3d::OnUpdateViewAnimateModels(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(m_animateModels?1:0);
 }
 
 // MLL C&C3

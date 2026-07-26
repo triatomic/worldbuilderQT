@@ -143,6 +143,8 @@ protected:
 	afx_msg void OnUpdateViewPartialmapsize128x128(CCmdUI* pCmdUI);
 	afx_msg void OnViewShowModels();
 	afx_msg void OnUpdateViewShowModels(CCmdUI* pCmdUI);
+	afx_msg void OnViewAnimateModels();
+	afx_msg void OnUpdateViewAnimateModels(CCmdUI* pCmdUI);
 	afx_msg void OnViewBoundingBoxes();
 	afx_msg void OnUpdateViewBoundingBoxes(CCmdUI* pCmdUI);
 	afx_msg void OnViewSightRanges();
@@ -339,6 +341,8 @@ private:
 	Bool										m_showTracingOverlay; ///< Flag whether to show the tracing overlay or not
 	Bool										m_showBaseRadius; ///< Flag whether to show the base radius or not
 	Bool										m_showSubDraw; ///< Flag whether to show the sub models
+	Bool										m_animateModels; ///< Flag whether AnimationMode=LOOP models play their animation
+	Int											m_animatedModelCount; ///< # of LOOP anims actually applied in the last scene build
 
 	Bool m_showBuildZoneFeedback;
 	Int m_lod;

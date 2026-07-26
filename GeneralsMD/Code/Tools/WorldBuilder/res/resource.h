@@ -795,6 +795,7 @@
 #define ID_EDIT_PICKWAYPOINTS           33002
 #define ID_VIEW_LABELS                  33003
 #define ID_VIEW_SHOWMODELS              33004
+#define ID_VIEW_ANIMATEMODELS           33404
 #define ID_EDIT_SELECTINVALIDTEAM       33005
 #define ID_FILE_DUMPTOFILE              33006
 #define ID_SCORCH_TOOL                  33007
@@ -974,7 +975,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_3D_CONTROLS                     1
 #define _APS_NEXT_RESOURCE_VALUE        247
-#define _APS_NEXT_COMMAND_VALUE         33404
+#define _APS_NEXT_COMMAND_VALUE         33405
 #define _APS_NEXT_CONTROL_VALUE         1393
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
