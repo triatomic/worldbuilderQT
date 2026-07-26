@@ -12,7 +12,9 @@
 #include <QApplication>
 #include <QEvent>
 #include <QMoveEvent>
+#include <QPoint>
 #include <QRect>
+#include <QSize>
 #include <QVariant>
 #include <QWidget>
 
@@ -21,10 +23,15 @@
 extern "C" int  WBQtWindowPos_Get(const char *name, int *topOut, int *leftOut);
 extern "C" void WBQtWindowPos_Save(const char *name, int top, int left);
 extern "C" void WBQtWindowPos_ClearSaved(void);
+// Companion [QtWindowSize] accessors; Get returns 1 and fills *width/*height when saved.
+extern "C" int  WBQtWindowSize_Get(const char *name, int *widthOut, int *heightOut);
+extern "C" void WBQtWindowSize_Save(const char *name, int width, int height);
 
 namespace
 {
-	// A property stamped on a tracked window so a second Track() call is a no-op.
+	// Stamped on a tracked window: present (valid) means a second Track() call is a no-op, and
+	// its bool value is "position is tracked too". Size-only (modal) windows store false, which
+	// is how Reset Window Positions knows not to drag them out of their normal centering.
 	const char *const kTrackedProp = "wbPosTracked";
 
 	// Shift the rect (size preserved) so the window stays reachable on the nearest monitor:
@@ -94,13 +101,25 @@ namespace
 	class WBQtWindowPosTracker : public QObject
 	{
 	public:
-		WBQtWindowPosTracker(QWidget *window, const QByteArray &name)
+		// trackPos false = size only: the window still persists its Width/Height but is left to
+		// be positioned normally (modal dialogs re-center on each open, which is the intended
+		// behavior -- see the header).
+		WBQtWindowPosTracker(QWidget *window, const QByteArray &name, bool trackPos)
 			: QObject(window),
 			  m_window(window),
 			  m_name(name),
-			  m_restored(false)
+			  m_trackPos(trackPos),
+			  m_restored(false),
+			  m_hasPendingPos(false)
 		{
 			window->installEventFilter(this);
+		}
+
+		virtual ~WBQtWindowPosTracker()
+		{
+			// A modeless window can go all the way to process exit without ever being hidden,
+			// so its last move/resize would otherwise never reach the INI.
+			flushPending();
 		}
 
 	protected:
@@ -110,63 +129,144 @@ namespace
 			{
 				if (event->type() == QEvent::Show)
 				{
-					// (Re)install the drag clamp. The native window can be recreated behind
-					// the widget, and re-subclassing with the same id/proc is a cheap no-op,
-					// so doing it on every Show keeps the hook alive.
-					::SetWindowSubclass(reinterpret_cast<HWND>(m_window->winId()),
-						wbPosSubclassProc, 1, 0);
-				}
-				if (event->type() == QEvent::Show && !m_restored)
-				{
-					m_restored = true;
-					int top = 0;
-					int left = 0;
-					if (WBQtWindowPos_Get(m_name.constData(), &top, &left))
+					if (m_trackPos)
 					{
-						// Clamp the stored position back on screen first -- it can be stale
-						// (monitor unplugged, resolution lowered) or from a pre-clamp build.
-						const QRect frame = m_window->frameGeometry();
-						RECT r = { left, top, left + frame.width(), top + frame.height() };
-						clampRectToNearestWorkArea(&r);
-						// move() targets the frame corner, matching the saved frameGeometry.
-						m_window->move(r.left, r.top);
+						// (Re)install the drag clamp. The native window can be recreated behind
+						// the widget, and re-subclassing with the same id/proc is a cheap no-op,
+						// so doing it on every Show keeps the hook alive.
+						::SetWindowSubclass(reinterpret_cast<HWND>(m_window->winId()),
+							wbPosSubclassProc, 1, 0);
+					}
+					if (!m_restored)
+					{
+						m_restored = true;
+						restoreGeometry();
 					}
 				}
-				else if (event->type() == QEvent::Move)
+				else if (event->type() == QEvent::Move && m_trackPos)
 				{
 					// Only echo user moves back; the restore move() above happens before the
 					// window is visible on screen for the FIRST show, but guard on visibility
-					// anyway so programmatic seeding isn't written back.
+					// anyway so programmatic seeding isn't written back. Stashed rather than
+					// written here for the same reason as the size below: Move fires per tick
+					// of a title-bar drag and each save is two WorldBuilder.ini writes.
 					if (m_window->isVisible()
 						&& !(m_window->windowState() & Qt::WindowMinimized))
 					{
-						const QRect frame = m_window->frameGeometry();
-						WBQtWindowPos_Save(m_name.constData(), frame.top(), frame.left());
+						m_pendingPos = m_window->frameGeometry().topLeft();
+						m_hasPendingPos = true;
 					}
+				}
+				else if (event->type() == QEvent::Resize)
+				{
+					// Remember the size, but do NOT write it here: Resize fires on every tick of
+					// a drag-resize and every profile write hits WorldBuilder.ini. Stash it and
+					// flush once on Hide (below). Skip minimized/maximized states -- a maximized
+					// size restored as the normal size leaves the window wrongly huge next open.
+					if (m_window->isVisible()
+						&& !(m_window->windowState() & (Qt::WindowMinimized | Qt::WindowMaximized)))
+					{
+						m_pendingSize = m_window->size();
+					}
+				}
+				else if (event->type() == QEvent::Hide)
+				{
+					// One write per close, matching the hand-rolled Team Sheet persistence this
+					// generic tracker replaced.
+					flushPending();
 				}
 			}
 			return QObject::eventFilter(obj, event);
 		}
 
 	private:
+		// Re-apply the stored geometry on the window's FIRST show, before it is on screen.
+		void restoreGeometry()
+		{
+			// Size first, so the position restore below measures the final frame.
+			int width = 0;
+			int height = 0;
+			if (WBQtWindowSize_Get(m_name.constData(), &width, &height))
+			{
+				// Never shrink below what the layout needs, or the dialog comes back clipped;
+				// a size saved by a build with different content is stale.
+				const QSize hint = m_window->minimumSizeHint();
+				m_window->resize(qMax(width, hint.width()), qMax(height, hint.height()));
+			}
+			if (!m_trackPos)
+			{
+				return;		// size-only (modal): leave it to center normally
+			}
+			int top = 0;
+			int left = 0;
+			if (WBQtWindowPos_Get(m_name.constData(), &top, &left))
+			{
+				// Clamp the stored position back on screen first -- it can be stale (monitor
+				// unplugged, resolution lowered) or from a pre-clamp build.
+				const QRect frame = m_window->frameGeometry();
+				RECT r = { left, top, left + frame.width(), top + frame.height() };
+				clampRectToNearestWorkArea(&r);
+				// move() targets the frame corner, matching the saved frameGeometry.
+				m_window->move(r.left, r.top);
+			}
+		}
+
+		// Write whatever the user last left us, once. Move/Resize only stash (they fire per tick
+		// of a drag and every save is two WorldBuilder.ini writes); this is the single flush.
+		void flushPending()
+		{
+			if (m_hasPendingPos)
+			{
+				WBQtWindowPos_Save(m_name.constData(), m_pendingPos.y(), m_pendingPos.x());
+				m_hasPendingPos = false;
+			}
+			if (m_pendingSize.isValid())
+			{
+				WBQtWindowSize_Save(m_name.constData(),
+					m_pendingSize.width(), m_pendingSize.height());
+				m_pendingSize = QSize();
+			}
+		}
+
 		QWidget *m_window;
 		QByteArray m_name;
+		bool m_trackPos;
 		bool m_restored;
+		QPoint m_pendingPos;	// last user frame top-left; flushed on Hide / destruction
+		bool m_hasPendingPos;
+		QSize m_pendingSize;	// last user size; flushed on Hide / destruction
 	};
+}
+
+namespace
+{
+	// Shared body of the two public entry points; they differ only in whether position is
+	// tracked as well as size.
+	void trackImpl(QWidget *window, const char *name, bool trackPos)
+	{
+		if (window == NULL || name == NULL)
+		{
+			return;
+		}
+		if (window->property(kTrackedProp).isValid())
+		{
+			return;		// already tracked
+		}
+		// One property carries both facts: "is tracked" (valid) and "is its position tracked"
+		// (the value), the latter being what ResetAll filters on.
+		window->setProperty(kTrackedProp, trackPos);
+		new WBQtWindowPosTracker(window, QByteArray(name), trackPos);
+	}
 }
 
 void WBQtWindowPos_Track(QWidget *window, const char *name)
 {
-	if (window == NULL || name == NULL)
-	{
-		return;
-	}
-	if (window->property(kTrackedProp).toBool())
-	{
-		return;		// already tracked
-	}
-	window->setProperty(kTrackedProp, true);
-	new WBQtWindowPosTracker(window, QByteArray(name));
+	trackImpl(window, name, true);
+}
+
+void WBQtWindowPos_TrackSize(QWidget *window, const char *name)
+{
+	trackImpl(window, name, false);
 }
 
 void WBQtWindowPos_ResetAll(void)
@@ -182,7 +282,7 @@ void WBQtWindowPos_ResetAll(void)
 		QWidget *w = tops.at(i);
 		if (!w->property(kTrackedProp).toBool())
 		{
-			continue;
+			continue;	// untracked, or size-only (modal): leave its placement alone
 		}
 		w->move(60 + (placed % 8) * 30, 60 + (placed % 8) * 30);
 		placed++;

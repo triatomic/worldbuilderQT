@@ -5,6 +5,7 @@
 #include "ui_WBQtSaveMapDialog.h"
 #include "WBQtMapFileBridge.h"
 #include "WBQtPreviewImage.h"
+#include "../WBQtWindowPos.h"
 
 #include <QImage>
 #include <QLabel>
@@ -78,7 +79,9 @@ WBQtOpenMapDialog::WBQtOpenMapDialog(QWidget *parent)
 	connect(m_ui->cancelBtn, SIGNAL(clicked()), this, SLOT(reject()));
 
 	reload();
-	resize(700, 480);
+	resize(700, 480);	// default only: a saved size overrides this on show
+	// Modal, so size only -- it keeps centering fresh on each open.
+	WBQtWindowPos_TrackSize(this, "OpenMap");
 }
 
 WBQtOpenMapDialog::~WBQtOpenMapDialog()

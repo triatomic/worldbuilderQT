@@ -5,6 +5,7 @@
 #include "ui_WBQtTeamSheetDialog.h"
 #include "WBQtComboStyle.h"
 #include "WBQtTeamsBridge.h"
+#include "../WBQtWindowPos.h"
 #include "resource.h"
 
 #include <QCheckBox>
@@ -57,23 +58,15 @@ WBQtTeamSheetDialog::WBQtTeamSheetDialog(QWidget *parent)
 	// result was ignored); a single OK just closes.
 	connect(m_ui->okButton, SIGNAL(clicked()), this, SLOT(accept()));
 
-	// Restore the last session's size (persisted in done()); layout minimums keep a
-	// nonsense stored value from collapsing the sheet.
-	resize(WBQtTeamSheet_GetProfileInt("TeamSheetWidth", 760),
-		WBQtTeamSheet_GetProfileInt("TeamSheetHeight", 620));
+	resize(760, 620);	// default only: a saved size overrides this on show
+	// Modal, so size only -- it keeps centering fresh on each open. The tracker clamps a
+	// stored size up to the layout minimum, so a nonsense value can't collapse the sheet.
+	WBQtWindowPos_TrackSize(this, "TeamSheet");
 }
 
 WBQtTeamSheetDialog::~WBQtTeamSheetDialog()
 {
 	delete m_ui;
-}
-
-void WBQtTeamSheetDialog::done(int r)
-{
-	// One write per close (not per resize tick -- profile writes hit WorldBuilder.ini).
-	WBQtTeamSheet_SetProfileInt("TeamSheetWidth", width());
-	WBQtTeamSheet_SetProfileInt("TeamSheetHeight", height());
-	QDialog::done(r);
 }
 
 QStringList WBQtTeamSheetDialog::readComboItems(int page, int ctrlId) const

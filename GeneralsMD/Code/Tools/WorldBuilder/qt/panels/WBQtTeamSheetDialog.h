@@ -25,9 +25,6 @@ public:
 	explicit WBQtTeamSheetDialog(QWidget *parent = 0);
 	virtual ~WBQtTeamSheetDialog();
 
-	// Persist the window size on ANY close path (OK, Esc, the X button all funnel here).
-	virtual void done(int r);
-
 private:
 	// wire the .ui widgets of each tab to their hidden page controls
 	void setupIdentityTab();

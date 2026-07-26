@@ -6,6 +6,7 @@
 #include "ui_WBQtTeamsDialog.h"
 #include "WBQtTeamsBridge.h"
 #include "WBQtTeamSheetDialog.h"
+#include "../WBQtWindowPos.h"
 
 #include <QHeaderView>
 #include <QListWidget>
@@ -62,6 +63,8 @@ WBQtTeamsDialog::WBQtTeamsDialog(QWidget *parent)
 	connect(m_ui->cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
 
 	refreshAll();
+	// Modal, so size only -- it keeps centering fresh on each open.
+	WBQtWindowPos_TrackSize(this, "TeamBuilder");
 }
 
 WBQtTeamsDialog::~WBQtTeamsDialog()

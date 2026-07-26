@@ -109,12 +109,72 @@ extern "C" void WBQtWindowPos_Save(const char *name, int top, int left)
 	::AfxGetApp()->WriteProfileInt(WB_QT_WINDOW_POS_SECTION, leftKey, left);
 }
 
+// Theme mode. Lives in WorldBuilder.ini like every other WB setting -- it used to be the one
+// stray value written to HKCU\Software\WorldBuilderZH\Qt via QSettings (WBQtTheme is pure-Qt
+// code and had no reach into the MFC profile at the time), which meant your theme did not
+// travel with the INI. The Qt side now goes through here instead.
+extern "C" int WBQtTheme_GetSavedMode(int def)
+{
+	return ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "Theme", def);
+}
+
+extern "C" void WBQtTheme_SetSavedMode(int mode)
+{
+	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "Theme", mode);
+}
+
+// Companion size store, same idea in a [QtWindowSize] section ("<Name>_Width"/"_Height").
+// Kept separate from position so a modal dialog can persist its SIZE while still centering
+// fresh every time (WBQtWindowPos_TrackSize), which is the behavior we want for Open Map.
+#define WB_QT_WINDOW_SIZE_SECTION "QtWindowSize"
+
+extern "C" int WBQtWindowSize_Get(const char *name, int *widthOut, int *heightOut)
+{
+	if (name == NULL)
+	{
+		return 0;
+	}
+	CString widthKey;
+	CString heightKey;
+	widthKey.Format("%s_Width", name);
+	heightKey.Format("%s_Height", name);
+	int width = ::AfxGetApp()->GetProfileInt(WB_QT_WINDOW_SIZE_SECTION, widthKey, 0);
+	int height = ::AfxGetApp()->GetProfileInt(WB_QT_WINDOW_SIZE_SECTION, heightKey, 0);
+	if (width <= 0 || height <= 0)
+	{
+		return 0;		// never saved
+	}
+	if (widthOut != NULL)
+	{
+		*widthOut = width;
+	}
+	if (heightOut != NULL)
+	{
+		*heightOut = height;
+	}
+	return 1;
+}
+
+extern "C" void WBQtWindowSize_Save(const char *name, int width, int height)
+{
+	if (name == NULL || width <= 0 || height <= 0)
+	{
+		return;
+	}
+	CString widthKey;
+	CString heightKey;
+	widthKey.Format("%s_Width", name);
+	heightKey.Format("%s_Height", name);
+	::AfxGetApp()->WriteProfileInt(WB_QT_WINDOW_SIZE_SECTION, widthKey, width);
+	::AfxGetApp()->WriteProfileInt(WB_QT_WINDOW_SIZE_SECTION, heightKey, height);
+}
+
 extern "C" void WBQtWindowPos_ClearSaved(void)
 {
 	// Reset Window Positions: drop the whole saved sections (WriteProfileString with a
 	// NULL entry deletes a section from WorldBuilder.ini); window sizes reset too.
 	::AfxGetApp()->WriteProfileString(WB_QT_WINDOW_POS_SECTION, NULL, NULL);
-	::AfxGetApp()->WriteProfileString("QtWindowSize", NULL, NULL);
+	::AfxGetApp()->WriteProfileString(WB_QT_WINDOW_SIZE_SECTION, NULL, NULL);
 }
 
 // Tier 5: follow a live Windows light/dark switch. The Settings app broadcasts
