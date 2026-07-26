@@ -1739,6 +1739,42 @@ static AsciiString CleanSubObjName(const AsciiString& in)
 }
 
 
+/** Which animation should "Animate Models" play for this state, or NULL to leave the static pose.
+
+	Two cases play, and nothing else:
+	  1. AnimationMode = LOOP -- the state is authored to loop, so play it.
+	  2. An IdleAnimation (infantry standing, and anything else that fidgets in place). Those are
+	     declared ONCE -- the engine REQUIRES it ("Idle Anims should always use ONCE or
+	     ONCE_BACKWARDS") -- and in game one plays through and then another is picked at random.
+	     WB has no per-drawable update to drive that reselection, so we loop the first idle
+	     instead: the unit reads as alive, which is the point in an editor.
+	Everything else (doors, deploy sequences, recoil) is driven by game logic WB does not run, so
+	looping it would look wrong.
+
+	isIdleAnim() is the same runtime seam the engine itself uses to spot an idle anim; the
+	parse-time GOT_IDLE_ANIMS flag is private to the INI parser. A state may not mix idle and
+	non-idle anims (the parser rejects it), so the first idle found describes the whole state. */
+static const W3DAnimationInfo *pickWBAnimation(const ModelConditionInfo *info)
+{
+	if (info == NULL || info->m_animations.empty())
+	{
+		return NULL;
+	}
+	if (info->m_mode == RenderObjClass::ANIM_MODE_LOOP)
+	{
+		return &info->m_animations[0];
+	}
+	for (size_t i = 0; i < info->m_animations.size(); ++i)
+	{
+		if (info->m_animations[i].isIdleAnim())
+		{
+			return &info->m_animations[i];
+		}
+	}
+	return NULL;
+}
+
+
 static void DumpSubObjects(RenderObjClass* obj, const char* modelName)
 {
     if (!obj) return;
@@ -2017,23 +2053,19 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 										}
 									}
 
-									// "Animate Models" (View menu): play the model's animation for states
-									// declared AnimationMode = LOOP. Only LOOP is handled on purpose -- ONCE
-									// / MANUAL / the backwards + pingpong modes are driven by game logic that
-									// does not exist in WB, so they are left on their static pose.
-									// WW3D::Sync() is already called every redraw(), so W3D advances the
-									// animation itself once it is set here.
-									if (m_animateModels && info != NULL &&
-										info->m_mode == RenderObjClass::ANIM_MODE_LOOP &&
-										!info->m_animations.empty())
+									// "Animate Models" (View menu). pickWBAnimation decides WHAT plays (and
+									// why); this just resolves and applies it. WW3D::Sync() is already
+									// called every redraw(), so W3D advances the animation from there.
+									const W3DAnimationInfo *animInfo =
+										m_animateModels ? pickWBAnimation(info) : NULL;
+									if (animInfo != NULL)
 									{
 										// Resolve the anim through WB's OWN asset manager. The obvious call,
 										// W3DAnimationInfo::getAnimHandle(), goes through the static
 										// W3DDisplay::m_assetManager, which WB never sets (it is normally
 										// NULL) -- see the same trap documented in WBParticleRuntime. Look
 										// the animation up by name here instead so no global is involved.
-										HAnimClass* anim = m_assetManager->Get_HAnim(
-											info->m_animations[0].getName().str());
+										HAnimClass* anim = m_assetManager->Get_HAnim(animInfo->getName().str());
 										if (anim)
 										{
 											subRenderObj->Set_Animation(anim, 0.0f, RenderObjClass::ANIM_MODE_LOOP);
@@ -4826,11 +4858,11 @@ void WbView3d::OnTimer(UINT nIDEvent)
 		// Live particle emitters animate every frame too -- keep repainting while any exist.
 		Bool particlesActive = WBParticleRuntime::hasActiveEmitters();
 
-		// Looping model animations (View > Animate Models) advance off WW3D::Sync in redraw(), so
-		// the view is never really "static" while any are playing -- keep repainting or they would
-		// freeze until the idle fallback fires. Gated on the count actually applied by the last
-		// scene build, not just the menu toggle, so enabling the option on a map with no LOOP
-		// models still idles (matching wavesActive / particlesActive, which query real state).
+		// Model animations (View > Animate Models) advance off WW3D::Sync in redraw(), so the view
+		// is never really "static" while any are playing -- keep repainting or they would freeze
+		// until the idle fallback fires. Gated on the count actually applied by the last scene
+		// build, not just the menu toggle, so enabling the option on a map with nothing animated
+		// still idles (matching wavesActive / particlesActive, which query real state).
 		Bool modelAnimsActive = m_animateModels && (m_animatedModelCount > 0);
 
 		// Mouse-tracking overlays that move WITHOUT a button held or a camera change:

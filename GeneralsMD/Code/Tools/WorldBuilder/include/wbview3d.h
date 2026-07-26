@@ -341,8 +341,8 @@ private:
 	Bool										m_showTracingOverlay; ///< Flag whether to show the tracing overlay or not
 	Bool										m_showBaseRadius; ///< Flag whether to show the base radius or not
 	Bool										m_showSubDraw; ///< Flag whether to show the sub models
-	Bool										m_animateModels; ///< Flag whether AnimationMode=LOOP models play their animation
-	Int											m_animatedModelCount; ///< # of LOOP anims actually applied in the last scene build
+	Bool										m_animateModels; ///< Flag whether models play their animation (LOOP states + idle anims)
+	Int											m_animatedModelCount; ///< # of animations actually applied in the last scene build
 
 	Bool m_showBuildZoneFeedback;
 	Int m_lod;
