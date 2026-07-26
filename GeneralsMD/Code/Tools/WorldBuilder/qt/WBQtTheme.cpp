@@ -22,6 +22,11 @@
 #include <windows.h>
 #include <dwmapi.h>
 
+// MFC-side bridge (src/WBQtHostBridge.cpp): the theme mode in WorldBuilder.ini.
+// Get returns `def` when the key is absent, so callers can detect "never saved".
+extern "C" int  WBQtTheme_GetSavedMode(int def);
+extern "C" void WBQtTheme_SetSavedMode(int mode);
+
 namespace
 {
 
@@ -266,8 +271,18 @@ bool WBQtTheme::osPrefersDark()
 
 WBQtTheme::Mode WBQtTheme::mode()
 {
-	QSettings s(WB_QT_SETTINGS_PATH, QSettings::NativeFormat);
-	const int m = s.value("Theme", (int)ModeSystem).toInt();
+	// Stored in WorldBuilder.ini (via the MFC host bridge) with everything else. Older builds
+	// wrote it to HKCU\Software\WorldBuilderZH\Qt instead, so when the INI has no value yet,
+	// fall back to that registry key once and carry it over -- an upgrading user keeps the
+	// theme they picked rather than silently reverting to System.
+	int m = WBQtTheme_GetSavedMode(-1);
+	if (m < 0)
+	{
+		QSettings s(WB_QT_SETTINGS_PATH, QSettings::NativeFormat);
+		const QVariant legacy = s.value("Theme");
+		m = legacy.isValid() ? legacy.toInt() : (int)ModeSystem;
+		WBQtTheme_SetSavedMode(m);		// migrate it into the INI
+	}
 	if (m == ModeDark)
 	{
 		return ModeDark;
@@ -294,8 +309,7 @@ bool WBQtTheme::effectiveDark()
 
 void WBQtTheme::setMode(Mode m)
 {
-	QSettings s(WB_QT_SETTINGS_PATH, QSettings::NativeFormat);
-	s.setValue("Theme", (int)m);
+	WBQtTheme_SetSavedMode((int)m);
 	applyCurrentTheme();
 }
 
