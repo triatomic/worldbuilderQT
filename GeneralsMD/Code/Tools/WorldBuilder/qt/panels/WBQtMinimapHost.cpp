@@ -11,6 +11,7 @@
 #include "qwinwidget.h"
 #include "qwinhost.h"
 
+#include <QCloseEvent>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -22,6 +23,26 @@ QWidget *WBQt_CreateOwnerBridgeWidget(void *frameHwnd);
 
 namespace
 {
+	// The host window. Closing it (X or Escape) tore down the adopted MFC dialog's HWND,
+	// leaving the host with a dangling handle so every later reopen showed a black window.
+	// The X is removed via the window flags below; this also swallows the close request
+	// itself, so nothing can destroy the hosted dialog. Use View > Minimap to hide it.
+	class MinimapHostWindow : public QWidget
+	{
+	public:
+		// Tool window with a title bar but NO close button.
+		MinimapHostWindow(QWidget *owner)
+			: QWidget(owner, Qt::Tool | Qt::CustomizeWindowHint | Qt::WindowTitleHint)
+		{
+		}
+
+	protected:
+		virtual void closeEvent(QCloseEvent *event)
+		{
+			event->ignore();
+		}
+	};
+
 	QWidget    *s_owner = NULL;	// owner for the floating window (created on first open)
 	QWidget    *s_window = NULL;	// the Qt tool window ("Minimap")
 	QWinHost   *s_winHost = NULL;	// hosts the adopted MFC dialog
@@ -40,7 +61,7 @@ extern "C" void WBQtMinimap_Open(void *frameHwnd, void *minimapHwnd)
 	}
 	if (s_window == NULL)
 	{
-		s_window = new QWidget(s_owner, Qt::Tool);
+		s_window = new MinimapHostWindow(s_owner);
 		s_window->setWindowTitle("Minimap");
 		s_window->resize(320, 340);
 		WBQtWindowPos_Track(s_window, "Minimap");
