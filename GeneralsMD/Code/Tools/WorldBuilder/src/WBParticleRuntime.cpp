@@ -154,7 +154,7 @@ namespace
 	// Runtime state.
 	// ------------------------------------------------------------------------------------------
 	bool s_enabled = false;
-	WBParticleTerrainLogic *s_wbTerrain = NULL;	// installed into TheTerrainLogic while enabled
+	WBParticleTerrainLogic *s_wbTerrain = NULL;	// installed into TheTerrainLogic across update() only
 
 	// Created once on first enable, then kept for the process life (their base destructors assume
 	// init() ran, so we must never delete them). Installed into TheGameLogic/TheGameClient and
@@ -164,6 +164,28 @@ namespace
 	Bool s_savedUseFX = FALSE;
 	Int  s_savedMaxParticleCount = 0;
 	W3DAssetManager *s_savedDisplayAssetMgr = NULL;	// restore W3DDisplay::m_assetManager on disable
+
+	// Publishes the TerrainLogic shim into the global for the lifetime of the scope, then puts
+	// back whatever was there (normally NULL). Only ParticleSystem::update() needs it; leaving it
+	// installed any longer makes shared engine code think the game is running -- see the comment
+	// at the use site in tick(). Restores rather than blindly NULLing so this stays correct if WB
+	// ever grows a real TheTerrainLogic.
+	struct ScopedTerrainLogic
+	{
+		TerrainLogic *m_saved;
+		ScopedTerrainLogic() : m_saved(TheTerrainLogic)
+		{
+			if (s_wbTerrain == NULL)
+			{
+				s_wbTerrain = new WBParticleTerrainLogic();
+			}
+			TheTerrainLogic = s_wbTerrain;
+		}
+		~ScopedTerrainLogic()
+		{
+			TheTerrainLogic = m_saved;
+		}
+	};
 
 	// The live emitter IDs created per placed object, for teardown.
 	typedef std::vector<ParticleSystemID> IDList;
@@ -410,13 +432,8 @@ void setEnabled(bool on)
 			TheGameLODManager->setDynamicLODLevel(DYNAMIC_GAME_LOD_HIGH);
 		}
 
-		// A ground-emit particle system reads TheTerrainLogic->getGroundHeight(); WB has no
-		// TheTerrainLogic. Install the heightmap-backed shim (kept for the process life).
-		if (TheTerrainLogic == NULL)
-		{
-			s_wbTerrain = new WBParticleTerrainLogic();
-			TheTerrainLogic = s_wbTerrain;
-		}
+		// NOTE: the TerrainLogic shim is deliberately NOT installed here. It goes in only around
+		// ParticleSystem::update() via ScopedTerrainLogic -- see the comment in tick().
 
 		// The particle DRAW path (W3DParticleSystemManager::doParticles) reads the static
 		// W3DDisplay::m_assetManager to fetch sprite textures -- WB never sets that static (it uses
@@ -452,11 +469,13 @@ void setEnabled(bool on)
 		destroyAllEmitters();
 		s_enabled = false;
 
-		// Leave the shim globals installed. They are harmless (only serve getFrame()), and any
-		// particle still draining during the next WW3D flush would read TheGameClient -- so
-		// un-pointing it to NULL here could crash the draw path. WB had no GameClient/GameLogic
-		// of its own, so keeping the shims in place changes nothing else. tick() is gated on
-		// s_enabled, so the manager stops advancing once disabled.
+		// Leave the GameLogic/GameClient shims installed. They are harmless (only serve
+		// getFrame()), and any particle still draining during the next WW3D flush would read
+		// TheGameClient -- so un-pointing it to NULL here could crash the draw path. WB had no
+		// GameClient/GameLogic of its own, so keeping those in place changes nothing else.
+		// tick() is gated on s_enabled, so the manager stops advancing once disabled.
+		// (TheTerrainLogic needs no teardown here -- ScopedTerrainLogic already removed it the
+		// moment update() returned, so it is never installed outside that call.)
 		if (TheWritableGlobalData != NULL)
 		{
 			TheWritableGlobalData->m_useFX = s_savedUseFX;
@@ -540,7 +559,25 @@ void tick()
 	}
 	s_wbFrame = want;
 	AssertQuiet quiet;	// per-particle aging can trip data-quality asserts on game templates
-	TheParticleSystemManager->update();
+	{
+		// Install the TerrainLogic shim ONLY across update(), then take it straight back out.
+		//
+		// ParticleSystem::update() is the one and only reader (ParticleSys.cpp, the
+		// m_isEmitAboveGroundOnly ground-height test); the particle DRAW path never touches
+		// TheTerrainLogic. Meanwhile a lot of shared engine code treats "TheTerrainLogic exists"
+		// as "the game is running, not the editor" and switches behaviour on it:
+		//   - W3DBridgeBuffer::drawBridges() disables every bridge and re-enables only the ones
+		//     in TheTerrainLogic's bridge list -- which our shim never populates, so every
+		//     bridge disappears. Its else branch is commented "In wb, all are enabled."
+		//   - W3DWaterTracks prefers TheTerrainLogic->isUnderwater() over the editor's
+		//     per-polygon m_editorWaterHeightFunc, so waves reseat to the flat global water
+		//     level and sink below a map's higher water areas.
+		// Overriding those getters on the shim does NOT help: the engine branches on the
+		// POINTER, not on what it returns. Keeping the global NULL outside update() is the only
+		// thing that keeps the editor on its intended paths.
+		ScopedTerrainLogic terrainForUpdate;
+		TheParticleSystemManager->update();
+	}
 	TheParticleSystemManager->queueParticleRender();
 }
 
