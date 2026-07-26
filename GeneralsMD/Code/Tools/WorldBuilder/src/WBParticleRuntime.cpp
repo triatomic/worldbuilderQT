@@ -192,6 +192,13 @@ namespace
 	typedef std::map<MapObject *, IDList> EmitterMap;
 	EmitterMap s_emitters;
 
+	// The bone Z rotation each tracked emitter was SPAWNED with, index-aligned with s_emitters.
+	// rotateLocalTransformZ is relative with no absolute setter, so an in-place move cannot fix a
+	// changed orientation; this lets tryRepositionInPlace detect a rotation and force a respawn.
+	typedef std::vector<Real> RotationList;
+	typedef std::map<MapObject *, RotationList> RotationMap;
+	RotationMap s_spawnRotations;
+
 	// Destroy the manager's systems for one tracked ID list (the manager isn't in m_scene, so it
 	// isn't auto-cleaned). Guards on the manager being present.
 	void destroyIDList( const IDList &ids )
@@ -206,8 +213,11 @@ namespace
 		}
 	}
 
-	// Spawn one emitter from a template at a world position; record its ID under obj.
-	void spawnEmitter( MapObject *obj, const ParticleSystemTemplate *tmpl, const Coord3D &pos )
+	// Spawn one emitter from a template at a world position; record its ID under obj. rotationZ is
+	// the bone's Z rotation, so a directional system (a spout, an exhaust) points the way the bone
+	// does -- the engine does the same via rotateLocalTransformZ after setPosition.
+	void spawnEmitter( MapObject *obj, const ParticleSystemTemplate *tmpl, const Coord3D &pos,
+		Real rotationZ )
 	{
 		if (tmpl == NULL || TheParticleSystemManager == NULL)
 		{
@@ -220,7 +230,12 @@ namespace
 			return;
 		}
 		sys->setPosition( &pos );
+		if (rotationZ != 0.0f)
+		{
+			sys->rotateLocalTransformZ( rotationZ );
+		}
 		s_emitters[obj].push_back( sys->getSystemID() );
+		s_spawnRotations[obj].push_back( rotationZ );
 	}
 
 	// Collect the always-on particle-system templates a ThingTemplate carries: the ones in its
@@ -286,6 +301,7 @@ namespace
 	{
 		const ParticleSystemTemplate *tmpl;
 		Coord3D pos;
+		Real rotationZ;		// bone's Z rotation (0 = unoriented / object origin)
 	};
 
 	// Build the ordered emitter placement list for an object: (a) its standalone particle-system
@@ -310,6 +326,7 @@ namespace
 					Placement p;
 					p.tmpl = tmpl;
 					p.pos = origin;
+					p.rotationZ = 0.0f;	// standalone marker: no bone to take an orientation from
 					out.push_back( p );
 				}
 			}
@@ -317,21 +334,38 @@ namespace
 
 		// (b) Always-on emitters attached to the object's template's default draw state, placed at
 		// their bone. Get_Bone_Transform gives the bone's WORLD matrix (the render obj is already
-		// positioned); an unknown bone falls back to Get_Transform (the object origin), so a bad
-		// bone name still shows the emitter rather than dropping it.
+		// positioned).
+		//
+		// Resolve the name through Get_Bone_Index FIRST and require a non-zero result, exactly as
+		// the engine does (W3DModelDraw's recalc of bone particle systems). HTreeClass returns 0
+		// for "no such bone", which is ALSO the valid index of the root bone -- so the by-name
+		// Get_Bone_Transform overload cannot tell the two apart and quietly hands back the root
+		// bone's transform. That put emitters for a mistyped/missing bone on the model's root
+		// instead of at the object origin, which reads as "one object's FX are off" while every
+		// object whose bones all resolve looks correct.
 		const AttachedList &attached = collectAlwaysOnTemplates( obj->getThingTemplate() );
 		for (size_t i = 0; i < attached.size(); ++i)
 		{
 			Placement p;
 			p.tmpl = attached[i].tmpl;
 			p.pos = origin;
+			p.rotationZ = 0.0f;
 			if (renderObj != NULL && !attached[i].bone.isEmpty() && !attached[i].bone.isNone())
 			{
-				const Matrix3D &bx = renderObj->Get_Bone_Transform( attached[i].bone.str() );
-				Vector3 t = bx.Get_Translation();
-				p.pos.x = t.X;
-				p.pos.y = t.Y;
-				p.pos.z = t.Z;
+				const int boneIndex = renderObj->Get_Bone_Index( attached[i].bone.str() );
+				if (boneIndex != 0)
+				{
+					const Matrix3D &bx = renderObj->Get_Bone_Transform( boneIndex );
+					Vector3 t = bx.Get_Translation();
+					p.pos.x = t.X;
+					p.pos.y = t.Y;
+					p.pos.z = t.Z;
+					// Orient the system like the bone, as the engine does. Without this a
+					// directional emitter always fired along +X no matter how the object was
+					// rotated, so it only lined up at one angle -- the rest of the time the FX
+					// pointed the wrong way relative to the building.
+					p.rotationZ = bx.Get_Z_Rotation();
+				}
 			}
 			out.push_back( p );
 		}
@@ -353,6 +387,24 @@ namespace
 		if (it == s_emitters.end() || places.empty() || it->second.size() != places.size())
 		{
 			return false;
+		}
+
+		// Only a MOVE can be done in place. ParticleSystem exposes rotateLocalTransformZ (a
+		// RELATIVE rotate) with no absolute setter, so a system whose bone orientation changed
+		// cannot be corrected here -- re-applying would compound onto the rotation it already
+		// carries. Rotating the object changes its bones' Z rotation, so bail out and let the
+		// caller respawn the whole set with the new orientation baked in.
+		RotationMap::iterator rot = s_spawnRotations.find( obj );
+		if (rot == s_spawnRotations.end() || rot->second.size() != places.size())
+		{
+			return false;
+		}
+		for (size_t r = 0; r < places.size(); ++r)
+		{
+			if (places[r].rotationZ != rot->second[r])
+			{
+				return false;
+			}
 		}
 
 		// Resolve every tracked system first: only move once we know the whole set is alive (a
@@ -515,7 +567,7 @@ void placeEmittersForObject(MapObject *obj, RenderObjClass *renderObj,
 	destroyEmittersForObject( obj );
 	for (size_t i = 0; i < places.size(); ++i)
 	{
-		spawnEmitter( obj, places[i].tmpl, places[i].pos );
+		spawnEmitter( obj, places[i].tmpl, places[i].pos, places[i].rotationZ );
 	}
 }
 
@@ -528,6 +580,7 @@ void destroyEmittersForObject(MapObject *obj)
 	}
 	destroyIDList( it->second );
 	s_emitters.erase( it );
+	s_spawnRotations.erase( obj );
 }
 
 void destroyAllEmitters()
@@ -537,6 +590,7 @@ void destroyAllEmitters()
 		destroyIDList( it->second );
 	}
 	s_emitters.clear();
+	s_spawnRotations.clear();
 }
 
 void tick()
