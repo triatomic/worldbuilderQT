@@ -2469,10 +2469,12 @@ Bool WorldHeightMapEdit::selectSimilar(void)
 	MapObject *selectedObj;
 	MapObject *otherObj;
 	Bool anySelected = false;
+	// Roads used to be skipped here (and below), so Select Similar did nothing at all when the
+	// selection was a road. They are ordinary map objects whose getName() is the road type, so
+	// they match on name like everything else -- the only special handling they need is that a
+	// segment is a POINT1 object immediately followed by its POINT2 partner, and selecting one
+	// endpoint without the other would leave a half-selected segment.
 	for (selectedObj=firstObj; selectedObj; selectedObj=selectedObj->getNext()) {
-		if (selectedObj->getFlag(FLAG_ROAD_FLAGS)) {
-			continue;
-		} 
 		if (selectedObj->isSelected()) {
 			anySelected = true;
 			break;
@@ -2482,14 +2484,21 @@ Bool WorldHeightMapEdit::selectSimilar(void)
 		return false;
 	}
 
+	// When the anchor is a road/bridge endpoint, match against the segment's type. Picking the
+	// POINT2 end still has the same name, so no normalization is needed here. Bridges are laid
+	// out as the same adjacent POINT1/POINT2 pair and are treated the same way throughout.
+	Bool wantRoads = (selectedObj->getFlags() & (FLAG_ROAD_FLAGS|FLAG_BRIDGE_FLAGS)) != 0;
+
 	for (otherObj=firstObj; otherObj != NULL; otherObj=otherObj->getNext()) {
 		if (otherObj->getName() != selectedObj->getName()) {
 			continue; // names don't match.
 		}
 
-		if (otherObj->getFlag(FLAG_ROAD_FLAGS)) {
+		// Never mix roads/bridges and normal objects, even if one shares the road's name.
+		Bool isRoad = (otherObj->getFlags() & (FLAG_ROAD_FLAGS|FLAG_BRIDGE_FLAGS)) != 0;
+		if (isRoad != wantRoads) {
 			continue;
-		} 
+		}
 
 		Bool exists;
 		AsciiString layerName = otherObj->getProperties()->getAsciiString(TheKey_objectLayer, &exists);
@@ -2498,6 +2507,16 @@ Bool WorldHeightMapEdit::selectSimilar(void)
 		}
 
 		otherObj->setSelected(true);
+
+		// Keep road segments whole: selecting a POINT1 without its POINT2 (or vice versa) would
+		// leave a half-selected segment that drags apart. The pair is always adjacent in the
+		// list, so the partner is just the next node.
+		if (isRoad && (otherObj->getFlags() & (FLAG_ROAD_POINT1|FLAG_BRIDGE_POINT1))) {
+			MapObject *partner = otherObj->getNext();
+			if (partner && (partner->getFlags() & (FLAG_ROAD_POINT2|FLAG_BRIDGE_POINT2))) {
+				partner->setSelected(true);
+			}
+		}
 	}
 	return anySelected;
 }
