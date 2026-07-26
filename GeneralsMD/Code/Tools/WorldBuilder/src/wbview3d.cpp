@@ -632,6 +632,8 @@ WbView3d::WbView3d() :
 	m_labelRenderer(0),
 	m_haveGdiPaintKey(false),
 	m_needToLoadRoads(0),
+	m_needToLoadBridges(0),
+	m_lastRoadLoadTime(0),
 	m_timer(NULL),
 	m_drawObject(NULL),
 	m_layer(NULL),
@@ -1795,6 +1797,30 @@ static void DumpSubObjects(RenderObjClass* obj, const char* modelName)
 
 
 // ----------------------------------------------------------------------------
+// While dragging, hold the road rebuild to this rate. The rebuild costs ~16.7ms on a
+// ~1900-segment map, so running it per mouse-move (~60/sec) leaves no time for anything else.
+#define ROAD_LOAD_THROTTLE_MS 100		// ~10 Hz while dragging
+
+// ----------------------------------------------------------------------------
+Bool WbView3d::roadEditIsThrottled(void) const
+{
+	if (!m_showRoads) {
+		return false;
+	}
+	Bool interacting = (m_trackingMode != TRACK_NONE) || PointerTool::isMouseDown();
+	if (!interacting) {
+		return false;		// only rate-limit continuous drags, never isolated edits
+	}
+	// Deliberately does NOT test m_needToLoadRoads: redraw() CLEARS that flag every time it
+	// rebuilds, so by the time the next mouse-move asks, it reads false and the throttle would
+	// never fire (this is exactly why the first attempt at this had no effect). The elapsed
+	// time since the last rebuild is the whole condition.
+	//
+	// Unsigned subtraction, so this stays correct across the 49-day tick wrap.
+	return (::GetTickCount() - m_lastRoadLoadTime) < ROAD_LOAD_THROTTLE_MS;
+}
+
+// ----------------------------------------------------------------------------
 void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 {
 	++m_updateCount;
@@ -1810,6 +1836,7 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 	}
 	Bool found = false;
 	Bool isRoad = false;
+	Bool isBridge = false;
 	Bool isLight = false;
 	Bool isScorch = false;
 	if (pMapObjIn == NULL)
@@ -1825,6 +1852,9 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 		}
 		if (pMapObj->getFlags() & (FLAG_ROAD_FLAGS|FLAG_BRIDGE_FLAGS)) {
 			isRoad = true;
+			if (pMapObj->getFlags() & FLAG_BRIDGE_FLAGS) {
+				isBridge = true;
+			}
 			continue; // Roads don't create drawable objects.
 		}
 		if (pMapObj->isLight() ) {
@@ -2177,6 +2207,9 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 	if (!found && pMapObjIn) {
 		if (pMapObjIn->getFlags() & (FLAG_ROAD_FLAGS|FLAG_BRIDGE_FLAGS)) {
 			isRoad = true;
+			if (pMapObjIn->getFlags() & FLAG_BRIDGE_FLAGS) {
+				isBridge = true;
+			}
 		}
 		const ThingTemplate *tTemplate = pMapObjIn->getThingTemplate();
 		if (tTemplate && tTemplate->isKindOf(KINDOF_OPTIMIZED_TREE)) {
@@ -2203,6 +2236,13 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 			TheTerrainRenderObject->removeAllRoads();
 		} else {
 			m_needToLoadRoads = true; // load roads next time we redraw.
+			// Only a bridge edit needs the bridge buffer rebuilt; a road-only edit skips it
+			// (loadRoadsOnly instead of loadRoadsAndBridges in redraw). Sticky until the
+			// rebuild consumes it, so a road move later in the same drag can't clear a
+			// bridge's pending rebuild.
+			if (isBridge) {
+				m_needToLoadBridges = true;
+			}
 		}
 	}
 	if (updateAllTrees) {
@@ -2930,9 +2970,31 @@ void WbView3d::redraw(void)
 
 	DEBUG_ASSERTCRASH((m_heightMapRenderObj),("oops"));
 	if (m_heightMapRenderObj) {
-		if (m_needToLoadRoads && m_showRoads) {
-			m_heightMapRenderObj->loadRoadsAndBridges(NULL,FALSE);
-			// m_heightMapRenderObj->worldBuilderUpdateBridgeTowers( m_assetManager, m_scene );
+		// Rebuilding roads throws away and re-derives EVERY road on the map (segment linking,
+		// tee/curve/join insertion, vertex buffers), so only pay for the bridge buffer on top
+		// of that when a bridge actually changed.
+		//
+		// That rebuild is expensive and superlinear in the map's road count -- measured at
+		// ~16.7ms on a ~1900-segment map. It used to run on EVERY mouse-move of a drag, which
+		// capped the drag at ~60 rebuilds/sec of pure CPU and is what made dragging road
+		// segments far slower than dragging buildings.
+		//
+		// roadEditIsThrottled() rate-limits it to ~10Hz for the duration of a drag. The frame
+		// itself still paints every mouse-move -- that paint is what draws the drag, and
+		// skipping it froze the viewport for the whole throttle window, which read as far worse
+		// lag than the rebuild it saved. Only the road GEOMETRY lags behind, by up to ~100ms.
+		// The dirty flag survives a throttled pass, and OnTimer's idle-skip treats a pending
+		// road load as "not idle", so the deferred rebuild always lands and the drop (no longer
+		// interacting, so never throttled) gets an exact final one.
+		if (m_needToLoadRoads && m_showRoads && !roadEditIsThrottled()) {
+			m_lastRoadLoadTime = ::GetTickCount();
+			if (m_needToLoadBridges) {
+				m_heightMapRenderObj->loadRoadsAndBridges(NULL,FALSE);
+				// m_heightMapRenderObj->worldBuilderUpdateBridgeTowers( m_assetManager, m_scene );
+				m_needToLoadBridges = false;
+			} else {
+				m_heightMapRenderObj->loadRoadsOnly();
+			}
 			m_needToLoadRoads = false;
 		}
 		++m_updateCount;
@@ -4871,8 +4933,14 @@ void WbView3d::OnTimer(UINT nIDEvent)
 		Bool overlayActive = (m_doRulerFeedback != RULER_NONE) || m_doRectFeedback ||
 			m_showObjToolTrackingObj;
 
+		// A road rebuild the drag throttle deferred (see redraw): the last mouse-move of a drag
+		// can land inside a throttle window, and mouse-up alone does not repaint, so without
+		// this the roads would sit stale on the old geometry until some later unrelated redraw.
+		// The paint key does not cover road geometry, so `changed` would not catch it either.
+		Bool roadLoadPending = m_needToLoadRoads && m_showRoads;
+
 		if (!interacting && !changed && !fallbackDue && !wavesActive && !particlesActive &&
-			!overlayActive && !modelAnimsActive)
+			!overlayActive && !modelAnimsActive && !roadLoadPending)
 		{
 			return;		// static view: leave the last frame (+ any GDI text) on screen
 		}

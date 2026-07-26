@@ -315,6 +315,8 @@ private:
 	Bool										m_deviceResetFailed;
 #endif
 	Bool										m_needToLoadRoads;
+	Bool										m_needToLoadBridges;	///< a BRIDGE piece changed; roads-only rebuilds skip the bridge buffer
+	UnsignedInt								m_lastRoadLoadTime;		///< GetTickCount of the last road rebuild (drag throttle)
 	LightClass							*m_globalLight[MAX_GLOBAL_LIGHTS];
 	RenderObjClass						*m_lightFeedbackMesh[MAX_GLOBAL_LIGHTS];
 
@@ -446,6 +448,11 @@ public:
 
 	/// Invalidates an object. Pass NULL to inval all objects.
 	virtual void invalObjectInView(MapObject *pObj);
+
+	/// True when a road/bridge rebuild should be held off right now: a drag is in progress and
+	/// the last rebuild was too recent. The pending dirty flag survives, so the rebuild simply
+	/// happens on a later frame -- nothing is lost.
+	Bool roadEditIsThrottled(void) const;
 
 	// find the best model for an object
 	AsciiString getBestModelName(const ThingTemplate* tt, const ModelConditionFlags& c);
