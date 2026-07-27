@@ -137,6 +137,8 @@ public:
 																							 Int &outDdsW, Int &outDdsH);
 
 	static void setDoAmbientSoundFeedback(Bool val) { m_ambientSoundFeedback = val; }
+	/// View > Show Playing Sounds: ring every ambient sound Listen To Map currently has playing.
+	static void setDoPlayingSoundFeedback(Bool val) { m_playingSoundFeedback = val; }
 	static void setDoBaseRadiusFeedback(Bool val) { m_baseRadiusFeedback = val; }
 	static void setForceDrawArrow(Bool val) { m_forceDrawArrow = val; }
 	
@@ -240,6 +242,7 @@ protected: // static state vars.
 	static Int								m_tracingOverlayOpacity;	///< 0..255 alpha for the overlay.
 	static Int								m_tracingOverlayFilter;		///< 0=default(linear), 1=nearest(point).
 	static Bool								m_ambientSoundFeedback;
+	static Bool								m_playingSoundFeedback;
 	static Bool								m_baseRadiusFeedback;
 	static Bool								m_forceDrawArrow;	///< True to force drawing arrow on roads/waypoints.
 

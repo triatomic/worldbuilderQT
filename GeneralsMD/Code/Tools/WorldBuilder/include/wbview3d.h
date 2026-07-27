@@ -166,6 +166,8 @@ protected:
 	afx_msg void OnUpdateViewListenAll(CCmdUI* pCmdUI);
 	afx_msg void OnViewListenNone();
 	afx_msg void OnUpdateViewListenNone(CCmdUI* pCmdUI);
+	afx_msg void OnViewShowPlayingSounds();
+	afx_msg void OnUpdateViewShowPlayingSounds(CCmdUI* pCmdUI);
 	afx_msg void OnViewBoundingBoxes();
 	afx_msg void OnUpdateViewBoundingBoxes(CCmdUI* pCmdUI);
 	afx_msg void OnViewSightRanges();
@@ -352,6 +354,7 @@ private:
 	Bool										m_showMapBoundaries;	///< Flag whether to show all the map boundaries or not
 	Bool										m_showWaveLines;	///< Flag whether to draw wave start->end overlay lines
 	Bool										m_showAmbientSounds;	///< Flag whether to show all the ambient sounds or not
+	Bool										m_showPlayingSounds;	///< ring the ambient sounds Listen To Map currently has audible
 	Int											m_listenMode;			///< View > Listen To Map: which ambient sounds to play (WB_LISTEN_*)
 	UnsignedInt								m_lastListenSweepTime;	///< GetTickCount of the last re-submit sweep (see startListenSounds)
 	std::map<MapObject *, AudioHandle>		m_listenHandles;		///< the live audio handle per sounding object
@@ -564,6 +567,11 @@ public:
 	void stopListenSounds(void);
 	/// Drop a going-away object's tracked sound, so the handle map cannot outlive its key.
 	void forgetListenSound(MapObject *pMapObj);
+public:
+	/// True while Listen To Map has this object's ambient sound actually audible (View > Show
+	/// Playing Sounds rings these). False for everything when no listen mode is active.
+	Bool isListenSoundPlaying(MapObject *pMapObj) const;
+private:
 private:
 	void startListenSounds(void);
 	/// The object's ambient sound (own dict override, else its template's). Empty == none.

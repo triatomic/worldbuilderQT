@@ -128,6 +128,7 @@ Bool	DrawObject::m_showTracingOverlay = false;
 Int		DrawObject::m_tracingOverlayOpacity = 255;	///< fully opaque by default
 Int		DrawObject::m_tracingOverlayFilter = 0;			///< 0 = default (linear)
 Bool	DrawObject::m_ambientSoundFeedback = false;
+Bool	DrawObject::m_playingSoundFeedback = false;
 Bool	DrawObject::m_baseRadiusFeedback = false;
 Bool	DrawObject::m_forceDrawArrow = false;
 Coord3D	DrawObject::m_feedbackPoint;
@@ -3328,13 +3329,21 @@ if (_skip_drawobject_render) {
 	}
 	m_waterDrawObject->update();
 	DX8Wrapper::Set_Vertex_Buffer(m_vertexBufferTile1);
-  if (m_drawObjects || m_drawWaypoints || m_drawBoundingBoxes || m_drawSightRanges || m_drawWeaponRanges || m_drawSoundRanges || m_drawTestArtHighlight || m_drawObjectsSelected) {
+  if (m_drawObjects || m_drawWaypoints || m_drawBoundingBoxes || m_drawSightRanges || m_drawWeaponRanges || m_drawSoundRanges || m_drawTestArtHighlight || m_drawObjectsSelected || m_playingSoundFeedback) {
 		//Apply the shader and material
 
 		//WST Variables below are for optimization to reduce VB updates which are extremely slow
 		// Optimization strategy is to remember last setting and avoid re-updating unless it changed
 		int rememberLastSettingVB1 = -99999;	
 		int rememberLastSettingVB2 = -99999;
+
+		// View > Show Playing Sounds asks the 3D view per object whether its sound is audible;
+		// look the view up once rather than per object.
+		WbView3d *pPlayingSoundView = NULL;
+		if (m_playingSoundFeedback) {
+			CWorldBuilderDoc *pSoundDoc = CWorldBuilderDoc::GetActiveDoc();
+			pPlayingSoundView = pSoundDoc ? pSoundDoc->GetActive3DView() : NULL;
+		}
 
 		MapObject *pMapObj;
 		for (pMapObj = MapObject::getFirstMapObject(); pMapObj; pMapObj = pMapObj->getNext()) {
@@ -3430,6 +3439,13 @@ if (_skip_drawobject_render) {
 						updateVBWithSoundRanges(pMapObj, &rinfo.Camera); 
 					}
 				} 
+				// View > Show Playing Sounds. Deliberately NOT gated on doArrow: the point is to
+				// see every sound Listen To Map currently has audible, not just the selected one.
+				// isListenSoundPlaying is false for everything unless a listen mode is running.
+				if (pPlayingSoundView && pPlayingSoundView->isListenSoundPlaying(pMapObj)) {
+					linesToRender = true;
+					updateVBWithSoundRanges(pMapObj, &rinfo.Camera);
+				}
 				// Force draw arrow triggering test art highlight by mistake
 				if (doArrow && m_drawTestArtHighlight && !m_forceDrawArrow) {
 					linesToRender = true;

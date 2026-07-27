@@ -3446,6 +3446,8 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_LISTEN_ALL, OnUpdateViewListenAll)
 	ON_COMMAND(ID_VIEW_LISTEN_NONE, OnViewListenNone)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_LISTEN_NONE, OnUpdateViewListenNone)
+	ON_COMMAND(ID_VIEW_SHOWPLAYINGSOUNDS, OnViewShowPlayingSounds)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_SHOWPLAYINGSOUNDS, OnUpdateViewShowPlayingSounds)
 	ON_COMMAND(ID_VIEW_SHOW_SOUND_CIRCLES, OnViewShowSoundCircles)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_SHOW_SOUND_CIRCLES, OnUpdateViewShowSoundCircles)
 
@@ -3632,6 +3634,7 @@ int WbView3d::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	m_showMapBoundaries = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowMapBoundaries", 0);
 	m_showWaveLines = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowWaveLines", 1);	// default ON
 	m_showAmbientSounds = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowAmbientSounds", 0);
+	m_showPlayingSounds = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowPlayingSounds", 0);
 	// View > Listen To Map. Default OFF: playing a map's ambient sounds is opt-in, and it is the
 	// only thing that makes WB pump the audio engine at all (see OnTimer).
 	m_listenMode = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ListenToMap", WB_LISTEN_NONE);
@@ -3705,6 +3708,7 @@ int WbView3d::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	DrawObject::setDoWaveFeedback(m_showWaveLines);
 	DrawObject::setDoGridFeedback(m_showRulerGrid);
 	DrawObject::setDoAmbientSoundFeedback(m_showAmbientSounds);
+	DrawObject::setDoPlayingSoundFeedback(m_showPlayingSounds);
 	DrawObject::setDoTracingOverlayFeedback(m_showTracingOverlay);
 	DrawObject::setDoBaseRadiusFeedback(m_showBaseRadius);
 
@@ -4948,8 +4952,14 @@ void WbView3d::OnTimer(UINT nIDEvent)
 		Bool overlayActive = (m_doRulerFeedback != RULER_NONE) || m_doRectFeedback ||
 			m_showObjToolTrackingObj;
 
+		// Show Playing Sounds rings whatever is audible right now, and sounds start and stop on
+		// their own (the listen sweep, or the engine culling one out of earshot) with nothing
+		// else about the view changing. The paint key does not cover them, so keep repainting
+		// while the overlay is up or a stopped sound would leave its ring on screen.
+		Bool playingSoundsShown = m_showPlayingSounds && (m_listenMode != WB_LISTEN_NONE);
+
 		if (!interacting && !changed && !fallbackDue && !wavesActive && !particlesActive &&
-			!overlayActive && !modelAnimsActive)
+			!overlayActive && !modelAnimsActive && !playingSoundsShown)
 		{
 			return;		// static view: leave the last frame (+ any GDI text) on screen
 		}
@@ -5845,6 +5855,21 @@ void WbView3d::OnViewShowAmbientSounds()
 	DrawObject::setDoAmbientSoundFeedback(m_showAmbientSounds);
 }
 
+void WbView3d::OnViewShowPlayingSounds()
+{
+	m_showPlayingSounds = !m_showPlayingSounds;
+	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "ShowPlayingSounds", m_showPlayingSounds ? 1 : 0);
+	DrawObject::setDoPlayingSoundFeedback(m_showPlayingSounds);
+	Invalidate(false);
+}
+
+void WbView3d::OnUpdateViewShowPlayingSounds(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(m_showPlayingSounds ? 1 : 0);
+	// Only meaningful while something is actually playing.
+	pCmdUI->Enable(m_listenMode != WB_LISTEN_NONE);
+}
+
 void WbView3d::OnUpdateViewShowAmbientSounds(CCmdUI* pCmdUI)
 {
 	pCmdUI->SetCheck(m_showAmbientSounds ? 1 : 0);
@@ -5987,6 +6012,23 @@ void WbView3d::startListenSounds(void)
 			m_listenHandles[pMapObj] = h;
 		}
 	}
+}
+
+// Is this object's ambient sound audible right now? Asks the engine rather than trusting the
+// handle map, because a sound can stop on its own (walked out of earshot, one-shot finished)
+// between sweeps and the map only learns that on the next sweep.
+Bool WbView3d::isListenSoundPlaying(MapObject *pMapObj) const
+{
+	if (m_listenMode == WB_LISTEN_NONE || TheAudio == NULL || m_listenHandles.empty())
+	{
+		return false;
+	}
+	std::map<MapObject *, AudioHandle>::const_iterator it = m_listenHandles.find(pMapObj);
+	if (it == m_listenHandles.end())
+	{
+		return false;
+	}
+	return TheAudio->isCurrentlyPlaying(it->second);
 }
 
 // An object is going away (deleted, or moved out of the list): forget its sound so the handle

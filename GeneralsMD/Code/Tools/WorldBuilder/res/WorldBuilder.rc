@@ -309,6 +309,7 @@ BEGIN
             MENUITEM "Show Base Radius From Player Spawn Points", ID_VIEW_SHOWBASERADIUS
             MENUITEM "Show Sound Circles",          ID_VIEW_SHOW_SOUND_CIRCLES
             MENUITEM "Show Sound Flags",            ID_VIEW_SHOWAMBIENTSOUNDS
+            MENUITEM "Show Playing Sounds",         ID_VIEW_SHOWPLAYINGSOUNDS
         END
         POPUP "Listen To Map"
         BEGIN
