@@ -354,7 +354,12 @@ void AudioManager::update()
 	groundToCameraVector.scale( bestScaleFactor );
 
 	//Set the microphone to be the ground position adjusted for terrain plus the vector we just calculated.
-	groundPos.z = TheTerrainLogic->getGroundHeight( groundPos.x, groundPos.y );
+	// TheTerrainLogic only exists while a game is running; WorldBuilder pumps this update() to
+	// preview a map's ambient sounds and has none, so fall back to the unadjusted height.
+	if( TheTerrainLogic )
+	{
+		groundPos.z = TheTerrainLogic->getGroundHeight( groundPos.x, groundPos.y );
+	}
 	microphonePos.set( &groundPos );
 	microphonePos.add( &groundToCameraVector );
 
@@ -1019,6 +1024,14 @@ Bool AudioManager::isCurrentSpeakerTypeSurroundSound()
 //-------------------------------------------------------------------------------------------------
 Bool AudioManager::shouldPlayLocally(const AudioEventRTS *audioEvent)
 {
+	// Every check below is about player affiliation (mine / ally / enemy / observed). With no
+	// player list there is no local player to compare against -- WorldBuilder previews a map's
+	// ambient sounds without a running game -- so nothing is filtered out.
+	if( !ThePlayerList )
+	{
+		return TRUE;
+	}
+
 	Player *localPlayer = ThePlayerList->getLocalPlayer();
 	if( !localPlayer->isPlayerActive() ) 
 	{

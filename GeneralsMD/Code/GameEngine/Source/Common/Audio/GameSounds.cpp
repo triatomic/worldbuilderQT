@@ -232,9 +232,13 @@ Bool SoundManager::canPlayNow( AudioEventRTS *event )
 				return false;
 			}
 			
-			Int localPlayerNdx = ThePlayerList->getLocalPlayer()->getPlayerIndex();
-			if( (event->getAudioEventInfo()->m_type & ST_SHROUDED) && 
-					 ThePartitionManager->getShroudStatusForPlayer(localPlayerNdx, pos) != CELLSHROUD_CLEAR ) 
+			// Shroud is a running-game concept: with no player list / partition manager there is
+			// nothing to be shrouded from (WorldBuilder previews a map's ambient sounds without a
+			// game), so the sound is simply not culled.
+			Int localPlayerNdx = ThePlayerList ? ThePlayerList->getLocalPlayer()->getPlayerIndex() : 0;
+			if( ThePlayerList && ThePartitionManager &&
+					 (event->getAudioEventInfo()->m_type & ST_SHROUDED) &&
+					 ThePartitionManager->getShroudStatusForPlayer(localPlayerNdx, pos) != CELLSHROUD_CLEAR )
 			{
 #ifdef INTENSIVE_AUDIO_DEBUG
 				DEBUG_LOG(("- culled due to shroud.\n"));
