@@ -310,6 +310,13 @@ BEGIN
             MENUITEM "Show Sound Circles",          ID_VIEW_SHOW_SOUND_CIRCLES
             MENUITEM "Show Sound Flags",            ID_VIEW_SHOWAMBIENTSOUNDS
         END
+        POPUP "Listen To Map"
+        BEGIN
+            MENUITEM "Play Enabled Ambient Sounds", ID_VIEW_LISTEN_ENABLED
+            MENUITEM "Play Permanent Ambient Sounds", ID_VIEW_LISTEN_PERMANENT
+            MENUITEM "Play All Ambient Sounds",     ID_VIEW_LISTEN_ALL
+            MENUITEM "Don't Play Ambient Sounds",   ID_VIEW_LISTEN_NONE
+        END
         POPUP "Terrain && Water"
         BEGIN
             MENUITEM "Show Wave Lines",             ID_VIEW_SHOWWAVELINES

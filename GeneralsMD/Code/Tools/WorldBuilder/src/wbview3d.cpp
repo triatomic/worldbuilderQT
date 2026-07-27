@@ -103,6 +103,10 @@ extern "C" int WBQtObject_GetRenderParticles(void);
 #include "GameLogic/SidesList.h"
 #include "GameLogic/TerrainLogic.h"
 #include "GameClient/View.h"
+#include "Common/GameAudio.h"			// View > Listen To Map: TheAudio / addAudioEvent / update
+#include "Common/AudioEventRTS.h"
+#include "Common/AudioEventInfo.h"
+#include "Common/AudioAffect.h"
 #include "GlobalLightOptions.h"
 #include "LayersList.h"
 #ifdef RTS_HAS_QT
@@ -182,6 +186,7 @@ static void WWAssert_Callback(const char * message)
 }
 
 
+
 // The W3DShadowManager accesses TheTacticalView, so we have to create
 // a stub class & object in Worldbuilder for it to access.
 class PlaceholderView : public View
@@ -189,11 +194,20 @@ class PlaceholderView : public View
 protected:
 	Int m_width, m_height;																			///< Dimensions of the view
 	Int m_originX, m_originY;																		///< Location of top/left view corner
+	Coord3D m_lookAtPos;																				///< where the camera is looking (audio microphone target)
+	Coord3D m_eyePos;																						///< the camera itself (audio listener)
+	Real m_viewAngle;																						///< camera heading, for audio orientation
 
 protected:
 	virtual View *prependViewToList( View *list ) {return NULL;};		///< Prepend this view to the given list, return the new list
 	virtual View *getNextView( void ) { return NULL; }				///< Return next view in the set
 public:
+
+	PlaceholderView() : m_width(0), m_height(0), m_originX(0), m_originY(0), m_viewAngle(0.0f)
+	{
+		m_lookAtPos.zero();
+		m_eyePos.zero();
+	}
 
 	virtual void init( void ){};
 
@@ -256,11 +270,25 @@ public:
 	virtual void pitchCamera( Real finalPitch, Int milliseconds, Real easeIn, Real easeOut ) {};
 															
 	virtual void setAngle( Real angle ){};																///< Rotate the view around the up axis to the given angle
-	virtual Real getAngle( void ) { return 0; }
 	virtual void setPitch( Real angle ){};																	///< Rotate the view around the horizontal axis to the given angle
 	virtual Real getPitch( void ) { return 0; }							///< Return current camera pitch
-	virtual void setAngleAndPitchToDefault( void ){};													///< Set the view angle back to default 
-	virtual void getPosition(Coord3D *pos)	{ ;}											///< Return camera position
+	virtual void setAngleAndPitchToDefault( void ){};													///< Set the view angle back to default
+
+	// View > Listen To Map drives the audio microphone off these three: AudioManager::update
+	// reads the look-at point, the view angle and the real camera position to place the
+	// listener. setupCamera() pushes the live values in via setAudioCamera() each frame; before
+	// that happens they read as the zeroes this stub always returned, which is what the shadow
+	// manager (the original and only other caller) has always seen.
+	virtual void getPosition(Coord3D *pos)	{ *pos = m_lookAtPos; }						///< Return camera position
+	virtual Real getAngle( void ) { return m_viewAngle; }
+	virtual const Coord3D& get3DCameraPosition() const { return m_eyePos; }
+
+	void setAudioCamera( const Coord3D *lookAt, const Coord3D *eye, Real angle )
+	{
+		m_lookAtPos = *lookAt;
+		m_eyePos = *eye;
+		m_viewAngle = angle;
+	}
 
 	virtual Real getHeightAboveGround() { return 1; }
 	virtual void setHeightAboveGround(Real z) { }
@@ -308,7 +336,6 @@ public:
 	virtual void forceCameraConstraintRecalc(void) { }
 	virtual void rotateCameraTowardPosition(const Coord3D *pLoc, Int milliseconds, Real easeIn, Real easeOut, Bool reverseRotation) {};	///< Rotate camera to face an object, and hold on it
 
-	virtual const Coord3D& get3DCameraPosition() const { static Coord3D dummy; return dummy; }							///< Returns the actual camera position
 
 	virtual void setGuardBandBias( const Coord2D *gb ) {};
 
@@ -632,6 +659,8 @@ WbView3d::WbView3d() :
 	m_labelRenderer(0),
 	m_haveGdiPaintKey(false),
 	m_needToLoadRoads(0),
+	m_listenMode(WB_LISTEN_NONE),
+	m_listenSoundsStarted(false),
 	m_timer(NULL),
 	m_drawObject(NULL),
 	m_layer(NULL),
@@ -1007,6 +1036,24 @@ void WbView3d::setupCamera()
 	m_actualHeightAboveGround = m_cameraOffset.z * zoom - groundLevel;
 	m_cameraSource = sourcePos;
 	m_cameraTarget = targetPos;
+
+	// Feed the audio listener (View > Listen To Map). AudioManager::update reads these off
+	// TheTacticalView to place the microphone; without them it would sit at the origin and every
+	// sound would pan as if the camera never moved. Both are shifted into the same
+	// BORDER-RELATIVE world that MapObject::getLocation() (and therefore the positions we hand
+	// to addAudioEvent) uses -- sourcePos/targetPos are in absolute cell-index world, so mixing
+	// the two would offset every sound by the map's border.
+	{
+		Coord3D audioLookAt;
+		Coord3D audioEye;
+		audioLookAt.x = targetPos.X - m_cameraBorderWorld;
+		audioLookAt.y = targetPos.Y - m_cameraBorderWorld;
+		audioLookAt.z = targetPos.Z;
+		audioEye.x = sourcePos.X - m_cameraBorderWorld;
+		audioEye.y = sourcePos.Y - m_cameraBorderWorld;
+		audioEye.z = sourcePos.Z;
+		bogusTacticalView.setAudioCamera(&audioLookAt, &audioEye, angle);
+	}
 	/*
 	DEBUG_LOG(("Camera: pos=(%g,%g) height=%g pitch=%g FXPitch=%g yaw=%g groundLevel=%g\n",
 		targetPos.X, targetPos.Y,
@@ -3387,6 +3434,14 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_SHOWBASERADIUS, OnUpdateViewShowBaseRadius)
 	ON_COMMAND(ID_VIEW_SHOWAMBIENTSOUNDS, OnViewShowAmbientSounds)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_SHOWAMBIENTSOUNDS, OnUpdateViewShowAmbientSounds)
+	ON_COMMAND(ID_VIEW_LISTEN_ENABLED, OnViewListenEnabled)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_LISTEN_ENABLED, OnUpdateViewListenEnabled)
+	ON_COMMAND(ID_VIEW_LISTEN_PERMANENT, OnViewListenPermanent)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_LISTEN_PERMANENT, OnUpdateViewListenPermanent)
+	ON_COMMAND(ID_VIEW_LISTEN_ALL, OnViewListenAll)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_LISTEN_ALL, OnUpdateViewListenAll)
+	ON_COMMAND(ID_VIEW_LISTEN_NONE, OnViewListenNone)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_LISTEN_NONE, OnUpdateViewListenNone)
 	ON_COMMAND(ID_VIEW_SHOW_SOUND_CIRCLES, OnViewShowSoundCircles)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_SHOW_SOUND_CIRCLES, OnUpdateViewShowSoundCircles)
 
@@ -3573,6 +3628,13 @@ int WbView3d::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	m_showMapBoundaries = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowMapBoundaries", 0);
 	m_showWaveLines = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowWaveLines", 1);	// default ON
 	m_showAmbientSounds = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowAmbientSounds", 0);
+	// View > Listen To Map. Default OFF: playing a map's ambient sounds is opt-in, and it is the
+	// only thing that makes WB pump the audio engine at all (see OnTimer).
+	m_listenMode = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ListenToMap", WB_LISTEN_NONE);
+	if (m_listenMode < WB_LISTEN_NONE || m_listenMode > WB_LISTEN_ALL)
+	{
+		m_listenMode = WB_LISTEN_NONE;
+	}
 	m_showBaseRadius = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowBaseRadius", 1);
 	m_showSubDraw = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowSubDraw", 1);
 	// Default OFF: looping animations keep the viewport repainting every frame (see the
@@ -4832,6 +4894,17 @@ Real WbView3d::getCurrentZoom(void)
 // ----------------------------------------------------------------------------
 void WbView3d::OnTimer(UINT nIDEvent)
 {
+	// View > Listen To Map: the audio engine only starts/updates queued events inside
+	// TheAudio->update(), which WB otherwise never pumps. Gated on an active listen mode so a
+	// session with the feature off behaves exactly as before and never runs the engine's audio
+	// update at all. Deliberately ahead of the repaint throttle below -- audio needs a steady
+	// tick to keep 3D positions current, and it must not be tied to whether a frame is drawn.
+	if (m_listenMode != WB_LISTEN_NONE && TheAudio != NULL)
+	{
+		startListenSounds();	// no-ops once the map's sounds are already playing
+		TheAudio->update();
+	}
+
 	if (getLastDrawTime()+UPDATE_TIME >= ::GetTickCount())
 		return;		// throttle: at most one repaint per UPDATE_TIME
 
@@ -5771,6 +5844,182 @@ void WbView3d::OnViewShowAmbientSounds()
 void WbView3d::OnUpdateViewShowAmbientSounds(CCmdUI* pCmdUI)
 {
 	pCmdUI->SetCheck(m_showAmbientSounds ? 1 : 0);
+}
+
+// ----------------------------------------------------------------------------
+// View > Listen To Map
+//
+// Hands the map's ambient sounds to TheAudio as positional 3D events, so panning the camera
+// around the map sounds like the game does. WB inits TheAudio but never pumps it (see the
+// update call in OnTimer, which only runs while a listen mode is active), and the microphone
+// follows PlaceholderView, whose camera accessors are fed from setupCamera().
+//
+// Sounds are read straight off each MapObject's dict rather than going through Drawable/Object
+// like the game does -- WB has no Drawable for a map object, so Object::updateObjValuesFromMapObject
+// (the game's equivalent of this) is not reachable here.
+// ----------------------------------------------------------------------------
+Bool WbView3d::shouldListenToObject(MapObject *pMapObj) const
+{
+	if (pMapObj == NULL || m_listenMode == WB_LISTEN_NONE)
+	{
+		return false;
+	}
+	// Roads, bridges, waypoints and scorches never carry an ambient sound.
+	if (pMapObj->getFlags() & (FLAG_ROAD_FLAGS|FLAG_BRIDGE_FLAGS))
+	{
+		return false;
+	}
+
+	Bool exists = false;
+	AsciiString soundName = pMapObj->getProperties()->getAsciiString(TheKey_objectSoundAmbient, &exists);
+	if (!exists || soundName.isEmpty())
+	{
+		// No per-object override: fall back to the template's own ambient sound, which is what
+		// most props on a map actually use.
+		const ThingTemplate *tt = pMapObj->getThingTemplate();
+		if (tt == NULL)
+		{
+			return false;
+		}
+		const AudioEventRTS *tmplSound = tt->getSoundAmbient();
+		if (tmplSound == NULL || tmplSound->getEventName().isEmpty())
+		{
+			return false;
+		}
+		soundName = tmplSound->getEventName();
+	}
+
+	const AudioEventInfo *info = TheAudio->findAudioEventInfo(soundName);
+	if (info == NULL)
+	{
+		return false;
+	}
+
+	switch (m_listenMode)
+	{
+		case WB_LISTEN_ALL:
+			return true;
+
+		case WB_LISTEN_PERMANENT:
+			// "Permanent" == loops forever with no loop count, i.e. it never stops on its own.
+			return info->isPermanentSound();
+
+		case WB_LISTEN_ENABLED:
+		{
+			// The per-object "enabled" checkbox in Object Properties. Absent means the object
+			// never had its ambient sound customized, which the game treats as enabled.
+			Bool enabledExists = false;
+			Bool enabled = pMapObj->getProperties()->getBool(TheKey_objectSoundAmbientEnabled, &enabledExists);
+			return !enabledExists || enabled;
+		}
+	}
+	return false;
+}
+
+void WbView3d::startListenSounds(void)
+{
+	if (m_listenSoundsStarted || m_listenMode == WB_LISTEN_NONE || TheAudio == NULL)
+	{
+		return;
+	}
+
+	for (MapObject *pMapObj = MapObject::getFirstMapObject(); pMapObj; pMapObj = pMapObj->getNext())
+	{
+		if (!shouldListenToObject(pMapObj))
+		{
+			continue;
+		}
+
+		Bool exists = false;
+		AsciiString soundName = pMapObj->getProperties()->getAsciiString(TheKey_objectSoundAmbient, &exists);
+		if (!exists || soundName.isEmpty())
+		{
+			const ThingTemplate *tt = pMapObj->getThingTemplate();
+			if (tt == NULL)
+			{
+				continue;
+			}
+			const AudioEventRTS *tmplSound = tt->getSoundAmbient();
+			if (tmplSound == NULL)
+			{
+				continue;
+			}
+			soundName = tmplSound->getEventName();
+		}
+
+		AudioEventRTS event(soundName);
+		event.setPosition(pMapObj->getLocation());
+		TheAudio->addAudioEvent(&event);
+	}
+	m_listenSoundsStarted = true;
+}
+
+void WbView3d::stopListenSounds(void)
+{
+	if (TheAudio != NULL)
+	{
+		// Everything this feature starts is a world sound, so this leaves music/UI alone.
+		TheAudio->stopAudio(AudioAffect_Sound3D);
+	}
+	m_listenSoundsStarted = false;
+}
+
+void WbView3d::restartListenSounds(void)
+{
+	stopListenSounds();
+	startListenSounds();
+}
+
+// The four modes are a radio group: picking one replaces the current mode rather than toggling.
+static void wbSetListenMode(WbView3d *pView, Int *pMode, Int newMode)
+{
+	if (*pMode == newMode)
+	{
+		return;
+	}
+	*pMode = newMode;
+	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "ListenToMap", newMode);
+	pView->restartListenSounds();
+}
+
+void WbView3d::OnViewListenEnabled()
+{
+	wbSetListenMode(this, &m_listenMode, WB_LISTEN_ENABLED);
+}
+
+void WbView3d::OnUpdateViewListenEnabled(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetRadio(m_listenMode == WB_LISTEN_ENABLED ? 1 : 0);
+}
+
+void WbView3d::OnViewListenPermanent()
+{
+	wbSetListenMode(this, &m_listenMode, WB_LISTEN_PERMANENT);
+}
+
+void WbView3d::OnUpdateViewListenPermanent(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetRadio(m_listenMode == WB_LISTEN_PERMANENT ? 1 : 0);
+}
+
+void WbView3d::OnViewListenAll()
+{
+	wbSetListenMode(this, &m_listenMode, WB_LISTEN_ALL);
+}
+
+void WbView3d::OnUpdateViewListenAll(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetRadio(m_listenMode == WB_LISTEN_ALL ? 1 : 0);
+}
+
+void WbView3d::OnViewListenNone()
+{
+	wbSetListenMode(this, &m_listenMode, WB_LISTEN_NONE);
+}
+
+void WbView3d::OnUpdateViewListenNone(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetRadio(m_listenMode == WB_LISTEN_NONE ? 1 : 0);
 }
 
 void WbView3d::OnViewShowBaseRadius() {

@@ -64,6 +64,16 @@ struct ID3DXFont;
 /////////////////////////////////////////////////////////////////////////////
 // WbView3d view
 
+// View > Listen To Map: which of the map's ambient sounds to actually play. Mirrors the
+// original WorldBuilder's four-way radio group.
+enum
+{
+	WB_LISTEN_NONE = 0,			///< don't play any ambient sounds (default)
+	WB_LISTEN_ENABLED,			///< only sounds whose object has the ambient-sound "enabled" box ticked
+	WB_LISTEN_PERMANENT,		///< only permanent sounds (looping with no loop count -- they never stop on their own)
+	WB_LISTEN_ALL				///< every ambient sound on the map
+};
+
 class WbView3d : public WbView, public DX8_CleanupHook
 {
 protected:
@@ -145,6 +155,14 @@ protected:
 	afx_msg void OnUpdateViewShowModels(CCmdUI* pCmdUI);
 	afx_msg void OnViewAnimateModels();
 	afx_msg void OnUpdateViewAnimateModels(CCmdUI* pCmdUI);
+	afx_msg void OnViewListenEnabled();
+	afx_msg void OnUpdateViewListenEnabled(CCmdUI* pCmdUI);
+	afx_msg void OnViewListenPermanent();
+	afx_msg void OnUpdateViewListenPermanent(CCmdUI* pCmdUI);
+	afx_msg void OnViewListenAll();
+	afx_msg void OnUpdateViewListenAll(CCmdUI* pCmdUI);
+	afx_msg void OnViewListenNone();
+	afx_msg void OnUpdateViewListenNone(CCmdUI* pCmdUI);
 	afx_msg void OnViewBoundingBoxes();
 	afx_msg void OnUpdateViewBoundingBoxes(CCmdUI* pCmdUI);
 	afx_msg void OnViewSightRanges();
@@ -331,6 +349,8 @@ private:
 	Bool										m_showMapBoundaries;	///< Flag whether to show all the map boundaries or not
 	Bool										m_showWaveLines;	///< Flag whether to draw wave start->end overlay lines
 	Bool										m_showAmbientSounds;	///< Flag whether to show all the ambient sounds or not
+	Int											m_listenMode;			///< View > Listen To Map: which ambient sounds to play (WB_LISTEN_*)
+	Bool										m_listenSoundsStarted;	///< true once the current map's ambient sounds have been handed to TheAudio
   Bool										m_showSoundCircles;	///< Flag whether to show the minimum and maximum radii of the ambient sounds attached to the selected object
 	Bool										m_showBoundingBoxes;
 	Bool										m_showSightRanges;
@@ -532,6 +552,16 @@ public:
 
 	Bool getShowMapBoundaryFeedback(void) const { return m_showMapBoundaries; }
 	Bool getShowAmbientSoundsFeedback(void) const { return m_showAmbientSounds; }
+
+	/// View > Listen To Map. Stopping and (re)starting the map's ambient sounds; call
+	/// restartListenSounds() whenever the set of ambient sounds may have changed (map opened,
+	/// objects added/removed/edited) so the playing set stays in sync with the map.
+	void restartListenSounds(void);
+	void stopListenSounds(void);
+private:
+	void startListenSounds(void);
+	Bool shouldListenToObject(MapObject *pMapObj) const;
+public:
 
 	Bool getShowGridFeedback(void) const { return m_showRulerGrid; }
 	Bool getShowTracingOverlay(void) const { return m_showTracingOverlay; }
