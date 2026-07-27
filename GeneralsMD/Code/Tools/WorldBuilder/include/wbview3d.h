@@ -40,8 +40,11 @@
 #include "Common/GameType.h"
 #include "Common/GlobalData.h"
 #include "Common/ModelState.h"
+#include "Common/GameAudio.h"		// AudioHandle, for the Listen To Map handle map
 #include "dx8wrapper.h"
 #include "WBFontAtlas.h"
+
+#include <map>
 
 //#include "GameLogic/Module/BodyModule.h" -- Yikes... not necessary to include this! (KM)
 enum BodyDamageType; //Ahhhh much better!
@@ -350,7 +353,8 @@ private:
 	Bool										m_showWaveLines;	///< Flag whether to draw wave start->end overlay lines
 	Bool										m_showAmbientSounds;	///< Flag whether to show all the ambient sounds or not
 	Int											m_listenMode;			///< View > Listen To Map: which ambient sounds to play (WB_LISTEN_*)
-	Bool										m_listenSoundsStarted;	///< true once the current map's ambient sounds have been handed to TheAudio
+	UnsignedInt								m_lastListenSweepTime;	///< GetTickCount of the last re-submit sweep (see startListenSounds)
+	std::map<MapObject *, AudioHandle>		m_listenHandles;		///< the live audio handle per sounding object
   Bool										m_showSoundCircles;	///< Flag whether to show the minimum and maximum radii of the ambient sounds attached to the selected object
 	Bool										m_showBoundingBoxes;
 	Bool										m_showSightRanges;
@@ -558,9 +562,14 @@ public:
 	/// objects added/removed/edited) so the playing set stays in sync with the map.
 	void restartListenSounds(void);
 	void stopListenSounds(void);
+	/// Drop a going-away object's tracked sound, so the handle map cannot outlive its key.
+	void forgetListenSound(MapObject *pMapObj);
 private:
 	void startListenSounds(void);
-	Bool shouldListenToObject(MapObject *pMapObj) const;
+	/// The object's ambient sound (own dict override, else its template's). Empty == none.
+	AsciiString getAmbientSoundName(MapObject *pMapObj) const;
+	/// outSoundName (optional) receives the sound to play when this returns true.
+	Bool shouldListenToObject(MapObject *pMapObj, AsciiString *outSoundName = NULL) const;
 public:
 
 	Bool getShowGridFeedback(void) const { return m_showRulerGrid; }

@@ -107,6 +107,7 @@ extern "C" int WBQtObject_GetRenderParticles(void);
 #include "Common/AudioEventRTS.h"
 #include "Common/AudioEventInfo.h"
 #include "Common/AudioAffect.h"
+#include "Common/AudioHandleSpecialValues.h"	// AHSV_NoSound
 #include "GlobalLightOptions.h"
 #include "LayersList.h"
 #ifdef RTS_HAS_QT
@@ -660,7 +661,7 @@ WbView3d::WbView3d() :
 	m_haveGdiPaintKey(false),
 	m_needToLoadRoads(0),
 	m_listenMode(WB_LISTEN_NONE),
-	m_listenSoundsStarted(false),
+	m_lastListenSweepTime(0),
 	m_timer(NULL),
 	m_drawObject(NULL),
 	m_layer(NULL),
@@ -2233,6 +2234,9 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 	if (!found && pMapObjIn) {
 		// The object is gone from the list (deleted/moved) -- drop any live emitters it had.
 		WBParticleRuntime::destroyEmittersForObject(pMapObjIn);
+		// Same for its Listen To Map sound: the handle map is keyed by MapObject*, so an entry
+		// for a deleted object would outlive the object it names.
+		forgetListenSound(pMapObjIn);
 	}
 	if (!found && pMapObjIn && pMapObjIn->getRenderObj()) {
 		if( m_showShadows ) {
@@ -5858,7 +5862,32 @@ void WbView3d::OnUpdateViewShowAmbientSounds(CCmdUI* pCmdUI)
 // like the game does -- WB has no Drawable for a map object, so Object::updateObjValuesFromMapObject
 // (the game's equivalent of this) is not reachable here.
 // ----------------------------------------------------------------------------
-Bool WbView3d::shouldListenToObject(MapObject *pMapObj) const
+// The object's ambient sound: its own dict override if it has one, else the sound its
+// ThingTemplate declares (what most props on a map actually use). Empty == no ambient sound.
+AsciiString WbView3d::getAmbientSoundName(MapObject *pMapObj) const
+{
+	Bool exists = false;
+	AsciiString soundName = pMapObj->getProperties()->getAsciiString(TheKey_objectSoundAmbient, &exists);
+	if (exists && !soundName.isEmpty())
+	{
+		return soundName;
+	}
+	const ThingTemplate *tt = pMapObj->getThingTemplate();
+	if (tt == NULL)
+	{
+		return AsciiString::TheEmptyString;
+	}
+	const AudioEventRTS *tmplSound = tt->getSoundAmbient();
+	if (tmplSound == NULL)
+	{
+		return AsciiString::TheEmptyString;
+	}
+	return tmplSound->getEventName();
+}
+
+// Fills outSoundName with the sound to play when it returns true, so the caller does not have to
+// resolve it a second time.
+Bool WbView3d::shouldListenToObject(MapObject *pMapObj, AsciiString *outSoundName) const
 {
 	if (pMapObj == NULL || m_listenMode == WB_LISTEN_NONE)
 	{
@@ -5870,29 +5899,20 @@ Bool WbView3d::shouldListenToObject(MapObject *pMapObj) const
 		return false;
 	}
 
-	Bool exists = false;
-	AsciiString soundName = pMapObj->getProperties()->getAsciiString(TheKey_objectSoundAmbient, &exists);
-	if (!exists || soundName.isEmpty())
+	AsciiString soundName = getAmbientSoundName(pMapObj);
+	if (soundName.isEmpty())
 	{
-		// No per-object override: fall back to the template's own ambient sound, which is what
-		// most props on a map actually use.
-		const ThingTemplate *tt = pMapObj->getThingTemplate();
-		if (tt == NULL)
-		{
-			return false;
-		}
-		const AudioEventRTS *tmplSound = tt->getSoundAmbient();
-		if (tmplSound == NULL || tmplSound->getEventName().isEmpty())
-		{
-			return false;
-		}
-		soundName = tmplSound->getEventName();
+		return false;
 	}
 
 	const AudioEventInfo *info = TheAudio->findAudioEventInfo(soundName);
 	if (info == NULL)
 	{
 		return false;
+	}
+	if (outSoundName != NULL)
+	{
+		*outSoundName = soundName;
 	}
 
 	switch (m_listenMode)
@@ -5916,42 +5936,68 @@ Bool WbView3d::shouldListenToObject(MapObject *pMapObj) const
 	return false;
 }
 
+// How often the sweep below re-checks the map. Sounds are submitted once and the engine drops
+// any that are out of earshot AT THAT MOMENT (SoundManager::canPlayNow culls on distance), so
+// without a periodic re-check a sound you panned away from never comes back when you pan to it
+// again. The game has no such problem because a Drawable re-starts its own ambient sound; WB has
+// no Drawable, so this sweep plays that role.
+#define LISTEN_SWEEP_INTERVAL_MS 1000
+
 void WbView3d::startListenSounds(void)
 {
-	if (m_listenSoundsStarted || m_listenMode == WB_LISTEN_NONE || TheAudio == NULL)
+	if (m_listenMode == WB_LISTEN_NONE || TheAudio == NULL)
 	{
 		return;
 	}
 
+	// Rate-limited: this walks every map object, and re-checking at frame rate would be wasteful
+	// (and pointless -- the listener cannot move far in 16ms). A zero timestamp means no sweep
+	// has run yet (fresh view, or stopListenSounds reset it), so the first one runs immediately.
+	const UnsignedInt now = ::GetTickCount();
+	if (m_lastListenSweepTime != 0 && (now - m_lastListenSweepTime) < LISTEN_SWEEP_INTERVAL_MS)
+	{
+		return;
+	}
+	m_lastListenSweepTime = now;
+
 	for (MapObject *pMapObj = MapObject::getFirstMapObject(); pMapObj; pMapObj = pMapObj->getNext())
 	{
-		if (!shouldListenToObject(pMapObj))
+		AsciiString soundName;
+		if (!shouldListenToObject(pMapObj, &soundName))
 		{
 			continue;
 		}
 
-		Bool exists = false;
-		AsciiString soundName = pMapObj->getProperties()->getAsciiString(TheKey_objectSoundAmbient, &exists);
-		if (!exists || soundName.isEmpty())
+		// Already audible? Leave it alone -- addAudioEvent does NOT dedupe, so re-submitting a
+		// playing sound would stack a second voice on it every sweep. Anything else (it walked
+		// out of earshot, or a one-shot finished) drops its stale handle and starts again;
+		// erase by key is a no-op when there is nothing to forget.
+		std::map<MapObject *, AudioHandle>::iterator known = m_listenHandles.find(pMapObj);
+		if (known != m_listenHandles.end() && TheAudio->isCurrentlyPlaying(known->second))
 		{
-			const ThingTemplate *tt = pMapObj->getThingTemplate();
-			if (tt == NULL)
-			{
-				continue;
-			}
-			const AudioEventRTS *tmplSound = tt->getSoundAmbient();
-			if (tmplSound == NULL)
-			{
-				continue;
-			}
-			soundName = tmplSound->getEventName();
+			continue;
 		}
+		m_listenHandles.erase(pMapObj);
 
 		AudioEventRTS event(soundName);
 		event.setPosition(pMapObj->getLocation());
-		TheAudio->addAudioEvent(&event);
+		AudioHandle h = TheAudio->addAudioEvent(&event);
+		if (h != AHSV_NoSound)
+		{
+			m_listenHandles[pMapObj] = h;
+		}
 	}
-	m_listenSoundsStarted = true;
+}
+
+// An object is going away (deleted, or moved out of the list): forget its sound so the handle
+// map never holds a pointer to a dead MapObject. Its voice is left to finish on its own -- the
+// engine owns it, and ambient sounds are short or looping-and-distance-culled.
+void WbView3d::forgetListenSound(MapObject *pMapObj)
+{
+	if (!m_listenHandles.empty())
+	{
+		m_listenHandles.erase(pMapObj);
+	}
 }
 
 void WbView3d::stopListenSounds(void)
@@ -5961,7 +6007,10 @@ void WbView3d::stopListenSounds(void)
 		// Everything this feature starts is a world sound, so this leaves music/UI alone.
 		TheAudio->stopAudio(AudioAffect_Sound3D);
 	}
-	m_listenSoundsStarted = false;
+	// The handles are dead now; keeping them would make the next sweep think everything is still
+	// playing and start nothing. Also drops pointers to objects a map reload is about to free.
+	m_listenHandles.clear();
+	m_lastListenSweepTime = 0;
 }
 
 void WbView3d::restartListenSounds(void)
