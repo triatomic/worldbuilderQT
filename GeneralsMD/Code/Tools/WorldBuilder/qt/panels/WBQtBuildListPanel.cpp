@@ -3,12 +3,16 @@
 #include "ui_WBQtBuildListPanel.h"
 #include "WBQtComboStyle.h"
 #include "WBQtPanelBridge.h"
+#include "WBQtPickUnitBridge.h"		// the shared "replaced missing" report
 
+#include <QBrush>
 #include <QCheckBox>
+#include <QColor>
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMessageBox>
 #include <QProgressBar>
 #include <QPushButton>
 
@@ -60,6 +64,7 @@ WBQtBuildListPanel::WBQtBuildListPanel(QWidget *owner)
 	connect(m_delete, SIGNAL(clicked()), this, SLOT(onDelete()));
 	connect(m_export, SIGNAL(clicked()), this, SLOT(onExport()));
 	connect(m_import, SIGNAL(clicked()), this, SLOT(onImport()));
+	connect(m_ui->fixMissingBtn, SIGNAL(clicked()), this, SLOT(onFixMissing()));
 	connect(m_angle, SIGNAL(valueChanged(double)), this, SLOT(onAngleChanged(double)));
 	connect(m_z, SIGNAL(valueChanged(double)), this, SLOT(onZChanged(double)));
 	connect(m_alreadyBuilt, SIGNAL(clicked()), this, SLOT(onAlreadyBuiltToggled()));
@@ -119,13 +124,24 @@ void WBQtBuildListPanel::refresh()
 	{
 		if (WBQtBuildList_GetBuildName(i, buf, cap))
 		{
-			m_buildList->addItem(QString::fromLatin1(buf));
+			QListWidgetItem *item = new QListWidgetItem(QString::fromLatin1(buf), m_buildList);
+			// An entry whose building no longer exists reads exactly like a working one, so mark
+			// it: red text (== the script tree's warning colour) and a tooltip saying why.
+			if (WBQtBuildList_GetBuildMissing(i) != 0)
+			{
+				item->setForeground(QBrush(QColor(200, 60, 60)));
+				item->setToolTip(tr("This building no longer exists and will not be built. "
+					"Use Fix Missing to replace it."));
+			}
 		}
 		else
 		{
 			m_buildList->addItem(QString());
 		}
 	}
+	// Greyed out when every entry resolves, so the button also says whether anything is wrong on
+	// a side you have not looked at.
+	m_ui->fixMissingBtn->setEnabled(WBQtBuildList_HasMissingBuildings() != 0);
 	int curBuild = WBQtBuildList_GetCurBuild();
 	if (curBuild >= 0 && curBuild < m_buildList->count())
 	{
@@ -241,6 +257,23 @@ void WBQtBuildListPanel::onExport()
 void WBQtBuildListPanel::onImport()
 {
 	WBQtBuildList_Import();
+	refresh();
+}
+
+// Replace every build list entry whose building no longer exists with its closest existing
+// template, across every side, then show the shared replace report so the guesses can be reviewed
+// and corrected. Each entry keeps its position, angle, rebuild count and flags -- only the
+// template name changes.
+void WBQtBuildListPanel::onFixMissing()
+{
+	const int found = WBQtBuildList_ReplaceMissingBuildings();
+	if (found == 0)
+	{
+		QMessageBox::information(this, tr("Fix Missing"),
+			tr("No missing buildings were found in the build lists."));
+		return;
+	}
+	WBQtReplaceReport_Run(NULL);
 	refresh();
 }
 

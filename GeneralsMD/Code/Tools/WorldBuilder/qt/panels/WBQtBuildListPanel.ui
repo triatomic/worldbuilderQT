@@ -97,6 +97,16 @@
          </widget>
         </item>
         <item>
+         <widget class="QPushButton" name="fixMissingBtn">
+          <property name="text">
+           <string>Fix Missing</string>
+          </property>
+          <property name="toolTip">
+           <string>Replace every build list entry whose building no longer exists with its closest name match, keeping its position and settings.</string>
+          </property>
+         </widget>
+        </item>
+        <item>
          <spacer name="ioSpacer">
           <property name="orientation">
            <enum>Qt::Horizontal</enum>

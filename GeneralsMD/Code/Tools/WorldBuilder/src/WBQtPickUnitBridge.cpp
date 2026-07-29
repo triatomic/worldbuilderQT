@@ -263,6 +263,19 @@ extern "C" void WBQtReplaceReport_SetReplacement(int i, const char *replacementN
 		return;
 	}
 
+	if (s_qtReplaceSource == WBQT_REPLACE_SOURCE_BUILDLIST)
+	{
+		// Build-list rows: rewrite the entries' template names, leaving each entry's position,
+		// angle, rebuild count and flags untouched. Empty puts the original missing name back.
+		const AsciiString from = wbRowActiveName(s_qtReplaceRows[i]);
+		const AsciiString to = newName.isEmpty() ? s_qtReplaceRows[i].m_missing : newName;
+		if (from != to)
+		{
+			WBQtBuildList_ReplaceBuildingName(from.str(), to.str());
+		}
+		s_qtReplaceRows[i].m_current = newName;
+		return;
+	}
 	if (s_qtReplaceSource == WBQT_REPLACE_SOURCE_TEAMS)
 	{
 		// Team rows: rewrite the team templates' unit-type slots. An empty replacement puts the

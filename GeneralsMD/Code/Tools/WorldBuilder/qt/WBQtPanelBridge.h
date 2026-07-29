@@ -75,6 +75,16 @@ int  WBQtBuildList_GetCurSide(void);
 void WBQtBuildList_SetCurSide(int i);
 int  WBQtBuildList_GetBuildCount(void);
 int  WBQtBuildList_GetBuildName(int i, char *out, int cap);
+// 1 when entry i names a template that no longer exists (the panel marks it).
+int  WBQtBuildList_GetBuildMissing(int i);
+// 1 when any side's build list holds such an entry, i.e. the fix button has work to do.
+int  WBQtBuildList_HasMissingBuildings(void);
+// Replace every missing build-list entry across all sides by closest name match, preserving each
+// entry's position/angle/rebuilds, and fill the shared replace report. Returns the number of
+// distinct missing names (0 == nothing to fix, no report to show).
+int  WBQtBuildList_ReplaceMissingBuildings(void);
+// Rewrite every entry naming `from` to `to`; returns the entries changed (the report's edits).
+int  WBQtBuildList_ReplaceBuildingName(const char *from, const char *to);
 int  WBQtBuildList_GetCurBuild(void);
 void WBQtBuildList_SetCurBuild(int i);
 // Re-point the current building without pushing a panel refresh; use before writing an attribute

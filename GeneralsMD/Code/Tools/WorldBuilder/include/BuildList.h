@@ -114,6 +114,19 @@ public:
 	static void qtSetCurSide(int i);
 	static int  qtGetBuildCount(void);
 	static int  qtGetBuildName(int i, char *out, int cap);
+	// 1 when entry i names a template TheThingFactory can't resolve (the map still records the
+	// name, but nothing will be built). Drives the panel's "missing" styling.
+	static int  qtGetBuildMissing(int i);
+	// 1 when ANY side's build list holds an unresolvable entry, i.e. the fix button has work.
+	static int  qtHasMissingBuildings(void);
+	// Replace every unresolvable build-list entry, across all sides, with its closest existing
+	// template by name match, filling the shared replace report. Position/angle/rebuilds and the
+	// rest of each entry are preserved -- only the template name changes. Returns the number of
+	// distinct missing names found (0 == nothing to do, no report).
+	static int  qtReplaceMissingBuildings(void);
+	// Rewrite every build-list entry naming `from` to `to`; returns the entries changed. Used by
+	// the report when a guess is corrected.
+	static int  qtReplaceBuildingName(const char *from, const char *to);
 	static int  qtGetCurBuild(void);
 	static void qtSetCurBuild(int i);
 	// As qtSetCurBuild, but without running OnSelchangeBuildList (which pushes a full panel

@@ -42,6 +42,7 @@ private slots:
 	void onDelete();
 	void onExport();
 	void onImport();
+	void onFixMissing();
 	void onAngleChanged(double v);
 	void onZChanged(double v);
 	void onAlreadyBuiltToggled();

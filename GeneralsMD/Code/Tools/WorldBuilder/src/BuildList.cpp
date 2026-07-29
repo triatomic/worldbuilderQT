@@ -27,7 +27,9 @@
 #include "BaseBuildProps.h"
 #ifdef RTS_HAS_QT
 #include "qt/panels/WBQtMiscModalsBridge.h"
+#include "qt/panels/WBQtPickUnitBridge.h"	// the name matcher + the shared replace report
 #endif
+#include <vector>
 #include "CUndoable.h"
 #include "PointerTool.h"
 #include "WHeightMapEdit.h"
@@ -1079,6 +1081,192 @@ int BuildList::qtGetBuildName(int i, char *out, int cap)
 	if (p == NULL) { return 0; }
 	qtCopyStr(out, cap, p->getTemplateName().str());
 	return 1;
+}
+
+//----------------------------------------------------------------------------------------
+// Missing build-list entries.
+//
+// A build list entry stores a template NAME; nothing validates it on load, so an entry whose
+// template is gone just sits in the list looking like any other. These flag those entries for
+// the panel and apply the shared name-matcher over them, the same pass the map objects, the
+// scripts and the team templates already have.
+//----------------------------------------------------------------------------------------
+namespace {
+	// An entry is missing when its name names no template. An EMPTY name is not "missing" --
+	// there is nothing to match it to and it was never a real entry.
+	Bool qtBuildIsMissing(BuildListInfo *p)
+	{
+		if (p == NULL)
+		{
+			return false;
+		}
+		AsciiString name = p->getTemplateName();
+		if (name.isEmpty())
+		{
+			return false;
+		}
+		return TheThingFactory->findTemplate(name) == NULL;
+	}
+}
+
+int BuildList::qtGetBuildMissing(int i)
+{
+	return qtBuildIsMissing(qtBuildAt(qtGetCurSide(), i)) ? 1 : 0;
+}
+
+int BuildList::qtHasMissingBuildings(void)
+{
+	if (TheSidesList == NULL)
+	{
+		return 0;
+	}
+	for (Int s = 0; s < TheSidesList->getNumSides(); s++)
+	{
+		for (BuildListInfo *p = TheSidesList->getSideInfo(s)->getBuildList(); p; p = p->getNext())
+		{
+			if (qtBuildIsMissing(p))
+			{
+				return 1;
+			}
+		}
+	}
+	return 0;
+}
+
+int BuildList::qtReplaceBuildingName(const char *from, const char *to)
+{
+	if (TheSidesList == NULL || from == NULL || to == NULL || from[0] == 0)
+	{
+		return 0;
+	}
+	const AsciiString wanted(from);
+	const AsciiString replacement(to);
+	if (wanted == replacement)
+	{
+		return 0;
+	}
+
+	// Mutate a COPY and commit it as one undoable (== addBuilding / the reorder handlers): the
+	// live TheSidesList is only replaced when the undoable is applied.
+	SidesList sides;
+	sides = *TheSidesList;
+
+	int hits = 0;
+	for (Int s = 0; s < sides.getNumSides(); s++)
+	{
+		for (BuildListInfo *p = sides.getSideInfo(s)->getBuildList(); p; p = p->getNext())
+		{
+			if (p->getTemplateName() == wanted)
+			{
+				// Only the name changes -- location, angle, rebuilds, already-built and the rest
+				// of the entry are left exactly as they were.
+				p->setTemplateName(replacement);
+				++hits;
+			}
+		}
+	}
+	if (hits == 0)
+	{
+		return 0;
+	}
+
+	CWorldBuilderDoc *pDoc = CWorldBuilderDoc::GetActiveDoc();
+	if (pDoc != NULL)
+	{
+		SidesListUndoable *pUndo = new SidesListUndoable(sides, pDoc);
+		pDoc->AddAndDoUndoable(pUndo);
+		REF_PTR_RELEASE(pUndo);		// belongs to pDoc now
+	}
+	if (m_staticThis != NULL)
+	{
+		m_staticThis->updateCurSide();
+	}
+	return hits;
+}
+
+int BuildList::qtReplaceMissingBuildings(void)
+{
+#ifndef RTS_HAS_QT
+	return 0;	// the matcher and the report are Qt-side
+#else
+	if (TheSidesList == NULL)
+	{
+		return 0;
+	}
+
+	// The distinct unresolvable names, across every side.
+	std::vector<AsciiString> missing;
+	for (Int s = 0; s < TheSidesList->getNumSides(); s++)
+	{
+		for (BuildListInfo *p = TheSidesList->getSideInfo(s)->getBuildList(); p; p = p->getNext())
+		{
+			if (!qtBuildIsMissing(p))
+			{
+				continue;
+			}
+			AsciiString name = p->getTemplateName();
+			Bool seen = false;
+			for (size_t k = 0; k < missing.size(); k++)
+			{
+				if (missing[k] == name)
+				{
+					seen = true;
+					break;
+				}
+			}
+			if (!seen)
+			{
+				missing.push_back(name);
+			}
+		}
+	}
+	if (missing.empty())
+	{
+		return 0;
+	}
+
+	// Match every name before touching anything, so an all-unmatched pass leaves the build lists
+	// and the undo stack alone (== the script and team passes).
+	std::vector<AsciiString> picks;
+	picks.resize(missing.size());
+	for (size_t i = 0; i < missing.size(); i++)
+	{
+		char picked[256];
+		picked[0] = 0;
+		if (WBQtReplaceUnit_BestMatch(missing[i].str(), NULL, 0, 0, picked, sizeof(picked)) != 0)
+		{
+			picks[i] = picked;
+		}
+	}
+
+	WBQtReplaceReport_Begin(WBQT_REPLACE_SOURCE_BUILDLIST);
+	for (size_t i = 0; i < missing.size(); i++)
+	{
+		int hits = 0;
+		if (!picks[i].isEmpty())
+		{
+			hits = qtReplaceBuildingName(missing[i].str(), picks[i].str());
+		}
+		else
+		{
+			// Unmatched names still get a row (with their entry count) so they can be fixed by
+			// hand rather than staying silently broken.
+			hits = 0;
+			for (Int s = 0; s < TheSidesList->getNumSides(); s++)
+			{
+				for (BuildListInfo *p = TheSidesList->getSideInfo(s)->getBuildList(); p; p = p->getNext())
+				{
+					if (p->getTemplateName() == missing[i])
+					{
+						++hits;
+					}
+				}
+			}
+		}
+		WBQtReplaceReport_Add(missing[i].str(), picks[i].str(), hits);
+	}
+	return (int)missing.size();
+#endif
 }
 
 int  BuildList::qtGetCurBuild(void) { return m_staticThis ? m_staticThis->m_curBuildList : -1; }

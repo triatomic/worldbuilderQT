@@ -60,6 +60,7 @@ void WBQtReplaceReport_Run(void *frameHwnd);
 #define WBQT_REPLACE_SOURCE_MAPOBJECTS	0
 #define WBQT_REPLACE_SOURCE_SCRIPTS		1
 #define WBQT_REPLACE_SOURCE_TEAMS		2
+#define WBQT_REPLACE_SOURCE_BUILDLIST	3
 
 // Start a batch: drop all rows and fix what this batch's rows describe. One source per batch --
 // taking it as an argument here means the two cannot be set out of order.

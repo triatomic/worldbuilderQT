@@ -17,6 +17,11 @@ int  WBQtBuildList_GetCurSide(void)                { return BuildList::qtGetCurS
 void WBQtBuildList_SetCurSide(int i)               { BuildList::qtSetCurSide(i); }
 int  WBQtBuildList_GetBuildCount(void)             { return BuildList::qtGetBuildCount(); }
 int  WBQtBuildList_GetBuildName(int i, char *o, int c){ return BuildList::qtGetBuildName(i, o, c); }
+int  WBQtBuildList_GetBuildMissing(int i)          { return BuildList::qtGetBuildMissing(i); }
+int  WBQtBuildList_HasMissingBuildings(void)       { return BuildList::qtHasMissingBuildings(); }
+int  WBQtBuildList_ReplaceMissingBuildings(void)   { return BuildList::qtReplaceMissingBuildings(); }
+int  WBQtBuildList_ReplaceBuildingName(const char *f, const char *t)
+                                                   { return BuildList::qtReplaceBuildingName(f, t); }
 int  WBQtBuildList_GetCurBuild(void)               { return BuildList::qtGetCurBuild(); }
 void WBQtBuildList_SetCurBuild(int i)              { BuildList::qtSetCurBuild(i); }
 void WBQtBuildList_SetCurBuildNoRefresh(int i)     { BuildList::qtSetCurBuildNoRefresh(i); }

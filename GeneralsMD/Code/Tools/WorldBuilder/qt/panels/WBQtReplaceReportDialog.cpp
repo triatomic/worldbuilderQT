@@ -37,6 +37,15 @@ WBQtReplaceReportDialog::WBQtReplaceReportDialog(QWidget *parent)
 		m_ui->rowTree->headerItem()->setText(kColMissing, tr("Missing object type"));
 		m_ui->rowTree->headerItem()->setText(kColObjects, tr("Uses"));
 	}
+	else if (WBQtReplaceReport_GetSource() == WBQT_REPLACE_SOURCE_BUILDLIST)
+	{
+		setWindowTitle(tr("Replaced Missing Buildings"));
+		m_ui->introLabel->setText(tr("Each missing building in the build lists was replaced with "
+			"its closest name match, keeping its position and settings. Change a replacement if "
+			"the guess is wrong."));
+		m_ui->rowTree->headerItem()->setText(kColMissing, tr("Missing building"));
+		m_ui->rowTree->headerItem()->setText(kColObjects, tr("Entries"));
+	}
 	else if (WBQtReplaceReport_GetSource() == WBQT_REPLACE_SOURCE_TEAMS)
 	{
 		setWindowTitle(tr("Replaced Missing Team Units"));
@@ -128,6 +137,10 @@ void WBQtReplaceReportDialog::refreshSummary()
 	else if (WBQtReplaceReport_GetSource() == WBQT_REPLACE_SOURCE_TEAMS)
 	{
 		text = tr("%1 missing unit type(s)").arg(count);
+	}
+	else if (WBQtReplaceReport_GetSource() == WBQT_REPLACE_SOURCE_BUILDLIST)
+	{
+		text = tr("%1 missing building(s)").arg(count);
 	}
 	else
 	{
