@@ -27,6 +27,8 @@
 #include "CUndoable.h"
 #include "DrawObject.h"
 #include "MainFrm.h"
+#include "mapobjectprops.h"		// getSingleSelectedObject, for the activate re-sync
+#include "ObjectOptions.h"
 #include "wbview3d.h"
 #include "WHeightMapEdit.h"
 #include "WorldBuilderDoc.h"
@@ -172,6 +174,18 @@ void ObjectTool::activate()
 {
 	CMainFrame::GetMainFrame()->showOptionsDialog(IDD_OBJECT_OPTIONS);
 	DrawObject::setDoBrushFeedback(false);
+
+	// Re-sync the tree to whatever is already selected. Selecting in the viewport calls
+	// ObjectOptions::selectObject, but that is a no-op while this panel does not exist yet
+	// (m_staticThis is NULL), which is exactly the case when the object tool has not been
+	// activated -- so without this the first click on the tool showed no selection and only
+	// a second one did.
+	MapObject *theObj = MapObjectProps::getSingleSelectedObject();
+	if (theObj != NULL)
+	{
+		ObjectOptions::selectObject(theObj);
+	}
+
 	CWorldBuilderDoc *pDoc = CWorldBuilderDoc::GetActiveDoc();
 	if (pDoc==NULL) return;
 	WbView3d *p3View = pDoc->GetActive3DView();
