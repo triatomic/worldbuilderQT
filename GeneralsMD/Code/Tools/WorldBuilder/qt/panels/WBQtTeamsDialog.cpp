@@ -6,10 +6,12 @@
 #include "ui_WBQtTeamsDialog.h"
 #include "WBQtTeamsBridge.h"
 #include "WBQtTeamSheetDialog.h"
+#include "WBQtPickUnitBridge.h"		// the shared "replaced missing" report
 #include "../WBQtWindowPos.h"
 
 #include <QHeaderView>
 #include <QListWidget>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QTreeWidget>
 
@@ -27,7 +29,8 @@ namespace
 WBQtTeamsDialog::WBQtTeamsDialog(QWidget *parent)
 	: QDialog(parent),
 	m_ui(new Ui::WBQtTeamsDialog),
-	m_updating(false)
+	m_updating(false),
+	m_hasMissingUnits(false)
 {
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
@@ -59,6 +62,7 @@ WBQtTeamsDialog::WBQtTeamsDialog(QWidget *parent)
 	connect(m_moveDownButton, SIGNAL(clicked()), this, SLOT(onMoveDownTeam()));
 	connect(m_ui->exportButton, SIGNAL(clicked()), this, SLOT(onExportTeams()));
 	connect(m_ui->importButton, SIGNAL(clicked()), this, SLOT(onImportTeams()));
+	connect(m_ui->fixMissingButton, SIGNAL(clicked()), this, SLOT(onFixMissingUnits()));
 	connect(m_ui->okButton, SIGNAL(clicked()), this, SLOT(accept()));
 	connect(m_ui->cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
 
@@ -76,7 +80,16 @@ void WBQtTeamsDialog::refreshAll()
 {
 	refreshPlayers();
 	refreshTeamsTable();
+	refreshMissingUnits();
 	refreshButtons();
+}
+
+// Re-scan the team templates for unit types with no matching template. Only called from
+// refreshAll (i.e. after an action that could have changed a slot), never from the
+// selection-change handlers -- see the note in refreshButtons.
+void WBQtTeamsDialog::refreshMissingUnits()
+{
+	m_hasMissingUnits = (WBQtTeamsData_HasMissingUnits() != 0);
 }
 
 void WBQtTeamsDialog::refreshPlayers()
@@ -141,6 +154,10 @@ void WBQtTeamsDialog::refreshButtons()
 	m_deleteButton->setEnabled(WBQtTeamsData_GetDeleteEnabled() != 0);
 	m_moveUpButton->setEnabled(WBQtTeamsData_GetMoveEnabled() != 0);
 	m_moveDownButton->setEnabled(WBQtTeamsData_GetMoveEnabled() != 0);
+	// NOT re-scanned here: refreshButtons runs on every player/team click, and the scan is
+	// teams x 7 slots x a findTemplate lookup. refreshMissingUnits() re-runs it only after
+	// something could have changed the slots.
+	m_ui->fixMissingButton->setEnabled(m_hasMissingUnits);
 }
 
 void WBQtTeamsDialog::onPlayerRowChanged(int row)
@@ -230,6 +247,23 @@ void WBQtTeamsDialog::onMoveUpTeam()
 void WBQtTeamsDialog::onMoveDownTeam()
 {
 	WBQtTeams_MoveDownTeam();
+	refreshAll();
+}
+
+// Replace every team member unit type whose template is gone with its closest existing template,
+// then show the shared replace report so the guesses can be reviewed and corrected. The edits land
+// in the working-copy sides list, so OK commits them and Cancel discards them like any other team
+// edit made here.
+void WBQtTeamsDialog::onFixMissingUnits()
+{
+	const int found = WBQtTeams_ReplaceMissingUnits();
+	if (found == 0)
+	{
+		QMessageBox::information(this, tr("Fix Missing Units"),
+			tr("No missing unit types were found in the team templates."));
+		return;
+	}
+	WBQtReplaceReport_Run(NULL);
 	refreshAll();
 }
 

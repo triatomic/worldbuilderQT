@@ -25,6 +25,10 @@ public:
 	explicit WBQtTeamSheetDialog(QWidget *parent = 0);
 	virtual ~WBQtTeamSheetDialog();
 
+private slots:
+	// Re-apply the missing-unit red tint to whichever member combo changed.
+	void onUnitTypeChanged();
+
 private:
 	// wire the .ui widgets of each tab to their hidden page controls
 	void setupIdentityTab();

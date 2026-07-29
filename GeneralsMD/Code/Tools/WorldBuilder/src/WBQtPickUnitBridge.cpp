@@ -17,6 +17,7 @@
 #include "wbview3d.h"
 #include "qt/panels/WBQtPickUnitBridge.h"
 #include "qt/WBQtPanelBridge.h"			// script rows rewrite params via _ReplaceInParams
+#include "qt/panels/WBQtTeamsBridge.h"	// team rows rewrite unit slots via _ReplaceUnitName
 
 #ifdef RTS_HAS_QT
 
@@ -262,6 +263,19 @@ extern "C" void WBQtReplaceReport_SetReplacement(int i, const char *replacementN
 		return;
 	}
 
+	if (s_qtReplaceSource == WBQT_REPLACE_SOURCE_TEAMS)
+	{
+		// Team rows: rewrite the team templates' unit-type slots. An empty replacement puts the
+		// original missing name back, exactly like the script rows.
+		const AsciiString from = wbRowActiveName(s_qtReplaceRows[i]);
+		const AsciiString to = newName.isEmpty() ? s_qtReplaceRows[i].m_missing : newName;
+		if (from != to)
+		{
+			WBQtTeams_ReplaceUnitName(from.str(), to.str());
+		}
+		s_qtReplaceRows[i].m_current = newName;
+		return;
+	}
 	if (s_qtReplaceSource == WBQT_REPLACE_SOURCE_SCRIPTS)
 	{
 		// Script rows: rewrite the OBJECT_TYPE parameter values instead of re-pointing objects.

@@ -1785,4 +1785,173 @@ extern "C" void WBQtTeamPage_ClickButton(int page, int ctrlId)
 	}
 }
 
+//----------------------------------------------------------------------------------------
+// "Fix Missing Units" over the team templates.
+//
+// A team member slot stores a template NAME in the team's dict; nothing validates it when the
+// map loads, so a name whose template is gone just sits there (the sheet shows it as "[???]
+// name"). This is the map-object / script Replace Missing pass applied to those slots: collect
+// the distinct names that no longer resolve, best-match each one, write the winners back into
+// every slot that carried them, and hand the results to the shared report for review.
+//----------------------------------------------------------------------------------------
+namespace
+{
+	// Every team dict in the working copy. The default player teams are included: they hold unit
+	// slots like any other team, and a missing name there is just as broken.
+	void qtmCollectTeamDicts(SidesList &sides, std::vector<Dict *> &out)
+	{
+		out.clear();
+		for (Int i = 0; i < sides.getNumTeams(); i++)
+		{
+			TeamsInfo *ti = sides.getTeamInfo(i);
+			if (ti != NULL && ti->getDict() != NULL)
+			{
+				out.push_back(ti->getDict());
+			}
+		}
+	}
+
+	// The distinct unit-type names across every team slot that TheThingFactory cannot resolve.
+	void qtmCollectMissingUnitNames(SidesList &sides, std::vector<AsciiString> &out)
+	{
+		out.clear();
+		std::vector<Dict *> dicts;
+		qtmCollectTeamDicts(sides, dicts);
+		for (size_t d = 0; d < dicts.size(); d++)
+		{
+			for (int slot = 0; slot < 7; slot++)
+			{
+				Bool exists = false;
+				AsciiString name = dicts[d]->getAsciiString(qtmUnitTypeKey(slot), &exists);
+				if (!exists || name.isEmpty())
+				{
+					continue;
+				}
+				if (TheThingFactory->findTemplate(name) != NULL)
+				{
+					continue;
+				}
+				Bool seen = false;
+				for (size_t k = 0; k < out.size(); k++)
+				{
+					if (out[k] == name)
+					{
+						seen = true;
+						break;
+					}
+				}
+				if (!seen)
+				{
+					out.push_back(name);
+				}
+			}
+		}
+	}
+}
+
+// Rewrite every team unit slot holding `from` to `to`; returns how many slots changed. Also used
+// by the report when the user corrects a guess, so it takes the names rather than a row index.
+extern "C" int WBQtTeams_ReplaceUnitName(const char *from, const char *to)
+{
+	CTeamsDialog *dlg = CTeamsDialog::qtInstance();
+	if (dlg == NULL || from == NULL || to == NULL || from[0] == 0)
+	{
+		return 0;
+	}
+	SidesList *sides = static_cast<SidesList *>(dlg->qtSides());
+	if (sides == NULL)
+	{
+		return 0;
+	}
+	const AsciiString wanted(from);
+	const AsciiString replacement(to);
+	std::vector<Dict *> dicts;
+	qtmCollectTeamDicts(*sides, dicts);
+
+	int hits = 0;
+	for (size_t d = 0; d < dicts.size(); d++)
+	{
+		for (int slot = 0; slot < 7; slot++)
+		{
+			Bool exists = false;
+			AsciiString name = dicts[d]->getAsciiString(qtmUnitTypeKey(slot), &exists);
+			if (exists && name == wanted)
+			{
+				dicts[d]->setAsciiString(qtmUnitTypeKey(slot), replacement);
+				++hits;
+			}
+		}
+	}
+	return hits;
+}
+
+extern "C" int WBQtTeamsData_HasMissingUnits(void)
+{
+	CTeamsDialog *dlg = CTeamsDialog::qtInstance();
+	if (dlg == NULL)
+	{
+		return 0;
+	}
+	SidesList *sides = static_cast<SidesList *>(dlg->qtSides());
+	if (sides == NULL)
+	{
+		return 0;
+	}
+	std::vector<AsciiString> missing;
+	qtmCollectMissingUnitNames(*sides, missing);
+	return missing.empty() ? 0 : 1;
+}
+
+extern "C" int WBQtTeams_ReplaceMissingUnits(void)
+{
+	CTeamsDialog *dlg = CTeamsDialog::qtInstance();
+	if (dlg == NULL)
+	{
+		return 0;
+	}
+	SidesList *sides = static_cast<SidesList *>(dlg->qtSides());
+	if (sides == NULL)
+	{
+		return 0;
+	}
+
+	std::vector<AsciiString> missing;
+	qtmCollectMissingUnitNames(*sides, missing);
+	if (missing.empty())
+	{
+		return 0;
+	}
+
+	// Match every name first (== the script pass), so an all-unmatched run changes nothing.
+	std::vector<AsciiString> picks;
+	picks.resize(missing.size());
+	for (size_t i = 0; i < missing.size(); i++)
+	{
+		char picked[256];
+		picked[0] = 0;
+		if (WBQtReplaceUnit_BestMatch(missing[i].str(), NULL, 0, 0, picked, sizeof(picked)) != 0)
+		{
+			picks[i] = picked;
+		}
+	}
+
+	WBQtReplaceReport_Begin(WBQT_REPLACE_SOURCE_TEAMS);
+	for (size_t i = 0; i < missing.size(); i++)
+	{
+		int hits = 0;
+		if (!picks[i].isEmpty())
+		{
+			hits = WBQtTeams_ReplaceUnitName(missing[i].str(), picks[i].str());
+		}
+		else
+		{
+			// Unmatched names still need a row (and a slot count) so they can be fixed by hand
+			// instead of staying silently broken.
+			hits = WBQtTeams_ReplaceUnitName(missing[i].str(), missing[i].str());
+		}
+		WBQtReplaceReport_Add(missing[i].str(), picks[i].str(), hits);
+	}
+	return (int)missing.size();
+}
+
 #endif // RTS_HAS_QT

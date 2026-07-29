@@ -77,6 +77,19 @@
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="fixMissingButton">
+       <property name="text">
+        <string>Fix Missing Units</string>
+       </property>
+       <property name="toolTip">
+        <string>Replace every team member unit type that no longer exists with its closest name match.</string>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
       <spacer name="commandsSpacer">
        <property name="orientation">
         <enum>Qt::Horizontal</enum>

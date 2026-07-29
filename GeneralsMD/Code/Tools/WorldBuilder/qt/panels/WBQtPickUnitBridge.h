@@ -55,9 +55,11 @@ void WBQtReplaceReport_Run(void *frameHwnd);
 // ---- report contents, filled by the validate pass before _Run (src/WBQtPickUnitBridge.cpp) ----
 
 // What a report's rows refer to. Map-object rows re-point placed objects and can select them in
-// the viewport; script rows rewrite OBJECT_TYPE parameters and have nothing to select.
+// the viewport; script rows rewrite OBJECT_TYPE parameters and team rows rewrite the team
+// templates' unit-type slots -- neither has anything to select.
 #define WBQT_REPLACE_SOURCE_MAPOBJECTS	0
 #define WBQT_REPLACE_SOURCE_SCRIPTS		1
+#define WBQT_REPLACE_SOURCE_TEAMS		2
 
 // Start a batch: drop all rows and fix what this batch's rows describe. One source per batch --
 // taking it as an argument here means the two cannot be set out of order.

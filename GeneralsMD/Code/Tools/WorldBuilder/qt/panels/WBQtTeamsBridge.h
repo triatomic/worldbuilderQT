@@ -57,6 +57,20 @@ void WBQtTeams_MoveDownTeam(void);
 void WBQtTeams_ExportTeams(void);
 void WBQtTeams_ImportTeams(void);
 
+// Replace every team member unit type that no longer names a real template with its closest
+// existing template, across every team of every player, and fill the shared replace report
+// (WBQT_REPLACE_SOURCE_TEAMS) so the guesses can be reviewed. Returns the number of distinct
+// missing names found; 0 means nothing to fix and no report to show.
+int  WBQtTeams_ReplaceMissingUnits(void);
+
+// Rewrite every team member slot naming `from` to `to`; returns the number of slots changed.
+// The report calls this when a guess is corrected (or reverted back to the missing name).
+int  WBQtTeams_ReplaceUnitName(const char *from, const char *to);
+
+// 1 when the team templates still name at least one unit type that has no template, i.e. the
+// Fix Missing Units button has something to do.
+int  WBQtTeamsData_HasMissingUnits(void);
+
 // --- the Qt team property sheet (Tier 3b-3): four HIDDEN Team* pages bound to the current
 // team; the Qt sheet drives their real controls and sends the real WM_COMMAND notifications,
 // so every page handler (live dict writes, rename validation, the PickUnitDialog pops) is

@@ -8,10 +8,13 @@
 #include "../WBQtWindowPos.h"
 #include "resource.h"
 
+#include <QApplication>
 #include <QCheckBox>
+#include <QColor>
 #include <QComboBox>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPalette>
 #include <QPushButton>
 
 namespace
@@ -34,6 +37,28 @@ namespace
 			combo->addItem(current);
 		}
 		combo->setCurrentIndex(combo->findText(current));
+	}
+
+	// The bridge renders a unit type with no matching template as "[???] name". That was the only
+	// signal, and it reads as just another entry at a glance -- tint those red, the same warning
+	// colour the script tree uses for a script whose parameters no longer resolve.
+	void tintIfMissing(QComboBox *combo)
+	{
+		const bool missing = combo->currentText().startsWith("[???] ");
+		QPalette pal = combo->palette();
+		if (missing)
+		{
+			pal.setColor(QPalette::Text, QColor(200, 60, 60));
+			pal.setColor(QPalette::ButtonText, QColor(200, 60, 60));
+		}
+		else
+		{
+			// Back to whatever the (light or dark) theme palette says.
+			const QPalette &base = QApplication::palette(combo);
+			pal.setColor(QPalette::Text, base.color(QPalette::Text));
+			pal.setColor(QPalette::ButtonText, base.color(QPalette::ButtonText));
+		}
+		combo->setPalette(pal);
 	}
 }
 
@@ -181,6 +206,9 @@ void WBQtTeamSheetDialog::setupIdentityTab()
 		m_ui->membersGrid->addWidget(maxEdit2, i + 1, 1);
 		m_unitCombos[i] = bindCombo(page, typeIds[i], unitItems, m_ui->membersBox, WB_QT_TEAMNOTIFY_SELCHANGE);
 		m_ui->membersGrid->addWidget(m_unitCombos[i], i + 1, 2);
+		tintIfMissing(m_unitCombos[i]);		// the seeded value may already be a "[???]" placeholder
+		// Picking a real unit clears the red; picking the placeholder row back re-applies it.
+		connect(m_unitCombos[i], SIGNAL(currentIndexChanged(int)), this, SLOT(onUnitTypeChanged()));
 		QPushButton *pickButton = new QPushButton("...", m_ui->membersBox);
 		pickButton->setFixedWidth(28);
 		pickButton->setAutoDefault(false);
@@ -194,6 +222,7 @@ void WBQtTeamSheetDialog::setupIdentityTab()
 			// hidden combo -- mirror the result back.
 			WBQtTeamPage_ClickButton(page, pickId);
 			seedComboCurrent(combo, pageText(page, typeId));
+			tintIfMissing(combo);
 		});
 	}
 
@@ -202,6 +231,15 @@ void WBQtTeamSheetDialog::setupIdentityTab()
 	bindCheck(page, IDC_AI_RECRUITABLE, m_ui->aiRecruitableCheck);
 	bindCheck(page, IDC_TEAM_SINGLETON, m_ui->singletonCheck);
 	bindEdit(page, IDC_DESCRIPTION, m_ui->descriptionEdit, WB_QT_TEAMNOTIFY_CHANGE);
+}
+
+void WBQtTeamSheetDialog::onUnitTypeChanged()
+{
+	QComboBox *combo = qobject_cast<QComboBox *>(sender());
+	if (combo != NULL)
+	{
+		tintIfMissing(combo);
+	}
 }
 
 void WBQtTeamSheetDialog::setupReinforcementTab()

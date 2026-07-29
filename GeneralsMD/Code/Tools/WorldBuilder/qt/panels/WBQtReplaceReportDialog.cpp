@@ -37,6 +37,14 @@ WBQtReplaceReportDialog::WBQtReplaceReportDialog(QWidget *parent)
 		m_ui->rowTree->headerItem()->setText(kColMissing, tr("Missing object type"));
 		m_ui->rowTree->headerItem()->setText(kColObjects, tr("Uses"));
 	}
+	else if (WBQtReplaceReport_GetSource() == WBQT_REPLACE_SOURCE_TEAMS)
+	{
+		setWindowTitle(tr("Replaced Missing Team Units"));
+		m_ui->introLabel->setText(tr("Each missing unit type in the team templates was replaced "
+			"with its closest name match. Change a replacement if the guess is wrong."));
+		m_ui->rowTree->headerItem()->setText(kColMissing, tr("Missing unit type"));
+		m_ui->rowTree->headerItem()->setText(kColObjects, tr("Slots"));
+	}
 	m_ui->rowTree->header()->setStretchLastSection(false);
 	m_ui->rowTree->header()->setSectionResizeMode(kColMissing, QHeaderView::Stretch);
 	m_ui->rowTree->header()->setSectionResizeMode(kColReplacement, QHeaderView::Stretch);
@@ -112,9 +120,19 @@ void WBQtReplaceReportDialog::refreshSummary()
 			++unresolved;
 		}
 	}
-	QString text = (WBQtReplaceReport_GetSource() == WBQT_REPLACE_SOURCE_SCRIPTS)
-		? tr("%1 missing object type(s)").arg(count)
-		: tr("%1 missing unit(s)").arg(count);
+	QString text;
+	if (WBQtReplaceReport_GetSource() == WBQT_REPLACE_SOURCE_SCRIPTS)
+	{
+		text = tr("%1 missing object type(s)").arg(count);
+	}
+	else if (WBQtReplaceReport_GetSource() == WBQT_REPLACE_SOURCE_TEAMS)
+	{
+		text = tr("%1 missing unit type(s)").arg(count);
+	}
+	else
+	{
+		text = tr("%1 missing unit(s)").arg(count);
+	}
 	if (unresolved > 0)
 	{
 		text += tr(" -- %1 with no close match").arg(unresolved);

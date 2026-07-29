@@ -33,17 +33,20 @@ private slots:
 	void onMoveDownTeam();
 	void onExportTeams();
 	void onImportTeams();
+	void onFixMissingUnits();
 
 private:
 	void refreshAll();
 	void refreshPlayers();
 	void refreshTeamsTable();
+	void refreshMissingUnits();
 	void refreshButtons();
 	void runTeamSheet();
 
 	Ui::WBQtTeamsDialog *m_ui;	// owns the static widget tree (WBQtTeamsDialog.ui)
 
 	bool m_updating;
+	bool m_hasMissingUnits;		// cached by refreshMissingUnits; gates the Fix Missing button
 	QListWidget *m_players;
 	QTreeWidget *m_teams;
 	QPushButton *m_newButton;
