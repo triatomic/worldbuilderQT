@@ -702,6 +702,7 @@ static QString wbLinkifyReferences(const QString &comment)
 	const int nMarkers = (int)(sizeof(markers) / sizeof(markers[0]));
 
 	QStringList lines = comment.split("\n");
+	bool inWarningBlock = false;	// "[Warnings] : ..." runs over several lines; tint them all
 	for (int li = 0; li < lines.size(); ++li)
 	{
 		const QString &line = lines.at(li);
@@ -716,9 +717,23 @@ static QString wbLinkifyReferences(const QString &comment)
 		}
 		if (mi == -1)
 		{
-			lines[li] = line.toHtmlEscaped();
+			// "[Warnings] : ..." carries sentences, not a comma-separated name list, so there is
+			// nothing to linkify -- but tint it (and its continuation lines) the same red the
+			// offending parameter gets, so the reason a script went red reads as the reason.
+			if (line.startsWith("[Warnings] : "))
+			{
+				inWarningBlock = true;
+			}
+			else if (line.startsWith("["))
+			{
+				inWarningBlock = false;	// a different tag begins
+			}
+			lines[li] = inWarningBlock
+				? ("<span style=\"color:#c00000;\">" + line.toHtmlEscaped() + "</span>")
+				: line.toHtmlEscaped();
 			continue;
 		}
+		inWarningBlock = false;
 		const QString marker = markers[mi].text;
 		const QString scheme = markers[mi].scheme;
 		QString html = marker.toHtmlEscaped();

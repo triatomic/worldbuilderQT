@@ -544,6 +544,7 @@ namespace {
 	// action lists (true + false), in order. Visitor is any struct with
 	// `void visit(Parameter *param, const AsciiString &value)`. All the tag/find/replace/count
 	// operations funnel through this so they scan identical scope.
+	//
 	template <class Visitor>
 	void forEachStringParamInScript(Script *pScr, Visitor &v)
 	{
@@ -578,6 +579,42 @@ namespace {
 		}
 	}
 
+	// Same walk, but the visitor is told whether each parameter came from an action. Kept separate
+	// from forEachStringParamInScript so the existing visitors (which take two args) are untouched.
+	template <class Visitor>
+	void forEachParamWithKind(Script *pScr, Visitor &v)
+	{
+		for (OrCondition *pOr = pScr->getOrCondition(); pOr != NULL; pOr = pOr->getNextOrCondition())
+		{
+			for (Condition *c = pOr->getFirstAndCondition(); c != NULL; c = c->getNext())
+			{
+				for (int p = 0; p < c->getNumParameters(); ++p)
+				{
+					Parameter *param = c->getParameter(p);
+					if (param != NULL)
+					{
+						v.visit(param, param->getString(), FALSE);
+					}
+				}
+			}
+		}
+		for (int pass = 0; pass < 2; ++pass)
+		{
+			ScriptAction *a = (pass == 0) ? pScr->getAction() : pScr->getFalseAction();
+			for (; a != NULL; a = a->getNext())
+			{
+				for (int p = 0; p < a->getNumParameters(); ++p)
+				{
+					Parameter *param = a->getParameter(p);
+					if (param != NULL)
+					{
+						v.visit(param, param->getString(), TRUE);
+					}
+				}
+			}
+		}
+	}
+
 	// Visitor: collect the distinct values of one parameter type into a comma-separated list.
 	struct ParamTypeCollector
 	{
@@ -597,36 +634,62 @@ namespace {
 		}
 	};
 
-	// Visitor: collect the distinct OBJECT_TYPE values that don't resolve in the current data set
-	// (a map from another mod references templates this game data doesn't have; the script text
-	// shows them as their raw name, or "???" when the value is empty). getWarningText is the same
-	// existence check that drives the warning icons -- it accepts both templates and the script's
-	// own object lists, so those never get flagged. (Its isAction flag only affects COUNTER/FLAG
-	// params, never OBJECT_TYPE, so FALSE is safe for both conditions and actions here.)
+	// Visitor: collect the distinct parameter values that don't resolve in the current data set (a
+	// map from another mod references templates, command buttons, waypoints... this game data
+	// doesn't have; the script text shows them as their raw name, or "???" when the value is
+	// empty). The verdict is getWarningText's -- the same check that drives the warning icons and
+	// the red parameter tint -- so this tag lists exactly what turned a script red, rather than
+	// leaving a red script with nothing to explain it. (Its isAction flag only affects
+	// COUNTER/FLAG params, so FALSE is the conservative choice for both conditions and actions:
+	// those two are never reported here.)
 	struct MissingObjectCollector
 	{
-		AsciiString list;
+		AsciiString list;			///< the names, for the clickable "[Missing]" links
+		AsciiString warnings;		///< the reasons, one per line, for "[Warnings]"
 		Bool found;
-		MissingObjectCollector() : found(false) {}
-		void visit(Parameter *param, const AsciiString &value)
+		Bool foundWarning;
+		MissingObjectCollector() : found(false), foundWarning(false) {}
+
+		// isAction must match what updateScriptWarning passes, or this disagrees with the red
+		// script/condition/action flags it is meant to explain: getWarningText only reports an
+		// unknown COUNTER or FLAG for a CONDITION, on the reasoning that an action is what
+		// creates them.
+		void visit(Parameter *param, const AsciiString &value, Bool isAction)
 		{
-			if (param->getParameterType() != Parameter::OBJECT_TYPE)
-			{
-				return;
-			}
 			AsciiString shown = value;
 			if (shown.isEmpty())
 			{
+				// Only OBJECT_TYPE reports an empty value as missing; elsewhere an empty
+				// parameter is "not filled in yet", which is not what this tag is about.
+				if (param->getParameterType() != Parameter::OBJECT_TYPE)
+				{
+					return;
+				}
 				shown = "???";	// == Parameter::getUiText's empty-value placeholder
 			}
-			else if (TheThingFactory->findTemplate(shown) != NULL)
+			else if (param->getParameterType() == Parameter::OBJECT_TYPE
+				&& TheThingFactory->findTemplate(shown) != NULL)
 			{
 				return;	// template exists -- the O(1) common case (this runs per selection click)
 			}
-			else if (EditParameter::getWarningText(param, FALSE).isEmpty())
+
+			const AsciiString warning = EditParameter::getWarningText(param, isAction);
+			if (warning.isEmpty())
 			{
-				return;	// exists as a script object list -- not missing (getWarningText's verdict)
+				return;	// resolves (or is a script object list) -- getWarningText's verdict
 			}
+
+			// The reason, verbatim from the same check that turned the script red. Listed even
+			// when the name is a repeat, since two parameters can fail for different reasons.
+			// A plain substring test, not alreadyListed(): that one looks for ", <name>" / a
+			// "[Referenced in:" prefix, neither of which applies to newline-joined sentences.
+			if (strstr(warnings.str(), warning.str()) == NULL)
+			{
+				if (foundWarning) { warnings.concat("\n"); }
+				else { foundWarning = true; }
+				warnings.concat(warning);
+			}
+
 			if (alreadyListed(list, shown))
 			{
 				return;
@@ -670,14 +733,29 @@ AsciiString ScriptDialog::buildMissingTag(Script *pScript)
 		return AsciiString::TheEmptyString;
 	}
 	MissingObjectCollector v;
-	forEachStringParamInScript(pScript, v);
-	if (!v.found)
+	forEachParamWithKind(pScript, v);
+	if (!v.found && !v.foundWarning)
 	{
 		return AsciiString::TheEmptyString;
 	}
+	// "[Missing]" lists the names (clickable in the Qt detail pane); "[Warnings]" spells out why,
+	// verbatim from the check that turned the script red -- Re-Verify All used to leave a red
+	// script with nothing on screen explaining it.
 	AsciiString out;
-	out.concat("[Missing] : ");
-	out.concat(v.list);
+	if (v.found)
+	{
+		out.concat("[Missing] : ");
+		out.concat(v.list);
+	}
+	if (v.foundWarning)
+	{
+		if (!out.isEmpty())
+		{
+			out.concat("\n");
+		}
+		out.concat("[Warnings] : ");
+		out.concat(v.warnings);
+	}
 	return out;
 }
 
