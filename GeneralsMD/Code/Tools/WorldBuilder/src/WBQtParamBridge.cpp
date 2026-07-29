@@ -26,6 +26,8 @@
 
 #include "Common/AudioEventInfo.h"
 #include "Common/BorderColors.h"
+#include "Common/file.h"			// audio preview reads through TheFileSystem (.big archives)
+#include "Common/FileSystem.h"
 #include "Common/GameAudio.h"
 #include "Common/PlayerTemplate.h"
 #include "Common/Radar.h"
@@ -277,19 +279,14 @@ Int EditParameter::qtDescribe(Parameter *pParm, AsciiString unitName, CComboBox 
 			showList = true;
 			break;
 		case Parameter::DIALOG:
-			captionText = "Dialog :";
 		case Parameter::MUSIC:
-			captionText = "Music :";
 		case Parameter::SOUND:
-			if (m_parameter->getParameterType() == Parameter::SOUND) {
-				captionText = "Sound :";
-			}
 			captionText = "Locate the Audio name:";
 			showCombo = true;
-			// enable the preview sound button only if we are dealing with a soundfx or speech
-			showAudioButton = true;
-			if (m_parameter->getParameterType() == Parameter::MUSIC)
-				showAudioButton = false;
+			// Preview for sound effects and speech; music is streamed, not a previewable sample.
+			// (This used to be decided after DIALOG fell through the MUSIC label, so speech --
+			// "Play speech file" -- never got the button at all.)
+			showAudioButton = (m_parameter->getParameterType() != Parameter::MUSIC);
 			loadAudioType(m_parameter->getParameterType(), pCombo);
 			break;
 		case Parameter::MOVIE:
@@ -616,19 +613,49 @@ Int EditParameter::qtStore(Parameter *pParm, const char *text, Int selIndex)
 // ================= EditParameter::qtPreviewAudio =================
 // Port of OnPreviewSound / OnComboSelChange's playback body.
 
+// The buffer PlaySound streams from; it must outlive the call, so it is static rather than local
+// (a new preview overwrites it, which also stops the previous one -- the behaviour we want).
+static std::vector<unsigned char> s_qtAudioPreviewData;
+
 void EditParameter::qtPreviewAudio(Parameter *pParm, const char *eventName)
 {
-	if (pParm->getParameterType() == Parameter::SOUND ||
-		  pParm->getParameterType() == Parameter::DIALOG ||
-		  pParm->getParameterType() == Parameter::MUSIC) {
-		AsciiString comboText(eventName ? eventName : "");
-		AudioEventRTS event;
-		event.setEventName(comboText);
-		event.setAudioEventInfo(TheAudio->findAudioEventInfo(comboText));
-		event.generateFilename();
-		if (!event.getFilename().isEmpty()) {
-			PlaySound(event.getFilename().str(), NULL, SND_ASYNC | SND_FILENAME | SND_PURGE);
-		}
+	if (pParm->getParameterType() != Parameter::SOUND &&
+		  pParm->getParameterType() != Parameter::DIALOG &&
+		  pParm->getParameterType() != Parameter::MUSIC) {
+		return;
+	}
+	AsciiString comboText(eventName ? eventName : "");
+	AudioEventRTS event;
+	event.setEventName(comboText);
+	event.setAudioEventInfo(TheAudio->findAudioEventInfo(comboText));
+	event.generateFilename();
+	if (event.getFilename().isEmpty()) {
+		return;
+	}
+
+	// Read through TheFileSystem and play from memory, rather than handing PlaySound a path:
+	// speech and most sound effects live inside .big archives, where SND_FILENAME finds nothing
+	// (which is why "Play speech file" previewed silence). Same approach the object-properties
+	// sound preview uses.
+	File *file = TheFileSystem->openFile(event.getFilename().str(), File::READ | File::BINARY);
+	if (file == NULL) {
+		return;
+	}
+	Int size = file->size();
+	if (size <= 0) {
+		file->close();
+		return;
+	}
+	s_qtAudioPreviewData.resize(size);
+	Int bytesRead = file->read(&s_qtAudioPreviewData[0], size);
+	file->close();
+	if (bytesRead != size) {
+		s_qtAudioPreviewData.clear();
+		return;
+	}
+	if (!::PlaySound((LPCSTR)&s_qtAudioPreviewData[0], NULL,
+			SND_MEMORY | SND_ASYNC | SND_NODEFAULT)) {
+		s_qtAudioPreviewData.clear();
 	}
 }
 
