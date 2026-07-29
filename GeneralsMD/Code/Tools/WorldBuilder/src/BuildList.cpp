@@ -1041,7 +1041,12 @@ int BuildList::qtGetSideName(int i, char *out, int cap)
 	}
 	else
 	{
-		qtCopyStr(out, cap, name.str());
+		// == loadSides: the internal name alone doesn't say WHICH player it is (every AI
+		// slot is "TheEnemy"-ish), so show the display name with it.
+		UnicodeString uni = dd->getUnicodeString(TheKey_playerDisplayName);
+		AsciiString fmt;
+		fmt.format("%s=\"%ls\"", name.str(), uni.str());
+		qtCopyStr(out, cap, fmt.str());
 	}
 	return 1;
 }

@@ -43,6 +43,12 @@ WBQtBuildListPanel::WBQtBuildListPanel(QWidget *owner)
 	WBQtComboStyle::applyTypeToFilter(m_rebuilds);
 	WBQtComboStyle::applyPopupScrollRecursive(this);
 
+	// A side label is 'name="display name"', which can run long ('example="American oil
+	// interests"'). A QComboBox sizes to its widest item, so without this the panel stretches
+	// to fit the longest player name on the map. The drop-down still shows them in full.
+	m_side->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+	m_side->setMinimumContentsLength(24);
+
 	refresh();
 
 	connect(m_side, SIGNAL(currentIndexChanged(int)), this, SLOT(onSideChanged(int)));
@@ -91,7 +97,9 @@ void WBQtBuildListPanel::refresh()
 	{
 		if (WBQtBuildList_GetSideName(i, buf, cap))
 		{
-			m_side->addItem(QString::fromLatin1(buf));
+			// Local8Bit, not Latin1: the label carries the player's DISPLAY name, which the
+			// %ls format wrote out in the CRT's narrow encoding (== the player list panel).
+			m_side->addItem(QString::fromLocal8Bit(buf));
 		}
 		else
 		{
