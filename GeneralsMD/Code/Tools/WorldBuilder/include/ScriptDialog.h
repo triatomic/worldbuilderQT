@@ -141,7 +141,7 @@ public:
 		int matchCase, int wholeValue, int doReplace, int scopeListType = -1);
 	// Every distinct OBJECT_TYPE value across all scripts that no longer resolves to a template
 	// (== what the per-script "[Missing]" tag lists, gathered map-wide).
-	void qtCollectMissingNames(std::vector<AsciiString> &out);
+	void qtCollectMissingNames(std::vector<AsciiString> &out, std::vector<int> &outKinds);
 	// Replace every one of those with its closest existing template (the same name matcher the
 	// Replace Missing Unit dialog uses) and fill the replace report. Returns the number of
 	// distinct missing names found; 0 means there was nothing to do.

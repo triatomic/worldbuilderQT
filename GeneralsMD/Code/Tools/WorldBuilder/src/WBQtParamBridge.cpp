@@ -684,6 +684,32 @@ static CComboBox *qtHiddenCombo(void)
 	return &s_qtHiddenCombo;
 }
 
+// The command-button catalog as strings, for the script "Replace Missing" name matcher.
+// Goes through loadCommandButtons rather than re-parsing CommandButton.ini, so the two can
+// never disagree about what exists.
+void EditParameter::qtCollectCommandButtons(std::vector<AsciiString> &out)
+{
+	out.clear();
+	// Reuse the bridge's long-lived hidden combo rather than creating one here: a fresh
+	// CComboBox::Create needs a valid parent window, and in the Qt inversion the MFC frame is
+	// hidden, so AfxGetMainWnd() is not a safe parent to assume at an arbitrary call site.
+	CComboBox *pCombo = qtHiddenCombo();
+	if (pCombo == NULL || pCombo->GetSafeHwnd() == NULL)
+	{
+		return;
+	}
+	pCombo->ResetContent();
+	loadCommandButtons(pCombo, AsciiString::TheEmptyString);
+	const int count = pCombo->GetCount();
+	for (int i = 0; i < count; i++)
+	{
+		CString s;
+		pCombo->GetLBText(i, s);
+		out.push_back(AsciiString((LPCTSTR)s));
+	}
+	pCombo->ResetContent();
+}
+
 extern "C" int WBQtParamData_GetEditorKind(void *parameter)
 {
 	Parameter *pParm = static_cast<Parameter *>(parameter);

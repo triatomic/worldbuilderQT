@@ -109,6 +109,37 @@ namespace WBQtNameMatch
 		return matchScoreFromBase(target, candidate, similarity(target, candidate));
 	}
 
+	// Best candidate for `target` out of `candidates`, or an empty string when nothing clears
+	// `threshold`. Admits on the raw similarity so the containment boost only ever REORDERS what
+	// already qualified -- it must not drag in a distant name that happens to embed the target.
+	// The single ranking rule behind every "closest existing name" lookup.
+	inline QString bestMatch(const QString &target, const QStringList &candidates,
+		float threshold = kSuggestThreshold)
+	{
+		QString best;
+		float bestScore = 0.0f;
+		for (int i = 0; i < candidates.size(); ++i)
+		{
+			const QString &candidate = candidates.at(i);
+			if (candidate.isEmpty())
+			{
+				continue;
+			}
+			const float base = similarity(target, candidate);
+			if (base < threshold)
+			{
+				continue;
+			}
+			const float score = matchScoreFromBase(target, candidate, base);
+			if (score > bestScore)
+			{
+				bestScore = score;
+				best = candidate;
+			}
+		}
+		return best;
+	}
+
 	// One scored leaf, for ranking (see rankMatches).
 	struct ScoredLeaf
 	{

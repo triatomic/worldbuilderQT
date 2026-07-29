@@ -4363,44 +4363,58 @@ namespace {
 		return v.hits;
 	}
 
-	// Visitor: gather every distinct OBJECT_TYPE value that does not resolve, across a script.
-	// Same verdict as MissingObjectCollector (which builds the per-script "[Missing]" tag) -- an
-	// empty value is a placeholder, not a name we could ever match, so it is skipped here.
+	// Visitor: gather every distinct value that does not resolve, across a script. Covers the two
+	// parameter kinds whose values are names the matcher can do something useful with:
+	// OBJECT_TYPE (matched against the template catalog) and COMMAND_BUTTON (matched against the
+	// CommandButton.ini catalog). The verdict is getWarningText's, the same one behind the
+	// per-script "[Missing]" tag -- so a name that exists as a script object list is not "missing".
+	// An empty value is a placeholder, not a name we could ever match, so it is skipped.
 	struct MissingNameGatherer
 	{
 		std::vector<AsciiString> *names;
+		std::vector<int> *kinds;		// parallel: the Parameter::ParameterType each name came from
 		void visit(Parameter *param, const AsciiString &value)
 		{
-			if (param->getParameterType() != Parameter::OBJECT_TYPE || value.isEmpty())
+			const int type = param->getParameterType();
+			if (value.isEmpty())
 			{
 				return;
 			}
-			if (TheThingFactory->findTemplate(value) != NULL)
+			if (type != Parameter::OBJECT_TYPE && type != Parameter::COMMAND_BUTTON)
+			{
+				return;
+			}
+			if (type == Parameter::OBJECT_TYPE && TheThingFactory->findTemplate(value) != NULL)
 			{
 				return;		// resolves fine
 			}
 			if (EditParameter::getWarningText(param, FALSE).isEmpty())
 			{
-				return;		// a script object list, not a missing template
+				return;		// resolves (or is a script object list) -- not missing
 			}
 			for (size_t i = 0; i < names->size(); i++)
 			{
-				if ((*names)[i] == value)
+				if ((*names)[i] == value && (*kinds)[i] == type)
 				{
 					return;	// already gathered
 				}
 			}
 			names->push_back(value);
+			kinds->push_back(type);
 		}
 	};
 }
 
-// Every distinct unresolvable OBJECT_TYPE name across all players' scripts, in encounter order.
-void ScriptDialog::qtCollectMissingNames(std::vector<AsciiString> &out)
+// Every distinct unresolvable OBJECT_TYPE / COMMAND_BUTTON name across all players' scripts, in
+// encounter order. outKinds receives the Parameter::ParameterType each name came from, so the
+// caller knows which catalog to match it against.
+void ScriptDialog::qtCollectMissingNames(std::vector<AsciiString> &out, std::vector<int> &outKinds)
 {
 	out.clear();
+	outKinds.clear();
 	MissingNameGatherer v;
 	v.names = &out;
+	v.kinds = &outKinds;
 	for (int i = 0; i < m_sides.getNumSides(); ++i)
 	{
 		ScriptList *pSL = m_sides.getSideInfo(i)->getScriptList();
@@ -4509,10 +4523,30 @@ int ScriptDialog::qtScriptReplaceMissing(void)
 	return 0;	// the matcher and the report are Qt-side
 #else
 	std::vector<AsciiString> missing;
-	qtCollectMissingNames(missing);
+	std::vector<int> kinds;
+	qtCollectMissingNames(missing, kinds);
 	if (missing.empty())
 	{
 		return 0;
+	}
+
+	// Command buttons are matched against their own catalog, not the template catalog. Built once
+	// (parsing CommandButton.ini is not free) and only when a command button is actually missing.
+	// Held as an array of pointers, NOT joined into one string: ZH has thousands of command
+	// buttons, and the joined form overflows AsciiString's 32K MAX_LEN, which throws.
+	std::vector<AsciiString> commandButtons;
+	std::vector<const char *> commandButtonPtrs;
+	for (size_t i = 0; i < kinds.size(); i++)
+	{
+		if (kinds[i] == Parameter::COMMAND_BUTTON)
+		{
+			EditParameter::qtCollectCommandButtons(commandButtons);
+			for (size_t c = 0; c < commandButtons.size(); c++)
+			{
+				commandButtonPtrs.push_back(commandButtons[c].str());
+			}
+			break;
+		}
 	}
 
 	// Match every name FIRST, so the undo snapshot is only taken when something will actually
@@ -4524,7 +4558,19 @@ int ScriptDialog::qtScriptReplaceMissing(void)
 	{
 		char picked[256];
 		picked[0] = 0;
-		if (WBQtReplaceUnit_BestMatch(missing[i].str(), NULL, 0, 0, picked, sizeof(picked)))
+		Bool matched = false;
+		if (kinds[i] == Parameter::COMMAND_BUTTON)
+		{
+			matched = !commandButtonPtrs.empty()
+				&& WBQtNameMatch_BestOfList(missing[i].str(), &commandButtonPtrs[0],
+					(int)commandButtonPtrs.size(), picked, sizeof(picked)) != 0;
+		}
+		else
+		{
+			matched = WBQtReplaceUnit_BestMatch(missing[i].str(), NULL, 0, 0,
+				picked, sizeof(picked)) != 0;
+		}
+		if (matched)
 		{
 			picks[i] = picked;
 			++resolvable;

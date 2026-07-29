@@ -71,6 +71,8 @@ public:
 	static Int qtStore(Parameter *pParm, const char *text, Int selIndex);
 	static void qtPreviewAudio(Parameter *pParm, const char *eventName);
 	static Int qtLoadSubroutineScripts(CComboBox *pCombo);
+	// Every command button name (== loadCommandButtons' catalog), for the batch name matcher.
+	static void qtCollectCommandButtons(std::vector<AsciiString> &out);
 #endif
 
 protected:

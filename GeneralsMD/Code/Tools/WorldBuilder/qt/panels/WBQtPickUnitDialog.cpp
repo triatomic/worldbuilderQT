@@ -489,9 +489,7 @@ extern "C" int WBQtReplaceUnit_BestMatch(const char *missingName, const int *all
 	// Rebuild the catalog with the caller's filter: a modal pick/replace dialog may have left it
 	// filtered to something else (the panel does the same before every read).
 	const int count = WBQtPickUnitData_Build(allowable, allowCount, factionOnly);
-	const QString target = QString::fromLocal8Bit(missingName);
-	QString best;
-	float bestScore = 0.0f;
+	QStringList candidates;
 	for (int i = 0; i < count; i++)
 	{
 		char name[256];
@@ -500,28 +498,46 @@ extern "C" int WBQtReplaceUnit_BestMatch(const char *missingName, const int *all
 		int isTest = 0;
 		WBQtPickUnitData_GetInfo(i, name, sizeof(name), side, sizeof(side),
 			sorting, sizeof(sorting), &isTest);
-		if (name[0] == 0)
+		if (name[0] != 0)
 		{
-			continue;
-		}
-		const QString candidate = QString::fromLocal8Bit(name);
-		// Admit on the raw similarity (same bar the dialog uses), rank by the containment-aware
-		// score, so "AsltGLAArmsDealer" beats "GLAHoleArmsDealer" for a missing "GLAArmsDealer".
-		const float base = WBQtNameMatch::similarity(target, candidate);
-		if (base < WBQtNameMatch::kSuggestThreshold)
-		{
-			continue;
-		}
-		const float score = WBQtNameMatch::matchScoreFromBase(target, candidate, base);
-		if (score > bestScore)
-		{
-			bestScore = score;
-			best = candidate;
+			candidates.append(QString::fromLocal8Bit(name));
 		}
 	}
+	// "AsltGLAArmsDealer" beats "GLAHoleArmsDealer" for a missing "GLAArmsDealer" -- see bestMatch.
+	const QString best = WBQtNameMatch::bestMatch(QString::fromLocal8Bit(missingName), candidates);
 	if (best.isEmpty())
 	{
 		return 0;	// nothing close enough -- leave it missing, the report lists it unresolved
+	}
+	copyName(best, nameOut, nameCap);
+	return 1;
+}
+
+// The same ranking over a caller-supplied catalog (newline-separated), for names that are not
+// template names -- command buttons, currently.
+extern "C" int WBQtNameMatch_BestOfList(const char *missingName, const char *const *candidates,
+	int candidateCount, char *nameOut, int nameCap)
+{
+	if (nameOut != NULL && nameCap > 0)
+	{
+		nameOut[0] = 0;
+	}
+	if (missingName == NULL || missingName[0] == 0 || candidates == NULL || candidateCount <= 0)
+	{
+		return 0;
+	}
+	QStringList list;
+	for (int i = 0; i < candidateCount; i++)
+	{
+		if (candidates[i] != NULL && candidates[i][0] != 0)
+		{
+			list.append(QString::fromLocal8Bit(candidates[i]));
+		}
+	}
+	const QString best = WBQtNameMatch::bestMatch(QString::fromLocal8Bit(missingName), list);
+	if (best.isEmpty())
+	{
+		return 0;
 	}
 	copyName(best, nameOut, nameCap);
 	return 1;

@@ -39,6 +39,14 @@ int WBQtReplaceUnit_Run(void *frameHwnd, const char *missingName, const int *all
 int WBQtReplaceUnit_BestMatch(const char *missingName, const int *allowable, int allowCount,
 	int factionOnly, char *nameOut, int nameCap);
 
+// The same ranking over an arbitrary candidate list, for callers whose catalog is not the
+// template catalog -- e.g. command buttons. Returns 1 and fills nameOut when something clears the
+// similarity bar, 0 otherwise. Takes an array of C strings rather than one joined blob: the
+// catalogs are big enough (ZH has thousands of command buttons) that joining them overflows
+// AsciiString's 32K MAX_LEN and throws.
+int WBQtNameMatch_BestOfList(const char *missingName, const char *const *candidates,
+	int candidateCount, char *nameOut, int nameCap);
+
 // Show the "Replaced Missing Units" report over the frame: one row per missing name and what it
 // became, editable so a wrong guess can be corrected. Modal; returns when the user closes it.
 // Rows come from the WBQtReplaceReport_* accessors below.
