@@ -223,6 +223,18 @@ extern "C" void WBQtCondActData_GetWarnings(void *item, int isAction, char *warn
 	copyOut(informationText, infoBuf, infoCap);
 }
 
+// Does THIS parameter have a warning? The sentence renders such parameters red, so the one that
+// is wrong can be spotted without reading the warning panel and matching it up by name.
+extern "C" int WBQtCondActData_ParameterHasWarning(void *item, int isAction, int i)
+{
+	Parameter *param = qtParameterAt(item, isAction, i);
+	if (param == NULL)
+	{
+		return 0;
+	}
+	return EditParameter::getWarningText(param, false).isEmpty() ? 0 : 1;
+}
+
 // ================= the Compress Script setting =================
 
 extern "C" int WBQtCondAct_GetCompress(void)

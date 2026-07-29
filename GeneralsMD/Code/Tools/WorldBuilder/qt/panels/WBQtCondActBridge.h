@@ -48,6 +48,8 @@ void WBQtCondAct_EditParameter(void *item, int isAction, int i);
 
 // Concatenated per-parameter warning and information text (either may come back empty).
 void WBQtCondActData_GetWarnings(void *item, int isAction, char *warnBuf, int warnCap, char *infoBuf, int infoCap);
+// 1 when parameter i is the one a warning is about, so the sentence can render it red.
+int  WBQtCondActData_ParameterHasWarning(void *item, int isAction, int i);
 
 // --- the "Compress Script" tree-density toggle (registry-backed, "CompressScripts") ---
 int  WBQtCondAct_GetCompress(void);

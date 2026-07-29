@@ -275,7 +275,20 @@ void WBQtCondActDialog::renderSentence()
 			{
 				text = "???";
 			}
-			html += QString("<a href=\"%1\">%2</a>").arg(i).arg(text.toHtmlEscaped());
+			// A parameter the warning panel is complaining about renders red rather than the
+			// normal link colour, so the offending one is obvious without matching the warning
+			// text up by name. The inner <span> is needed because Qt paints <a> with the palette
+			// link colour and ignores a colour set on the anchor itself.
+			const QString escaped = text.toHtmlEscaped();
+			if (WBQtCondActData_ParameterHasWarning(m_item, m_isAction, i))
+			{
+				html += QString("<a href=\"%1\"><span style=\"color:#c00000;\">%2</span></a>")
+					.arg(i).arg(escaped);
+			}
+			else
+			{
+				html += QString("<a href=\"%1\">%2</a>").arg(i).arg(escaped);
+			}
 		}
 	}
 	m_sentence->setHtml(html);
