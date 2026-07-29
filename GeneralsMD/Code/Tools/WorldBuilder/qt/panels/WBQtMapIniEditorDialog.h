@@ -17,6 +17,7 @@
 #include <QWidget>
 
 class QPlainTextEdit;
+class QTimer;
 
 namespace Ui { class WBQtMapIniEditorDialog; }	// generated from WBQtMapIniEditorDialog.ui
 
@@ -29,18 +30,54 @@ class WBQtMapIniHighlighter : public QSyntaxHighlighter
 public:
 	explicit WBQtMapIniHighlighter(QTextDocument *doc);
 
-	// Off = plain INI colouring with no name checking (the "Check object names" toggle).
+	// What kind of name a line carries, which decides both the catalog it is checked against
+	// and the catalog the suggestions come from.
+	enum NameKind
+	{
+		KindNone = 0,
+		KindObject,			///< Object / ChildObject / ObjectReskin      -> TheThingFactory
+		KindUpgrade,		///< TriggeredBy / ConflictsWith / Upgrade =  -> TheUpgradeCenter
+		KindCommandButton,	///< the numbered entries of a CommandSet     -> TheControlBar
+		KindScience,		///< Science = inside a SkillSet              -> TheScienceStore
+		KindCommandSet,		///< CommandSet = / CommandSetAlt =           -> TheControlBar
+		KindSide			///< SideInfo <name>                         -> ThePlayerTemplateStore
+	};
+	enum { kNameKindCount = 7 };
+
+	// Off = plain INI colouring with no name checking (the "Check names" toggle).
 	void setCheckNames(bool on);
-	// The object name at `posInBlock` within `blockText`, when that name is flagged as unknown;
-	// empty otherwise. Drives the context menu.
-	static QString unknownNameAt(const QString &blockText, int posInBlock, int *startOut,
-		int *lengthOut);
-	// True when this line declares/references an object name, filling the name and its span.
-	static bool objectNameOnLine(const QString &line, QString *nameOut, int *startOut,
-		int *lengthOut);
-	// Cached WBQtMapIniEditorData_IsTemplate.
-	static bool isKnownTemplate(const QString &name);
+	// The checkable name at `posInBlock` within `blockText`, when that name is flagged as
+	// unknown; empty otherwise. Drives the context menu. `kindOut` says which catalog to
+	// suggest from.
+	static QString unknownNameAt(const QString &blockText, int posInBlock, int context,
+		int *startOut, int *lengthOut, NameKind *kindOut);
+	// True when this line carries a checkable name, filling the name, its span and its kind.
+	static bool checkableNameOnLine(const QString &line, QString *nameOut, int *startOut,
+		int *lengthOut, NameKind *kindOut);
+	// Cached lookup against the catalog for `kind`.
+	static bool isKnownName(const QString &name, NameKind kind);
 	static void clearNameCache();
+
+	// Names the FILE ITSELF declares (its own Object / Upgrade / CommandSet / Science blocks).
+	// A map.ini routinely defines a thing and then refers to it, and those names are not in the
+	// loaded game data until it is loaded -- without this they would all read as unknown.
+	// Rebuilt from the whole document on load and on edit.
+	static void setLocalNames(const QSet<QString> &names);
+	static bool isLocallyDeclared(const QString &name);
+	// Scan `text` for the block declarations it defines.
+	static QSet<QString> scanLocalNames(const QString &text);
+
+	// Which enclosing block a line sits in, carried across lines via the highlighter's per-block
+	// user state. "Command = X" means a command button only inside a CommandSet; elsewhere it is
+	// an unrelated key that must not be checked.
+	enum BlockContext
+	{
+		ContextOther = 0,
+		ContextCommandSet
+	};
+
+	// The enclosing-block context a line establishes, given the context of the line before it.
+	static int contextAfterLine(const QString &line, int previousContext);
 
 protected:
 	virtual void highlightBlock(const QString &text);
@@ -74,6 +111,10 @@ private slots:
 	void onModificationChanged(bool modified);
 	void onEditorContextMenu(const QPoint &pos);
 	void onCursorMoved();
+	// Re-scan the file's own declarations and re-highlight. Coalesced through a timer so it
+	// runs once after a burst of typing, not once per keystroke.
+	void onTextChanged();
+	void rescanLocalNames();
 
 private:
 	void find(bool forward);
@@ -88,6 +129,7 @@ private:
 	WBQtMapIniHighlighter *m_highlighter;
 	QPlainTextEdit *m_editor;
 	QString m_path;
+	QTimer *m_rescanTimer;		// coalesces the local-declaration rescan while typing
 
 	static WBQtMapIniEditorDialog *s_instance;
 };

@@ -79,10 +79,10 @@
      <item>
       <widget class="QCheckBox" name="checkNamesBox">
        <property name="text">
-        <string>Check object names</string>
+        <string>Check names</string>
        </property>
        <property name="toolTip">
-        <string>Underline object names the game data does not define. Right-click one for suggested replacements.</string>
+        <string>Underline object, upgrade and command button names the game data does not define. Right-click one for suggested replacements.</string>
        </property>
        <property name="checked">
         <bool>true</bool>

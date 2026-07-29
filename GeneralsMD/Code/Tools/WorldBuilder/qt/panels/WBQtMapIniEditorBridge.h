@@ -31,6 +31,36 @@ void WBQtMapIniEditorData_GetTemplate(int i, char *bufOut, int cap);
 // linear walk of the catalog, since the check runs over every line of the file.
 int  WBQtMapIniEditorData_IsTemplate(const char *name);
 
+// The other two name kinds the editor checks, each with the same Build/Get/Is trio:
+//   UPGRADE  -- the Upgrade = name of an upgrade module, against TheUpgradeCenter
+//   COMMAND  -- the Command = entries of a CommandSet block, against TheControlBar
+// A kind whose catalog is unavailable (the subsystem is NULL in WorldBuilder) reports
+// everything as known, so the editor never underlines what it cannot actually verify.
+int  WBQtMapIniEditorData_BuildUpgrades(void);
+void WBQtMapIniEditorData_GetUpgrade(int i, char *bufOut, int cap);
+int  WBQtMapIniEditorData_IsUpgrade(const char *name);
+
+int  WBQtMapIniEditorData_BuildCommandButtons(void);
+void WBQtMapIniEditorData_GetCommandButton(int i, char *bufOut, int cap);
+int  WBQtMapIniEditorData_IsCommandButton(const char *name);
+
+int  WBQtMapIniEditorData_BuildSciences(void);
+void WBQtMapIniEditorData_GetScience(int i, char *bufOut, int cap);
+int  WBQtMapIniEditorData_IsScience(const char *name);
+
+// Command SET names (what "CommandSet = X" references). Validation only: the engine's command
+// set list is protected, so there is no enumeration to suggest from without editing shared
+// engine code. Build returns 0 and Get yields nothing; Is still answers correctly.
+int  WBQtMapIniEditorData_BuildCommandSets(void);
+void WBQtMapIniEditorData_GetCommandSet(int i, char *bufOut, int cap);
+int  WBQtMapIniEditorData_IsCommandSet(const char *name);
+
+// Side names (what "SideInfo <name>" names), from the player templates. AI::parseSideInfo
+// matches these by exact string, so a typo silently creates a side nothing ever reads.
+int  WBQtMapIniEditorData_BuildSides(void);
+void WBQtMapIniEditorData_GetSide(int i, char *bufOut, int cap);
+int  WBQtMapIniEditorData_IsSide(const char *name);
+
 // The [MapIniEditor] profile section (window Top/Left/Width/Height).
 int  WBQtMapIniEditorData_GetProfileInt(const char *key, int def);
 void WBQtMapIniEditor_SetProfileInt(const char *key, int value);
