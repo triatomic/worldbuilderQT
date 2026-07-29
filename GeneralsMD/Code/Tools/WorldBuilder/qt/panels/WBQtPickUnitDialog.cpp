@@ -133,8 +133,16 @@ WBQtPickUnitDialog::WBQtPickUnitDialog(bool replaceMode, const QString &missingN
 		QPushButton *ignoreButton = new QPushButton("Continue without replacing...", this);
 		ignoreButton->setAutoDefault(false);
 		m_ui->buttonColHost->addWidget(ignoreButton, 0, Qt::AlignLeft);
+		// Stop asking one dialog at a time: resolve every remaining missing name by its closest
+		// catalog match, then show the report so the guesses can be reviewed and corrected.
+		QPushButton *replaceAllButton = new QPushButton("Replace All by name match...", this);
+		replaceAllButton->setAutoDefault(false);
+		replaceAllButton->setToolTip("Replace every remaining missing unit with its closest "
+			"name match, then show a report you can correct.");
+		m_ui->buttonColHost->addWidget(replaceAllButton, 0, Qt::AlignLeft);
 		m_ui->buttonColHost->addStretch(1);
 		connect(ignoreButton, SIGNAL(clicked()), this, SLOT(onIgnore()));
+		connect(replaceAllButton, SIGNAL(clicked()), this, SLOT(onReplaceAll()));
 	}
 	else
 	{
@@ -291,6 +299,11 @@ void WBQtPickUnitDialog::onFindPrevMatch()
 void WBQtPickUnitDialog::onIgnore()
 {
 	done(2);	// == EndDialog(IDIGNORE)
+}
+
+void WBQtPickUnitDialog::onReplaceAll()
+{
+	done(3);	// == WBQT_REPLACE_ALL: the caller auto-resolves the rest and reports
 }
 
 void WBQtPickUnitDialog::onCurrentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous)
@@ -453,7 +466,64 @@ extern "C" int WBQtReplaceUnit_Run(void *frameHwnd, const char *missingName, con
 	{
 		return 2;	// == IDIGNORE ("Continue without replacing...")
 	}
+	if (rc == 3)
+	{
+		return 3;	// == WBQT_REPLACE_ALL: caller auto-resolves the remaining names
+	}
 	return (rc == QDialog::Accepted) ? 1 : 0;
+}
+
+// Headless best-match over the catalog WBQtPickUnitData_Build last produced -- the same ranking
+// the replace dialog's suggestion uses, without showing a dialog. Backs "Replace All".
+extern "C" int WBQtReplaceUnit_BestMatch(const char *missingName, const int *allowable,
+	int allowCount, int factionOnly, char *nameOut, int nameCap)
+{
+	if (nameOut != NULL && nameCap > 0)
+	{
+		nameOut[0] = 0;
+	}
+	if (missingName == NULL || missingName[0] == 0)
+	{
+		return 0;
+	}
+	// Rebuild the catalog with the caller's filter: a modal pick/replace dialog may have left it
+	// filtered to something else (the panel does the same before every read).
+	const int count = WBQtPickUnitData_Build(allowable, allowCount, factionOnly);
+	const QString target = QString::fromLocal8Bit(missingName);
+	QString best;
+	float bestScore = 0.0f;
+	for (int i = 0; i < count; i++)
+	{
+		char name[256];
+		char side[128];
+		char sorting[128];
+		int isTest = 0;
+		WBQtPickUnitData_GetInfo(i, name, sizeof(name), side, sizeof(side),
+			sorting, sizeof(sorting), &isTest);
+		if (name[0] == 0)
+		{
+			continue;
+		}
+		const QString candidate = QString::fromLocal8Bit(name);
+		// Admit on the raw similarity (same bar the dialog uses), rank by the containment-aware
+		// score, so "AsltGLAArmsDealer" beats "GLAHoleArmsDealer" for a missing "GLAArmsDealer".
+		if (WBQtNameMatch::similarity(target, candidate) < WBQtNameMatch::kSuggestThreshold)
+		{
+			continue;
+		}
+		const float score = WBQtNameMatch::matchScore(target, candidate);
+		if (score > bestScore)
+		{
+			bestScore = score;
+			best = candidate;
+		}
+	}
+	if (best.isEmpty())
+	{
+		return 0;	// nothing close enough -- leave it missing, the report lists it unresolved
+	}
+	copyName(best, nameOut, nameCap);
+	return 1;
 }
 
 // ===================== BuildListTool's modeless pick panel =====================

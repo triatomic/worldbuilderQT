@@ -47,6 +47,7 @@ private slots:
 	void onSearchLive(const QString &text);	// NewSearch: live filter, no beep / no message box
 	void onReset();
 	void onIgnore();
+	void onReplaceAll();
 	void onFindNextMatch();	// replace mode: step to the next close name match
 	void onFindPrevMatch();	// replace mode: step to the previous close name match
 	void onCurrentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);

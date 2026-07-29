@@ -1551,6 +1551,14 @@ void CWorldBuilderDoc::validate(void)
 		FIX_TEAM(TheKey_teamUnitType7)
 	}
 
+#ifdef RTS_HAS_QT
+	// "Replace All by name match" latches here: once the user picks it, the rest of the missing
+	// names are resolved by best name match without further prompting, and every decision (this
+	// one included) is recorded for the report shown at the end.
+	Bool qtReplaceAll = false;
+	WBQtReplaceReport_Clear();
+#endif
+
 	MapObject *pMapObj;
 	for (pMapObj = MapObject::getFirstMapObject(); pMapObj; pMapObj = pMapObj->getNext())
 	{
@@ -1601,20 +1609,42 @@ void CWorldBuilderDoc::validate(void)
 					}
 					char qtPicked[256];
 					qtPicked[0] = 0;
-					int qtRc = WBQtReplaceUnit_Run(::AfxGetMainWnd() ? ::AfxGetMainWnd()->GetSafeHwnd() : NULL, name.str(), allowable, allowCount, false, qtPicked, sizeof(qtPicked));
+					int qtRc;
+					if (qtReplaceAll) {
+						// Already batching: no dialog, just take the closest name match (0 when
+						// nothing clears the bar, which leaves the name missing).
+						qtRc = WBQtReplaceUnit_BestMatch(name.str(), allowable, allowCount, false,
+							qtPicked, sizeof(qtPicked)) ? WBQT_REPLACE_OK : WBQT_REPLACE_IGNORE;
+					} else {
+						qtRc = WBQtReplaceUnit_Run(::AfxGetMainWnd() ? ::AfxGetMainWnd()->GetSafeHwnd() : NULL, name.str(), allowable, allowCount, false, qtPicked, sizeof(qtPicked));
+						if (qtRc == WBQT_REPLACE_ALL) {
+							// Latch batch mode and resolve THIS name the same way, so the button
+							// applies to the unit that is on screen as well as the rest.
+							qtReplaceAll = true;
+							qtRc = WBQtReplaceUnit_BestMatch(name.str(), allowable, allowCount, false,
+								qtPicked, sizeof(qtPicked)) ? WBQT_REPLACE_OK : WBQT_REPLACE_IGNORE;
+						}
+					}
 					if (qtRc >= 0) {
 						qtHandled = true;
-						if (qtRc == 1) {
+						if (qtRc == WBQT_REPLACE_OK) {
 							const ThingTemplate* qtThing = TheThingFactory->findTemplate(AsciiString(qtPicked));
 							if (qtThing) {
 								swapName = qtThing->getName();
 								swapDict.setAsciiString(NAMEKEY(name), swapName);
 							}
-						} else if (qtRc == 2) {
-							// User clicked "Proceed without replace"
-							DEBUG_LOG(("User opted to proceed without replacing unit '%s'\n", name.str()));
-							qtIgnored = true;
+						} else if (qtRc == WBQT_REPLACE_IGNORE) {
+							// User clicked "Proceed without replace" (or the batch pass found no
+							// close match). Only stop the whole validate for a real user choice.
+							DEBUG_LOG(("Not replacing unit '%s'\n", name.str()));
+							qtIgnored = !qtReplaceAll;
 						}
+					}
+					if (qtReplaceAll) {
+						// One report row per distinct missing name, recorded whether or not it
+						// resolved; the object count is filled in below once they are re-pointed.
+						WBQtReplaceReport_Add(name.str(),
+							(qtRc == WBQT_REPLACE_OK) ? qtPicked : "", 0);
 					}
 				}
 				if (qtIgnored) {
@@ -1702,6 +1732,15 @@ void CWorldBuilderDoc::validate(void)
 	if (needToFixTeams) {
 		AfxMessageBox(IDS_NEED_TO_FIX_TEAMS, MB_OK|MB_ICONERROR);
 	}
+
+#ifdef RTS_HAS_QT
+	// A Replace All pass guessed at every remaining missing unit; show what it decided so the
+	// wrong ones can be corrected while the map is fresh. No-ops when nothing was batched.
+	if (qtReplaceAll) {
+		WBQtReplaceReport_CountObjects();
+		WBQtReplaceReport_Run(::AfxGetMainWnd() ? ::AfxGetMainWnd()->GetSafeHwnd() : NULL);
+	}
+#endif
 }
 
 // Build "<map folder>\map.ini" from the current document path; empty if no map is open.

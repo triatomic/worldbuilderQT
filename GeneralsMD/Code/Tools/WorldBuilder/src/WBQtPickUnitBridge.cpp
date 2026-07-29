@@ -13,6 +13,8 @@
 #include "Common/ThingTemplate.h"
 #include "Common/ThingFactory.h"
 #include "Common/ThingSort.h"
+#include "WorldBuilderDoc.h"		// the replace report re-points map objects + recentres the view
+#include "wbview3d.h"
 #include "qt/panels/WBQtPickUnitBridge.h"
 
 #ifdef RTS_HAS_QT
@@ -39,9 +41,12 @@ extern "C" int WBQtPickUnitData_Build(const int *allowable, int allowCount, int 
 {
 	Bool allowed[ES_NUM_SORTING_TYPES];
 	int i;
+	// A NULL list means "every editor sorting" -- it lets Qt-side callers ask for the unfiltered
+	// catalog without needing the ES_* enum, which lives on this side of the seam.
+	const Bool allowEverything = (allowable == NULL);
 	for (i = 0; i < ES_NUM_SORTING_TYPES; i++)
 	{
-		allowed[i] = false;
+		allowed[i] = allowEverything;
 	}
 	for (i = 0; i < allowCount; i++)
 	{
@@ -116,6 +121,182 @@ extern "C" int WBQtPickUnit_RenderPreview(const char *templateName, unsigned cha
 	}
 	memcpy(bgrOut, data, WBQT_PREVIEW_W * WBQT_PREVIEW_H * 3);
 	return 1;
+}
+
+//----------------------------------------------------------------------------------------
+// "Replaced Missing Units" report.
+//
+// validateAllObjects records one row per distinct missing template name and what it became, so
+// the user can review a Replace All pass and correct anything the name matcher guessed wrong.
+// Rows key on the ORIGINAL missing name: the objects have already been re-pointed at the
+// replacement by then, so re-applying an edit has to find them by the replacement they are
+// currently carrying, which is what m_current tracks.
+//----------------------------------------------------------------------------------------
+struct WBQtReplaceRow
+{
+	AsciiString m_missing;		///< the template name the map asked for and the data set lacks
+	AsciiString m_current;		///< what its objects carry now ("" == left unreplaced)
+	Int m_objectCount;
+};
+
+static std::vector<WBQtReplaceRow> s_qtReplaceRows;
+
+extern "C" void WBQtReplaceReport_Clear(void)
+{
+	s_qtReplaceRows.clear();
+}
+
+extern "C" void WBQtReplaceReport_Add(const char *missingName, const char *replacementName,
+	int objectCount)
+{
+	if (missingName == NULL || missingName[0] == 0)
+	{
+		return;
+	}
+	WBQtReplaceRow row;
+	row.m_missing = missingName;
+	row.m_current = (replacementName != NULL) ? replacementName : "";
+	row.m_objectCount = objectCount;
+	s_qtReplaceRows.push_back(row);
+}
+
+extern "C" int WBQtReplaceReport_HasRows(void)
+{
+	return s_qtReplaceRows.empty() ? 0 : 1;
+}
+
+// Count the objects each row now accounts for. Called once the validate pass has re-pointed
+// everything, since rows are recorded while the swap decisions are still being made.
+extern "C" void WBQtReplaceReport_CountObjects(void)
+{
+	for (size_t r = 0; r < s_qtReplaceRows.size(); r++)
+	{
+		const AsciiString &wanted = s_qtReplaceRows[r].m_current.isEmpty()
+			? s_qtReplaceRows[r].m_missing : s_qtReplaceRows[r].m_current;
+		Int n = 0;
+		for (MapObject *obj = MapObject::getFirstMapObject(); obj; obj = obj->getNext())
+		{
+			if (obj->getName() == wanted)
+			{
+				++n;
+			}
+		}
+		s_qtReplaceRows[r].m_objectCount = n;
+	}
+}
+
+extern "C" int WBQtReplaceReport_GetCount(void)
+{
+	return (int)s_qtReplaceRows.size();
+}
+
+extern "C" void WBQtReplaceReport_GetRow(int i, char *missingOut, int missingCap,
+	char *replacementOut, int replacementCap, int *objectCountOut)
+{
+	if (i < 0 || i >= (int)s_qtReplaceRows.size())
+	{
+		copyOut("", missingOut, missingCap);
+		copyOut("", replacementOut, replacementCap);
+		if (objectCountOut != NULL)
+		{
+			*objectCountOut = 0;
+		}
+		return;
+	}
+	copyOut(s_qtReplaceRows[i].m_missing, missingOut, missingCap);
+	copyOut(s_qtReplaceRows[i].m_current, replacementOut, replacementCap);
+	if (objectCountOut != NULL)
+	{
+		*objectCountOut = s_qtReplaceRows[i].m_objectCount;
+	}
+}
+
+// Every map object that row i's missing name currently resolves to. Matched by the name the
+// objects carry NOW (the replacement), not the original missing name -- validateAllObjects has
+// already re-pointed them by the time the report opens.
+static void wbCollectRowObjects(int i, std::vector<MapObject *> &out)
+{
+	out.clear();
+	if (i < 0 || i >= (int)s_qtReplaceRows.size())
+	{
+		return;
+	}
+	const AsciiString &wanted = s_qtReplaceRows[i].m_current.isEmpty()
+		? s_qtReplaceRows[i].m_missing : s_qtReplaceRows[i].m_current;
+	for (MapObject *obj = MapObject::getFirstMapObject(); obj; obj = obj->getNext())
+	{
+		if (obj->getName() == wanted)
+		{
+			out.push_back(obj);
+		}
+	}
+}
+
+extern "C" void WBQtReplaceReport_SetReplacement(int i, const char *replacementName)
+{
+	if (i < 0 || i >= (int)s_qtReplaceRows.size())
+	{
+		return;
+	}
+	AsciiString newName = (replacementName != NULL) ? replacementName : "";
+	if (newName == s_qtReplaceRows[i].m_current)
+	{
+		return;
+	}
+	// An empty replacement means "leave it missing": put the original name back so the map still
+	// records what it actually wanted, and the object shows up as missing again next validate.
+	const ThingTemplate *tt = NULL;
+	if (!newName.isEmpty())
+	{
+		tt = TheThingFactory->findTemplate(newName);
+		if (tt == NULL)
+		{
+			return;		// unknown template: leave the row alone
+		}
+	}
+
+	std::vector<MapObject *> objs;
+	wbCollectRowObjects(i, objs);
+
+	const AsciiString applied = newName.isEmpty() ? s_qtReplaceRows[i].m_missing : newName;
+	for (size_t n = 0; n < objs.size(); n++)
+	{
+		objs[n]->setName(applied);
+		objs[n]->setThingTemplate(tt);		// NULL when reverting to the missing name
+	}
+	s_qtReplaceRows[i].m_current = newName;
+
+	CWorldBuilderDoc *pDoc = CWorldBuilderDoc::GetActiveDoc();
+	if (pDoc != NULL)
+	{
+		pDoc->SetModifiedFlag(TRUE);
+		pDoc->invalObject(NULL);		// rebuild render objects for the changed templates
+	}
+}
+
+extern "C" void WBQtReplaceReport_SelectRow(int i)
+{
+	std::vector<MapObject *> objs;
+	wbCollectRowObjects(i, objs);
+	if (objs.empty())
+	{
+		return;
+	}
+	for (MapObject *obj = MapObject::getFirstMapObject(); obj; obj = obj->getNext())
+	{
+		obj->setSelected(false);
+	}
+	for (size_t n = 0; n < objs.size(); n++)
+	{
+		objs[n]->setSelected(true);
+	}
+	WbView3d *p3View = CWorldBuilderDoc::GetActive3DView();
+	if (p3View != NULL)
+	{
+		const Coord3D *pos = objs[0]->getLocation();
+		p3View->setCenterInView(pos->x / MAP_XY_FACTOR, pos->y / MAP_XY_FACTOR);
+		p3View->Invalidate(false);
+	}
 }
 
 extern "C" void WBQtPickUnit_SavePos(int top, int left)

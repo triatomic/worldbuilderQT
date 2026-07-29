@@ -22,8 +22,47 @@ int WBQtPickUnit_Run(void *frameHwnd, const int *allowable, int allowCount, int 
 
 // Run the Qt "Replace Missing Unit" modal (== ReplaceUnitDialog::DoModal). Returns 1 on OK,
 // 2 on "Continue without replacing..." (== IDIGNORE), 0 on cancel, -1 when Qt is unavailable.
+// Returns 3 for "Replace All": the caller stops prompting and auto-resolves every remaining
+// missing name by best name match (see WBQtReplaceUnit_BestMatch), collecting the results for
+// the report window.
 int WBQtReplaceUnit_Run(void *frameHwnd, const char *missingName, const int *allowable,
 	int allowCount, int factionOnly, char *nameOut, int nameCap);
+
+#define WBQT_REPLACE_OK				1
+#define WBQT_REPLACE_IGNORE			2
+#define WBQT_REPLACE_ALL			3
+
+// Best name match for `missingName` among the catalog built by WBQtPickUnitData_Build, using the
+// same ranking the replace dialog's suggestion uses. Returns 1 and fills nameOut when something
+// clears the similarity bar, 0 otherwise (the caller leaves that name unreplaced and the report
+// shows it as unresolved).
+int WBQtReplaceUnit_BestMatch(const char *missingName, const int *allowable, int allowCount,
+	int factionOnly, char *nameOut, int nameCap);
+
+// Show the "Replaced Missing Units" report over the frame: one row per missing name and what it
+// became, editable so a wrong guess can be corrected. Modal; returns when the user closes it.
+// Rows come from the WBQtReplaceReport_* accessors below.
+void WBQtReplaceReport_Run(void *frameHwnd);
+
+// ---- report contents, filled by the validate pass before _Run (src/WBQtPickUnitBridge.cpp) ----
+
+// Drop all rows (start of a validate pass).
+void WBQtReplaceReport_Clear(void);
+// Record that `missingName` was replaced by `replacementName` (empty == left unreplaced).
+void WBQtReplaceReport_Add(const char *missingName, const char *replacementName, int objectCount);
+// True when at least one row was recorded, i.e. the report is worth showing.
+int WBQtReplaceReport_HasRows(void);
+// Fill in each row's object count. Call once the validate pass has re-pointed the objects.
+void WBQtReplaceReport_CountObjects(void);
+
+int WBQtReplaceReport_GetCount(void);
+void WBQtReplaceReport_GetRow(int i, char *missingOut, int missingCap,
+	char *replacementOut, int replacementCap, int *objectCountOut);
+// Re-point every object still carrying `missingName` at `replacementName` (empty to undo the
+// replacement), updating the row. Applied live as the user edits the report.
+void WBQtReplaceReport_SetReplacement(int i, const char *replacementName);
+// Select every object that came from row i's missing name and centre the view on the first.
+void WBQtReplaceReport_SelectRow(int i);
 
 // ---- BuildListTool's modeless pick panel (== PickUnitDialog Create/SetupAsPanel) ----
 

@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WBQtReplaceReportDialog</class>
+ <widget class="QDialog" name="WBQtReplaceReportDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>560</width>
+    <height>420</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Replaced Missing Units</string>
+  </property>
+  <layout class="QVBoxLayout" name="rootLayout">
+   <item>
+    <widget class="QLabel" name="introLabel">
+     <property name="text">
+      <string>Each missing unit was replaced with its closest name match. Select a row to find it on the map; change a replacement if the guess is wrong.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QTreeWidget" name="rowTree">
+     <property name="rootIsDecorated">
+      <bool>false</bool>
+     </property>
+     <property name="uniformRowHeights">
+      <bool>true</bool>
+     </property>
+     <property name="allColumnsShowFocus">
+      <bool>true</bool>
+     </property>
+     <column>
+      <property name="text">
+       <string>Missing unit</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Replaced with</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Objects</string>
+      </property>
+     </column>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="buttonRow">
+     <item>
+      <widget class="QLabel" name="summaryLabel">
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="buttonSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="changeButton">
+       <property name="text">
+        <string>Change Replacement...</string>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="closeButton">
+       <property name="text">
+        <string>Close</string>
+       </property>
+       <property name="default">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
