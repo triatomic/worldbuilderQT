@@ -783,33 +783,20 @@ void ScriptDialog::qtMToggleActive(void)
 // updateWarnings(true) only when no valid cache exists (matches OnVerify's fast path).
 void ScriptDialog::qtMVerify(void)
 {
-	// Flag to indicate if cache was successfully loaded
-	Bool loadedFromCache = false;
+	// "Re-Verify All" means re-verify: always re-run the real checks, never restore the cached
+	// verdict. Loading the cache here made the button a no-op whenever a cache existed, which
+	// left scripts red from a PREVIOUS session's state with no live warning to explain them --
+	// the warning panel and the "[Warnings]" tag both come from getWarningText, so they were
+	// correctly empty while the tree still showed red.
+	//
+	// The cache still does its job on map load (see the LoadScriptWarningsState call there); it
+	// just is not what an explicit re-verify should consult.
+	updateWarnings(true);
+	DEBUG_LOG(("ScriptDialog: Re-Verify All re-ran the warning checks.\n"));
 
-	if (m_autoUpdateWarnings)
-	{
-		// Try loading cached warning state first
-		if (LoadScriptWarningsState())
-		{
-			DEBUG_LOG(("ScriptDialog: Loaded script warning state from cache.\n"));
-			loadedFromCache = true;
-		}
-		else
-		{
-			DEBUG_LOG(("ScriptDialog: No valid cache found. Will update warnings normally.\n"));
-		}
-
-		// If cache didn't load, fall back to the expensive update
-		if (!loadedFromCache)
-		{
-			updateWarnings(true);
-			DEBUG_LOG(("ScriptDialog: Ran updateWarnings(true) due to missing cache.\n"));
-		}
-	}
-	else
-	{
-		updateWarnings(true);
-	}
+	// The freshly computed state is what should persist, so a later load agrees with what is
+	// on screen now.
+	SaveScriptWarningsState();
 }
 
 // == doDropOn keyed by the packed ListType ints directly (the MFC version resolves them
