@@ -16,6 +16,7 @@
 #include <QSyntaxHighlighter>
 #include <QWidget>
 
+class QListWidgetItem;
 class QPlainTextEdit;
 class QTimer;
 
@@ -115,9 +116,15 @@ private slots:
 	// runs once after a burst of typing, not once per keystroke.
 	void onTextChanged();
 	void rescanLocalNames();
+	// "Show errors": swap the editor for a read-only list of just the flagged lines.
+	void onShowErrorsToggled(bool on);
+	// Selecting a listed line moves the cursor to it in the editor above; the pane stays open.
+	void onErrorRowChanged(QListWidgetItem *item, QListWidgetItem *previous);
 
 private:
 	void find(bool forward);
+	// Refill the flagged-line list from the current text (only while the filter is showing).
+	void rebuildErrorList();
 	void updateTitle();
 	void updateStatus(const QString &message);
 	// Replace the token at [start,length) of `blockNumber` with `replacement`, as one undo step.

@@ -12,10 +12,13 @@
 #include <QFont>
 #include <QHash>
 #include <QKeyEvent>
+#include <QListWidget>
+#include <QListWidgetItem>
 #include <QMenu>
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QRegExp>
+#include <QSplitter>
 #include <QSet>
 #include <QTextBlock>
 #include <QTimer>
@@ -690,6 +693,14 @@ WBQtMapIniEditorDialog::WBQtMapIniEditorDialog(void *frameHwnd)
 	connect(m_ui->findPrevButton, SIGNAL(clicked()), this, SLOT(onFindPrevious()));
 	connect(m_ui->findEdit, SIGNAL(returnPressed()), this, SLOT(onFindNext()));
 	connect(m_ui->checkNamesBox, SIGNAL(toggled(bool)), this, SLOT(onCheckNamesToggled(bool)));
+	connect(m_ui->showErrorsBox, SIGNAL(toggled(bool)), this, SLOT(onShowErrorsToggled(bool)));
+	// currentItemChanged, not itemClicked, so the arrow keys walk the flagged lines too.
+	connect(m_ui->errorList, SIGNAL(currentItemChanged(QListWidgetItem*,QListWidgetItem*)),
+			this, SLOT(onErrorRowChanged(QListWidgetItem*,QListWidgetItem*)));
+	m_ui->errorList->hide();		// the pane only appears once "Show errors" is ticked
+	m_ui->split->setStretchFactor(0, 1);	// the text takes the slack when the window resizes
+	m_ui->split->setStretchFactor(1, 0);
+	m_ui->split->setChildrenCollapsible(false);
 
 	// Undo/Redo follow the document's own stack, so they cover typing and applied fixes alike.
 	m_ui->undoButton->setEnabled(false);
@@ -845,6 +856,125 @@ void WBQtMapIniEditorDialog::onModificationChanged(bool modified)
 	updateTitle();
 }
 
+// Walk the whole file, collecting the lines whose name does not resolve. Runs the same matcher
+// and the same block-context tracking the highlighter uses, so the list and the underlines can
+// never disagree.
+void WBQtMapIniEditorDialog::rebuildErrorList()
+{
+	// The list refills on every edit; re-selecting by ROW would jump around as lines are fixed,
+	// so remember which file line was selected and restore that instead. Blocked so the restore
+	// does not fire the navigation slot and yank the cursor away from where you are typing.
+	int wasLine = -1;
+	if (m_ui->errorList->currentItem() != NULL)
+	{
+		wasLine = m_ui->errorList->currentItem()->data(Qt::UserRole).toInt();
+	}
+	const bool blocked = m_ui->errorList->blockSignals(true);
+
+	m_ui->errorList->clear();
+	const QStringList lines = m_editor->toPlainText().split('\n');
+	int context = WBQtMapIniHighlighter::ContextOther;
+	int flagged = 0;
+	for (int i = 0; i < lines.size(); ++i)
+	{
+		const QString &line = lines.at(i);
+		context = WBQtMapIniHighlighter::contextAfterLine(line, context);
+
+		QString name;
+		int start = 0;
+		int length = 0;
+		WBQtMapIniHighlighter::NameKind kind = WBQtMapIniHighlighter::KindNone;
+		if (!checkableNameOnLineIn(line, context, &name, &start, &length, &kind))
+		{
+			continue;
+		}
+		if (WBQtMapIniHighlighter::isKnownName(name, kind))
+		{
+			continue;
+		}
+		QListWidgetItem *item = new QListWidgetItem(
+			tr("%1:  %2").arg(i + 1, 5).arg(line.trimmed()), m_ui->errorList);
+		// The line number the row jumps to; the text itself is only for reading.
+		item->setData(Qt::UserRole, i);
+		item->setForeground(QBrush(QColor(220, 140, 40)));
+		++flagged;
+	}
+	if (flagged == 0)
+	{
+		QListWidgetItem *item = new QListWidgetItem(
+			tr("No unrecognised names found."), m_ui->errorList);
+		item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
+		item->setForeground(palette().brush(QPalette::Disabled, QPalette::Text));
+	}
+
+	// Restore the previously selected FILE LINE if it is still flagged.
+	if (wasLine >= 0)
+	{
+		for (int i = 0; i < m_ui->errorList->count(); ++i)
+		{
+			QListWidgetItem *item = m_ui->errorList->item(i);
+			if (item->data(Qt::UserRole).toInt() == wasLine)
+			{
+				m_ui->errorList->setCurrentItem(item);
+				break;
+			}
+		}
+	}
+	m_ui->errorList->blockSignals(blocked);
+
+	// The count goes on the checkbox, NOT the status label: that label follows the cursor, and
+	// with the pane open the cursor moves constantly, so a count there would be wiped the moment
+	// you clicked a row.
+	m_ui->showErrorsBox->setText(flagged > 0
+		? tr("Show errors (%1)").arg(flagged) : tr("Show errors"));
+}
+
+void WBQtMapIniEditorDialog::onShowErrorsToggled(bool on)
+{
+	if (on)
+	{
+		// Listing the flagged lines while name checking is off would read as a contradiction
+		// (an empty list next to an unticked "Check names"), so switch it back on.
+		m_ui->checkNamesBox->setChecked(true);
+		rebuildErrorList();
+	}
+	// A second pane BELOW the text rather than a mode that replaces it (== the script editor's
+	// comment pane): the file stays visible and editable while the list is up, so clicking
+	// through the flagged lines does not keep closing the thing you are trying to fix.
+	m_ui->errorList->setVisible(on);
+	if (!on)
+	{
+		m_editor->setFocus();
+	}
+}
+
+void WBQtMapIniEditorDialog::onErrorRowChanged(QListWidgetItem *item, QListWidgetItem *previous)
+{
+	Q_UNUSED(previous);
+	if (item == NULL)
+	{
+		return;
+	}
+	bool ok = false;
+	const int lineNumber = item->data(Qt::UserRole).toInt(&ok);
+	if (!ok)
+	{
+		return;		// the "nothing found" placeholder row
+	}
+	// The pane stays open -- selecting a row only moves the cursor in the editor above it.
+	QTextBlock block = m_editor->document()->findBlockByNumber(lineNumber);
+	if (!block.isValid())
+	{
+		return;
+	}
+	QTextCursor cursor(block);
+	cursor.select(QTextCursor::LineUnderCursor);
+	m_editor->setTextCursor(cursor);
+	m_editor->centerCursor();
+	// Focus deliberately stays on the list: with the pane open you step through the flagged
+	// lines with the arrow keys, and stealing focus to the editor would break that after one row.
+}
+
 void WBQtMapIniEditorDialog::onTextChanged()
 {
 	m_rescanTimer->start();		// restarts the countdown; fires once typing pauses
@@ -855,6 +985,10 @@ void WBQtMapIniEditorDialog::rescanLocalNames()
 	WBQtMapIniHighlighter::setLocalNames(
 		WBQtMapIniHighlighter::scanLocalNames(m_editor->toPlainText()));
 	m_highlighter->rehighlight();
+	if (m_ui->showErrorsBox->isChecked())
+	{
+		rebuildErrorList();		// keep the filtered list in step with the text behind it
+	}
 }
 
 void WBQtMapIniEditorDialog::onCursorMoved()

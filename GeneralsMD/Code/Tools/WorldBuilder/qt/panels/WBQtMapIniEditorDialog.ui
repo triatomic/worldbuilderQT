@@ -77,6 +77,16 @@
       </widget>
      </item>
      <item>
+      <widget class="QCheckBox" name="showErrorsBox">
+       <property name="text">
+        <string>Show errors</string>
+       </property>
+       <property name="toolTip">
+        <string>List only the lines with an unrecognised name. Click one to jump to it in the file.</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QCheckBox" name="checkNamesBox">
        <property name="text">
         <string>Check names</string>
@@ -154,10 +164,29 @@
     </layout>
    </item>
    <item>
-    <widget class="QPlainTextEdit" name="editor">
-     <property name="lineWrapMode">
-      <enum>QPlainTextEdit::NoWrap</enum>
+    <widget class="QSplitter" name="split">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
      </property>
+     <widget class="QPlainTextEdit" name="editor">
+      <property name="lineWrapMode">
+       <enum>QPlainTextEdit::NoWrap</enum>
+      </property>
+     </widget>
+     <widget class="QListWidget" name="errorList">
+      <property name="toolTip">
+       <string>Lines with an unrecognised name. Click one to jump to it in the file above.</string>
+      </property>
+      <property name="alternatingRowColors">
+       <bool>true</bool>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>16777215</width>
+        <height>200</height>
+       </size>
+      </property>
+     </widget>
     </widget>
    </item>
    <item>
