@@ -90,9 +90,11 @@ namespace WBQtNameMatch
 	// The boost closes half the remaining gap to 1.0, so it can never outrank a true equal or
 	// reorder two candidates that both contain the name -- among those, edit distance still
 	// decides (shorter prefix wins).
-	inline float matchScore(const QString &target, const QString &candidate)
+	//
+	// This overload takes the already-computed similarity: every caller tests it against the
+	// threshold first, so passing it in avoids a second Levenshtein pass over the same pair.
+	inline float matchScoreFromBase(const QString &target, const QString &candidate, float base)
 	{
-		const float base = similarity(target, candidate);
 		const QString t = target.toLower();
 		const QString c = candidate.toLower();
 		if (t.isEmpty() || c == t || !c.contains(t))
@@ -100,6 +102,11 @@ namespace WBQtNameMatch
 			return base;
 		}
 		return base + 0.5f * (1.0f - base);
+	}
+
+	inline float matchScore(const QString &target, const QString &candidate)
+	{
+		return matchScoreFromBase(target, candidate, similarity(target, candidate));
 	}
 
 	// One scored leaf, for ranking (see rankMatches).
@@ -138,11 +145,12 @@ namespace WBQtNameMatch
 				// candidates that already cleared the bar -- it must not drag in a distant name
 				// that happens to embed the target.
 				const QString candidate = (*it)->text(0);
-				if (similarity(target, candidate) >= threshold)
+				const float base = similarity(target, candidate);
+				if (base >= threshold)
 				{
 					ScoredLeaf s;
 					s.item = *it;
-					s.score = matchScore(target, candidate);
+					s.score = matchScoreFromBase(target, candidate, base);
 					scored.push_back(s);
 				}
 			}

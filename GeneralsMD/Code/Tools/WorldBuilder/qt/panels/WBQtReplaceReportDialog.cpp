@@ -2,6 +2,7 @@
 #include "WBQtReplaceReportDialog.h"
 #include "ui_WBQtReplaceReportDialog.h"
 #include "WBQtPickUnitBridge.h"
+#include "WBQtTreeStyle.h"
 
 #include <QApplication>		// qApp, in the _Run entry point
 #include <QHeaderView>
@@ -25,6 +26,7 @@ WBQtReplaceReportDialog::WBQtReplaceReportDialog(QWidget *parent)
 	  m_ui(new Ui::WBQtReplaceReportDialog)
 {
 	m_ui->setupUi(this);
+	WBQtTreeStyle::applyTreeLines(m_ui->rowTree);
 	// The same report serves both sources; only the wording differs. Script rows name object
 	// types used in condition/action parameters, so there is nothing to select in the viewport.
 	if (WBQtReplaceReport_GetSource() == WBQT_REPLACE_SOURCE_SCRIPTS)

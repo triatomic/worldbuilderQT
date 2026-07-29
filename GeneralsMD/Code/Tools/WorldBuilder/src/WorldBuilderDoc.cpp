@@ -1556,7 +1556,7 @@ void CWorldBuilderDoc::validate(void)
 	// names are resolved by best name match without further prompting, and every decision (this
 	// one included) is recorded for the report shown at the end.
 	Bool qtReplaceAll = false;
-	WBQtReplaceReport_Clear();
+	WBQtReplaceReport_Begin(WBQT_REPLACE_SOURCE_MAPOBJECTS);
 #endif
 
 	MapObject *pMapObj;
@@ -1599,8 +1599,8 @@ void CWorldBuilderDoc::validate(void)
 
 			if (!exists) {
 #ifdef RTS_HAS_QT
-				Bool qtHandled = false;
 				Bool qtIgnored = false;
+				int qtRc = -1;
 				{
 					int allowable[ES_NUM_SORTING_TYPES];
 					int allowCount = 0;
@@ -1609,35 +1609,35 @@ void CWorldBuilderDoc::validate(void)
 					}
 					char qtPicked[256];
 					qtPicked[0] = 0;
-					int qtRc;
-					if (qtReplaceAll) {
-						// Already batching: no dialog, just take the closest name match (0 when
-						// nothing clears the bar, which leaves the name missing).
+					if (!qtReplaceAll) {
+						qtRc = WBQtReplaceUnit_Run(::AfxGetMainWnd() ? ::AfxGetMainWnd()->GetSafeHwnd() : NULL, name.str(), allowable, allowCount, false, qtPicked, sizeof(qtPicked));
+					} else {
+						qtRc = WBQT_REPLACE_ALL;	// already batching: skip straight to the match
+					}
+					if (qtRc == WBQT_REPLACE_ALL) {
+						// Latch batch mode and resolve this name by closest match, so the button
+						// covers the unit on screen as well as the rest. IGNORE here just means
+						// nothing cleared the bar -- it must not stop the validate.
+						qtReplaceAll = true;
 						qtRc = WBQtReplaceUnit_BestMatch(name.str(), allowable, allowCount, false,
 							qtPicked, sizeof(qtPicked)) ? WBQT_REPLACE_OK : WBQT_REPLACE_IGNORE;
-					} else {
-						qtRc = WBQtReplaceUnit_Run(::AfxGetMainWnd() ? ::AfxGetMainWnd()->GetSafeHwnd() : NULL, name.str(), allowable, allowCount, false, qtPicked, sizeof(qtPicked));
-						if (qtRc == WBQT_REPLACE_ALL) {
-							// Latch batch mode and resolve THIS name the same way, so the button
-							// applies to the unit that is on screen as well as the rest.
-							qtReplaceAll = true;
-							qtRc = WBQtReplaceUnit_BestMatch(name.str(), allowable, allowCount, false,
-								qtPicked, sizeof(qtPicked)) ? WBQT_REPLACE_OK : WBQT_REPLACE_IGNORE;
-						}
 					}
-					if (qtRc >= 0) {
-						qtHandled = true;
-						if (qtRc == WBQT_REPLACE_OK) {
-							const ThingTemplate* qtThing = TheThingFactory->findTemplate(AsciiString(qtPicked));
-							if (qtThing) {
-								swapName = qtThing->getName();
-								swapDict.setAsciiString(NAMEKEY(name), swapName);
-							}
-						} else if (qtRc == WBQT_REPLACE_IGNORE) {
-							// User clicked "Proceed without replace" (or the batch pass found no
-							// close match). Only stop the whole validate for a real user choice.
-							DEBUG_LOG(("Not replacing unit '%s'\n", name.str()));
-							qtIgnored = !qtReplaceAll;
+					if (qtRc == WBQT_REPLACE_OK) {
+						const ThingTemplate* qtThing = TheThingFactory->findTemplate(AsciiString(qtPicked));
+						if (qtThing) {
+							swapName = qtThing->getName();
+							swapDict.setAsciiString(NAMEKEY(name), swapName);
+						}
+					} else if (qtRc == WBQT_REPLACE_IGNORE) {
+						DEBUG_LOG(("Not replacing unit '%s'\n", name.str()));
+						// A real user "Continue without replacing" stops the validate; a batch name
+						// that simply found no match does not.
+						qtIgnored = !qtReplaceAll;
+						if (qtReplaceAll) {
+							// Remember the "no match" verdict too. Without this, every OTHER object
+							// carrying this same name re-enters here -- re-running the whole catalog
+							// scan and pushing a duplicate report row per object, not per name.
+							swapDict.setAsciiString(NAMEKEY(name), name);
 						}
 					}
 					if (qtReplaceAll) {
@@ -1650,7 +1650,7 @@ void CWorldBuilderDoc::validate(void)
 				if (qtIgnored) {
 					break;  // Skip this object and move to the next one
 				}
-				if (!qtHandled) {
+				if (qtRc < 0) {
 #endif
 				ReplaceUnitDialog dlg;
 				dlg.setMissing(name);

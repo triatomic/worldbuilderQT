@@ -507,11 +507,12 @@ extern "C" int WBQtReplaceUnit_BestMatch(const char *missingName, const int *all
 		const QString candidate = QString::fromLocal8Bit(name);
 		// Admit on the raw similarity (same bar the dialog uses), rank by the containment-aware
 		// score, so "AsltGLAArmsDealer" beats "GLAHoleArmsDealer" for a missing "GLAArmsDealer".
-		if (WBQtNameMatch::similarity(target, candidate) < WBQtNameMatch::kSuggestThreshold)
+		const float base = WBQtNameMatch::similarity(target, candidate);
+		if (base < WBQtNameMatch::kSuggestThreshold)
 		{
 			continue;
 		}
-		const float score = WBQtNameMatch::matchScore(target, candidate);
+		const float score = WBQtNameMatch::matchScoreFromBase(target, candidate, base);
 		if (score > bestScore)
 		{
 			bestScore = score;

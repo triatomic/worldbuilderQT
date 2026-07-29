@@ -143,14 +143,16 @@ struct WBQtReplaceRow
 static std::vector<WBQtReplaceRow> s_qtReplaceRows;
 static int s_qtReplaceSource = WBQT_REPLACE_SOURCE_MAPOBJECTS;
 
-extern "C" void WBQtReplaceReport_Clear(void)
+// The name this row's objects/parameters actually carry right now. An empty m_current means the
+// row was never replaced, so they still carry the original missing name.
+static const AsciiString &wbRowActiveName(const WBQtReplaceRow &row)
 {
-	s_qtReplaceRows.clear();
-	s_qtReplaceSource = WBQT_REPLACE_SOURCE_MAPOBJECTS;
+	return row.m_current.isEmpty() ? row.m_missing : row.m_current;
 }
 
-extern "C" void WBQtReplaceReport_SetSource(int source)
+extern "C" void WBQtReplaceReport_Begin(int source)
 {
+	s_qtReplaceRows.clear();
 	s_qtReplaceSource = source;
 }
 
@@ -188,8 +190,7 @@ extern "C" void WBQtReplaceReport_CountObjects(void)
 	}
 	for (size_t r = 0; r < s_qtReplaceRows.size(); r++)
 	{
-		const AsciiString &wanted = s_qtReplaceRows[r].m_current.isEmpty()
-			? s_qtReplaceRows[r].m_missing : s_qtReplaceRows[r].m_current;
+		const AsciiString &wanted = wbRowActiveName(s_qtReplaceRows[r]);
 		Int n = 0;
 		for (MapObject *obj = MapObject::getFirstMapObject(); obj; obj = obj->getNext())
 		{
@@ -239,8 +240,7 @@ static void wbCollectRowObjects(int i, std::vector<MapObject *> &out)
 	{
 		return;		// script rows name template values in parameters, not placed objects
 	}
-	const AsciiString &wanted = s_qtReplaceRows[i].m_current.isEmpty()
-		? s_qtReplaceRows[i].m_missing : s_qtReplaceRows[i].m_current;
+	const AsciiString &wanted = wbRowActiveName(s_qtReplaceRows[i]);
 	for (MapObject *obj = MapObject::getFirstMapObject(); obj; obj = obj->getNext())
 	{
 		if (obj->getName() == wanted)
@@ -267,8 +267,7 @@ extern "C" void WBQtReplaceReport_SetReplacement(int i, const char *replacementN
 		// Script rows: rewrite the OBJECT_TYPE parameter values instead of re-pointing objects.
 		// Whole-value, case-sensitive -- the parameter holds exactly one template name. An empty
 		// replacement puts the original missing name back.
-		const AsciiString from = s_qtReplaceRows[i].m_current.isEmpty()
-			? s_qtReplaceRows[i].m_missing : s_qtReplaceRows[i].m_current;
+		const AsciiString from = wbRowActiveName(s_qtReplaceRows[i]);
 		const AsciiString to = newName.isEmpty() ? s_qtReplaceRows[i].m_missing : newName;
 		if (from != to)
 		{

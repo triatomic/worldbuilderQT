@@ -43,12 +43,10 @@
 #include "Common/UnicodeString.h"
 #include "MainFrm.h"
 #ifdef RTS_HAS_QT
-#include "qt/panels/WBQtPickUnitBridge.h"	// Replace Missing Entries: name matcher + the report
-#endif
-#ifdef RTS_HAS_QT
 #include "qt/panels/WBQtScriptEditBridge.h"
 #include "qt/panels/WBQtParamBridge.h"
 #include "qt/panels/WBQtMiscModalsBridge.h"
+#include "qt/panels/WBQtPickUnitBridge.h"	// Replace Missing Entries: name matcher + the report
 #endif
 
 #include "Common/GlobalData.h"
@@ -4533,8 +4531,7 @@ int ScriptDialog::qtScriptReplaceMissing(void)
 		}
 	}
 
-	WBQtReplaceReport_Clear();
-	WBQtReplaceReport_SetSource(WBQT_REPLACE_SOURCE_SCRIPTS);
+	WBQtReplaceReport_Begin(WBQT_REPLACE_SOURCE_SCRIPTS);
 	if (resolvable > 0)
 	{
 		qtPushUndoSnapshot();

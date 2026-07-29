@@ -51,9 +51,9 @@ void WBQtReplaceReport_Run(void *frameHwnd);
 #define WBQT_REPLACE_SOURCE_MAPOBJECTS	0
 #define WBQT_REPLACE_SOURCE_SCRIPTS		1
 
-// Drop all rows (start of a validate pass) and say what the next batch of rows describes.
-void WBQtReplaceReport_Clear(void);
-void WBQtReplaceReport_SetSource(int source);
+// Start a batch: drop all rows and fix what this batch's rows describe. One source per batch --
+// taking it as an argument here means the two cannot be set out of order.
+void WBQtReplaceReport_Begin(int source);
 int WBQtReplaceReport_GetSource(void);
 // Record that `missingName` was replaced by `replacementName` (empty == left unreplaced).
 void WBQtReplaceReport_Add(const char *missingName, const char *replacementName, int objectCount);
