@@ -6,6 +6,7 @@
 #include "WBQtWindowPos.h"
 #include "WBQtTheme.h"
 #include "panels/WBQtScriptEditBridge.h"	// SetInitialFocus: the [Missing] link jump
+#include "panels/WBQtPickUnitBridge.h"		// Replace Missing: the shared replace report
 
 #include <QApplication>
 #include <QBrush>
@@ -236,6 +237,7 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	m_copyScript = m_ui->copyScript;
 	m_delete = m_ui->deleteBtn;
 	m_verify = m_ui->verify;
+	m_replaceMissing = m_ui->replaceMissing;
 	m_addDebug = m_ui->addDebug;
 	m_removeDebug = m_ui->removeDebug;
 	m_patchGC = m_ui->patchGC;
@@ -294,6 +296,7 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	connect(m_copyScript, SIGNAL(clicked()), this, SLOT(onCopyScript()));
 	connect(m_delete, SIGNAL(clicked()), this, SLOT(onDelete()));
 	connect(m_verify, SIGNAL(clicked()), this, SLOT(onVerify()));
+	connect(m_replaceMissing, SIGNAL(clicked()), this, SLOT(onReplaceMissing()));
 	connect(m_addDebug, SIGNAL(clicked()), this, SLOT(onAddDebug()));
 	connect(m_removeDebug, SIGNAL(clicked()), this, SLOT(onRemoveDebug()));
 	connect(m_patchGC, SIGNAL(clicked()), this, SLOT(onPatchGC()));
@@ -969,6 +972,24 @@ void WBQtScriptWindow::onRedo()
 void WBQtScriptWindow::onVerify()
 {
 	WBQtScript_Verify();
+	rebuildTree();
+	updateButtonStates();
+	updateDetail();
+}
+
+// Replace every missing object type in the scripts with its closest existing template, then show
+// the shared replace report so the guesses can be reviewed and corrected.
+void WBQtScriptWindow::onReplaceMissing()
+{
+	pushSelectionToDialog();
+	const int found = WBQtScript_ReplaceMissingEntries();
+	if (found == 0)
+	{
+		QMessageBox::information(this, tr("Replace Missing"),
+			tr("No missing object types were found in the scripts."));
+		return;
+	}
+	WBQtReplaceReport_Run(NULL);
 	rebuildTree();
 	updateButtonStates();
 	updateDetail();

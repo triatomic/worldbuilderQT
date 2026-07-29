@@ -78,6 +78,7 @@ private slots:
 	void onUndo();
 	void onRedo();
 	void onVerify();
+	void onReplaceMissing();
 	void onToggleActive();
 	void onAddDebug();
 	void onRemoveDebug();
@@ -197,6 +198,7 @@ private:
 	QPushButton *m_copyScript;
 	QPushButton *m_delete;
 	QPushButton *m_verify;
+	QPushButton *m_replaceMissing;
 	QPushButton *m_addDebug;
 	QPushButton *m_removeDebug;
 	QPushButton *m_patchGC;

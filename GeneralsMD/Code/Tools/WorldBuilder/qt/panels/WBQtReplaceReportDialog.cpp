@@ -25,6 +25,16 @@ WBQtReplaceReportDialog::WBQtReplaceReportDialog(QWidget *parent)
 	  m_ui(new Ui::WBQtReplaceReportDialog)
 {
 	m_ui->setupUi(this);
+	// The same report serves both sources; only the wording differs. Script rows name object
+	// types used in condition/action parameters, so there is nothing to select in the viewport.
+	if (WBQtReplaceReport_GetSource() == WBQT_REPLACE_SOURCE_SCRIPTS)
+	{
+		setWindowTitle(tr("Replaced Missing Script Entries"));
+		m_ui->introLabel->setText(tr("Each missing object type in the scripts was replaced with "
+			"its closest name match. Change a replacement if the guess is wrong."));
+		m_ui->rowTree->headerItem()->setText(kColMissing, tr("Missing object type"));
+		m_ui->rowTree->headerItem()->setText(kColObjects, tr("Uses"));
+	}
 	m_ui->rowTree->header()->setStretchLastSection(false);
 	m_ui->rowTree->header()->setSectionResizeMode(kColMissing, QHeaderView::Stretch);
 	m_ui->rowTree->header()->setSectionResizeMode(kColReplacement, QHeaderView::Stretch);
@@ -100,7 +110,9 @@ void WBQtReplaceReportDialog::refreshSummary()
 			++unresolved;
 		}
 	}
-	QString text = tr("%1 missing unit(s)").arg(count);
+	QString text = (WBQtReplaceReport_GetSource() == WBQT_REPLACE_SOURCE_SCRIPTS)
+		? tr("%1 missing object type(s)").arg(count)
+		: tr("%1 missing unit(s)").arg(count);
 	if (unresolved > 0)
 	{
 		text += tr(" -- %1 with no close match").arg(unresolved);

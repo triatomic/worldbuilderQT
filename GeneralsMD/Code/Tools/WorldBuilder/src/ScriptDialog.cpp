@@ -43,6 +43,9 @@
 #include "Common/UnicodeString.h"
 #include "MainFrm.h"
 #ifdef RTS_HAS_QT
+#include "qt/panels/WBQtPickUnitBridge.h"	// Replace Missing Entries: name matcher + the report
+#endif
+#ifdef RTS_HAS_QT
 #include "qt/panels/WBQtScriptEditBridge.h"
 #include "qt/panels/WBQtParamBridge.h"
 #include "qt/panels/WBQtMiscModalsBridge.h"
@@ -4361,6 +4364,64 @@ namespace {
 		forEachStringParamInScript(pScr, v);
 		return v.hits;
 	}
+
+	// Visitor: gather every distinct OBJECT_TYPE value that does not resolve, across a script.
+	// Same verdict as MissingObjectCollector (which builds the per-script "[Missing]" tag) -- an
+	// empty value is a placeholder, not a name we could ever match, so it is skipped here.
+	struct MissingNameGatherer
+	{
+		std::vector<AsciiString> *names;
+		void visit(Parameter *param, const AsciiString &value)
+		{
+			if (param->getParameterType() != Parameter::OBJECT_TYPE || value.isEmpty())
+			{
+				return;
+			}
+			if (TheThingFactory->findTemplate(value) != NULL)
+			{
+				return;		// resolves fine
+			}
+			if (EditParameter::getWarningText(param, FALSE).isEmpty())
+			{
+				return;		// a script object list, not a missing template
+			}
+			for (size_t i = 0; i < names->size(); i++)
+			{
+				if ((*names)[i] == value)
+				{
+					return;	// already gathered
+				}
+			}
+			names->push_back(value);
+		}
+	};
+}
+
+// Every distinct unresolvable OBJECT_TYPE name across all players' scripts, in encounter order.
+void ScriptDialog::qtCollectMissingNames(std::vector<AsciiString> &out)
+{
+	out.clear();
+	MissingNameGatherer v;
+	v.names = &out;
+	for (int i = 0; i < m_sides.getNumSides(); ++i)
+	{
+		ScriptList *pSL = m_sides.getSideInfo(i)->getScriptList();
+		if (pSL == NULL)
+		{
+			continue;
+		}
+		for (Script *s = pSL->getScript(); s != NULL; s = s->getNext())
+		{
+			forEachStringParamInScript(s, v);
+		}
+		for (ScriptGroup *g = pSL->getScriptGroup(); g != NULL; g = g->getNext())
+		{
+			for (Script *s = g->getScript(); s != NULL; s = s->getNext())
+			{
+				forEachStringParamInScript(s, v);
+			}
+		}
+	}
 }
 
 // Resolve a packed-ListType node to its Script* without disturbing the real tree selection. NULL
@@ -4436,6 +4497,88 @@ int ScriptDialog::qtScriptReplace(const char *find, const char *replace,
 		updateIcons(TVI_ROOT);
 	}
 	return hits;
+}
+
+// Script editor "Replace Missing Entries": resolve every unresolvable OBJECT_TYPE name in the
+// scripts to its closest existing template, using the same name matcher the Replace Missing Unit
+// dialog uses, and report what was decided so wrong guesses can be corrected.
+//
+// Whole-value replacement only: an OBJECT_TYPE parameter holds exactly one template name, so a
+// substring rewrite would be wrong.
+int ScriptDialog::qtScriptReplaceMissing(void)
+{
+#ifndef RTS_HAS_QT
+	return 0;	// the matcher and the report are Qt-side
+#else
+	std::vector<AsciiString> missing;
+	qtCollectMissingNames(missing);
+	if (missing.empty())
+	{
+		return 0;
+	}
+
+	// Match every name FIRST, so the undo snapshot is only taken when something will actually
+	// change (an all-unmatched pass leaves the scripts and the undo stack alone).
+	std::vector<AsciiString> picks;
+	picks.resize(missing.size());
+	int resolvable = 0;
+	for (size_t i = 0; i < missing.size(); i++)
+	{
+		char picked[256];
+		picked[0] = 0;
+		if (WBQtReplaceUnit_BestMatch(missing[i].str(), NULL, 0, 0, picked, sizeof(picked)))
+		{
+			picks[i] = picked;
+			++resolvable;
+		}
+	}
+
+	WBQtReplaceReport_Clear();
+	WBQtReplaceReport_SetSource(WBQT_REPLACE_SOURCE_SCRIPTS);
+	if (resolvable > 0)
+	{
+		qtPushUndoSnapshot();
+	}
+
+	int replaced = 0;
+	for (size_t i = 0; i < missing.size(); i++)
+	{
+		int hits = 0;
+		if (!picks[i].isEmpty())
+		{
+			for (int s = 0; s < m_sides.getNumSides(); ++s)
+			{
+				ScriptList *pSL = m_sides.getSideInfo(s)->getScriptList();
+				if (pSL == NULL)
+				{
+					continue;
+				}
+				for (Script *scr = pSL->getScript(); scr != NULL; scr = scr->getNext())
+				{
+					hits += qtReplaceInScript(scr, missing[i], picks[i], true, true, true);
+				}
+				for (ScriptGroup *g = pSL->getScriptGroup(); g != NULL; g = g->getNext())
+				{
+					for (Script *scr = g->getScript(); scr != NULL; scr = scr->getNext())
+					{
+						hits += qtReplaceInScript(scr, missing[i], picks[i], true, true, true);
+					}
+				}
+			}
+			replaced += hits;
+		}
+		// One row per missing name either way -- an unmatched name still belongs in the report so
+		// it can be fixed by hand rather than silently staying broken.
+		WBQtReplaceReport_Add(missing[i].str(), picks[i].str(), hits);
+	}
+
+	if (replaced > 0)
+	{
+		updateWarnings(true);	// parameters changed -> refresh warning flags (== a normal edit)
+		updateIcons(TVI_ROOT);
+	}
+	return (int)missing.size();
+#endif
 }
 
 namespace {

@@ -46,8 +46,15 @@ void WBQtReplaceReport_Run(void *frameHwnd);
 
 // ---- report contents, filled by the validate pass before _Run (src/WBQtPickUnitBridge.cpp) ----
 
-// Drop all rows (start of a validate pass).
+// What a report's rows refer to. Map-object rows re-point placed objects and can select them in
+// the viewport; script rows rewrite OBJECT_TYPE parameters and have nothing to select.
+#define WBQT_REPLACE_SOURCE_MAPOBJECTS	0
+#define WBQT_REPLACE_SOURCE_SCRIPTS		1
+
+// Drop all rows (start of a validate pass) and say what the next batch of rows describes.
 void WBQtReplaceReport_Clear(void);
+void WBQtReplaceReport_SetSource(int source);
+int WBQtReplaceReport_GetSource(void);
 // Record that `missingName` was replaced by `replacementName` (empty == left unreplaced).
 void WBQtReplaceReport_Add(const char *missingName, const char *replacementName, int objectCount);
 // True when at least one row was recorded, i.e. the report is worth showing.

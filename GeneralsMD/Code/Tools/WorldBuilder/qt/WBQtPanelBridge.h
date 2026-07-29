@@ -265,6 +265,11 @@ int  WBQtScript_NodeMatches(int listType, const char *text, const char *label);
 // Find/replace across script condition/action parameter values. Returns the match count.
 // doReplace 0 = count only; 1 = rewrite matches (undoable). matchCase/wholeValue toggle the mode.
 // scopeListType -1 = all scripts; else a packed ListType limiting to that one selected script.
+// Replace every unresolvable OBJECT_TYPE value across all scripts with its closest existing
+// template (same name matcher as the Replace Missing Unit dialog) and fill the replace report.
+// Returns the number of distinct missing names found; 0 == nothing to do.
+int  WBQtScript_ReplaceMissingEntries(void);
+
 int  WBQtScript_ReplaceInParams(const char *find, const char *replace,
 	int matchCase, int wholeValue, int doReplace, int scopeListType);
 // Next script (tree order, after fromListType) with a matching parameter value; 1 + outListType, or 0.

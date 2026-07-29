@@ -16,6 +16,7 @@
 #include "WorldBuilderDoc.h"		// the replace report re-points map objects + recentres the view
 #include "wbview3d.h"
 #include "qt/panels/WBQtPickUnitBridge.h"
+#include "qt/WBQtPanelBridge.h"			// script rows rewrite params via _ReplaceInParams
 
 #ifdef RTS_HAS_QT
 
@@ -140,10 +141,22 @@ struct WBQtReplaceRow
 };
 
 static std::vector<WBQtReplaceRow> s_qtReplaceRows;
+static int s_qtReplaceSource = WBQT_REPLACE_SOURCE_MAPOBJECTS;
 
 extern "C" void WBQtReplaceReport_Clear(void)
 {
 	s_qtReplaceRows.clear();
+	s_qtReplaceSource = WBQT_REPLACE_SOURCE_MAPOBJECTS;
+}
+
+extern "C" void WBQtReplaceReport_SetSource(int source)
+{
+	s_qtReplaceSource = source;
+}
+
+extern "C" int WBQtReplaceReport_GetSource(void)
+{
+	return s_qtReplaceSource;
 }
 
 extern "C" void WBQtReplaceReport_Add(const char *missingName, const char *replacementName,
@@ -169,6 +182,10 @@ extern "C" int WBQtReplaceReport_HasRows(void)
 // everything, since rows are recorded while the swap decisions are still being made.
 extern "C" void WBQtReplaceReport_CountObjects(void)
 {
+	if (s_qtReplaceSource != WBQT_REPLACE_SOURCE_MAPOBJECTS)
+	{
+		return;		// script rows already carry their own hit counts
+	}
 	for (size_t r = 0; r < s_qtReplaceRows.size(); r++)
 	{
 		const AsciiString &wanted = s_qtReplaceRows[r].m_current.isEmpty()
@@ -217,9 +234,10 @@ extern "C" void WBQtReplaceReport_GetRow(int i, char *missingOut, int missingCap
 static void wbCollectRowObjects(int i, std::vector<MapObject *> &out)
 {
 	out.clear();
-	if (i < 0 || i >= (int)s_qtReplaceRows.size())
+	if (i < 0 || i >= (int)s_qtReplaceRows.size()
+		|| s_qtReplaceSource != WBQT_REPLACE_SOURCE_MAPOBJECTS)
 	{
-		return;
+		return;		// script rows name template values in parameters, not placed objects
 	}
 	const AsciiString &wanted = s_qtReplaceRows[i].m_current.isEmpty()
 		? s_qtReplaceRows[i].m_missing : s_qtReplaceRows[i].m_current;
@@ -241,6 +259,22 @@ extern "C" void WBQtReplaceReport_SetReplacement(int i, const char *replacementN
 	AsciiString newName = (replacementName != NULL) ? replacementName : "";
 	if (newName == s_qtReplaceRows[i].m_current)
 	{
+		return;
+	}
+
+	if (s_qtReplaceSource == WBQT_REPLACE_SOURCE_SCRIPTS)
+	{
+		// Script rows: rewrite the OBJECT_TYPE parameter values instead of re-pointing objects.
+		// Whole-value, case-sensitive -- the parameter holds exactly one template name. An empty
+		// replacement puts the original missing name back.
+		const AsciiString from = s_qtReplaceRows[i].m_current.isEmpty()
+			? s_qtReplaceRows[i].m_missing : s_qtReplaceRows[i].m_current;
+		const AsciiString to = newName.isEmpty() ? s_qtReplaceRows[i].m_missing : newName;
+		if (from != to)
+		{
+			WBQtScript_ReplaceInParams(from.str(), to.str(), 1, 1, 1, -1);
+		}
+		s_qtReplaceRows[i].m_current = newName;
 		return;
 	}
 	// An empty replacement means "leave it missing": put the original name back so the map still

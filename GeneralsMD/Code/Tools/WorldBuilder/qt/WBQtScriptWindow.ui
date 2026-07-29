@@ -432,6 +432,16 @@
        </property>
       </widget>
      </item>
+     <item>
+      <widget class="QPushButton" name="replaceMissing">
+       <property name="text">
+        <string>Replace Missing...</string>
+       </property>
+       <property name="toolTip">
+        <string>Replace every missing object type in the scripts with its closest name match, then show a report you can correct.</string>
+       </property>
+      </widget>
+     </item>
     </layout>
    </item>
    <item>

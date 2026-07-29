@@ -139,6 +139,13 @@ public:
 	// scopeListType -1 = all scripts; else limit to that one selected script.
 	int  qtScriptReplace(const char *find, const char *replace,
 		int matchCase, int wholeValue, int doReplace, int scopeListType = -1);
+	// Every distinct OBJECT_TYPE value across all scripts that no longer resolves to a template
+	// (== what the per-script "[Missing]" tag lists, gathered map-wide).
+	void qtCollectMissingNames(std::vector<AsciiString> &out);
+	// Replace every one of those with its closest existing template (the same name matcher the
+	// Replace Missing Unit dialog uses) and fill the replace report. Returns the number of
+	// distinct missing names found; 0 means there was nothing to do.
+	int  qtScriptReplaceMissing(void);
 	// Navigate to the next script (tree order, after fromListType) with a matching PARAMETER value
 	// -- same scope as qtScriptReplace, so the replace bar's Next/Prev agrees with its count.
 	int  qtFindNextParamMatch(int fromListType, const char *find,

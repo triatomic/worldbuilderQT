@@ -1522,6 +1522,12 @@ int WBQtScript_ReplaceInParams(const char *find, const char *replace,
 		? dlg->qtScriptReplace(find, replace, matchCase, wholeValue, doReplace, scopeListType) : 0;
 }
 
+int WBQtScript_ReplaceMissingEntries(void)
+{
+	ScriptDialog *dlg = ScriptDialog::qtInstance();
+	return (dlg != NULL) ? dlg->qtScriptReplaceMissing() : 0;
+}
+
 int WBQtScript_FindNextParamMatch(int fromListType, const char *find,
 	int matchCase, int wholeValue, int *outListType)
 {
