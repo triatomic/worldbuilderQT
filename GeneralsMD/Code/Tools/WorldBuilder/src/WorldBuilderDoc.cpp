@@ -69,6 +69,7 @@
 #include "qt/panels/WBQtMapFileBridge.h"
 #include "qt/panels/WBQtPickUnitBridge.h"
 #include "qt/panels/WBQtMapIniReport.h"
+#include "qt/panels/WBQtMapIniEditorBridge.h"
 #endif
 #include "SaveMap.h"
 #include "ScriptDialog.h"
@@ -933,6 +934,7 @@ BEGIN_MESSAGE_MAP(CWorldBuilderDoc, CDocument)
 	
 	ON_COMMAND(ID_FILE_GENERATE_MAPSTRNINI, OnGenerateMapStrAndIni)
 	ON_COMMAND(ID_FILE_OPEN_MAPINI, OnOpenMapIni)
+	ON_COMMAND(ID_FILE_EDIT_MAPINI, OnEditMapIni)
 	ON_COMMAND(ID_FILE_RELOAD_MAPINI, OnReloadMapIni)
 	ON_COMMAND(ID_FILE_CHECK_MAPINI, OnCheckMapIni)
 	ON_COMMAND(ID_FILE_WATCH_MAPINI, OnToggleWatchMapIni)
@@ -1778,6 +1780,38 @@ void CWorldBuilderDoc::OnOpenMapIni()
 		}
 		fclose(fp);
 	}
+	::ShellExecute(NULL, "open", iniPath.str(), NULL, NULL, SW_SHOW);
+}
+
+// File > Map.ini > Open map.ini (internal): the same file as Open map.ini, but in WorldBuilder's
+// own editor -- which knows the template catalog and can therefore flag object names the data set
+// does not define and offer the closest matches. Falls back to the external editor if Qt is down.
+void CWorldBuilderDoc::OnEditMapIni()
+{
+	AsciiString iniPath = currentMapIniPath(m_strPathName);
+	if (iniPath.isEmpty()) {
+		AfxMessageBox("Save or open a map first.", MB_ICONEXCLAMATION | MB_OK);
+		return;
+	}
+	if (!TheFileSystem->doesFileExist(iniPath.str())) {
+		if (AfxMessageBox("This map has no map.ini yet. Create an empty one and open it?",
+				MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON1) != IDYES) {
+			return;
+		}
+		FILE *fp = fopen(iniPath.str(), "wt");
+		if (fp == NULL) {
+			AfxMessageBox("Couldn't create the map.ini file (is the map folder writable?).",
+				MB_ICONEXCLAMATION | MB_OK);
+			return;
+		}
+		fclose(fp);
+	}
+#ifdef RTS_HAS_QT
+	if (WBQtMapIniEditor_Open(::AfxGetMainWnd() ? ::AfxGetMainWnd()->GetSafeHwnd() : NULL,
+			iniPath.str()) != 0) {
+		return;
+	}
+#endif
 	::ShellExecute(NULL, "open", iniPath.str(), NULL, NULL, SW_SHOW);
 }
 

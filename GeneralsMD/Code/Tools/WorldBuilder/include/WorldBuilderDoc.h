@@ -208,6 +208,7 @@ protected:
 
 	// Map.ini loader commands (File > Map.ini submenu).
 	afx_msg void OnOpenMapIni();
+	afx_msg void OnEditMapIni();	///< the built-in Qt editor (falls back to OnOpenMapIni's shell)
 	afx_msg void OnReloadMapIni();
 	afx_msg void OnCheckMapIni();
 	afx_msg void OnToggleWatchMapIni();

@@ -903,6 +903,7 @@
 #define ID_FILE_WATCH_MAPINI            33400
 #define ID_FILE_CHECK_MAPINI            33401
 #define ID_FILE_VERBOSE_MAPINI          33402
+#define ID_FILE_EDIT_MAPINI             33420
 #define ID_FILE_OPEN_MAPINI             33403
 #define IDS_NEW                         61446
 #define IDS_RESIZE                      61447

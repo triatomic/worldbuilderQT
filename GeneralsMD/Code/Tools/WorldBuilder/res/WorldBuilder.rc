@@ -221,6 +221,7 @@ BEGIN
         POPUP "Map.ini"
         BEGIN
             MENUITEM "Open map.ini",                ID_FILE_OPEN_MAPINI
+            MENUITEM "Open map.ini (internal)",     ID_FILE_EDIT_MAPINI
             MENUITEM "Reload map.ini",              ID_FILE_RELOAD_MAPINI
             MENUITEM "Check map.ini",               ID_FILE_CHECK_MAPINI
             MENUITEM "Auto-reload map.ini on change", ID_FILE_WATCH_MAPINI
