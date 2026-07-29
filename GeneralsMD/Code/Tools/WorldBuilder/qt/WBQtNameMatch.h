@@ -6,6 +6,10 @@
 // similarity in [0,1] from the Levenshtein edit distance (1 - dist/maxLen), compared
 // case-insensitively. A caller uses a threshold (~0.70) to decide whether the best candidate is a
 // good enough suggestion to auto-select.
+//
+// Ranking uses matchScore() rather than similarity() directly: edit distance alone cannot tell a
+// prefixed name from one with text spliced into its middle, so a candidate containing the whole
+// missing name intact is preferred. See the comment there.
 #ifndef WB_QT_NAME_MATCH_H
 #define WB_QT_NAME_MATCH_H
 
@@ -73,6 +77,31 @@ namespace WBQtNameMatch
 		return 1.0f - (float(dist) / float(maxLen));
 	}
 
+	// Ranking score: similarity(), but a candidate that CONTAINS the whole missing name intact
+	// beats one of the same edit distance that splices text into the middle of it.
+	//
+	// Levenshtein counts how many edits, never where, so for a missing "GLAArmsDealer" the four
+	// candidates AsltGLAArmsDealer / ChemGLAArmsDealer / SlthGLAArmsDealer / GLAHoleArmsDealer all
+	// score an identical 0.7647 -- four inserted characters either way. The tie then fell to
+	// whichever the catalog happened to list first (stable_sort keeps tree order), which picked
+	// the GLAHole* variant. The faction/rank prefixes are the near-universal naming convention
+	// here ("<Prefix>Name"), so keeping the name unbroken is the better guess by a wide margin.
+	//
+	// The boost closes half the remaining gap to 1.0, so it can never outrank a true equal or
+	// reorder two candidates that both contain the name -- among those, edit distance still
+	// decides (shorter prefix wins).
+	inline float matchScore(const QString &target, const QString &candidate)
+	{
+		const float base = similarity(target, candidate);
+		const QString t = target.toLower();
+		const QString c = candidate.toLower();
+		if (t.isEmpty() || c == t || !c.contains(t))
+		{
+			return base;
+		}
+		return base + 0.5f * (1.0f - base);
+	}
+
 	// One scored leaf, for ranking (see rankMatches).
 	struct ScoredLeaf
 	{
@@ -105,12 +134,15 @@ namespace WBQtNameMatch
 		{
 			if ((*it)->data(0, leafRole).toInt() >= leafMin)
 			{
-				const float score = similarity(target, (*it)->text(0));
-				if (score >= threshold)
+				// Admit on the raw similarity so the containment boost only ever REORDERS the
+				// candidates that already cleared the bar -- it must not drag in a distant name
+				// that happens to embed the target.
+				const QString candidate = (*it)->text(0);
+				if (similarity(target, candidate) >= threshold)
 				{
 					ScoredLeaf s;
 					s.item = *it;
-					s.score = score;
+					s.score = matchScore(target, candidate);
 					scored.push_back(s);
 				}
 			}
