@@ -209,6 +209,11 @@
         <string>Origin</string>
        </property>
       </column>
+      <column>
+       <property name="text">
+        <string>Index</string>
+       </property>
+      </column>
      </widget>
     </widget>
    </item>

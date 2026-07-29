@@ -23,7 +23,7 @@ QWidget *WBQt_DialogParent(void);
 namespace
 {
 	const int kTextCap = 1024;
-	const int kTeamColumns = 5;	// name / script / trigger / priority / origin
+	const int kTeamColumns = 6;	// name / script / trigger / priority / origin / index
 }
 
 WBQtTeamsDialog::WBQtTeamsDialog(QWidget *parent)
@@ -46,10 +46,13 @@ WBQtTeamsDialog::WBQtTeamsDialog(QWidget *parent)
 	m_moveUpButton = m_ui->moveUpButton;
 	m_moveDownButton = m_ui->moveDownButton;
 
+	// == the MFC InsertColumn widths (Origin and Index were the narrow 50px pair).
 	m_teams->header()->resizeSection(0, 200);
 	m_teams->header()->resizeSection(1, 200);
 	m_teams->header()->resizeSection(2, 200);
 	m_teams->header()->resizeSection(3, 60);
+	m_teams->header()->resizeSection(4, 60);
+	m_teams->header()->resizeSection(5, 60);
 
 	connect(m_players, SIGNAL(currentRowChanged(int)), this, SLOT(onPlayerRowChanged(int)));
 	connect(m_teams, SIGNAL(itemSelectionChanged()), this, SLOT(onTeamRowChanged()));
