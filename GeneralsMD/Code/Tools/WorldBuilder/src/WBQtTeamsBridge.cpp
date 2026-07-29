@@ -1823,7 +1823,9 @@ namespace
 			{
 				Bool exists = false;
 				AsciiString name = dicts[d]->getAsciiString(qtmUnitTypeKey(slot), &exists);
-				if (!exists || name.isEmpty())
+				// "<none>" is a real row in the unit catalog, so a slot can hold it verbatim
+				// rather than the empty string. It means "no unit here", NOT a broken name.
+				if (!exists || name.isEmpty() || name == NONE_STRING)
 				{
 					continue;
 				}
