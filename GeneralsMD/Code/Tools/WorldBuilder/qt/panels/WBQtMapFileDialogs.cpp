@@ -22,6 +22,9 @@
 // window). Defined in WBQtBridge.cpp.
 QWidget *WBQt_DialogParent(void);
 
+// NewSearch toggle (WBQtObjectBridge.cpp): live-filter search when on.
+extern "C" int WBQtConfig_GetNewSearch(void);
+
 namespace
 {
 	const int kPathCap = 1024;
@@ -71,6 +74,11 @@ WBQtOpenMapDialog::WBQtOpenMapDialog(QWidget *parent)
 	connect(m_userButton, SIGNAL(clicked()), this, SLOT(onModeClicked()));
 	connect(m_systemButton, SIGNAL(clicked()), this, SLOT(onModeClicked()));
 	connect(m_ui->findBtn, SIGNAL(clicked()), this, SLOT(onFind()));
+	if (WBQtConfig_GetNewSearch() != 0)
+	{
+		// NewSearch: filter live as the user types (the Find button still works).
+		connect(m_searchEdit, SIGNAL(textChanged(QString)), this, SLOT(onSearchLive(QString)));
+	}
 	connect(m_ui->resetBtn, SIGNAL(clicked()), this, SLOT(onReset()));
 	connect(m_ui->browseBtn, SIGNAL(clicked()), this, SLOT(onBrowse()));
 	connect(m_list, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(onDoubleClicked()));
@@ -176,6 +184,19 @@ void WBQtOpenMapDialog::onFind()
 	reload();
 }
 
+// NewSearch: filter live as the user types -- empty box restores the full list, and no beep
+// (the Find button keeps that; beeping on every not-yet-matching keystroke is jarring).
+void WBQtOpenMapDialog::onSearchLive(const QString &text)
+{
+	if (m_updating)
+	{
+		return;	// reload() doesn't touch the search box, but stay consistent with the others
+	}
+	QByteArray raw = text.toLocal8Bit();
+	WBQtOpenMap_SearchLive(raw.constData());
+	reload();
+}
+
 void WBQtOpenMapDialog::onReset()
 {
 	m_searchEdit->clear();
@@ -205,7 +226,11 @@ void WBQtOpenMapDialog::accept()
 	// == OnOK's first check: Enter pressed in the search box performs a search instead of
 	// opening a map (the list always pre-selects row 0, so without this Enter-to-search would
 	// silently open the wrong map). Only when the search box has focus and holds text.
-	if (m_searchEdit != NULL && m_searchEdit->hasFocus() && !m_searchEdit->text().isEmpty())
+	//
+	// Not under NewSearch: the list is already filtered to what was typed, so re-searching
+	// would just swallow the keypress. Enter opens the highlighted map, as it does elsewhere.
+	if (WBQtConfig_GetNewSearch() == 0
+		&& m_searchEdit != NULL && m_searchEdit->hasFocus() && !m_searchEdit->text().isEmpty())
 	{
 		onFind();
 		return;

@@ -95,6 +95,9 @@ public:
 	int  qtGetMode(void);
 	void qtSetMode(int mode);
 	void qtSearch(const char *text);
+	// NewSearch live filter: the same filter with the no-match beep suppressed (a beep on
+	// every keystroke that doesn't match yet is jarring). Called per keystroke.
+	void qtSearchLive(const char *text);
 	void qtResetSearch(void);
 	int  qtPick(int row);
 	int  qtBrowsePick(void);

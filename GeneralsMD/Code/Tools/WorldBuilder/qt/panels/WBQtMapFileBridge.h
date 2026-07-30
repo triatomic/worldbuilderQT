@@ -50,6 +50,9 @@ int  WBQtOpenMapData_OkEnabled(void);
 int  WBQtOpenMapData_GetMode(void);
 void WBQtOpenMap_SetMode(int mode);
 void WBQtOpenMap_Search(const char *text);
+// NewSearch live filter: the same filter with the no-match beep suppressed, for the
+// per-keystroke path (the Find button keeps WBQtOpenMap_Search's beep).
+void WBQtOpenMap_SearchLive(const char *text);
 void WBQtOpenMap_ResetSearch(void);
 // Pick row (== OK/double-click). Returns 1 if COMPLETED (result captured), 0 if it only
 // drilled into an archive / did nothing (the Qt list should reload).

@@ -804,27 +804,28 @@ void OpenMap::qtSetMode(int mode)
 	}
 }
 
-void OpenMap::qtSearch(const char *text)
+// Shared filter behind qtSearch (Find button) and qtSearchLive (NewSearch, per keystroke).
+// `beepOnNoMatch` is the only difference: the button keeps the MFC listbox's beep, the live
+// path stays silent because most in-progress prefixes legitimately match nothing yet.
+static void qtSearchInto(const CStringArray &fullMapList, const char *text, bool beepOnNoMatch)
 {
-	// == OnSearchMap minus the edit/listbox: filter m_fullMapList into the view. A no-match
-	// search beeps and leaves the view empty, like the MFC listbox.
 	CString search(text ? text : "");
 	search.MakeLower();
 
 	s_qtView.RemoveAll();
 	if (search.IsEmpty())
 	{
-		for (int i = 0; i < m_fullMapList.GetSize(); i++)
+		for (int i = 0; i < fullMapList.GetSize(); i++)
 		{
-			s_qtView.Add(m_fullMapList[i]);
+			s_qtView.Add(fullMapList[i]);
 		}
 		s_qtViewSel = (s_qtView.GetSize() == 0) ? -1 : 0;
 		return;
 	}
 	bool found = false;
-	for (int i = 0; i < m_fullMapList.GetSize(); i++)
+	for (int i = 0; i < fullMapList.GetSize(); i++)
 	{
-		CString name = m_fullMapList[i];
+		CString name = fullMapList[i];
 		CString lower = name;
 		lower.MakeLower();
 		if (lower.Find(search) != -1)
@@ -835,13 +836,29 @@ void OpenMap::qtSearch(const char *text)
 	}
 	if (!found)
 	{
-		::MessageBeep(MB_ICONEXCLAMATION); // no matches
+		if (beepOnNoMatch)
+		{
+			::MessageBeep(MB_ICONEXCLAMATION); // no matches
+		}
 		s_qtViewSel = -1;
 	}
 	else
 	{
 		s_qtViewSel = 0;
 	}
+}
+
+void OpenMap::qtSearch(const char *text)
+{
+	// == OnSearchMap minus the edit/listbox: filter m_fullMapList into the view. A no-match
+	// search beeps and leaves the view empty, like the MFC listbox.
+	qtSearchInto(m_fullMapList, text, true);
+}
+
+void OpenMap::qtSearchLive(const char *text)
+{
+	// NewSearch: same filter, no beep -- see qtSearchInto.
+	qtSearchInto(m_fullMapList, text, false);
 }
 
 void OpenMap::qtResetSearch(void)
@@ -1000,6 +1017,15 @@ extern "C" void WBQtOpenMap_Search(const char *text)
 	if (dlg != NULL)
 	{
 		dlg->qtSearch(text);
+	}
+}
+
+extern "C" void WBQtOpenMap_SearchLive(const char *text)
+{
+	OpenMap *dlg = OpenMap::qtInstance();
+	if (dlg != NULL)
+	{
+		dlg->qtSearchLive(text);
 	}
 }
 

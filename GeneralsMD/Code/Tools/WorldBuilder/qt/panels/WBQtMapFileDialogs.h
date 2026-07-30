@@ -28,6 +28,7 @@ public:
 private slots:
 	void onModeClicked();
 	void onFind();
+	void onSearchLive(const QString &text);	// NewSearch: live filter, no beep
 	void onReset();
 	void onBrowse();
 	void onDoubleClicked();
