@@ -102,6 +102,10 @@ void WBQtBuildPickPanel_ResetPos(int top, int left);
 // Build the filtered template catalog (== PickUnitDialog::OnInitDialog's allowable-sorting +
 // factionOnly==isBuildableItem filter); returns the row count readable via GetInfo.
 int WBQtPickUnitData_Build(const int *allowable, int allowCount, int factionOnly);
+// 1 when catalog entry i is a template the loaded map.ini invented (no Object block in the
+// installed game data). Automatic replacement skips these -- resolving a broken name to one would
+// point the map at an object that disappears with the map.ini. Manual picking is unaffected.
+int WBQtPickUnitData_IsPhantom(int i);
 int WBQtPickUnitData_GetInfo(int i, char *nameOut, int nameCap, char *sideOut, int sideCap,
 	char *sortingOut, int sortingCap, int *isTestOut);
 

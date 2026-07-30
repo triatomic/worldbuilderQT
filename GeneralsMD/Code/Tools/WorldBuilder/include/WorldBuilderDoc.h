@@ -261,6 +261,18 @@ protected:
 
 /////////////////////////////////////////////////////////////////////////////
 
+// True when `name` is a template the loaded map.ini INVENTED -- i.e. the installed game data has
+// no Object block for it, so it exists only while this map.ini's overrides are installed.
+//
+// Such a template is registered in TheThingFactory like any other, so catalog walks built from
+// firstTemplate() include it. The "fix missing units/buildings" matchers must NOT offer one as a
+// replacement: it would point the map at an object that vanishes with the map.ini, resolving a
+// broken name to something equally non-existent. Common on a modded install, where a mod drops a
+// vanilla template and a vanilla-authored map.ini re-creates the old name from scratch.
+//
+// Always false when no map.ini is loaded.
+Bool WBMapIni_IsPhantomTemplate(const AsciiString &name);
+
 //{{AFX_INSERT_LOCATION}}
 // Microsoft Visual C++ will insert additional declarations immediately before the previous line.
 

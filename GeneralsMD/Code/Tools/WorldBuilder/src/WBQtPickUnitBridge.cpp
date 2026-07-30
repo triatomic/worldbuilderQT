@@ -78,6 +78,19 @@ extern "C" int WBQtPickUnitData_Build(const int *allowable, int allowCount, int 
 	return (int)s_qtPickTemplates.size();
 }
 
+// True when catalog entry i is a template the loaded map.ini invented, so the auto-matcher can
+// leave it out of the replacement candidates (see WBMapIni_IsPhantomTemplate). The browse/pick
+// dialog deliberately does NOT filter on this -- picking one by hand is a valid choice; only
+// AUTOMATIC replacement must avoid resolving a broken name to another name that isn't real.
+extern "C" int WBQtPickUnitData_IsPhantom(int i)
+{
+	if (i < 0 || i >= (int)s_qtPickTemplates.size())
+	{
+		return 0;
+	}
+	return WBMapIni_IsPhantomTemplate(s_qtPickTemplates[i]->getName()) ? 1 : 0;
+}
+
 extern "C" int WBQtPickUnitData_GetInfo(int i, char *nameOut, int nameCap, char *sideOut, int sideCap,
 	char *sortingOut, int sortingCap, int *isTestOut)
 {

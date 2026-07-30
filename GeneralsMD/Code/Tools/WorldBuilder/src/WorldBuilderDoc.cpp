@@ -87,6 +87,7 @@
 
 #include <algorithm>
 #include <string>
+#include <set>
 #include <vector>
 
 #ifdef _INTERNAL
@@ -114,6 +115,30 @@ enum DIRECTION
 static Bool g_mapiniloaded = false;
 static Bool g_warnedfordupedforthismap = false;
 
+// Templates the loaded map.ini INVENTED -- names the installed game data has no Object block for.
+//
+// These are registered in TheThingFactory like any other template (newTemplate -> addTemplate), so
+// every catalog walk built from firstTemplate() picks them up. That is wrong for the "fix missing"
+// passes: offering one as the replacement for a broken name points the map at an object that only
+// exists because THIS map.ini defines it, and which disappears the moment the map.ini is unloaded.
+// The auto-matcher would then "resolve" a missing unit to something equally non-existent.
+//
+// This is common on a modded install: a mod deletes a vanilla template and ships its own under a
+// different name, so a vanilla-authored map.ini re-creates the old name from scratch.
+//
+// Filled by the map.ini load (the pre-scan already works out which names are new), cleared when the
+// overrides are torn down. Read through WBMapIni_IsPhantomTemplate.
+static std::set<AsciiString> g_mapIniPhantomTemplates;
+
+Bool WBMapIni_IsPhantomTemplate(const AsciiString &name)
+{
+	if (g_mapIniPhantomTemplates.empty())
+	{
+		return FALSE;	// no map.ini loaded (or it invented nothing) -- the common case
+	}
+	return (g_mapIniPhantomTemplates.find(name) != g_mapIniPhantomTemplates.end()) ? TRUE : FALSE;
+}
+
 // ----------------------------------------------------------------------------
 // Gracefully unload map.ini overrides.
 //
@@ -133,6 +158,9 @@ static void unloadMapIniOverrides(void)
 {
 	if (!g_mapiniloaded)
 		return;
+
+	// The invented templates go away with the reset below, so stop excluding those names.
+	g_mapIniPhantomTemplates.clear();
 
 	if (TheThingFactory)       TheThingFactory->reset();        // Object
 	if (TheWeaponStore)        TheWeaponStore->reset();         // Weapon
@@ -830,6 +858,17 @@ static bool doLoadMapIni(const AsciiString &iniPath, MapIniLoadMode mode, CStrin
 		// The scan listed what the file WANTS to change; loadWB decides what actually applied.
 		// Reconcile before anything reads the counts, so the report can't claim a dropped block.
 		markDroppedBlocks(scan);
+
+		// Remember the invented templates so the "fix missing" matchers won't offer them as
+		// replacements (see g_mapIniPhantomTemplates). markDroppedBlocks has already removed the
+		// blocks that failed to parse, so a dropped one never lands here.
+		if (installOverrides)
+		{
+			for (size_t i = 0; i < scan.newNames.size(); ++i)
+			{
+				g_mapIniPhantomTemplates.insert(scan.newNames[i]);
+			}
+		}
 
 		if (mode == MAPINI_INSTALL) {
 			// Apply now: rebuild the catalog + refresh the placed objects in the viewport.

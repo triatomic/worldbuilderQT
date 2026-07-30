@@ -492,6 +492,16 @@ extern "C" int WBQtReplaceUnit_BestMatch(const char *missingName, const int *all
 	QStringList candidates;
 	for (int i = 0; i < count; i++)
 	{
+		// Skip templates the loaded map.ini invented. They are in the catalog like any other, but
+		// only exist while this map.ini's overrides are installed -- auto-resolving a missing name
+		// to one would just swap a broken name for another name the game data doesn't have. On a
+		// modded install this is the common case: the mod dropped the vanilla template, and a
+		// vanilla-authored map.ini re-created the old name from scratch. Manual picking still
+		// offers them; only the automatic choice is filtered.
+		if (WBQtPickUnitData_IsPhantom(i) != 0)
+		{
+			continue;
+		}
 		char name[256];
 		char side[128];
 		char sorting[128];
