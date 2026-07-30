@@ -2615,6 +2615,16 @@ MapObject *WbView3d::picked3dObjectInView(CPoint viewPt)
 		Bool hit = m_intersector->Intersect_Screen_Point_Layer( logX, logY, *m_layer );
 		if( hit )
 		{
+			// Reject a hit the terrain is standing in front of. Lots of models sink part of
+			// their mesh below ground -- wall segments, bunkers, anything with a buried
+			// foundation -- and the layer ray test happily reports that buried geometry, so
+			// clicking bare ground NEAR such an object selected the object instead of the
+			// terrain. Comparing the object hit against the terrain along the SAME ray gives
+			// the answer the user expects: whatever is actually visible at that pixel wins.
+			if (isHitBehindTerrain(m_intersector->Result.Intersection)) {
+				return NULL;
+			}
+
 			MapObject *pObj;
 			for (pObj = MapObject::getFirstMapObject(); pObj; pObj = pObj->getNext()) {
 				if (pObj->getRenderObj() == m_intersector->Result.IntersectedRenderObject) {
@@ -2625,6 +2635,50 @@ MapObject *WbView3d::picked3dObjectInView(CPoint viewPt)
 	}
 
 	return NULL;
+}
+
+//=============================================================================
+// WbView3d::isHitBehindTerrain
+//=============================================================================
+/** True when the terrain surface is nearer to the camera than hitPoint, i.e. the thing that
+was hit is buried and not the thing the user can actually see at that pixel.
+
+Casts the camera-to-hitPoint segment at the heightmap. A terrain contact strictly closer to
+the camera than the hit means the ground occludes it. The small tolerance keeps an object
+resting ON the ground (its base coincident with the surface) selectable -- without it, float
+error at the contact point would randomly reject legitimate picks. */
+//=============================================================================
+Bool WbView3d::isHitBehindTerrain(const Vector3 &hitPoint)
+{
+	if (TheTerrainRenderObject == NULL || m_camera == NULL) {
+		return false;	// no terrain to occlude with -- keep the old behaviour
+	}
+
+	// With the terrain hidden (View > Show Terrain off), submerged and underground objects are
+	// exactly what the user is looking at, so nothing should be occluded by a surface that isn't
+	// being drawn. Reaching that buried geometry is the whole point of turning terrain off.
+	if (!getShowTerrain()) {
+		return false;
+	}
+
+	Vector3 camPos = m_camera->Get_Position();
+	if ((hitPoint - camPos).Length2() <= 0.0f) {
+		return false;	// degenerate segment (hit at the camera) -- nothing to compare against
+	}
+
+	// Cast only as far as the hit itself: a terrain contact along this segment is by definition
+	// in front of the hit, so there is no need to reason about hits past it.
+	LineSegClass ray(camPos, hitPoint);
+	CastResultStruct castResult;
+	RayCollisionTestClass rayCollide(ray, &castResult);
+	if (!TheTerrainRenderObject->Cast_Ray(rayCollide)) {
+		return false;	// ray never meets the ground -- nothing occludes the hit
+	}
+
+	// Fraction is along the segment, so it IS the ratio of terrain distance to hit distance.
+	// Anything closer than (1 - tolerance) is the ground genuinely standing in front.
+	const Real TERRAIN_OCCLUSION_TOLERANCE = 0.01f;	// ~1% of the pick distance
+	return (castResult.Fraction < 1.0f - TERRAIN_OCCLUSION_TOLERANCE);
 }
 
 //=============================================================================

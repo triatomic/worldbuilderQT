@@ -514,6 +514,9 @@ public:
 	Real getLastTrackingZ(void) { return m_lastTrackingZ; }
 	Bool getLastTrackingZIsFromHighElev(void) { return m_lastTrackingZIsFromHighElev; }
 	virtual MapObject *picked3dObjectInView(CPoint viewPt);
+	/// True when the terrain surface sits between the camera and hitPoint, so the thing hit is
+	/// buried geometry rather than what the user can see at that pixel.
+	Bool isHitBehindTerrain(const Vector3 &hitPoint);
 	virtual BuildListInfo *pickedBuildObjectInView(CPoint viewPt);
 
 	void removeFenceListObjects(MapObject *pObject);
@@ -558,7 +561,8 @@ public:
 	// driving the D3D device from a foreign context.
 	void setCenterInViewDeferred(Real x, Real y);
 
-	Bool getShowTerrain();
+	// (getShowTerrain is WbView's inline accessor -- there was a bodiless redeclaration here that
+	// shadowed it with no definition, so the first caller got an unresolved external.)
 	Bool getShowWireframe();
 
 	// Wave-line overlay toggle, shared by the View menu and the Wave Editor panel
