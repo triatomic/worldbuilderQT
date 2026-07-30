@@ -56,6 +56,29 @@ namespace
 				return QObject::eventFilter(watched, event);
 			}
 
+			// Shrinking the popup WINDOW alone leaves the view inside it at its full content
+			// height (all N rows), merely CLIPPED by the smaller window: the view's viewport
+			// still spans every item, so its scroll range stays 0..0 -- no scrollbar, and the
+			// entries past the cut are unreachable. Bound the view to the window as well, which
+			// is what gives it something to scroll.
+			QAbstractItemView *view = m_combo->view();
+			if (view != NULL)
+			{
+				// The view is inset in the popup by the container's frame; keep that inset so
+				// the list doesn't overhang the border.
+				int inset = 0;
+				if (view->parentWidget() == popup)
+				{
+					inset = popup->height() - view->height();
+				}
+				if (inset < 0)
+				{
+					inset = 0;
+				}
+				view->setMaximumHeight(WB_COMBO_MAX_POPUP_PX);
+				view->resize(view->width(), WB_COMBO_MAX_POPUP_PX - inset);
+			}
+
 			popup->setMaximumHeight(WB_COMBO_MAX_POPUP_PX);
 			popup->resize(popup->width(), WB_COMBO_MAX_POPUP_PX);
 
@@ -107,7 +130,9 @@ void WBQtComboStyle::applyPopupScroll(QComboBox *combo)
 		view->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
 		// Clamp the popup WINDOW (the view's parent), which is what the style sizes; capping
-		// the view alone doesn't hold. Installed once per combo -- see WBQtPopupClamp.
+		// the view alone doesn't hold (the style re-sizes the window around it). The filter
+		// caps BOTH -- the window for the geometry, the view so the list actually scrolls
+		// instead of being clipped. Installed once per combo -- see WBQtPopupClamp.
 		if (!combo->property(WB_COMBO_CLAMPED).toBool())
 		{
 			QWidget *popup = view->parentWidget();
@@ -120,8 +145,19 @@ void WBQtComboStyle::applyPopupScroll(QComboBox *combo)
 	}
 
 	// Belt and braces: under Fusion this alone bounds the popup, and it keeps the item count
-	// sane if a style ever sizes the popup before our filter sees the Show.
-	combo->setMaxVisibleItems(WB_COMBO_MAX_POPUP_PX / 20);	// ~20px per row
+	// sane if a style ever sizes the popup before our filter sees the Show. Measure the row
+	// rather than assuming 20px: the actual height is style- and font-dependent (21px under
+	// Fusion at the default font), and guessing low lets the popup overshoot the cap.
+	int rowPx = 0;
+	if (view != NULL && combo->count() > 0)
+	{
+		rowPx = view->sizeHintForRow(0);
+	}
+	if (rowPx <= 0)
+	{
+		rowPx = 20;	// empty combo (populated later) -- fall back to the old estimate
+	}
+	combo->setMaxVisibleItems(WB_COMBO_MAX_POPUP_PX / rowPx);
 }
 
 void WBQtComboStyle::applyPopupScrollRecursive(QWidget *root)

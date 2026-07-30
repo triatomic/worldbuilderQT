@@ -181,6 +181,10 @@ void WBQtObjectPropsPanel::rebuildTeams()
 			m_team->addItem(QString());
 		}
 	}
+
+	// The ctor styled this combo while it was still empty, so the popup bound was computed
+	// from an estimated row height. Re-apply now that there are rows to measure.
+	WBQtComboStyle::applyPopupScroll(m_team);
 }
 
 // ID_EDIT_DELETE (resource.h) -- the MFC view command that deletes the selected object(s).
