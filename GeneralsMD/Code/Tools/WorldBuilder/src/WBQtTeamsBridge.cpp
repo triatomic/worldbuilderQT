@@ -1924,6 +1924,11 @@ extern "C" int WBQtTeams_ReplaceMissingUnits(void)
 		return 0;
 	}
 
+	// Constrain the match to the types a team slot can actually hold -- the SAME set the slot's
+	// own unit picker offers (WBQtTeamPage_ClickButton). Unconstrained, a missing infantry unit
+	// could be "fixed" to something from a category the picker would never have shown.
+	static const int allowable[4] = { ES_VEHICLE, ES_INFANTRY, ES_STRUCTURE, ES_SYSTEM };
+
 	// Match every name first (== the script pass), so an all-unmatched run changes nothing.
 	std::vector<AsciiString> picks;
 	picks.resize(missing.size());
@@ -1931,7 +1936,7 @@ extern "C" int WBQtTeams_ReplaceMissingUnits(void)
 	{
 		char picked[256];
 		picked[0] = 0;
-		if (WBQtReplaceUnit_BestMatch(missing[i].str(), NULL, 0, 0, picked, sizeof(picked)) != 0)
+		if (WBQtReplaceUnit_BestMatch(missing[i].str(), allowable, 4, 0, picked, sizeof(picked)) != 0)
 		{
 			picks[i] = picked;
 		}

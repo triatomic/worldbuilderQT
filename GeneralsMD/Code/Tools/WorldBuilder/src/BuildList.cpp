@@ -1227,13 +1227,18 @@ int BuildList::qtReplaceMissingBuildings(void)
 
 	// Match every name before touching anything, so an all-unmatched pass leaves the build lists
 	// and the undo stack alone (== the script and team passes).
+	// Constrain the match to the same type the ADD path allows (BuildListTool: ES_STRUCTURE).
+	// Without it the name is matched against every editor sorting, so a missing building could be
+	// "fixed" to a system marker or a piece of scenery that happens to have a closer name -- a
+	// replacement the user could never have chosen through the tool itself.
+	static const int allowable[1] = { ES_STRUCTURE };
 	std::vector<AsciiString> picks;
 	picks.resize(missing.size());
 	for (size_t i = 0; i < missing.size(); i++)
 	{
 		char picked[256];
 		picked[0] = 0;
-		if (WBQtReplaceUnit_BestMatch(missing[i].str(), NULL, 0, 0, picked, sizeof(picked)) != 0)
+		if (WBQtReplaceUnit_BestMatch(missing[i].str(), allowable, 1, 0, picked, sizeof(picked)) != 0)
 		{
 			picks[i] = picked;
 		}
