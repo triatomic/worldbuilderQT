@@ -58,6 +58,14 @@ public:
 	};
 	enum { kNameKindCount = 9 };
 
+	// The boundary between kinds that VALIDATE (an engine store can answer "does this exist?")
+	// and the suggest-only INI-tree kinds above, which must never underline anything. Insert new
+	// validating kinds before KindAnyIniName and this keeps holding.
+	static bool isValidatingKind(int kind)
+	{
+		return kind > KindNone && kind < KindAnyIniName;
+	}
+
 	// Off = plain INI colouring with no name checking (the "Check names" toggle).
 	void setCheckNames(bool on);
 	// Off = no structural checking (the "Check syntax" toggle).
@@ -81,8 +89,8 @@ public:
 	// A map.ini routinely defines a thing and then refers to it, and those names are not in the
 	// loaded game data until it is loaded -- without this they would all read as unknown.
 	// Rebuilt from the whole document on load and on edit.
-	// PER-HIGHLIGHTER, not static: with several files open in tabs, one file's declarations must
-	// not validate another file's references.
+	// PER-HIGHLIGHTER, not static: this set belongs to the document being highlighted, unlike the
+	// catalogs (which come from the loaded game data and are shared).
 	void setLocalNames(const QSet<QString> &names);
 	const QSet<QString> &localNames() const;
 	bool isLocallyDeclared(const QString &name) const;
@@ -120,9 +128,15 @@ public:
 	// What (if anything) is wrong with `line` on its own, plus what it does to the nesting depth.
 	// `depthBefore` is the depth going in; `depthAfterOut` receives the depth going out.
 	static SyntaxProblem checkLineSyntax(const QString &line, int depthBefore, int *depthAfterOut);
+	// The code half of a line: everything before the first ';', trimmed. opensBlock/isEndLine
+	// take that form, so a caller testing both strips once and passes the result to each rather
+	// than having every test re-strip the same line.
+	static QString codePart(const QString &line);
 	// True when `line` opens a block (a bare `Keyword Name`, or a bare keyword like SkillSet1).
+	// Takes the code part (codePart above); passing a raw line still works, since stripping is
+	// idempotent -- it just costs an extra copy.
 	static bool opensBlock(const QString &line);
-	// True when `line` is an End.
+	// True when `line` is an End. Takes the code part, as opensBlock does.
 	static bool isEndLine(const QString &line);
 
 	// Pack/unpack the per-block state: low bits context, high bits depth.
@@ -227,7 +241,10 @@ private:
 	// The candidates for the cursor's position, best-scoped first: the values actually seen with
 	// this line's key, else the kind's catalog, else the whole tree. `labelOut` names what is
 	// being offered, for the picker's title.
-	QStringList candidatesAtCursor(int wordStart, QString *labelOut) const;
+	// `key` and `kind` come from keyOnCurrentLine/catalogKindAtCursor; the caller passes them in
+	// because both are needed for its own cache key and each costs a full line parse.
+	QStringList candidatesAtCursor(int wordStart, const QString &key, int kind,
+		QString *labelOut) const;
 	// The key on the cursor's line ("Surfaces" from "Surfaces = GROUND"), or empty.
 	QString keyOnCurrentLine(int wordStart) const;
 	// Ctrl+Space: the searchable picker over those candidates.

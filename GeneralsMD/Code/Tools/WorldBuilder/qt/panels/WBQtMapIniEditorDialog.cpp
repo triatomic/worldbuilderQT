@@ -47,6 +47,34 @@ namespace
 	const int kTextCap = 1024;
 	const int kMaxSuggestions = 6;
 
+	// The code half of an INI line: everything before the first ';', trimmed. Every line-shape
+	// test starts here, so it is one helper rather than the same five lines in each of them --
+	// and on the per-repaint highlight path the callers pass the result along instead of
+	// re-stripping the same line for each test.
+	QString iniCodePart(const QString &line)
+	{
+		const int commentAt = line.indexOf(';');
+		return (commentAt >= 0) ? line.left(commentAt).trimmed() : line.trimmed();
+	}
+
+	// The editor's font, shared by the text pane and the value picker's list: both show INI
+	// identifiers, which are hand-aligned in these files and unreadable proportionally.
+	QFont iniMonoFont()
+	{
+		QFont mono("Consolas");
+		mono.setStyleHint(QFont::Monospace);
+		mono.setFixedPitch(true);
+		return mono;
+	}
+
+	// As iniCodePart but WITHOUT trimming: callers that report a column back (the underline
+	// span) need offsets that still line up with the original line.
+	QString iniCodePartKeepIndent(const QString &line)
+	{
+		const int commentAt = line.indexOf(';');
+		return (commentAt >= 0) ? line.left(commentAt) : line;
+	}
+
 	// The INI block keywords whose argument is an object/template name. These are the lines the
 	// name checking looks at -- deliberately NOT every token in the file, because most values are
 	// numbers, enums or module names rather than template references.
@@ -119,7 +147,10 @@ namespace
 	// (name, kind) -> known, so the per-block highlight does not hit the bridge for every repeat.
 	// Only catalog answers are cached; the locally-declared set is consulted BEFORE this and is
 	// rebuilt on every edit, so deleting a declaration re-flags its references immediately.
-	QHash<QString, bool> s_knownCache;
+	// One cache per kind, keyed on the name alone. A single hash keyed on "kind:name" would have
+	// to build that composite string on every lookup -- an allocation per checkable line per
+	// repaint, more than the hash probe itself costs.
+	QHash<QString, bool> s_knownCache[WBQtMapIniHighlighter::kNameKindCount];
 	// Names this file declares for itself (see scanLocalNames).
 	// One catalog per checked kind, built on first use.
 	QStringList s_catalogs[WBQtMapIniHighlighter::kNameKindCount];
@@ -274,7 +305,10 @@ void WBQtMapIniHighlighter::setCheckNames(bool on)
 
 void WBQtMapIniHighlighter::clearNameCache()
 {
-	s_knownCache.clear();
+	for (int i = 0; i < kNameKindCount; ++i)
+	{
+		s_knownCache[i].clear();
+	}
 	for (int i = 0; i < kNameKindCount; ++i)
 	{
 		s_catalogs[i].clear();
@@ -312,12 +346,7 @@ namespace
 			"Science", "Weapon", "Armor", "Locomotor", "FXList", "ObjectCreationList",
 			NULL
 		};
-		QString scan = line;
-		const int commentAt = scan.indexOf(';');
-		if (commentAt >= 0)
-		{
-			scan = scan.left(commentAt);
-		}
+		const QString scan = iniCodePart(line);
 		// Split into exactly two tokens once, then match the first against the keyword list --
 		// a regex per keyword per line would be a dozen compilations for every line of the file.
 		// A block header is exactly `Keyword Name` with no '=' (that would be a reference).
@@ -328,7 +357,7 @@ namespace
 		}
 		for (int k = 0; kDeclKeywords[k] != NULL; ++k)
 		{
-			if (tokens.at(0).compare(QString::fromLatin1(kDeclKeywords[k]),
+			if (tokens.at(0).compare(QLatin1String(kDeclKeywords[k]),
 					Qt::CaseInsensitive) == 0)
 			{
 				names.insert(tokens.at(1));
@@ -378,14 +407,18 @@ bool WBQtMapIniHighlighter::isKnownName(const QString &name, NameKind kind) cons
 
 bool WBQtMapIniHighlighter::isInCatalog(const QString &name, NameKind kind)
 {
-	if (name.isEmpty() || kind == KindNone)
+	if (name.isEmpty() || !isValidatingKind(kind))
 	{
-		return true;	// nothing to flag
+		// Nothing to flag, or a suggest-only catalog. The INI-tree kinds must NEVER validate: a
+		// name harvested from the game's INI files says only that it exists somewhere, not that
+		// this key accepts it. Refused explicitly here rather than by falling through the switch
+		// below, so the rule cannot quietly lapse when a kind is added.
+		return true;
 	}
-	// Key on the kind too: the same string can be a valid upgrade and an unknown object.
-	const QString cacheKey = QString::number((int)kind) + ":" + name;
-	QHash<QString, bool>::const_iterator it = s_knownCache.constFind(cacheKey);
-	if (it != s_knownCache.constEnd())
+	// Per-kind cache: the same string can be a valid upgrade and an unknown object.
+	QHash<QString, bool> &cache = s_knownCache[(int)kind];
+	QHash<QString, bool>::const_iterator it = cache.constFind(name);
+	if (it != cache.constEnd())
 	{
 		return it.value();
 	}
@@ -414,18 +447,13 @@ bool WBQtMapIniHighlighter::isInCatalog(const QString &name, NameKind kind)
 		default:
 			break;
 	}
-	s_knownCache.insert(cacheKey, known);
+	cache.insert(name, known);
 	return known;
 }
 
 int WBQtMapIniHighlighter::contextAfterLine(const QString &line, int previousContext)
 {
-	QString scan = line;
-	const int commentAt = scan.indexOf(';');
-	if (commentAt >= 0)
-	{
-		scan = scan.left(commentAt);
-	}
+	const QString scan = iniCodePartKeepIndent(line);
 	// A CommandSet block opens with `CommandSet <name>` -- no '=', which is what separates the
 	// block header from a `CommandSet = <name>` reference to one. Both static: this runs per
 	// line per repaint.
@@ -445,16 +473,15 @@ int WBQtMapIniHighlighter::contextAfterLine(const QString &line, int previousCon
 	return previousContext;
 }
 
+QString WBQtMapIniHighlighter::codePart(const QString &line)
+{
+	return iniCodePart(line);
+}
+
 bool WBQtMapIniHighlighter::isEndLine(const QString &line)
 {
-	QString scan = line;
-	const int commentAt = scan.indexOf(';');
-	if (commentAt >= 0)
-	{
-		scan = scan.left(commentAt);
-	}
 	// Case-insensitive: real map.inis use End, end and END interchangeably.
-	return scan.trimmed().compare("End", Qt::CaseInsensitive) == 0;
+	return iniCodePart(line).compare("End", Qt::CaseInsensitive) == 0;
 }
 
 // Whether a line opens a block that an "End" must close. Two shapes, both verified against real
@@ -468,13 +495,7 @@ bool WBQtMapIniHighlighter::isEndLine(const QString &line)
 // them is the module-tag convention -- a module block's last token is its tag.
 bool WBQtMapIniHighlighter::opensBlock(const QString &line)
 {
-	QString scan = line;
-	const int commentAt = scan.indexOf(';');
-	if (commentAt >= 0)
-	{
-		scan = scan.left(commentAt);
-	}
-	scan = scan.trimmed();
+	const QString scan = iniCodePart(line);
 	if (scan.isEmpty() || scan.compare("End", Qt::CaseInsensitive) == 0)
 	{
 		return false;
@@ -504,7 +525,7 @@ bool WBQtMapIniHighlighter::opensBlock(const QString &line)
 	static const char *const kOneLiners[] = { "RemoveModule", "InheritableModule", NULL };
 	for (int k = 0; kOneLiners[k] != NULL; ++k)
 	{
-		if (tokens.at(0).compare(QString::fromLatin1(kOneLiners[k]), Qt::CaseInsensitive) == 0)
+		if (tokens.at(0).compare(QLatin1String(kOneLiners[k]), Qt::CaseInsensitive) == 0)
 		{
 			return false;
 		}
@@ -531,15 +552,12 @@ WBQtMapIniHighlighter::SyntaxProblem WBQtMapIniHighlighter::checkLineSyntax(cons
 	int depth = depthBefore;
 	SyntaxProblem problem = SyntaxOk;
 
-	QString scan = line;
-	const int commentAt = scan.indexOf(';');
-	if (commentAt >= 0)
-	{
-		scan = scan.left(commentAt);
-	}
-	scan = scan.trimmed();
+	// Stripped once here and reused: isEndLine/opensBlock are idempotent on already-stripped
+	// text, so passing `scan` avoids re-stripping the same line two more times. This runs per
+	// visible line per repaint, so those copies are worth not making.
+	const QString scan = iniCodePart(line);
 
-	if (isEndLine(line))
+	if (isEndLine(scan))
 	{
 		if (depth <= 0)
 		{
@@ -550,7 +568,7 @@ WBQtMapIniHighlighter::SyntaxProblem WBQtMapIniHighlighter::checkLineSyntax(cons
 			--depth;
 		}
 	}
-	else if (opensBlock(line))
+	else if (opensBlock(scan))
 	{
 		++depth;
 	}
@@ -581,12 +599,7 @@ WBQtMapIniHighlighter::SyntaxProblem WBQtMapIniHighlighter::checkLineSyntax(cons
 bool WBQtMapIniHighlighter::checkableNameOnLine(const QString &line, QString *nameOut,
 	int *startOut, int *lengthOut, NameKind *kindOut)
 {
-	QString scan = line;
-	const int commentAt = scan.indexOf(';');
-	if (commentAt >= 0)
-	{
-		scan = scan.left(commentAt);
-	}
+	const QString scan = iniCodePartKeepIndent(line);
 
 	// Split the line ONCE into its leading word and what follows, then look the word up. The
 	// earlier form built a fresh QRegExp per candidate key -- twenty-odd regex compilations per
@@ -638,7 +651,7 @@ bool WBQtMapIniHighlighter::checkableNameOnLine(const QString &line, QString *na
 		// name per line keeps the underline and the replacement unambiguous.
 		for (int k = 0; kValueKeys[k].m_key != NULL; ++k)
 		{
-			if (word.compare(QString::fromLatin1(kValueKeys[k].m_key), Qt::CaseInsensitive) != 0)
+			if (word.compare(QLatin1String(kValueKeys[k].m_key), Qt::CaseInsensitive) != 0)
 			{
 				continue;
 			}
@@ -665,7 +678,7 @@ bool WBQtMapIniHighlighter::checkableNameOnLine(const QString &line, QString *na
 	}
 	for (int k = 0; kBlockKeywords[k].m_keyword != NULL; ++k)
 	{
-		if (word.compare(QString::fromLatin1(kBlockKeywords[k].m_keyword),
+		if (word.compare(QLatin1String(kBlockKeywords[k].m_keyword),
 				Qt::CaseInsensitive) != 0)
 		{
 			continue;
@@ -694,12 +707,7 @@ static bool checkableNameOnLineIn(const QString &line, int context, QString *nam
 	{
 		return false;
 	}
-	QString scan = line;
-	const int commentAt = scan.indexOf(';');
-	if (commentAt >= 0)
-	{
-		scan = scan.left(commentAt);
-	}
+	const QString scan = iniCodePartKeepIndent(line);
 	// A CommandSet's entries are NUMBERED keys ("1 = Command_AmbushFromShortcut"), not
 	// "Command = ...". Some sets also use the literal key, so accept both. Static: this runs
 	// per line per repaint, and recompiling it each time is what made scrolling hitch.
@@ -774,7 +782,7 @@ void WBQtMapIniHighlighter::highlightBlock(const QString &text)
 		bool isBlockKeyword = false;
 		for (int k = 0; kBlockKeywords[k].m_keyword != NULL; ++k)
 		{
-			if (word.compare(QString::fromLatin1(kBlockKeywords[k].m_keyword),
+			if (word.compare(QLatin1String(kBlockKeywords[k].m_keyword),
 					Qt::CaseInsensitive) == 0)
 			{
 				isBlockKeyword = true;
@@ -788,7 +796,7 @@ void WBQtMapIniHighlighter::highlightBlock(const QString &text)
 		};
 		for (int b = 0; !isBlockKeyword && kOtherBlockWords[b] != NULL; ++b)
 		{
-			if (word.compare(QString::fromLatin1(kOtherBlockWords[b]), Qt::CaseInsensitive) == 0)
+			if (word.compare(QLatin1String(kOtherBlockWords[b]), Qt::CaseInsensitive) == 0)
 			{
 				isBlockKeyword = true;
 			}
@@ -823,11 +831,15 @@ void WBQtMapIniHighlighter::highlightBlock(const QString &text)
 		fmt.setUnderlineStyle(QTextCharFormat::WaveUnderline);
 		int from = 0;
 		int span = text.length();
-		// Underline just the offending token where there is one.
-		const int firstNonSpace = text.length() - QString(text).remove(QRegExp("^\\s*")).length();
 		if (problem == SyntaxStrayEnd)
 		{
-			from = firstNonSpace;
+			// Underline just the End itself. A plain scan, not a regex: this is the per-visible-
+			// line repaint path, and the old form copied the whole line and rebuilt a QRegExp to
+			// count leading spaces.
+			while (from < text.length() && text.at(from).isSpace())
+			{
+				++from;
+			}
 			span = 3;		// "End"
 		}
 		if (span > 0)
@@ -886,10 +898,7 @@ WBQtMapIniValuePicker::WBQtMapIniValuePicker(const QStringList &candidates,
 	m_list = new QListWidget(this);
 	m_list->setAlternatingRowColors(true);
 	// Monospaced, like the editor: these are identifiers, and the shared prefixes line up.
-	QFont mono("Consolas");
-	mono.setStyleHint(QFont::Monospace);
-	mono.setFixedPitch(true);
-	m_list->setFont(mono);
+	m_list->setFont(iniMonoFont());
 	layout->addWidget(m_list, 1);
 
 	QDialogButtonBox *buttons = new QDialogButtonBox(
@@ -1010,8 +1019,7 @@ WBQtMapIniEditorDialog::WBQtMapIniEditorDialog(void *frameHwnd)
 	// Autocomplete over the same catalogs the checking uses, so it can only offer names that
 	// would also validate. The model is swapped per line kind (object / upgrade / science / ...).
 	m_completer = new QCompleter(this);
-	// MUST be set before anything touches popup(): a widget-less QCompleter has no popup to
-	// return. (The multi-tab version set this per tab; with one editor it is set once, here.)
+	// MUST be set before anything touches popup(): a widget-less QCompleter has no popup.
 	m_completer->setWidget(m_editor);
 	m_completer->setCompletionMode(QCompleter::PopupCompletion);
 	m_completer->setCaseSensitivity(Qt::CaseInsensitive);
@@ -1103,10 +1111,6 @@ void WBQtMapIniEditorDialog::loadFile(const QString &path)
 
 bool WBQtMapIniEditorDialog::maybeSave()
 {
-	if (m_editor == NULL)
-	{
-		return true;		// no tab open: nothing to save, so never block
-	}
 	if (!m_editor->document()->isModified())
 	{
 		return true;
@@ -1152,9 +1156,7 @@ void WBQtMapIniEditorDialog::createEditor()
 	m_ui->editorHostLay->addWidget(m_split);
 
 	// Fixed-pitch: INI files are column-aligned by hand and a proportional font ruins that.
-	QFont mono("Consolas");
-	mono.setStyleHint(QFont::Monospace);
-	mono.setFixedPitch(true);
+	QFont mono = iniMonoFont();
 	mono.setPointSize(10);
 	m_editor->setFont(mono);
 	m_editor->setTabStopWidth(4 * QFontMetrics(mono).width(' '));
@@ -1189,22 +1191,14 @@ void WBQtMapIniEditorDialog::createEditor()
 			m_ui->redoButton, SLOT(setEnabled(bool)));
 }
 
-// Routed rather than connected straight to the editor's own undo/redo slots, so the buttons keep
-// working if the editor is ever rebuilt underneath them.
 void WBQtMapIniEditorDialog::onUndo()
 {
-	if (m_editor != NULL)
-	{
-		m_editor->undo();
-	}
+	m_editor->undo();
 }
 
 void WBQtMapIniEditorDialog::onRedo()
 {
-	if (m_editor != NULL)
-	{
-		m_editor->redo();
-	}
+	m_editor->redo();
 }
 
 
@@ -1390,10 +1384,6 @@ void WBQtMapIniEditorDialog::onSaveAs()
 
 void WBQtMapIniEditorDialog::onSave()
 {
-	if (m_editor == NULL)
-	{
-		return;		// no tab open: nothing to act on
-	}
 	if (m_path.isEmpty())
 	{
 		return;
@@ -1417,10 +1407,6 @@ void WBQtMapIniEditorDialog::onSave()
 
 void WBQtMapIniEditorDialog::onReload()
 {
-	if (m_editor == NULL)
-	{
-		return;		// no tab open: nothing to act on
-	}
 	if (m_editor->document()->isModified())
 	{
 		if (QMessageBox::question(this, tr("Map.ini Editor"),
@@ -1438,10 +1424,6 @@ void WBQtMapIniEditorDialog::onReload()
 
 void WBQtMapIniEditorDialog::onCheckNamesToggled(bool on)
 {
-	if (m_editor == NULL)
-	{
-		return;		// no tab open: nothing to act on
-	}
 	m_highlighter->setCheckNames(on);
 	if (m_ui->showErrorsBox->isChecked())
 	{
@@ -1453,10 +1435,6 @@ void WBQtMapIniEditorDialog::onCheckNamesToggled(bool on)
 // spaces is invisible until you turn this on.
 void WBQtMapIniEditorDialog::onWhitespaceToggled(bool on)
 {
-	if (m_editor == NULL)
-	{
-		return;		// no tab open: nothing to act on
-	}
 	QTextOption options = m_editor->document()->defaultTextOption();
 	QTextOption::Flags flags = options.flags();
 	if (on)
@@ -1475,10 +1453,6 @@ void WBQtMapIniEditorDialog::onWhitespaceToggled(bool on)
 
 void WBQtMapIniEditorDialog::onCheckSyntaxToggled(bool on)
 {
-	if (m_editor == NULL)
-	{
-		return;		// no tab open: nothing to act on
-	}
 	m_highlighter->setCheckSyntax(on);
 	if (m_ui->showErrorsBox->isChecked())
 	{
@@ -1490,11 +1464,8 @@ void WBQtMapIniEditorDialog::onModificationChanged(bool modified)
 {
 	Q_UNUSED(modified);
 	updateTitle();
-	if (m_editor != NULL)
-	{
-		m_ui->undoButton->setEnabled(m_editor->document()->isUndoAvailable());
-		m_ui->redoButton->setEnabled(m_editor->document()->isRedoAvailable());
-	}
+	m_ui->undoButton->setEnabled(m_editor->document()->isUndoAvailable());
+	m_ui->redoButton->setEnabled(m_editor->document()->isRedoAvailable());
 }
 
 // Walk the whole file, collecting the lines whose name does not resolve. Runs the same matcher
@@ -1502,10 +1473,6 @@ void WBQtMapIniEditorDialog::onModificationChanged(bool modified)
 // never disagree.
 void WBQtMapIniEditorDialog::rebuildErrorList()
 {
-	if (m_editor == NULL)
-	{
-		return;		// no tab open: nothing to act on
-	}
 	// The list refills on every edit; re-selecting by ROW would jump around as lines are fixed,
 	// so remember which file line was selected and restore that instead. Blocked so the restore
 	// does not fire the navigation slot and yank the cursor away from where you are typing.
@@ -1540,11 +1507,14 @@ void WBQtMapIniEditorDialog::rebuildErrorList()
 			int depthAfter = depth;
 			const WBQtMapIniHighlighter::SyntaxProblem problem =
 				WBQtMapIniHighlighter::checkLineSyntax(line, depth, &depthAfter);
-			if (WBQtMapIniHighlighter::opensBlock(line))
+			// Stripped once and reused: opensBlock/isEndLine take the code part, so this walk
+			// over a 10,000-line document does not re-strip every line twice more.
+			const QString code = WBQtMapIniHighlighter::codePart(line);
+			if (WBQtMapIniHighlighter::opensBlock(code))
 			{
 				openLines.append(i);
 			}
-			else if (WBQtMapIniHighlighter::isEndLine(line) && !openLines.isEmpty())
+			else if (WBQtMapIniHighlighter::isEndLine(code) && !openLines.isEmpty())
 			{
 				openLines.removeLast();
 			}
@@ -1634,10 +1604,6 @@ void WBQtMapIniEditorDialog::rebuildErrorList()
 
 void WBQtMapIniEditorDialog::onShowErrorsToggled(bool on)
 {
-	if (m_editor == NULL)
-	{
-		return;		// no tab open: nothing to act on
-	}
 	if (on)
 	{
 		// Listing the flagged lines while name checking is off would read as a contradiction
@@ -1711,10 +1677,6 @@ QString WBQtMapIniEditorDialog::wordUnderCursor(int *startInBlockOut) const
 // a single character.
 void WBQtMapIniEditorDialog::maybeComplete(bool force)
 {
-	if (m_editor == NULL)
-	{
-		return;		// no tab open: nothing to act on
-	}
 	if (!m_ui->autoCompleteBox->isChecked())
 	{
 		return;
@@ -1732,11 +1694,14 @@ void WBQtMapIniEditorDialog::maybeComplete(bool force)
 	// Same narrowing the Ctrl+Space picker uses, so the two never disagree. Keyed on the KEY text
 	// rather than the kind, since "values used with Surfaces" and "values used with Science" are
 	// different lists that share a kind.
-	const QString cacheKey = keyOnCurrentLine(wordStart) + "/"
-		+ QString::number(catalogKindAtCursor(wordStart));
+	// Both computed ONCE here and threaded through: each is a block-text copy plus a full
+	// matcher run, and this path fires on every keystroke.
+	const QString key = keyOnCurrentLine(wordStart);
+	const int kind = catalogKindAtCursor(wordStart);
+	const QString cacheKey = key + "/" + QString::number(kind);
 	if (cacheKey != m_completerFor)
 	{
-		const QStringList catalog = candidatesAtCursor(wordStart, NULL);
+		const QStringList catalog = candidatesAtCursor(wordStart, key, kind, NULL);
 		if (catalog.isEmpty())
 		{
 			m_completer->popup()->hide();
@@ -1816,11 +1781,12 @@ QString WBQtMapIniEditorDialog::keyOnCurrentLine(int wordStart) const
 }
 
 // Narrowest useful candidate list for the cursor's position.
-QStringList WBQtMapIniEditorDialog::candidatesAtCursor(int wordStart, QString *labelOut) const
+QStringList WBQtMapIniEditorDialog::candidatesAtCursor(int wordStart, const QString &key,
+	int kind, QString *labelOut) const
 {
 	// 1. The values actually seen with THIS key. Far and away the most useful: "Surfaces ="
 	//    offers the five surface names rather than every name in the game data.
-	const QString key = keyOnCurrentLine(wordStart);
+	Q_UNUSED(wordStart);
 	if (!key.isEmpty())
 	{
 		const QByteArray raw = key.toLocal8Bit();
@@ -1837,15 +1803,17 @@ QStringList WBQtMapIniEditorDialog::candidatesAtCursor(int wordStart, QString *l
 			}
 			// Fold in the engine-validated catalog for this position, so a name that exists but
 			// happens never to be used with this key in the shipped data is still offered.
-			const int kind = catalogKindAtCursor(wordStart);
-			if (kind != WBQtMapIniHighlighter::KindAnyIniName
-				&& kind != WBQtMapIniHighlighter::KindAnyIniKey)
+			// Deduped through a QSet: out.contains() per candidate was O(n*m) over catalogs
+			// thousands of entries long.
+			if (WBQtMapIniHighlighter::isValidatingKind(kind))
 			{
+				QSet<QString> seen = QSet<QString>::fromList(out);
 				const QStringList &validated = catalogFor(kind);
 				for (int i = 0; i < validated.size(); ++i)
 				{
-					if (!out.contains(validated.at(i)))
+					if (!seen.contains(validated.at(i)))
 					{
+						seen.insert(validated.at(i));
 						out.append(validated.at(i));
 					}
 				}
@@ -1861,7 +1829,6 @@ QStringList WBQtMapIniEditorDialog::candidatesAtCursor(int wordStart, QString *l
 
 	// 2. Otherwise the catalog for the kind (a validated one where the key is checkable, else the
 	//    whole-tree names or keys).
-	const int kind = catalogKindAtCursor(wordStart);
 	if (labelOut != NULL)
 	{
 		*labelOut = (kind == WBQtMapIniHighlighter::KindAnyIniKey)
@@ -1872,10 +1839,6 @@ QStringList WBQtMapIniEditorDialog::candidatesAtCursor(int wordStart, QString *l
 
 void WBQtMapIniEditorDialog::openValuePicker()
 {
-	if (m_editor == NULL)
-	{
-		return;		// no tab open: nothing to act on
-	}
 	int wordStart = 0;
 	const QString prefix = wordUnderCursor(&wordStart);
 
@@ -1883,7 +1846,8 @@ void WBQtMapIniEditorDialog::openValuePicker()
 	// user asked for a list by pressing the key.
 	QApplication::setOverrideCursor(Qt::WaitCursor);
 	QString label;
-	const QStringList catalog = candidatesAtCursor(wordStart, &label);
+	const QStringList catalog = candidatesAtCursor(wordStart, keyOnCurrentLine(wordStart),
+		catalogKindAtCursor(wordStart), &label);
 	QApplication::restoreOverrideCursor();
 
 	if (catalog.isEmpty())
@@ -1945,20 +1909,12 @@ void WBQtMapIniEditorDialog::onCompletionChosen(const QString &completion)
 
 void WBQtMapIniEditorDialog::onTextChanged()
 {
-	if (m_editor == NULL)
-	{
-		return;		// no tab open: nothing to act on
-	}
 	m_rescanTimer->start();		// restarts the countdown; fires once typing pauses
 	maybeComplete(false);		// cheap: bails immediately unless the line takes a name
 }
 
 void WBQtMapIniEditorDialog::rescanLocalNames()
 {
-	if (m_editor == NULL)
-	{
-		return;		// no tab open: nothing to act on
-	}
 	const QSet<QString> found =
 		WBQtMapIniHighlighter::scanLocalNames(m_editor->document());
 
@@ -1980,10 +1936,6 @@ void WBQtMapIniEditorDialog::rescanLocalNames()
 
 void WBQtMapIniEditorDialog::onCursorMoved()
 {
-	if (m_editor == NULL)
-	{
-		return;		// no tab open: nothing to act on
-	}
 	const QTextCursor cursor = m_editor->textCursor();
 	updateStatus(tr("Line %1, column %2")
 		.arg(cursor.blockNumber() + 1)
@@ -2002,10 +1954,6 @@ void WBQtMapIniEditorDialog::onFindPrevious()
 
 void WBQtMapIniEditorDialog::find(bool forward)
 {
-	if (m_editor == NULL)
-	{
-		return;		// no tab open: nothing to act on
-	}
 	const QString needle = m_ui->findEdit->text();
 	if (needle.isEmpty())
 	{
@@ -2042,10 +1990,6 @@ void WBQtMapIniEditorDialog::find(bool forward)
 
 void WBQtMapIniEditorDialog::onEditorContextMenu(const QPoint &pos)
 {
-	if (m_editor == NULL)
-	{
-		return;		// no tab open: nothing to act on
-	}
 	QMenu *menu = m_editor->createStandardContextMenu();
 	const QTextCursor atPoint = m_editor->cursorForPosition(pos);
 	const QString blockText = atPoint.block().text();
@@ -2127,9 +2071,7 @@ void WBQtMapIniEditorDialog::updateTitle()
 		// say which map is being edited.
 		title += " (" + QFileInfo(m_path).absolutePath() + ")";
 	}
-	// m_editor is NULL between construction and the first tab, and again after the last tab is
-	// closed -- this runs in both windows.
-	if (m_editor != NULL && m_editor->document()->isModified())
+	if (m_editor->document()->isModified())
 	{
 		title += " *";
 	}
