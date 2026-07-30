@@ -2677,6 +2677,7 @@ MapObject *WbView3d::pickedTreeAlongRay(const Vector3 &rayStart, const Vector3 &
 
 	MapObject *pBest = NULL;
 	Real bestFraction = 1.0f;
+	Real bestTrunkDistSqr = FLT_MAX;	// nothing picked yet, so any hit beats it
 	LineSegClass ray(rayStart, rayStart + rayDir*maxDistance);
 
 	for (MapObject *pObj = MapObject::getFirstMapObject(); pObj; pObj = pObj->getNext()) {
@@ -2721,11 +2722,29 @@ MapObject *WbView3d::pickedTreeAlongRay(const Vector3 &rayStart, const Vector3 &
 		CastResultStruct castResult;
 		castResult.Fraction = 1.0f;
 		RayCollisionTestClass rayTest(ray, &castResult);
-		if (CollisionMath::Collide(rayTest.Ray, worldBox, rayTest.Result)) {
-			if (castResult.Fraction < bestFraction) {
-				bestFraction = castResult.Fraction;
-				pBest = pObj;
-			}
+		if (!CollisionMath::Collide(rayTest.Ray, worldBox, rayTest.Result)) {
+			continue;
+		}
+
+		// Among the trees the ray passes through, take the one whose TRUNK the click is nearest,
+		// not the one whose box the ray happens to enter first.
+		//
+		// A tree's bounding box is a tall prism around a roughly conical canopy, so neighbouring
+		// trees' boxes overlap heavily in the corners where there is no actual foliage. Ranking by
+		// entry distance meant a click aimed squarely at one tree could land in a sliver of its
+		// neighbour's box first and select the neighbour -- which made picking one tree out of a
+		// close pair almost impossible. Distance from the click ray to the trunk axis is stable and
+		// matches what the user is aiming at.
+		const Vector3 trunk(pos.x, pos.y, pos.z);
+		const Vector3 toTrunk = trunk - rayStart;
+		const Real along = Vector3::Dot_Product(toTrunk, rayDir);		// rayDir is unit length
+		const Vector3 closestOnRay = rayStart + rayDir*along;
+		const Real trunkDistSqr = (trunk - closestOnRay).Length2();
+
+		if (trunkDistSqr < bestTrunkDistSqr) {
+			bestTrunkDistSqr = trunkDistSqr;
+			bestFraction = castResult.Fraction;
+			pBest = pObj;
 		}
 	}
 
