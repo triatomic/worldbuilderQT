@@ -3593,6 +3593,8 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_LISTEN_ALL, OnUpdateViewListenAll)
 	ON_COMMAND(ID_VIEW_LISTEN_NONE, OnViewListenNone)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_LISTEN_NONE, OnUpdateViewListenNone)
+	ON_COMMAND(ID_VIEW_LISTEN_TOGGLE, OnViewListenToggle)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_LISTEN_TOGGLE, OnUpdateViewListenToggle)
 	ON_COMMAND(ID_VIEW_SHOWPLAYINGSOUNDS, OnViewShowPlayingSounds)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_SHOWPLAYINGSOUNDS, OnUpdateViewShowPlayingSounds)
 	ON_COMMAND(ID_VIEW_SHOW_SOUND_CIRCLES, OnViewShowSoundCircles)
@@ -6258,6 +6260,26 @@ void WbView3d::OnViewListenNone()
 void WbView3d::OnUpdateViewListenNone(CCmdUI* pCmdUI)
 {
 	pCmdUI->SetRadio(m_listenMode == WB_LISTEN_NONE ? 1 : 0);
+}
+
+// Toolbar play/pause: a one-button shortcut across the Listen To Map radio group, so the common
+// "let me hear the map" / "quiet please" flip doesn't need the submenu. Anything that is currently
+// making noise (Enabled / Permanent / All) pauses to NONE; silence resumes to ALL. Resuming to ALL
+// rather than the mode we came from keeps the button honest: it is drawn as a plain play/pause
+// pair, so it must not depend on hidden state the icon can't show. The submenu still selects the
+// narrower Enabled / Permanent modes, and its radio marks follow along because everything routes
+// through the same wbSetListenMode.
+void WbView3d::OnViewListenToggle()
+{
+	wbSetListenMode(this, &m_listenMode,
+		(m_listenMode == WB_LISTEN_NONE) ? WB_LISTEN_ALL : WB_LISTEN_NONE);
+}
+
+void WbView3d::OnUpdateViewListenToggle(CCmdUI* pCmdUI)
+{
+	// Pushed in while sound is playing, so the button shows what is happening rather than what
+	// clicking it would do.
+	pCmdUI->SetCheck(m_listenMode != WB_LISTEN_NONE ? 1 : 0);
 }
 
 void WbView3d::OnViewShowBaseRadius() {

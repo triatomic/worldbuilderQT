@@ -166,6 +166,10 @@ protected:
 	afx_msg void OnUpdateViewListenAll(CCmdUI* pCmdUI);
 	afx_msg void OnViewListenNone();
 	afx_msg void OnUpdateViewListenNone(CCmdUI* pCmdUI);
+	// Toolbar play/pause across the listen modes: anything audible pauses to NONE, silence
+	// resumes to ALL.
+	afx_msg void OnViewListenToggle();
+	afx_msg void OnUpdateViewListenToggle(CCmdUI* pCmdUI);
 	afx_msg void OnViewShowPlayingSounds();
 	afx_msg void OnUpdateViewShowPlayingSounds(CCmdUI* pCmdUI);
 	afx_msg void OnViewBoundingBoxes();
