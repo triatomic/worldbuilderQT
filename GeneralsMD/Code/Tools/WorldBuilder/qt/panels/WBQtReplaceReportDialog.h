@@ -4,7 +4,9 @@
 // replaced with, and how many objects carried it. Selecting a row selects those objects on the map
 // and centres the view on the first, so a wrong guess can be seen in place. "Change Replacement"
 // reopens the normal pick dialog for that row and re-applies live, and clearing a replacement puts
-// the original missing name back.
+// the original missing name back. "Find Next" / "^" (F3 / Shift+F3) walk the rows in order with
+// wrap-around -- the same stepper convention as the Replace Missing Unit dialog -- so a long
+// report can be reviewed from the keyboard: F3, judge the selection on the map, F3 again.
 //
 // Run via WBQtReplaceReport_Run; the rows themselves live on the MFC side
 // (src/WBQtPickUnitBridge.cpp), which owns the map objects being re-pointed.
@@ -28,11 +30,14 @@ public:
 private slots:
 	void onCurrentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
 	void onChangeReplacement();
+	void onFindNextRow();	// F3 / "Find Next": step to the next report row
+	void onFindPrevRow();	// Shift+F3 / "^": step to the previous report row
 
 private:
 	void reload();
 	void refreshSummary();
 	int currentRow() const;
+	void stepRow(int dir);	// move the selection by dir (+1/-1) with wrap-around
 
 	Ui::WBQtReplaceReportDialog *m_ui;
 };

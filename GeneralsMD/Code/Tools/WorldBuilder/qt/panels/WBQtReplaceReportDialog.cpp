@@ -7,6 +7,7 @@
 #include <QApplication>		// qApp, in the _Run entry point
 #include <QHeaderView>
 #include <QPushButton>
+#include <QShortcut>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 
@@ -68,6 +69,18 @@ WBQtReplaceReportDialog::WBQtReplaceReportDialog(QWidget *parent)
 	connect(m_ui->changeButton, SIGNAL(clicked()), this, SLOT(onChangeReplacement()));
 	connect(m_ui->closeButton, SIGNAL(clicked()), this, SLOT(accept()));
 
+	// Row stepper == the Replace Missing Unit dialog's "Find Next" / "^": walk the report in
+	// order so a long list can be reviewed without reaching for the mouse. Selecting a row
+	// already selects its objects on the map, so F3 doubles as "show me the next one".
+	connect(m_ui->findNextButton, SIGNAL(clicked()), this, SLOT(onFindNextRow()));
+	connect(m_ui->findPrevButton, SIGNAL(clicked()), this, SLOT(onFindPrevRow()));
+	// F3 / Shift+F3 == the standard find-next convention, matching the pick/replace dialog.
+	// This dialog is modal, so the main window's F3 (Border Tool) accelerator can't fire.
+	QShortcut *nextSc = new QShortcut(QKeySequence(Qt::Key_F3), this);
+	connect(nextSc, SIGNAL(activated()), this, SLOT(onFindNextRow()));
+	QShortcut *prevSc = new QShortcut(QKeySequence(Qt::SHIFT + Qt::Key_F3), this);
+	connect(prevSc, SIGNAL(activated()), this, SLOT(onFindPrevRow()));
+
 	reload();
 }
 
@@ -110,6 +123,10 @@ void WBQtReplaceReportDialog::reload()
 	{
 		m_ui->rowTree->setCurrentItem(m_ui->rowTree->topLevelItem(0));
 	}
+	// Nothing to step through with a single row (or none) -- == the pick dialog's arming rule.
+	const bool canStep = (m_ui->rowTree->topLevelItemCount() > 1);
+	m_ui->findNextButton->setEnabled(canStep);
+	m_ui->findPrevButton->setEnabled(canStep);
 	refreshSummary();
 }
 
@@ -174,6 +191,33 @@ void WBQtReplaceReportDialog::onCurrentItemChanged(QTreeWidgetItem *current,
 	// Select this row's objects on the map and centre on the first, so the replacement can be
 	// judged in place rather than by name alone.
 	WBQtReplaceReport_SelectRow(m_ui->rowTree->indexOfTopLevelItem(current));
+}
+
+// Move the selection by `dir` (+1 next, -1 previous) with wrap-around. Setting the current item
+// fires onCurrentItemChanged, which selects that row's objects on the map -- so stepping the
+// report also walks the viewport through them.
+void WBQtReplaceReportDialog::stepRow(int dir)
+{
+	const int count = m_ui->rowTree->topLevelItemCount();
+	if (count <= 0)
+	{
+		return;
+	}
+	const int cur = currentRow();
+	// No selection yet: enter at the top going forward, at the bottom going back.
+	int next = (cur < 0) ? ((dir > 0) ? 0 : count - 1) : ((cur + dir + count) % count);
+	m_ui->rowTree->setCurrentItem(m_ui->rowTree->topLevelItem(next));
+	m_ui->rowTree->scrollToItem(m_ui->rowTree->topLevelItem(next));
+}
+
+void WBQtReplaceReportDialog::onFindNextRow()
+{
+	stepRow(1);
+}
+
+void WBQtReplaceReportDialog::onFindPrevRow()
+{
+	stepRow(-1);
 }
 
 void WBQtReplaceReportDialog::onChangeReplacement()

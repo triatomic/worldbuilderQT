@@ -290,6 +290,15 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	QShortcut *replaceEsc = new QShortcut(QKeySequence(Qt::Key_Escape), m_replaceBar);
 	replaceEsc->setContext(Qt::WidgetWithChildrenShortcut);
 	connect(replaceEsc, SIGNAL(activated()), this, SLOT(onReplaceClose()));
+	// F3 / Shift+F3 step the matches, == the pick/replace dialogs' convention. Scoped to the
+	// replace BAR (like Esc above), not the window: this window is modeless, so a window-wide
+	// F3 would shadow the main window's Border Tool accelerator whenever it had focus.
+	QShortcut *replaceNextSc = new QShortcut(QKeySequence(Qt::Key_F3), m_replaceBar);
+	replaceNextSc->setContext(Qt::WidgetWithChildrenShortcut);
+	connect(replaceNextSc, SIGNAL(activated()), this, SLOT(onReplaceNext()));
+	QShortcut *replacePrevSc = new QShortcut(QKeySequence(Qt::SHIFT + Qt::Key_F3), m_replaceBar);
+	replacePrevSc->setContext(Qt::WidgetWithChildrenShortcut);
+	connect(replacePrevSc, SIGNAL(activated()), this, SLOT(onReplacePrev()));
 	connect(m_newFolder, SIGNAL(clicked()), this, SLOT(onNewFolder()));
 	connect(m_newScript, SIGNAL(clicked()), this, SLOT(onNewScript()));
 	connect(m_editScript, SIGNAL(clicked()), this, SLOT(onEditScript()));
