@@ -53,6 +53,10 @@ namespace WBParticleRuntime
 	// Destroy every emitter for every object (called from the full scene teardown).
 	void destroyAllEmitters();
 
+	/// Drop the cached per-template emitter sets. Call when the loaded game data changes (a
+	/// map.ini load), since an override gives the template a different set.
+	void clearTemplateCache();
+
 	// Advance the frame clock and tick + queue the manager for this WB frame. Call once per redraw
 	// after WW3D::Sync and before the scene render. No-op when disabled.
 	void tick();

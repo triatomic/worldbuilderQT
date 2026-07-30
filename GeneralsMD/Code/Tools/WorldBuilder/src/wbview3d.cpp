@@ -38,6 +38,7 @@
 #include "part_ldr.h"
 #include "rendobj.h"
 #include "hanim.h"
+#include "htree.h"			// Get_Parent_Index, for the sub-object bone walk
 #include "dx8wrapper.h"
 #include "dx8indexbuffer.h"
 #include "dx8vertexbuffer.h"
@@ -465,7 +466,8 @@ void WbView3d::setObjTracking(MapObject *pMapObj,  Coord3D pos, Real angle, Bool
 	m_showObjToolTrackingObj = show;
 	if (!show) return;
 	Real scale;
-	AsciiString modelName = getModelNameAndScale(pMapObj, &scale, BODY_PRISTINE);
+	ModelConditionFlags trackState;
+	AsciiString modelName = getModelNameAndScale(pMapObj, &scale, BODY_PRISTINE, &trackState);
 
 	// Adriane [Deathscythe] The worldbuilder's scale change is very off for infantry -- adjust properly
 	if (scale > 2.0 && pMapObj->getThingTemplate()->isKindOf(KINDOF_INFANTRY)) {
@@ -476,6 +478,8 @@ void WbView3d::setObjTracking(MapObject *pMapObj,  Coord3D pos, Real angle, Bool
 		m_objectToolTrackingModelName = modelName;
 		REF_PTR_RELEASE(m_objectToolTrackingObj);
 		m_objectToolTrackingObj = m_assetManager->Create_Render_Obj( modelName.str(), scale, 0);
+		// The placement ghost should look like what will actually be placed.
+		applySubObjectVisibility(m_objectToolTrackingObj, pMapObj->getThingTemplate(), trackState);
 	}
 	if (m_objectToolTrackingObj == NULL) {
 		return;
@@ -660,6 +664,7 @@ WbView3d::WbView3d() :
 	m_labelRenderer(0),
 	m_haveGdiPaintKey(false),
 	m_needToLoadRoads(0),
+	m_freeAssetsOnNextReset(false),
 	m_listenMode(WB_LISTEN_NONE),
 	m_lastListenSweepTime(0),
 	m_timer(NULL),
@@ -1193,6 +1198,20 @@ void WbView3d::resetRenderObjects()
 
 	m_needToLoadRoads = true; // load roads next time we redraw.
 
+	// Drop the cached W3D prototypes too, when asked. Create_Render_Obj clones a prototype cached
+	// by model name, so tearing the scene down is not enough on its own: a model whose definition
+	// changed underneath us -- a map.ini editing an object's Draw module, so the same name now
+	// means different geometry or a different set of sub-objects -- would be rebuilt from the
+	// STALE prototype, leaving the old sub-objects visible. Only done on request: Free_Assets
+	// also releases every texture, so it is far too heavy for the ordinary per-edit refresh.
+	// Ordered AFTER the scene teardown above, which is what releases the last references to the
+	// render objects cloned from those prototypes.
+	if (m_freeAssetsOnNextReset && m_assetManager) {
+		m_freeAssetsOnNextReset = false;
+		PredictiveLODOptimizerClass::Free();
+		m_assetManager->Free_Assets();
+	}
+
 	if (TheW3DShadowManager)
 		TheW3DShadowManager->Reset();
 
@@ -1428,13 +1447,15 @@ void WbView3d::updateFenceListObjects(MapObject *pObject)
 		REF_PTR_SET( renderObj, pMapObj->getRenderObj() );
 		if (!renderObj) {
 			Real scale = 1.0; 
-			AsciiString modelName = getModelNameAndScale(pMapObj, &scale, BODY_PRISTINE);
+			ModelConditionFlags subState;
+			AsciiString modelName = getModelNameAndScale(pMapObj, &scale, BODY_PRISTINE, &subState);
 			// set render object, or create if we need to
 			if( renderObj == NULL && modelName.isEmpty() == FALSE && 
 					strncmp( modelName.str(), "No ", 3 ) ) 
 			{
 
 				renderObj = m_assetManager->Create_Render_Obj( modelName.str(), scale, 0);
+				applySubObjectVisibility(renderObj, pMapObj->getThingTemplate(), subState);
 
 			}  // end if
 		}
@@ -1491,6 +1512,94 @@ void WbView3d::removeFenceListObjects(MapObject *pObject)
  * since there's a weird bug I haven't been able to fix where models are drawn twice
  * when trees are rendered.
  */
+// Apply the draw module's ShowSubObject / HideSubObject list to a freshly created render object.
+//
+// The game does this in W3DModelDraw::doHideShowSubObjs when it builds a drawable; WorldBuilder
+// only ever called Create_Render_Obj, so a model whose condition state hides part of itself drew
+// the hidden geometry. Objects that share a model and differ only by what they hide -- which is
+// how a map.ini commonly reskins one -- all looked identical, and identical to the base model.
+//
+// Mirrors the game in BOTH steps: hide the named sub-object, then hide everything parented to its
+// bone. That second step is why hiding a turret takes its barrel with it.
+void WbView3d::applySubObjectVisibility(RenderObjClass *renderObj, const ThingTemplate *tt,
+	const ModelConditionFlags &state)
+{
+	if (renderObj == NULL || tt == NULL)
+	{
+		return;
+	}
+	const ModuleInfo &mi = tt->getDrawModuleInfo();
+	if (mi.getCount() == 0)
+	{
+		return;
+	}
+	const ModuleData *mdd = mi.getNthData(0);
+	const W3DModelDrawModuleData *md = mdd ? mdd->getAsW3DModelDrawModuleData() : NULL;
+	if (md == NULL)
+	{
+		return;
+	}
+	const ModelConditionInfo *info = md->findBestInfo(state);
+	if (info == NULL || info->m_hideShowVec.empty())
+	{
+		return;
+	}
+	applySubObjectHideList(renderObj, info);
+}
+
+// The applier itself, given the already-resolved condition state. Separate so the placed-object
+// path -- which walks every draw module and so resolves its own info per module -- shares it.
+void WbView3d::applySubObjectHideList(RenderObjClass *renderObj, const ModelConditionInfo *info)
+{
+	if (renderObj == NULL || info == NULL)
+	{
+		return;
+	}
+	const HTreeClass *htree = renderObj->Get_HTree();
+	const Int numSubObjects = renderObj->Get_Num_Sub_Objects();
+	for (std::vector<ModelConditionInfo::HideShowSubObjInfo>::const_iterator it =
+			info->m_hideShowVec.begin(); it != info->m_hideShowVec.end(); ++it)
+	{
+		Int objIndex = 0;
+		RenderObjClass *subObj = renderObj->Get_Sub_Object_By_Name(it->subObjName.str(), &objIndex);
+		if (subObj == NULL)
+		{
+			continue;
+		}
+		subObj->Set_Hidden(it->hide);
+		if (htree != NULL)
+		{
+			// Everything hanging off this sub-object's bone goes with it (== the game's
+			// doHideShowBoneSubObjs): hiding a chassis must hide what is mounted on it.
+			const Int boneIdx = renderObj->Get_Sub_Object_Bone_Index(0, objIndex);
+			for (Int i = 0; i < numSubObjects; i++)
+			{
+				Int parentBoneIndex = renderObj->Get_Sub_Object_Bone_Index(0, i);
+				Bool isChild = false;
+				while (parentBoneIndex != 0)
+				{
+					parentBoneIndex = htree->Get_Parent_Index(parentBoneIndex);
+					if (parentBoneIndex == boneIdx)
+					{
+						isChild = true;
+						break;
+					}
+				}
+				if (isChild)
+				{
+					RenderObjClass *childObject = renderObj->Get_Sub_Object(i);
+					if (childObject != NULL)
+					{
+						childObject->Set_Hidden(it->hide);
+						childObject->Release_Ref();
+					}
+				}
+			}
+		}
+		subObj->Release_Ref();
+	}
+}
+
 AsciiString WbView3d::getBestModelNameWBPrev(const ThingTemplate* tt, const ModelConditionFlags& c)
 {
 	if (tt)
@@ -1607,6 +1716,12 @@ void WbView3d::invalBuildListItemInView(BuildListInfo *pBuildToInval)
 				{
 
 					renderObj = m_assetManager->Create_Render_Obj( modelName.str(), scale, playerColor);
+					{
+						// == the game's W3DModelDraw: apply this state's Show/HideSubObject list.
+						ModelConditionFlags subState;
+						subState.clear();
+						applySubObjectVisibility(renderObj, tTemplate, subState);
+					}
 					if( m_showShadows  && tTemplate->getShadowType() != SHADOW_NONE)
 					{
 						//add correct type of shadow
@@ -1655,7 +1770,8 @@ void WbView3d::invalBuildListItemInView(BuildListInfo *pBuildToInval)
 }
 
 
-AsciiString WbView3d::getModelNameAndScale(MapObject *pMapObj, Real *scale, BodyDamageType curDamageState)
+AsciiString WbView3d::getModelNameAndScale(MapObject *pMapObj, Real *scale,
+	BodyDamageType curDamageState, ModelConditionFlags *stateOut)
 {
 	ModelConditionFlags state;
 	switch (curDamageState) 
@@ -1742,7 +1858,7 @@ AsciiString WbView3d::getModelNameAndScale(MapObject *pMapObj, Real *scale, Body
 	{
 		modelName = "No Model Name"; // must be this while GDF exists (it's the default)
 		const ThingTemplate *tTemplate;
-		
+
 		tTemplate = pMapObj->getThingTemplate();
 		if( tTemplate && !(pMapObj->getFlags() & FLAG_DONT_RENDER))
 		{
@@ -1753,6 +1869,10 @@ AsciiString WbView3d::getModelNameAndScale(MapObject *pMapObj, Real *scale, Body
 
 		}  // end if
 	}  // end else
+	if (stateOut != NULL)
+	{
+		*stateOut = state;		// so the caller can apply this state's sub-object visibility
+	}
 	return modelName;
 }
 
@@ -2076,6 +2196,13 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 								// Create the sub-model render object
 								RenderObjClass* subRenderObj = m_assetManager->Create_Render_Obj(modelName.str(), scale, playerColor);
 								if (subRenderObj) {
+									// == the game's W3DModelDraw: hide what THIS module's condition
+									// state hides, plus anything parented to a hidden bone. Uses
+									// this module's own info, not the template's first module.
+									const ModelConditionInfo *ci = md->findBestInfo(state);
+									if (ci != NULL && !ci->m_hideShowVec.empty()) {
+										applySubObjectHideList(subRenderObj, ci);
+									}
 
 									// DumpSubObjects(subRenderObj, modelName.str()); // <-- dump list once
 
@@ -2219,6 +2346,13 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 			REF_PTR_RELEASE(renderObj); // belongs to m_scene now.
 		} else if (renderObj) {
 			m_scene->Remove_Render_Object(renderObj);
+		} else if (!(pMapObj->getFlags() & FLAG_DONT_RENDER)) {
+			// No render object, but the object may still be PURE PARTICLES: a map.ini commonly
+			// defines an FX marker as "Model = None" plus a ParticleSysBone, which is a real,
+			// visible thing in the game and drew nothing here -- the emitter placement used to sit
+			// inside the has-a-model branch above. There is no bone to read, so the runtime falls
+			// back to the object origin, which is where such an emitter belongs anyway.
+			WBParticleRuntime::placeEmittersForObject(pMapObj, NULL, loc.x, loc.y, loc.z);
 		}
 		if (found) break;
 	}

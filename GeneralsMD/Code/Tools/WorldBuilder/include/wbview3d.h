@@ -338,6 +338,7 @@ private:
 	Bool										m_deviceResetFailed;
 #endif
 	Bool										m_needToLoadRoads;
+	Bool										m_freeAssetsOnNextReset;	///< see resetRenderObjects
 	LightClass							*m_globalLight[MAX_GLOBAL_LIGHTS];
 	RenderObjClass						*m_lightFeedbackMesh[MAX_GLOBAL_LIGHTS];
 
@@ -516,6 +517,10 @@ public:
 
 	/// Removes all render objects.  Call when swithing to a new map.
 	void resetRenderObjects();
+	/// Make the next resetRenderObjects also drop the cached W3D prototypes, so a model whose
+	/// DEFINITION changed (a map.ini editing an object's Draw module) is rebuilt from the new
+	/// one instead of the stale cache. Costs a full asset reload, so only for that case.
+	void freeCachedModelsOnNextReset(void) { m_freeAssetsOnNextReset = true; }
 
 	void stepTimeOfDay(void);
 
@@ -524,7 +529,15 @@ public:
 
 	DrawObject *getDrawObject(void) {return m_drawObject;};
 
-	AsciiString getModelNameAndScale(MapObject *pMapObj, Real *scale, BodyDamageType curDamageState);
+	AsciiString getModelNameAndScale(MapObject *pMapObj, Real *scale, BodyDamageType curDamageState,
+		ModelConditionFlags *stateOut = NULL);
+	/// Apply the draw module's Show/HideSubObject list to a newly created render object, as the
+	/// game's W3DModelDraw does -- including hiding whatever is parented to a hidden bone.
+	void applySubObjectVisibility(RenderObjClass *renderObj, const ThingTemplate *tt,
+		const ModelConditionFlags &state);
+	/// As above, with the condition state already resolved (the placed-object path walks every
+	/// draw module, so it resolves one per module).
+	void applySubObjectHideList(RenderObjClass *renderObj, const struct ModelConditionInfo *info);
 
 	virtual Int getPickPixels(void) {return m_pickPixels;}
 	virtual Bool viewToDocCoordZ(CPoint curPt, Coord3D *newPt, Real Z); 

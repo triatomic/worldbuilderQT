@@ -79,6 +79,7 @@
 #include "wbview.h"
 #include "WHeightMapEdit.h"
 #include "WorldBuilderDoc.h"
+#include "WBParticleRuntime.h"
 #include "WorldBuilderView.h"
 #include "MapPreview.h"
 
@@ -702,6 +703,13 @@ static void refreshMapIniViewport(void)
 	ObjectOptions::reprocessObjectList();
 	WbView3d *p3d = CWorldBuilderDoc::GetActive3DView();
 	if (p3d != NULL) {
+		// A map.ini can change what a model NAME means (editing an object's Draw module), and
+		// render objects are cloned from prototypes cached by that name -- so the cache has to go
+		// too, or the object rebuilds from the old geometry and its old sub-objects stay visible.
+		p3d->freeCachedModelsOnNextReset();
+		// Same reason for the per-template emitter sets: an override can add, move or drop a
+		// ParticleSysBone, and those sets are cached per template.
+		WBParticleRuntime::clearTemplateCache();
 		p3d->resetRenderObjects();		// == Troubleshooting > Refresh Scene Objects
 		p3d->invalObjectInView(NULL);
 	}

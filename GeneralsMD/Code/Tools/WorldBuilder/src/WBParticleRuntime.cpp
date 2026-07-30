@@ -249,10 +249,15 @@ namespace
 		AsciiString bone;
 	};
 
-	// A template's always-on emitter set is immutable for the process life, but
 	// createEmittersForObject runs per placed object on every render rebuild (invalObjectInView(NULL)
-	// walks every object on ~20 events). Compute it once per distinct template and cache it, so
-	// repeat instances are a map lookup instead of a fresh module walk + vector build each time.
+	// walks every object on ~20 events), so compute a template's set once and cache it -- repeat
+	// instances become a map lookup instead of a fresh module walk + vector build.
+	//
+	// NOT immutable for the process life: a map.ini load appends an override to a template's chain,
+	// and getThingTemplate() then resolves to that NEW object with a different emitter set. So the
+	// cache has to be dropped when the data changes -- see clearTemplateCache, called from the
+	// map.ini refresh. (Keying on the template pointer is still fine; the override is a distinct
+	// object, so a stale entry is only wasted memory, never a wrong answer for the new pointer.)
 	typedef std::vector<AttachedEmitter> AttachedList;
 	typedef std::map<const ThingTemplate *, AttachedList> AttachedCache;
 	AttachedCache s_attachedCache;
@@ -279,14 +284,23 @@ namespace
 			{
 				continue;
 			}
-			const ModelConditionInfo &base = md->m_conditionStates[0];
-			for (size_t b = 0; b < base.m_particleSysBones.size(); ++b)
+			// Resolve the default state the way the engine does rather than indexing [0]: a
+			// DefaultConditionState is not necessarily the first entry in the vector, and taking
+			// the wrong one means reading another state's emitters (or none).
+			ModelConditionFlags none;
+			none.clear();
+			const ModelConditionInfo *base = md->findBestInfo( none );
+			if (base == NULL)
 			{
-				if (base.m_particleSysBones[b].particleSystemTemplate != NULL)
+				continue;
+			}
+			for (size_t b = 0; b < base->m_particleSysBones.size(); ++b)
+			{
+				if (base->m_particleSysBones[b].particleSystemTemplate != NULL)
 				{
 					AttachedEmitter e;
-					e.tmpl = base.m_particleSysBones[b].particleSystemTemplate;
-					e.bone = base.m_particleSysBones[b].boneName;
+					e.tmpl = base->m_particleSysBones[b].particleSystemTemplate;
+					e.bone = base->m_particleSysBones[b].boneName;
 					out.push_back( e );
 				}
 			}
@@ -569,6 +583,13 @@ void placeEmittersForObject(MapObject *obj, RenderObjClass *renderObj,
 	{
 		spawnEmitter( obj, places[i].tmpl, places[i].pos, places[i].rotationZ );
 	}
+}
+
+void clearTemplateCache()
+{
+	// Called when the loaded game data changes (a map.ini load), which can give a template a
+	// different always-on emitter set. Cheap: the sets are rebuilt lazily on the next placement.
+	s_attachedCache.clear();
 }
 
 void destroyEmittersForObject(MapObject *obj)
