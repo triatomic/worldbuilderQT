@@ -46,6 +46,8 @@
 #include "GameClient/Color.h"
 
 #include "W3DDevice/GameClient/W3DAssetManager.h"
+#include "W3DDevice/GameClient/Module/W3DModelDraw.h"	// W3DModelDrawModuleData (per-module walk)
+#include "W3DDevice/GameClient/Module/W3DTreeDraw.h"		// W3DTreeDrawModuleData (tree fallback)
 #include "WW3D2/dx8wrapper.h"
 #include "WWLib/TARGA.H"
 
@@ -180,28 +182,79 @@ static UnsignedByte * saveSurface(IDirect3DSurface8 *surface)
 #endif
 }
 
+// Create the render object to preview for this template, walking EVERY draw module and taking
+// the first one that yields a model the asset manager can actually create. Returns NULL if none
+// can be.
+//
+// getBestModelNameWBPrev() only ever consults draw module 0, which loses the preview outright
+// whenever module 0 isn't the one carrying the visible model. A map.ini that retargets an object
+// does exactly that: "AddModule" APPENDS draw modules, so the module at index 0 is whatever the
+// base template had -- commonly a marker/mound module, or one whose state says "Model = NONE"
+// (stored literally as "none", so Create_Render_Obj just fails). The real replacement model then
+// sits at index 1+ and never got looked at, so the panel showed "(no preview)" for precisely the
+// objects the user had retargeted.
+//
+// This mirrors what the viewport already does in WbView3d::invalObjectInView: try each module,
+// skip empty / "No ..." names, and tolerate an individual Create_Render_Obj failure instead of
+// giving up on the template.
+static RenderObjClass *createPreviewModel( const ThingTemplate *tt )
+{
+	if (tt == NULL)
+	{
+		return NULL;
+	}
+
+	ModelConditionFlags state;
+	state.clear();
+
+	WW3DAssetManager *pMgr = W3DAssetManager::Get_Instance();
+	if (pMgr == NULL)
+	{
+		return NULL;
+	}
+
+	const ModuleInfo &draws = tt->getDrawModuleInfo();
+	for (Int i = 0; i < draws.getCount(); ++i)
+	{
+		const ModuleData *mdd = draws.getNthData( i );
+		AsciiString modelName;
+
+		const W3DModelDrawModuleData *md = mdd ? mdd->getAsW3DModelDrawModuleData() : NULL;
+		if (md != NULL)
+		{
+			modelName = md->getBestModelNameForWB( state );
+		}
+		else
+		{
+			// Same W3DTreeDraw fallback getBestModelNameWBPrev has, kept so optimized trees
+			// still preview.
+			const W3DTreeDrawModuleData *td = mdd ? mdd->getAsW3DTreeDrawModuleData() : NULL;
+			if (td != NULL)
+			{
+				modelName = td->m_modelName;
+			}
+		}
+
+		if (modelName.isEmpty() || strncmp( modelName.str(), "No ", 3 ) == 0)
+		{
+			continue;
+		}
+		RenderObjClass *model = pMgr->Create_Render_Obj( modelName.str() );
+		if (model != NULL)
+		{
+			return model;
+		}
+	}
+	return NULL;
+}
+
 // return an array of BGRA pixels
 static UnsignedByte * generatePreview( const ThingTemplate *tt, Int renderSize = PREVIEW_WIDTH )
 {
-	// find the default model to preview
-	RenderObjClass *model = NULL;
-	Real scale = 1.0f;
-	AsciiString modelName = "No Model Name";
-	if (tt)
+	// find the model to preview -- the first draw module that resolves to a creatable one.
+	RenderObjClass *model = createPreviewModel( tt );
+	if (model)
 	{
-		ModelConditionFlags state;
-		state.clear();
-		WbView3d *p3View = CWorldBuilderDoc::GetActiveDoc()->GetActive3DView();
-		modelName = p3View->getBestModelNameWBPrev(tt, state);
-		scale = tt->getAssetScale();
-	}
-	// set render object, or create if we need to
-	if( modelName.isEmpty() == FALSE &&
-			strncmp( modelName.str(), "No ", 3 ) )
-	{
-	 	WW3DAssetManager *pMgr = W3DAssetManager::Get_Instance();
-		model = pMgr->Create_Render_Obj(modelName.str());
-		if (model)
 		{
 			const AABoxClass bbox = model->Get_Bounding_Box();
 //			Real height = bbox.Extent.Z;

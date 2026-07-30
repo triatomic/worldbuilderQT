@@ -6,13 +6,20 @@
 #include "WBQtPreviewImage.h"
 #include "WBQtTreeStyle.h"
 
+#include <QApplication>
+#include <QBrush>
 #include <QCheckBox>
+#include <QClipboard>
+#include <QColor>
 #include <QComboBox>
+#include <QIcon>
 #include <QImage>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPainter>
 #include <QPixmap>
 #include <QSpinBox>
+#include <QToolButton>
 #include <QTreeWidget>
 #include <QTreeWidgetItemIterator>
 
@@ -21,6 +28,35 @@ WBQtObjectPanel *WBQtObjectPanel::s_instance = NULL;
 // The list index a tree leaf represents is stored in this item-data role (>=0 for leaves,
 // absent/-1 for grouping nodes).
 static const int kListIndexRole = Qt::UserRole + 1;
+
+// Tint for a template the loaded map.ini redefined -- the same orange the map.ini editor uses
+// for a name it can't match, since both mean "look at this", not "this is broken".
+static const QColor kMapIniOverrideColor(220, 140, 40);
+
+// Draw the little "copy" glyph (two offset outlined rectangles) for the name-copy button.
+// Painted rather than shipped as an asset because the Qt side carries no icon resources at all,
+// and QStyle has no standard copy icon that renders consistently across styles. Stroked in the
+// supplied text colour so it follows whichever theme is active.
+static QIcon makeCopyIcon(const QColor &ink)
+{
+	const int px = 16;
+	QPixmap pm(px, px);
+	pm.fill(Qt::transparent);
+
+	QPainter p(&pm);
+	p.setRenderHint(QPainter::Antialiasing, true);
+	QPen pen(ink);
+	pen.setWidthF(1.2);
+	p.setPen(pen);
+	p.setBrush(Qt::NoBrush);
+	// back sheet (up-right), then the front sheet overlapping it (down-left). Kept inside
+	// 1.5..14.5 so the 1.2px stroke can't clip against the pixmap edge.
+	p.drawRect(QRectF(5.5, 1.5, 8.0, 8.0));
+	p.drawRect(QRectF(2.5, 6.5, 8.0, 8.0));
+	p.end();
+
+	return QIcon(pm);
+}
 
 WBQtObjectPanel::WBQtObjectPanel(QWidget *owner)
 	: QWidget(owner, Qt::Tool),
@@ -34,7 +70,12 @@ WBQtObjectPanel::WBQtObjectPanel(QWidget *owner)
 	m_search = m_ui->search;
 	m_tree = m_ui->tree;
 	m_nameLabel = m_ui->nameLabel;
+	m_copyNameBtn = m_ui->copyNameBtn;
 	m_preview = m_ui->preview;
+
+	// Palette text colour, so the glyph tracks the active theme.
+	m_copyNameBtn->setIcon(makeCopyIcon(palette().color(QPalette::WindowText)));
+	m_copyNameBtn->setEnabled(false);	// nothing selected yet
 	m_team = m_ui->team;
 	m_height = m_ui->height;
 	m_placeAll = m_ui->placeAll;
@@ -64,6 +105,7 @@ WBQtObjectPanel::WBQtObjectPanel(QWidget *owner)
 	connect(m_tree, SIGNAL(itemSelectionChanged()), this, SLOT(onTreeSelectionChanged()));
 	connect(m_team, SIGNAL(currentIndexChanged(int)), this, SLOT(onTeamChanged(int)));
 	connect(m_height, SIGNAL(valueChanged(int)), this, SLOT(onHeightChanged(int)));
+	connect(m_copyNameBtn, SIGNAL(clicked()), this, SLOT(onCopyName()));
 	connect(m_ui->searchBtn, SIGNAL(clicked()), this, SLOT(onSearch()));
 	connect(m_ui->resetBtn, SIGNAL(clicked()), this, SLOT(onReset()));
 	connect(m_search, SIGNAL(returnPressed()), this, SLOT(onSearch()));
@@ -177,6 +219,15 @@ void WBQtObjectPanel::rebuildTree(const QString &filter)
 		QTreeWidgetItem *leaf = new QTreeWidgetItem(parent);
 		leaf->setText(0, QString::fromLatin1(leafBuf));
 		leaf->setData(0, kListIndexRole, i);
+
+		// Flag templates the loaded map.ini redefined, so it's obvious at a glance which objects
+		// are not the stock ones. Same orange the map.ini editor uses for a name it can't match:
+		// this is information, not an error.
+		if (WBQtObject_IsMapIniOverridden(i) != 0)
+		{
+			leaf->setForeground(0, QBrush(kMapIniOverrideColor));
+			leaf->setToolTip(0, tr("Redefined by the loaded map.ini"));
+		}
 	}
 
 	m_tree->sortItems(0, Qt::AscendingOrder);
@@ -205,6 +256,7 @@ void WBQtObjectPanel::onTreeSelectionChanged()
 
 	WBQtObject_SelectIndex(listIndex);
 	m_nameLabel->setText(sel.first()->text(0));
+	m_copyNameBtn->setEnabled(true);
 
 	m_updating = true;
 	refreshTeamCombo();
@@ -278,6 +330,29 @@ void WBQtObjectPanel::onHeightChanged(int v)
 	WBQtObject_SetHeight(v);
 }
 
+void WBQtObjectPanel::onCopyName()
+{
+	// Copy the FULL unique name rather than the label text: the tree leaf is only the last path
+	// element, but what's useful on the clipboard is the name you'd paste into a map.ini or a
+	// script -- which is what WBQtObject_GetFullName returns.
+	QList<QTreeWidgetItem*> sel = m_tree->selectedItems();
+	if (sel.isEmpty())
+	{
+		return;
+	}
+	int listIndex = sel.first()->data(0, kListIndexRole).toInt();
+	if (listIndex < 0)
+	{
+		return;
+	}
+	const int cap = 256;
+	char nameBuf[cap];
+	if (WBQtObject_GetFullName(listIndex, nameBuf, cap))
+	{
+		QApplication::clipboard()->setText(QString::fromLatin1(nameBuf));
+	}
+}
+
 void WBQtObjectPanel::onSearch()
 {
 	QString text = m_search->text().trimmed();
@@ -347,6 +422,7 @@ void WBQtObjectPanel::selectListIndex(int listIndex)
 		{
 			m_tree->setCurrentItem(*it);
 			m_nameLabel->setText((*it)->text(0));
+			m_copyNameBtn->setEnabled(true);
 			break;
 		}
 	}

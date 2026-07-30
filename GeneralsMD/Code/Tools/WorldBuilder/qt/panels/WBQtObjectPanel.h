@@ -17,6 +17,7 @@ class QComboBox;
 class QLabel;
 class QLineEdit;
 class QSpinBox;
+class QToolButton;
 class QTreeWidget;
 class QTreeWidgetItem;
 
@@ -41,6 +42,7 @@ private slots:
 	void onTreeSelectionChanged();
 	void onTeamChanged(int index);
 	void onHeightChanged(int v);
+	void onCopyName();
 	void onSearch();
 	void onReset();
 	void onPreviewSoundToggled();
@@ -60,6 +62,7 @@ private:
 	QTreeWidget *m_tree;
 	QLabel      *m_preview;
 	QLabel      *m_nameLabel;
+	QToolButton *m_copyNameBtn;	// copies the selected object's full name to the clipboard
 	QComboBox   *m_team;
 	QSpinBox    *m_height;
 	QLineEdit   *m_search;

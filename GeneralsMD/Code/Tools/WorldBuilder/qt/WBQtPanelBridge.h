@@ -181,6 +181,9 @@ int  WBQtObject_GetCount(void);
 int  WBQtObject_GetEntry(int listIndex, char *preOut, char *sideOut, char *sortingOut, char *leafOut, int cap);
 // The full (unique) template name for listIndex -- used as the tree item's identity/tooltip.
 int  WBQtObject_GetFullName(int listIndex, char *nameOut, int cap);
+// Non-zero if the loaded map.ini redefined this template (it has a map.ini override on its
+// chain), so the panel can tint the entry to show it was changed.
+int  WBQtObject_IsMapIniOverridden(int listIndex);
 
 // Selection (Qt -> MFC): make listIndex the current object (drives placement).
 void WBQtObject_SelectIndex(int listIndex);

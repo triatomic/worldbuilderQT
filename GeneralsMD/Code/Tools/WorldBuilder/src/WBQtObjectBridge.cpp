@@ -18,6 +18,7 @@
 #include "WorldBuilderDoc.h"
 #include "Common/WellKnownKeys.h"
 #include "Common/ThingTemplate.h"
+#include "Common/ThingFactory.h"	// TheThingFactory (base-template lookup for the override check)
 #include "Common/ThingSort.h"
 #include "Common/AudioEventRTS.h"
 #include "Common/GameAudio.h"
@@ -199,6 +200,35 @@ int WBQtObject_GetFullName(int listIndex, char *nameOut, int cap)
 	}
 	copyString(nameOut, cap, pObj->getName().str());
 	return 1;
+}
+
+// Non-zero when the loaded map.ini redefined this template, so the panel can flag it.
+//
+// A map.ini "Object Foo" block is loaded with INI_LOAD_CREATE_OVERRIDES, which appends a copy of
+// the template to its override chain rather than editing it in place. ThingFactory's hash map
+// still holds the BASE template (overrides are never re-registered), so looking the name up and
+// asking whether it has a next override is exactly the "this was changed by map.ini" test.
+// MapObject::getThingTemplate() can't answer it -- that already resolves to the final override,
+// which never has a next one of its own.
+int WBQtObject_IsMapIniOverridden(int listIndex)
+{
+	MapObject *pObj = objectAtIndex(listIndex);
+	if (pObj == NULL || TheThingFactory == NULL)
+	{
+		return 0;
+	}
+	const ThingTemplate *tt = pObj->getThingTemplate();
+	if (tt == NULL)
+	{
+		return 0;	// a test-model entry, not a real template
+	}
+	// check=FALSE: a missing name is a normal answer here (no DEBUG_CRASH for it).
+	const ThingTemplate *base = TheThingFactory->findTemplate(tt->getName(), FALSE);
+	if (base == NULL)
+	{
+		return 0;
+	}
+	return (base->getNextOverride() != NULL) ? 1 : 0;
 }
 
 void WBQtObject_SelectIndex(int listIndex)
