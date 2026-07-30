@@ -213,8 +213,9 @@ struct MapIniObjectDetail
 {
 	AsciiString name;
 	Bool isNew;								// defined by the map.ini vs. overriding an existing template
+	Bool wasDropped;						// the parser couldn't finish this block, so it did NOT apply
 	std::vector<AsciiString> moduleLines;	// e.g. "Add Behavior FooUpdate (ModuleTag_Foo)"
-	MapIniObjectDetail() : isNew(false) {}
+	MapIniObjectDetail() : isNew(false), wasDropped(false) {}
 };
 
 struct MapIniScanResult
@@ -706,6 +707,91 @@ static void refreshMapIniViewport(void)
 	}
 }
 
+// Pull the block name out of a dropped-block header line ("Object CarLimo3", possibly with
+// trailing whitespace or a comment). Returns an empty string for a non-Object block.
+static AsciiString droppedBlockObjectName(const AsciiString &headerLine)
+{
+	char work[1024];
+	strncpy(work, headerLine.str(), sizeof(work) - 1);
+	work[sizeof(work) - 1] = 0;
+	// Comments end the header; the engine's separators are the same set the scan uses.
+	char *semi = strchr(work, ';');
+	if (semi != NULL)
+	{
+		*semi = 0;
+	}
+	static const char *seps = " \t\n\r=";
+	const char *tok1 = strtok(work, seps);
+	if (tok1 == NULL || strcmp(tok1, "Object") != 0)
+	{
+		return AsciiString::TheEmptyString;
+	}
+	const char *tok2 = strtok(NULL, seps);
+	return (tok2 != NULL) ? AsciiString(tok2) : AsciiString::TheEmptyString;
+}
+
+// Reconcile the pre-scan against what the parser actually managed to apply.
+//
+// The scan runs BEFORE loadWB and lists every block the file wants to change. loadWB may then
+// drop a block whose fields don't match the installed data. Without this the report contradicts
+// itself -- it lists "Object Foo ; overridden" in the body AND under "Blocks dropped", and counts
+// the drop as an applied change. Mark the dropped ones and take them out of the counts, so the
+// summary only ever claims what really landed.
+static void markDroppedBlocks(MapIniScanResult &scan)
+{
+	const std::vector<AsciiString> &badBlocks = INI::friend_getWBSkippedBlocks();
+	for (size_t b = 0; b < badBlocks.size(); ++b)
+	{
+		AsciiString name = droppedBlockObjectName(badBlocks[b]);
+		if (name.isEmpty())
+		{
+			continue;	// a dropped non-Object block; the counts below don't cover those
+		}
+
+		// Mark ONE not-yet-marked entry per dropped block. A map.ini may define the same object
+		// twice (a later block refining an earlier one), and the skip list carries only the header
+		// line -- so it can't say WHICH occurrence failed. Marking one per drop keeps the count of
+		// dropped entries right instead of condemning every block that shares the name.
+		for (size_t i = 0; i < scan.objects.size(); ++i)
+		{
+			if (scan.objects[i].name == name && !scan.objects[i].wasDropped)
+			{
+				scan.objects[i].wasDropped = true;
+				break;
+			}
+		}
+
+		// Drop ONE name from whichever count list holds it, per dropped block, so the totals
+		// track the number of blocks that actually applied.
+		std::vector<AsciiString> *list = NULL;
+		for (size_t i = 0; i < scan.overriddenNames.size() && list == NULL; ++i)
+		{
+			if (scan.overriddenNames[i] == name)
+			{
+				list = &scan.overriddenNames;
+			}
+		}
+		for (size_t i = 0; i < scan.newNames.size() && list == NULL; ++i)
+		{
+			if (scan.newNames[i] == name)
+			{
+				list = &scan.newNames;
+			}
+		}
+		if (list != NULL)
+		{
+			for (std::vector<AsciiString>::iterator it = list->begin(); it != list->end(); ++it)
+			{
+				if (*it == name)
+				{
+					list->erase(it);
+					break;
+				}
+			}
+		}
+	}
+}
+
 // How doLoadMapIni finishes after a successful parse (which always creates overrides):
 enum MapIniLoadMode {
 	MAPINI_INSTALL,		// keep overrides + refresh the viewport now (no confirm dialog)
@@ -732,6 +818,10 @@ static bool doLoadMapIni(const AsciiString &iniPath, MapIniLoadMode mode, CStrin
 		INI ini;
 		ini.loadWB(scan.loadPath, INI_LOAD_CREATE_OVERRIDES, NULL);
 		g_mapiniloaded = true;	// overrides now exist; teardown paths must run
+
+		// The scan listed what the file WANTS to change; loadWB decides what actually applied.
+		// Reconcile before anything reads the counts, so the report can't claim a dropped block.
+		markDroppedBlocks(scan);
 
 		if (mode == MAPINI_INSTALL) {
 			// Apply now: rebuild the catalog + refresh the placed objects in the viewport.
@@ -778,7 +868,9 @@ static bool doLoadMapIni(const AsciiString &iniPath, MapIniLoadMode mode, CStrin
 			for (size_t i = 0; i < scan.objects.size(); ++i) {
 				const MapIniObjectDetail &o = scan.objects[i];
 				CString hdr;
-				hdr.Format("\r\nObject %s   ; %s\r\n", o.name.str(), o.isNew ? "new" : "overridden");
+				hdr.Format("\r\nObject %s   ; %s\r\n", o.name.str(),
+					o.wasDropped ? "DROPPED -- not applied"
+								 : (o.isNew ? "new" : "overridden"));
 				msg += hdr;
 				for (size_t m = 0; m < o.moduleLines.size(); ++m) {
 					msg += "    ";
@@ -801,6 +893,22 @@ static bool doLoadMapIni(const AsciiString &iniPath, MapIniLoadMode mode, CStrin
 				msg += "\r\n";
 			}
 			msg += ";   (The game itself would refuse to load this map.ini.)\r\n";
+		}
+
+		// Blocks the parser recognized but could not finish -- a field the installed data does
+		// not define, which is what a vanilla map.ini hits on a modded install. loadWB skips the
+		// block rather than abandoning the file, so say which ones were dropped.
+		const std::vector<AsciiString> &badBlocks = INI::friend_getWBSkippedBlocks();
+		if (!badBlocks.empty()) {
+			msg += "\r\n; ----- Blocks dropped (a field in them isn't in the installed data) -----\r\n";
+			for (size_t i = 0; i < badBlocks.size(); ++i) {
+				msg += ";   ";
+				msg += badBlocks[i].str();
+				msg += "\r\n";
+			}
+			msg += ";   These blocks did NOT apply -- the object keeps the definition the installed\r\n"
+				";   game data gives it. The rest of the map.ini was loaded. This is normal for a\r\n"
+				";   map.ini written against different game data than the one installed.\r\n";
 		}
 		if (installOverrides && scan.hasUntearableOverrides) {
 			msg += "\r\n; Note: FXList / ObjectCreationList / Armor / ParticleSystem overrides\r\n"

@@ -368,10 +368,20 @@ static INIBlockParse findWBBlockParse(const char* token) {
 /** Load and parse an INI file using World Builder's type table.
     Skips unknown/unreadable blocks safely (until "End") */
 //-------------------------------------------------------------------------------------------------
+// Blocks loadWB skipped because they failed to parse (see the catch in the loop below).
+// WorldBuilder-only: read back through INI::friend_getWBSkippedBlocks for the load report.
+static std::vector<AsciiString> s_wbSkippedBlocks;
+
+const std::vector<AsciiString>& INI::friend_getWBSkippedBlocks(void)
+{
+    return s_wbSkippedBlocks;
+}
+
 void INI::loadWB(AsciiString filename, INILoadType loadType, Xfer* pXfer)
 {
     setFPMode();
 
+    s_wbSkippedBlocks.clear();		// per-load, so the report only shows this file's skips
     s_xfer = pXfer;
     prepFile(filename, loadType);
 
@@ -394,10 +404,23 @@ void INI::loadWB(AsciiString filename, INILoadType loadType, Xfer* pXfer)
                 }
                 catch (...)
                 {
-                    char buff[1024];
-                    sprintf(buff, "Error parsing WB INI file '%s' (Line: '%s')\n",
-                            m_filename.str(), currentLine.str());
-                    throw INIException(buff);
+                    // A block the parser RECOGNIZES but cannot finish -- typically a field the
+                    // installed data no longer defines, which is what a vanilla map.ini hits on a
+                    // modded install (and vice versa). Losing the whole file over one stale field
+                    // is worse than losing the block, so skip to this block's End and carry on,
+                    // exactly as the unrecognized-block path below already does. The block's
+                    // partial effects are left as-is; WorldBuilder tears the whole override set
+                    // down if the user declines the load.
+                    s_wbSkippedBlocks.push_back(currentLine);
+                    const char* blockEnd = "End";
+                    Bool skipDone = false;
+                    while (!skipDone && !m_endOfFile)
+                    {
+                        readLine();
+                        const char* endToken = strtok(m_buffer, m_seps);
+                        if (endToken && strcmp(endToken, blockEnd) == 0)
+                            skipDone = true;
+                    }
                 }
             }
             else

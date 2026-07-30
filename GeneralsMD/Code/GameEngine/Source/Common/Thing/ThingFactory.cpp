@@ -381,6 +381,9 @@ AsciiString TheThingTemplateBeingParsedName;
 
 	// find existing item if present
 	ThingTemplate *thingTemplate = TheThingFactory->findTemplateInternal( name, FALSE );
+	// The template this block hangs a NEW override off, when it does. Kept so a parse that dies
+	// partway can unlink the half-built override again -- see the catch below.
+	ThingTemplate *overrideParent = NULL;
 	if( !thingTemplate )
 	{
 		// no item is present, create a new one
@@ -403,28 +406,56 @@ AsciiString TheThingTemplateBeingParsedName;
 	}
 	else
 	{
+		// newOverride() links the new override into the chain BEFORE a single field is parsed,
+		// so from here on the chain is live and getFinalOverride() already resolves to it.
+		overrideParent = (ThingTemplate*) thingTemplate->friend_getFinalOverride();
 		thingTemplate = TheThingFactory->newOverride( thingTemplate );
 	}
 
-	if (reskinFrom.isNotEmpty())
+	// Parse under a rollback guard. If a field throws (typically INI_UNKNOWN_TOKEN for a field
+	// the installed data doesn't define -- what a vanilla map.ini hits on a modded install), the
+	// half-built override must come back OFF the chain before the exception leaves this function.
+	//
+	// Otherwise WorldBuilder's loadWB, which catches the throw and skips to the block's End so one
+	// stale field doesn't cost the whole file, leaves that partial override linked and WINNING every
+	// getFinalOverride() lookup. Its contents are a copy of the parent (the MOD's template) with the
+	// map.ini's vanilla fields applied on top until the throw -- a mixed template that is neither
+	// what the mod defines nor what the map asked for, which reads as "the vanilla object loaded as
+	// a new object". Unlinking restores exactly the state before this block.
+	try
 	{
-		const ThingTemplate* reskinTmpl = TheThingFactory->findTemplate(reskinFrom);
-		if (reskinTmpl)
+		if (reskinFrom.isNotEmpty())
 		{
-			thingTemplate->copyFrom(reskinTmpl);
-			thingTemplate->setCopiedFromDefault();
-			thingTemplate->setReskinnedFrom(reskinTmpl);
-			ini->initFromINI( thingTemplate, thingTemplate->getReskinFieldParse() );
+			const ThingTemplate* reskinTmpl = TheThingFactory->findTemplate(reskinFrom);
+			if (reskinTmpl)
+			{
+				thingTemplate->copyFrom(reskinTmpl);
+				thingTemplate->setCopiedFromDefault();
+				thingTemplate->setReskinnedFrom(reskinTmpl);
+				ini->initFromINI( thingTemplate, thingTemplate->getReskinFieldParse() );
+			}
+			else
+			{
+				DEBUG_CRASH(("ObjectReskin must come after the original Object (%s, %s).\n",reskinFrom.str(),name.str()));
+				throw INI_INVALID_DATA;
+			}
 		}
 		else
 		{
-			DEBUG_CRASH(("ObjectReskin must come after the original Object (%s, %s).\n",reskinFrom.str(),name.str()));
-			throw INI_INVALID_DATA;
+			ini->initFromINI( thingTemplate, thingTemplate->getFieldParse() );
 		}
 	}
-	else
+	catch (...)
 	{
-		ini->initFromINI( thingTemplate, thingTemplate->getFieldParse() );
+		if (overrideParent != NULL)
+		{
+			// Drop the partial override and restore the chain. deleteInstance() on it is safe:
+			// nothing else can reference an override that was only just created, and its own
+			// m_nextOverride is NULL (it was the tail).
+			overrideParent->setNextOverride( NULL );
+			thingTemplate->deleteInstance();
+		}
+		throw;
 	}
 
 	thingTemplate->validate();
