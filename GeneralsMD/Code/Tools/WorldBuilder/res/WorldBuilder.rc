@@ -300,6 +300,7 @@ BEGIN
         POPUP "Models"
         BEGIN
             MENUITEM "Show Sub Models",             ID_VIEW_SHOWSUBDRAW
+            MENUITEM "Show Full Model",             ID_VIEW_SHOWFULLMODEL
             MENUITEM "Animate Models",              ID_VIEW_ANIMATEMODELS
             MENUITEM "Show Shadows",                ID_VIEW_SHOWSHADOWS
             MENUITEM "Show Garrisoned",             ID_VIEW_GARRISONED

@@ -906,6 +906,7 @@
 #define ID_FILE_EDIT_MAPINI             33420
 #define ID_FILE_OPEN_MAPINI             33403
 #define ID_VIEW_LISTEN_TOGGLE           33421
+#define ID_VIEW_SHOWFULLMODEL           33422
 #define IDS_NEW                         61446
 #define IDS_RESIZE                      61447
 #define IDS_REMOVING_INUSE_TEAM         61448

@@ -32,6 +32,14 @@
 #include "intersec.h"
 #include "colmath.h"		// CollisionMath::Collide, for the ray-vs-tree-box pick
 #include "aabox.h"			// AABoxClass
+// Show Full Model reads these two modules' data straight off the template (no GameLogic involved).
+#include "Common/GameCommon.h"		// LOGICFRAMES_PER_SECOND, which SpawnBehavior.h uses unqualified
+#include "GameLogic/Module/SpawnBehavior.h"
+#include "GameLogic/Module/SpawnPointProductionExitUpdate.h"
+#include "GameLogic/Module/TransportContain.h"		// InitialPayload (the plain transports)
+#include "GameLogic/Module/OverlordContain.h"		// payload template list (Overlord turrets)
+#include "GameLogic/Module/HelixContain.h"			// payload template list (Helix)
+#include "W3DDevice/GameClient/Module/W3DDependencyModelDraw.h"	// AttachToBoneInContainer
 #include "W3DDevice/GameClient/W3DAssetManager.h"
 #include "W3DDevice/GameClient/Module/W3DModelDraw.h"
 #include "W3DDevice/GameClient/Module/W3DTreeDraw.h"
@@ -2338,6 +2346,13 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 
 			m_scene->Add_Render_Object(renderObj);
 
+			// View > Models > Show Full Model: also draw the units this object SPAWNS, attached to
+			// its spawn-point bones. Must come after Set_Transform + Add_Render_Object so the
+			// attached models inherit the parent's placement.
+			if (m_showFullModel) {
+				attachSpawnedObjects(renderObj, pMapObj->getThingTemplate(), playerColor);
+			}
+
 			// Live particle preview: place this object's emitters now that its render obj is
 			// positioned, so attached emitters can read their bone world-transforms from it. This
 			// moves existing emitters in place when it can (so a drag-move doesn't reset them each
@@ -2756,6 +2771,172 @@ MapObject *WbView3d::pickedTreeAlongRay(const Vector3 &rayStart, const Vector3 &
 		}
 	}
 	return pBest;
+}
+
+//=============================================================================
+// WbView3d::attachSpawnedObjects
+//=============================================================================
+/** View > Models > Show Full Model: draw the units a template brings with it -- the ones it
+SPAWNS and the ones it CARRIES -- as sub-objects of the parent's render object.
+
+A Stinger Site is the clearest case: in game it is a nest plus three soldiers, but the map shows
+only the empty nest, because the soldiers are separate Objects that GameLogic creates at runtime.
+An Overlord with a turret is the same story from the other direction -- the turret is a passenger
+the transport starts loaded with. WorldBuilder never runs GameLogic, so neither exists here.
+
+Two mechanisms put a unit on another unit, and they name their bone from opposite ends:
+
+  SPAWNED  -- SpawnBehavior names the templates, and SpawnPointProductionExitUpdate names the
+              bone prefix they exit at, numbered <Prefix>01, <Prefix>02, ... exactly as
+              W3DModelDraw's getPristineBonePositions builds them.
+  CARRIED  -- a *Contain module's InitialPayload names the templates, and the PASSENGER's own
+              W3DDependencyModelDraw names the bone it rides on (AttachToBoneInContainer), so
+              the bone has to be read off the thing being carried, not the carrier.
+
+Both end at the same place: create the unit's model and attach it to that bone on the parent, so
+it inherits the parent's transform and moves with it.
+
+These are DECORATION ONLY: attached as sub-objects of the parent rather than added to the scene
+in their own right, so they carry no MapObject, cannot be picked or selected, and nothing about
+the map changes. Turning the option off (the default) removes them again on the next rebuild. */
+//=============================================================================
+void WbView3d::attachSpawnedObjects(RenderObjClass *parentObj, const ThingTemplate *tt,
+	Int playerColor)
+{
+	if (parentObj == NULL || tt == NULL || m_assetManager == NULL) {
+		return;
+	}
+
+	// Collect both kinds in one walk of the behavior modules.
+	std::vector<AsciiString> spawnNames;	// SpawnBehavior templates
+	AsciiString spawnBoneName;				// SpawnPointProductionExitUpdate bone prefix
+	std::vector<AsciiString> payloadNames;	// *Contain InitialPayload templates
+
+	const ModuleInfo &behaviors = tt->getBehaviorModuleInfo();
+	for (Int i = 0; i < behaviors.getCount(); ++i) {
+		const AsciiString moduleName = behaviors.getNthName(i);
+		const ModuleData *md = behaviors.getNthData(i);
+		if (md == NULL) {
+			continue;
+		}
+
+		if (moduleName.compare("SpawnBehavior") == 0) {
+			const SpawnBehaviorModuleData *sd = (const SpawnBehaviorModuleData *)md;
+			for (size_t s = 0; s < sd->m_spawnTemplateNameData.size(); ++s) {
+				spawnNames.push_back(sd->m_spawnTemplateNameData[s]);
+			}
+			continue;
+		}
+		if (moduleName.compare("SpawnPointProductionExitUpdate") == 0) {
+			const SpawnPointProductionExitUpdateModuleData *ed =
+				(const SpawnPointProductionExitUpdateModuleData *)md;
+			spawnBoneName = ed->m_spawnPointBoneNameData;
+			continue;
+		}
+
+		// Carried payloads. Overlord / Helix keep a template LIST; the plain transports (and
+		// everything deriving from TransportContain, which is most of the rest) keep a single
+		// name + count. Both are reachable through TransportContainModuleData, so one branch per
+		// shape covers Overlord, Helix, MobNexus, Transport and their relatives.
+		if (moduleName.compare("OverlordContain") == 0) {
+			const OverlordContainModuleData *od = (const OverlordContainModuleData *)md;
+			for (size_t s = 0; s < od->m_payloadTemplateNameData.size(); ++s) {
+				payloadNames.push_back(od->m_payloadTemplateNameData[s]);
+			}
+		} else if (moduleName.compare("HelixContain") == 0) {
+			const HelixContainModuleData *hd = (const HelixContainModuleData *)md;
+			for (size_t s = 0; s < hd->m_payloadTemplateNameData.size(); ++s) {
+				payloadNames.push_back(hd->m_payloadTemplateNameData[s]);
+			}
+		} else if (moduleName.compare("TransportContain") == 0 ||
+					moduleName.compare("MobNexusContain") == 0) {
+			const TransportContainModuleData *td = (const TransportContainModuleData *)md;
+			for (Int c = 0; c < td->m_initialPayload.count; ++c) {
+				payloadNames.push_back(td->m_initialPayload.name);
+			}
+		}
+	}
+
+	// --- spawned units, at <Prefix>01.. on the parent -------------------------------------
+	if (!spawnNames.empty() && !spawnBoneName.isEmpty()) {
+		// Cycle the template list the way SpawnBehavior does when there are more spawn points
+		// than named templates.
+		const Int MAX_SPAWN_BONES = 10;		// == MAX_SPAWN_POINTS
+		size_t nameIndex = 0;
+		for (Int b = 1; b <= MAX_SPAWN_BONES; ++b) {
+			char buffer[256];
+			sprintf(buffer, "%s%02d", spawnBoneName.str(), b);
+			const Int boneIndex = parentObj->Get_Bone_Index(buffer);
+			if (boneIndex == 0) {
+				break;	// 0 is the root, i.e. "not found" -- the numbered run has ended
+			}
+			attachOneRider(parentObj, spawnNames[nameIndex], boneIndex, playerColor);
+			nameIndex = (nameIndex + 1) % spawnNames.size();
+		}
+	}
+
+	// --- carried units, at the bone the PASSENGER names ------------------------------------
+	for (size_t p = 0; p < payloadNames.size(); ++p) {
+		const ThingTemplate *rider =
+			TheThingFactory ? TheThingFactory->findTemplate(payloadNames[p], FALSE) : NULL;
+		if (rider == NULL) {
+			continue;
+		}
+		// The rider's own draw module says which bone of its container it sits on.
+		AsciiString riderBone;
+		const ModuleInfo &draws = rider->getDrawModuleInfo();
+		for (Int d = 0; d < draws.getCount(); ++d) {
+			const ModuleData *dd = draws.getNthData(d);
+			if (dd == NULL) {
+				continue;
+			}
+			if (draws.getNthName(d).compare("W3DDependencyModelDraw") == 0) {
+				const W3DDependencyModelDrawModuleData *depd =
+					(const W3DDependencyModelDrawModuleData *)dd;
+				riderBone = depd->m_attachToDrawableBoneInContainer;
+				break;
+			}
+		}
+		if (riderBone.isEmpty()) {
+			continue;	// a passenger with no declared mount point -- the game hides it inside
+		}
+		const Int boneIndex = parentObj->Get_Bone_Index(riderBone.str());
+		if (boneIndex == 0) {
+			continue;	// this container has no such bone
+		}
+		attachOneRider(parentObj, payloadNames[p], boneIndex, playerColor);
+	}
+}
+
+//=============================================================================
+// WbView3d::attachOneRider
+//=============================================================================
+/** Create templateName's default model and hang it off parentObj's bone. Shared by the spawned
+and carried paths, which differ only in how they arrive at the bone. */
+//=============================================================================
+void WbView3d::attachOneRider(RenderObjClass *parentObj, const AsciiString &templateName,
+	Int boneIndex, Int playerColor)
+{
+	const ThingTemplate *tmpl =
+		TheThingFactory ? TheThingFactory->findTemplate(templateName, FALSE) : NULL;
+	if (tmpl == NULL) {
+		return;		// a rider whose template this install doesn't have
+	}
+
+	ModelConditionFlags noFlags;
+	noFlags.clear();
+	const AsciiString modelName = getBestModelNameWBPrev(tmpl, noFlags);
+	if (modelName.isEmpty() || strncmp(modelName.str(), "No ", 3) == 0) {
+		return;
+	}
+
+	RenderObjClass *riderObj = m_assetManager->Create_Render_Obj(modelName.str(),
+		tmpl->getAssetScale(), playerColor);
+	if (riderObj == NULL) {
+		return;
+	}
+	parentObj->Add_Sub_Object_To_Bone(riderObj, boneIndex);
+	riderObj->Release_Ref();	// the parent holds it now
 }
 
 //=============================================================================
@@ -3783,6 +3964,8 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_SHOWTRACINGOVERLAY, OnUpdateViewShowTracingOverlay)
 	ON_COMMAND(ID_VIEW_SHOWSUBDRAW, OnViewShowSubDraw)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_SHOWSUBDRAW, OnUpdateViewShowSubDraw)
+	ON_COMMAND(ID_VIEW_SHOWFULLMODEL, OnViewShowFullModel)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_SHOWFULLMODEL, OnUpdateViewShowFullModel)
 	ON_COMMAND(ID_VIEW_SHOWBASERADIUS, OnViewShowBaseRadius)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_SHOWBASERADIUS, OnUpdateViewShowBaseRadius)
 	ON_COMMAND(ID_VIEW_SHOWAMBIENTSOUNDS, OnViewShowAmbientSounds)
@@ -3995,6 +4178,9 @@ int WbView3d::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	}
 	m_showBaseRadius = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowBaseRadius", 1);
 	m_showSubDraw = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowSubDraw", 1);
+	// Default OFF: showing an object's spawned crew changes what the map LOOKS like without
+	// changing what it IS, so it must be opted into rather than surprising anyone.
+	m_showFullModel = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowFullModel", 0);
 	// Default OFF: looping animations keep the viewport repainting every frame (see the
 	// idle-skip in OnTimer), so this is opt-in rather than a silent perf cost.
 	m_animateModels = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "AnimateModels", 0);
@@ -6505,6 +6691,19 @@ void WbView3d::OnViewShowSubDraw()
 void WbView3d::OnUpdateViewShowSubDraw(CCmdUI* pCmdUI)
 {
 	pCmdUI->SetCheck(m_showSubDraw ? 1 : 0);
+}
+
+void WbView3d::OnViewShowFullModel()
+{
+	m_showFullModel = !m_showFullModel;
+	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "ShowFullModel", m_showFullModel ? 1 : 0);
+	resetRenderObjects();
+	invalObjectInView(NULL);
+}
+
+void WbView3d::OnUpdateViewShowFullModel(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(m_showFullModel ? 1 : 0);
 }
 
 void WbView3d::OnViewShowSoundCircles()

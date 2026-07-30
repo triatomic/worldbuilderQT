@@ -283,6 +283,8 @@ protected:
 	afx_msg void OnUpdateTextLabelCullFar(CCmdUI* pCmdUI);
 	afx_msg void OnViewShowSubDraw();
 	afx_msg void OnUpdateViewShowSubDraw(CCmdUI* pCmdUI);
+	afx_msg void OnViewShowFullModel();
+	afx_msg void OnUpdateViewShowFullModel(CCmdUI* pCmdUI);
 	afx_msg void OnViewShowBaseRadius();
 	afx_msg void OnUpdateViewShowBaseRadius(CCmdUI* pCmdUI);
 	afx_msg void OnRefreshSceneObjects();
@@ -376,6 +378,9 @@ private:
 	Bool										m_showTracingOverlay; ///< Flag whether to show the tracing overlay or not
 	Bool										m_showBaseRadius; ///< Flag whether to show the base radius or not
 	Bool										m_showSubDraw; ///< Flag whether to show the sub models
+	/// Flag whether to also draw the objects a template SPAWNS at its spawn-point bones (the
+	/// Stinger Site's soldiers, and anything else using SpawnBehavior). Default OFF.
+	Bool										m_showFullModel;
 	Bool										m_animateModels; ///< Flag whether models play their animation (LOOP states + idle anims)
 	Int											m_animatedModelCount; ///< # of animations actually applied in the last scene build
 
@@ -525,6 +530,13 @@ public:
 	MapObject *pickedTreeAlongRay(const Vector3 &rayStart, const Vector3 &rayDir, Real maxDistance);
 	/// Object-space bounding box of a tree model, cached by name (see m_treeBoxCache).
 	Bool getTreeModelBox(const AsciiString &modelName, AABoxClass &boxOut);
+	/// View > Models > Show Full Model: attach the units this template spawns (SpawnBehavior) and
+	/// carries (a *Contain InitialPayload) to their bones, as decoration only -- they carry no
+	/// MapObject and can't be picked.
+	void attachSpawnedObjects(RenderObjClass *parentObj, const ThingTemplate *tt, Int playerColor);
+	/// Create one rider's model and hang it off parentObj's bone (shared by both paths above).
+	void attachOneRider(RenderObjClass *parentObj, const AsciiString &templateName, Int boneIndex,
+		Int playerColor);
 	virtual BuildListInfo *pickedBuildObjectInView(CPoint viewPt);
 
 	void removeFenceListObjects(MapObject *pObject);
