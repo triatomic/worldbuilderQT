@@ -238,11 +238,15 @@ namespace
 		s_spawnRotations[obj].push_back( rotationZ );
 	}
 
-	// Collect the always-on particle-system templates a ThingTemplate carries: the ones in its
-	// DEFAULT draw state (the base/idle ModelConditionInfo). Condition-gated states (damage,
-	// combat, upgrades) are skipped -- WB can't evaluate their triggers, so showing them would be
-	// wrong. The default state is m_conditionStates[0] (built from MODELCONDITION_NONE).
-	// One always-on attached emitter: its template + the bone it hangs off (empty = object origin).
+	// Collect the particle-system templates a ThingTemplate shows in the condition state WB is
+	// DRAWING. Emitters are declared per ModelConditionInfo, so the set depends on the state -- and
+	// the state WB draws is not necessarily the default one: the viewport applies NIGHT, SNOW,
+	// GARRISONED and the object's damage level (see WbView3d::getModelNameAndScale). Resolving from
+	// a hardcoded empty flag set instead meant reading the DEFAULT state's emitters while the
+	// viewport drew a different state's model, so a building whose chimney smoke is declared on its
+	// NIGHT / GARRISONED / damaged states (very common -- the pristine daytime state often has the
+	// ParticleSysBone lines commented out) showed no FX at all.
+	// One attached emitter: its template + the bone it hangs off (empty = object origin).
 	struct AttachedEmitter
 	{
 		const ParticleSystemTemplate *tmpl;
@@ -250,32 +254,61 @@ namespace
 	};
 
 	// createEmittersForObject runs per placed object on every render rebuild (invalObjectInView(NULL)
-	// walks every object on ~20 events), so compute a template's set once and cache it -- repeat
-	// instances become a map lookup instead of a fresh module walk + vector build.
+	// walks every object on ~20 events), so compute a state's set once and cache it -- repeat
+	// instances become a map lookup instead of a fresh bone walk + vector build.
 	//
-	// NOT immutable for the process life: a map.ini load appends an override to a template's chain,
-	// and getThingTemplate() then resolves to that NEW object with a different emitter set. So the
-	// cache has to be dropped when the data changes -- see clearTemplateCache, called from the
-	// map.ini refresh. (Keying on the template pointer is still fine; the override is a distinct
-	// object, so a stale entry is only wasted memory, never a wrong answer for the new pointer.)
+	// Keyed on the RESOLVED ModelConditionInfo rather than the ThingTemplate + flags: findBestInfo
+	// collapses many flag combinations onto the same state, so this both keys correctly per state
+	// and hits more often than caching per flag set would. (ModelConditionFlags has no operator<,
+	// so it cannot key a std::map anyway.)
+	//
+	// NOT immutable for the process life: a map.ini load appends an override to a template's chain
+	// whose states are new objects, so the cache has to be dropped when the data changes -- see
+	// clearTemplateCache, called from the map.ini refresh. A stale entry is only wasted memory,
+	// never a wrong answer, since the new state is a distinct pointer.
 	typedef std::vector<AttachedEmitter> AttachedList;
-	typedef std::map<const ThingTemplate *, AttachedList> AttachedCache;
+	typedef std::map<const ModelConditionInfo *, AttachedList> AttachedCache;
 	AttachedCache s_attachedCache;
 
-	const AttachedList &collectAlwaysOnTemplates( const ThingTemplate *tt )
+	// The emitters declared on one resolved condition state (cached).
+	const AttachedList &collectStateEmitters( const ModelConditionInfo *state )
 	{
 		static const AttachedList empty;
-		if (tt == NULL)
+		if (state == NULL)
 		{
 			return empty;
 		}
-		AttachedCache::iterator cached = s_attachedCache.find( tt );
+		AttachedCache::iterator cached = s_attachedCache.find( state );
 		if (cached != s_attachedCache.end())
 		{
 			return cached->second;
 		}
 
-		AttachedList &out = s_attachedCache[tt];
+		AttachedList &out = s_attachedCache[state];
+		for (size_t b = 0; b < state->m_particleSysBones.size(); ++b)
+		{
+			if (state->m_particleSysBones[b].particleSystemTemplate != NULL)
+			{
+				AttachedEmitter e;
+				e.tmpl = state->m_particleSysBones[b].particleSystemTemplate;
+				e.bone = state->m_particleSysBones[b].boneName;
+				out.push_back( e );
+			}
+		}
+		return out;
+	}
+
+	// Append the emitters this template shows in condition state `flags`, resolving each draw
+	// module's state the way the engine does (findBestInfo, as W3DModelDraw's ctor does) rather
+	// than indexing m_conditionStates[0] -- a DefaultConditionState is not necessarily the first
+	// entry, and taking the wrong one means reading another state's emitters (or none).
+	void collectEmittersForState( const ThingTemplate *tt, const ModelConditionFlags &flags,
+		AttachedList &out )
+	{
+		if (tt == NULL)
+		{
+			return;
+		}
 		const ModuleInfo &draws = tt->getDrawModuleInfo();
 		for (int i = 0; i < draws.getCount(); ++i)
 		{
@@ -284,28 +317,17 @@ namespace
 			{
 				continue;
 			}
-			// Resolve the default state the way the engine does rather than indexing [0]: a
-			// DefaultConditionState is not necessarily the first entry in the vector, and taking
-			// the wrong one means reading another state's emitters (or none).
-			ModelConditionFlags none;
-			none.clear();
-			const ModelConditionInfo *base = md->findBestInfo( none );
+			const ModelConditionInfo *base = md->findBestInfo( flags );
 			if (base == NULL)
 			{
 				continue;
 			}
-			for (size_t b = 0; b < base->m_particleSysBones.size(); ++b)
+			const AttachedList &mine = collectStateEmitters( base );
+			for (size_t b = 0; b < mine.size(); ++b)
 			{
-				if (base->m_particleSysBones[b].particleSystemTemplate != NULL)
-				{
-					AttachedEmitter e;
-					e.tmpl = base->m_particleSysBones[b].particleSystemTemplate;
-					e.bone = base->m_particleSysBones[b].boneName;
-					out.push_back( e );
-				}
+				out.push_back( mine[b] );
 			}
 		}
-		return out;
 	}
 
 	// One emitter to place: its template + the world position it should sit at. Both the initial
@@ -319,11 +341,12 @@ namespace
 	};
 
 	// Build the ordered emitter placement list for an object: (a) its standalone particle-system
-	// marker (if any), then (b) each always-on attached emitter at its bone world position. renderObj
+	// marker (if any), then (b) each attached emitter at its bone world position. renderObj
 	// (may be NULL) is the positioned render object attached emitters read their bone transform from;
 	// origin is the terrain-adjusted object origin used for the marker and for unresolved bones.
+	// flags is the condition state the VIEWPORT is drawing, so the emitters match the model shown.
 	void computeEmitterPlacements( MapObject *obj, RenderObjClass *renderObj, const Coord3D &origin,
-		std::vector<Placement> &out )
+		const ModelConditionFlags &flags, std::vector<Placement> &out )
 	{
 		// (a) Standalone placed particle system: a marker whose dict names a particle template.
 		Dict *props = obj->getProperties();
@@ -346,9 +369,8 @@ namespace
 			}
 		}
 
-		// (b) Always-on emitters attached to the object's template's default draw state, placed at
-		// their bone. Get_Bone_Transform gives the bone's WORLD matrix (the render obj is already
-		// positioned).
+		// (b) Emitters attached to the draw state the viewport is showing, placed at their bone.
+		// Get_Bone_Transform gives the bone's WORLD matrix (the render obj is already positioned).
 		//
 		// Resolve the name through Get_Bone_Index FIRST and require a non-zero result, exactly as
 		// the engine does (W3DModelDraw's recalc of bone particle systems). HTreeClass returns 0
@@ -357,7 +379,8 @@ namespace
 		// bone's transform. That put emitters for a mistyped/missing bone on the model's root
 		// instead of at the object origin, which reads as "one object's FX are off" while every
 		// object whose bones all resolve looks correct.
-		const AttachedList &attached = collectAlwaysOnTemplates( obj->getThingTemplate() );
+		AttachedList attached;
+		collectEmittersForState( obj->getThingTemplate(), flags, attached );
 		for (size_t i = 0; i < attached.size(); ++i)
 		{
 			Placement p;
@@ -552,7 +575,7 @@ void setEnabled(bool on)
 }
 
 void placeEmittersForObject(MapObject *obj, RenderObjClass *renderObj,
-	float worldX, float worldY, float worldZ)
+	float worldX, float worldY, float worldZ, const ModelConditionFlags *flags)
 {
 	if (!s_enabled || obj == NULL)
 	{
@@ -564,8 +587,13 @@ void placeEmittersForObject(MapObject *obj, RenderObjClass *renderObj,
 	origin.y = worldY;
 	origin.z = worldZ;
 
+	// No state supplied (a caller with no model, so nothing to match): fall back to the default
+	// state, which is what a model-less FX marker declares its emitters on anyway.
+	ModelConditionFlags none;
+	none.clear();
+
 	std::vector<Placement> places;
-	computeEmitterPlacements( obj, renderObj, origin, places );
+	computeEmitterPlacements( obj, renderObj, origin, (flags != NULL) ? *flags : none, places );
 
 	// If this object already has a live emitter set that still matches its template, MOVE the
 	// systems in place instead of respawning -- so a drag-move keeps its in-flight particles and
@@ -587,8 +615,8 @@ void placeEmittersForObject(MapObject *obj, RenderObjClass *renderObj,
 
 void clearTemplateCache()
 {
-	// Called when the loaded game data changes (a map.ini load), which can give a template a
-	// different always-on emitter set. Cheap: the sets are rebuilt lazily on the next placement.
+	// Called when the loaded game data changes (a map.ini load), which replaces the condition
+	// states the cache is keyed on. Cheap: the sets are rebuilt lazily on the next placement.
 	s_attachedCache.clear();
 }
 

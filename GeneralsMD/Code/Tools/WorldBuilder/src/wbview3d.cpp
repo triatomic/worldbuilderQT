@@ -2341,7 +2341,18 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 			// moves existing emitters in place when it can (so a drag-move doesn't reset them each
 			// tick -- the "re-rendering" flicker) and rebuilds otherwise; the caller doesn't decide.
 			// Self-guards (no-op unless "Render Particles" is on), like the destroy hooks.
-			WBParticleRuntime::placeEmittersForObject(pMapObj, renderObj, loc.x, loc.y, loc.z);
+			//
+			// Pass the condition state the model above was selected with. Emitters are declared per
+			// condition state, so without this the runtime read the DEFAULT state's emitters while we
+			// drew a night/garrisoned/damaged model -- and building FX like chimney smoke are usually
+			// declared ONLY on those states (the pristine daytime state has them commented out), so
+			// nothing showed. Recomputed here via the same helper the model lookup uses, because the
+			// flags built inside the create branch above are out of scope by now.
+			Real emitterScale = 1.0f;
+			ModelConditionFlags emitterState;
+			getModelNameAndScale(pMapObj, &emitterScale, curDamageState, &emitterState);
+			WBParticleRuntime::placeEmittersForObject(pMapObj, renderObj, loc.x, loc.y, loc.z,
+				&emitterState);
 
 			REF_PTR_RELEASE(renderObj); // belongs to m_scene now.
 		} else if (renderObj) {
@@ -2352,7 +2363,9 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 			// visible thing in the game and drew nothing here -- the emitter placement used to sit
 			// inside the has-a-model branch above. There is no bone to read, so the runtime falls
 			// back to the object origin, which is where such an emitter belongs anyway.
-			WBParticleRuntime::placeEmittersForObject(pMapObj, NULL, loc.x, loc.y, loc.z);
+			// No model was drawn, so there is no state to match -- the runtime falls back to the
+			// default state, which is where a model-less FX marker declares its emitters anyway.
+			WBParticleRuntime::placeEmittersForObject(pMapObj, NULL, loc.x, loc.y, loc.z, NULL);
 		}
 		if (found) break;
 	}
