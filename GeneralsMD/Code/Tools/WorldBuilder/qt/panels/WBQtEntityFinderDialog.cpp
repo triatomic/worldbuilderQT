@@ -11,6 +11,9 @@
 // NewSearch toggle (WBQtObjectBridge.cpp): live-filter search in the tree pickers.
 extern "C" int  WBQtConfig_GetNewSearch(void);
 extern "C" void WBQtConfig_SetNewSearch(int on);
+// ComboSearch toggle: type-to-search in the long drop-downs (Sound, the team pickers).
+extern "C" int  WBQtConfig_GetComboSearch(void);
+extern "C" void WBQtConfig_SetComboSearch(int on);
 
 // Render Particles toggle (WBQtObjectBridge.cpp): startup-only live particle preview.
 extern "C" int  WBQtObject_GetRenderParticles(void);
@@ -116,6 +119,7 @@ WBQtEntityFinderDialog::WBQtEntityFinderDialog(void *frameHwnd)
 	m_undoSpin = m_ui->undoSpin;
 	m_launchCheck = m_ui->launchCheck;
 	m_newSearchCheck = m_ui->newSearchCheck;
+	m_comboSearchCheck = m_ui->comboSearchCheck;
 	m_tutorialPromptsCheck = m_ui->tutorialPromptsCheck;
 	m_renderParticlesCheck = m_ui->renderParticlesCheck;
 	m_toggleButton = m_ui->toggleButton;
@@ -225,6 +229,11 @@ WBQtEntityFinderDialog::WBQtEntityFinderDialog(void *frameHwnd)
 	m_newSearchCheck->setChecked(WBQtConfig_GetNewSearch() != 0);
 	m_newSearchCheck->blockSignals(false);
 	connect(m_newSearchCheck, SIGNAL(toggled(bool)), this, SLOT(onNewSearchToggled(bool)));
+
+	m_comboSearchCheck->blockSignals(true);
+	m_comboSearchCheck->setChecked(WBQtConfig_GetComboSearch() != 0);
+	m_comboSearchCheck->blockSignals(false);
+	connect(m_comboSearchCheck, SIGNAL(toggled(bool)), this, SLOT(onComboSearchToggled(bool)));
 
 	m_tutorialPromptsCheck->blockSignals(true);
 	m_tutorialPromptsCheck->setChecked(WBQtObject_GetTutorialPrompts() != 0);
@@ -495,6 +504,14 @@ void WBQtEntityFinderDialog::onNewSearchToggled(bool on)
 {
 	// Persisted; the tree pickers read it when they are next opened.
 	WBQtConfig_SetNewSearch(on ? 1 : 0);
+}
+
+void WBQtEntityFinderDialog::onComboSearchToggled(bool on)
+{
+	// Persisted; a combo is wired when its panel builds the list, so this takes effect for
+	// panels opened after the change (the Object Properties sound list is built once, on
+	// first open). Off restores the plain pick-only drop-downs.
+	WBQtConfig_SetComboSearch(on ? 1 : 0);
 }
 
 void WBQtEntityFinderDialog::onTutorialPromptsToggled(bool on)

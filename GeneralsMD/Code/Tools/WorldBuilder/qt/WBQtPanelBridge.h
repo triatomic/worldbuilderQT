@@ -232,6 +232,13 @@ int  WBQtObject_GetPlaceAllYSpacing(void);
 int  WBQtConfig_GetNewSearch(void);
 void WBQtConfig_SetNewSearch(int on);
 
+// ComboSearch ([QtSearch] ComboSearch in WorldBuilder.ini, default off): when on, the long
+// drop-downs (Sound, the team pickers) can be typed into to filter the list to the substring
+// matches. Off = plain pick-only combos, the MFC behavior. Read when a panel builds its combo,
+// so it applies to panels opened after the toggle changes.
+int  WBQtConfig_GetComboSearch(void);
+void WBQtConfig_SetComboSearch(int on);
+
 // Forward (Qt-side): WB calls ObjectOptions::update()/selectObject() on selection changes;
 // a guarded WBQtObject_PushFromSelection() re-seeds the Qt panel (label/team/preview) and
 // WBQtObject_PushSelectIndex() moves the tree selection to match a programmatic selectObject.

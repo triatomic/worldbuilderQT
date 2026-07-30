@@ -43,6 +43,11 @@ namespace WBQtComboStyle
 	// the completer popup to the substring matches instead of MFC's first-letter jump, which is
 	// unusable on a list of hundreds. Implies applyPopupScroll().
 	//
+	// GATED on [QtSearch] ComboSearch (the "Search in combo boxes" checkbox in the Entity
+	// Finder), default OFF: with it off this only bounds the popup and the combo stays plain
+	// pick-only, exactly as it was before this existed. Read per call, so the toggle applies to
+	// panels built after it changes.
+	//
 	// The combo keeps its OWN model -- the filter proxy drives only the completer -- so
 	// count() / setCurrentIndex(i) / currentIndex() stay in SOURCE row coordinates and the
 	// panels' existing index-based bridge calls are unaffected.

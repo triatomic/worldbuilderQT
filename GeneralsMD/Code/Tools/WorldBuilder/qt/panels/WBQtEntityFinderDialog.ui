@@ -220,6 +220,19 @@ Search/Find click. Applies to windows opened after this is changed.</string>
          </widget>
         </item>
         <item>
+         <widget class="QCheckBox" name="comboSearchCheck">
+          <property name="toolTip">
+           <string>When on, the long drop-downs (the Sound list and the owning-team
+pickers) can be typed into to filter the list to the matching entries,
+instead of only jumping to the first letter. Off = plain pick-only
+drop-downs. Applies to panels opened after this is changed.</string>
+          </property>
+          <property name="text">
+           <string>Search in combo boxes</string>
+          </property>
+         </widget>
+        </item>
+        <item>
          <widget class="QCheckBox" name="tutorialPromptsCheck">
           <property name="toolTip">
            <string>Show the one-time hint popups (F11 full screen, Ctrl-click a

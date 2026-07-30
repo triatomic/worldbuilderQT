@@ -527,5 +527,16 @@ void WBQtConfig_SetNewSearch(int on)
 	::AfxGetApp()->WriteProfileInt("QtSearch", "NewSearch", on ? 1 : 0);
 }
 
+// ComboSearch toggle ([QtSearch] ComboSearch): type-to-search in the long drop-downs
+// (Sound, the team pickers). Default OFF -- the combos stay plain pick-only, as before.
+int WBQtConfig_GetComboSearch(void)
+{
+	return ::AfxGetApp()->GetProfileInt("QtSearch", "ComboSearch", 0);
+}
+void WBQtConfig_SetComboSearch(int on)
+{
+	::AfxGetApp()->WriteProfileInt("QtSearch", "ComboSearch", on ? 1 : 0);
+}
+
 }
 #endif

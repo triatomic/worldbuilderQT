@@ -16,6 +16,9 @@
 #include <QSortFilterProxyModel>
 #include <QWidget>
 
+// ComboSearch toggle (WBQtObjectBridge.cpp): type-to-search in the long drop-downs when on.
+extern "C" int WBQtConfig_GetComboSearch(void);
+
 namespace
 {
 	// Marks a combo we've already wired, so a re-call (e.g. after the item list is rebuilt)
@@ -265,6 +268,21 @@ void WBQtComboStyle::applySearchable(QComboBox *combo)
 {
 	if (combo == NULL)
 	{
+		return;
+	}
+	if (WBQtConfig_GetComboSearch() == 0)
+	{
+		// Gated off (the default): leave the combo plain pick-only, exactly as before this
+		// existed. Still bound the popup -- that is the separate MFC WS_VSCROLL behaviour.
+		if (combo->property(WB_COMBO_SEARCHABLE).toBool())
+		{
+			// Turned off while this combo was already wired (the team pickers re-apply on
+			// every repopulate). Drop back to pick-only rather than leaving a stale text
+			// field behind. The completer goes with the line edit setEditable(false) frees.
+			combo->setEditable(false);
+			combo->setProperty(WB_COMBO_SEARCHABLE, false);
+		}
+		applyPopupScroll(combo);
 		return;
 	}
 	if (combo->property(WB_COMBO_SEARCHABLE).toBool())

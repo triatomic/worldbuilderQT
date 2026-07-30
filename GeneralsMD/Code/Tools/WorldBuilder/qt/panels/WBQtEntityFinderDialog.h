@@ -44,6 +44,7 @@ private slots:
 	void onResolutionChanged(int index);
 	void onMaxUndosChanged(int value);
 	void onNewSearchToggled(bool on);
+	void onComboSearchToggled(bool on);
 	void onTutorialPromptsToggled(bool on);
 	void onRenderParticlesToggled(bool on);
 	void onToggleHotkeyPanel();
@@ -64,6 +65,7 @@ private:
 	QSpinBox  *m_undoSpin;
 	QCheckBox *m_launchCheck;
 	QCheckBox *m_newSearchCheck;
+	QCheckBox *m_comboSearchCheck;
 	QCheckBox *m_tutorialPromptsCheck;
 	QCheckBox *m_renderParticlesCheck;
 	QPushButton *m_toggleButton;
