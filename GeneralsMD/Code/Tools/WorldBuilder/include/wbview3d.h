@@ -331,6 +331,9 @@ private:
 	LayerClass							*m_layer;
 	LayerClass							*m_buildLayer;
 	IntersectionClass				*m_intersector;
+	/// Object-space bounding box per tree model name, so picking a forest doesn't create a render
+	/// object per tree per click. Depends only on the asset, so it lives for the session.
+	std::map<AsciiString, AABoxClass>	m_treeBoxCache;
 	Bool										m_showWireframe;
 	Bool										m_showFullWireframe;	///< true => render whole scene in LINE mode (no solid pass)
 	Bool										m_showSelectionOverlay;	///< true => tint selected objects with a highlight color
@@ -517,6 +520,11 @@ public:
 	/// True when the terrain surface sits between the camera and hitPoint, so the thing hit is
 	/// buried geometry rather than what the user can see at that pixel.
 	Bool isHitBehindTerrain(const Vector3 &hitPoint);
+	/// Nearest optimized tree the ray passes through, or NULL. Optimized trees are drawn from the
+	/// terrain's tree buffer rather than the scene, so the layer intersector cannot pick them.
+	MapObject *pickedTreeAlongRay(const Vector3 &rayStart, const Vector3 &rayDir, Real maxDistance);
+	/// Object-space bounding box of a tree model, cached by name (see m_treeBoxCache).
+	Bool getTreeModelBox(const AsciiString &modelName, AABoxClass &boxOut);
 	virtual BuildListInfo *pickedBuildObjectInView(CPoint viewPt);
 
 	void removeFenceListObjects(MapObject *pObject);

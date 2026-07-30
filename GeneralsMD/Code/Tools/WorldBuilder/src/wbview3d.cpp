@@ -30,6 +30,8 @@
 #include "rendobj.h"
 #include "camera.h"
 #include "intersec.h"
+#include "colmath.h"		// CollisionMath::Collide, for the ray-vs-tree-box pick
+#include "aabox.h"			// AABoxClass
 #include "W3DDevice/GameClient/W3DAssetManager.h"
 #include "W3DDevice/GameClient/Module/W3DModelDraw.h"
 #include "W3DDevice/GameClient/Module/W3DTreeDraw.h"
@@ -2632,9 +2634,136 @@ MapObject *WbView3d::picked3dObjectInView(CPoint viewPt)
 				}
 			}
 		}
+
+		// Nothing in the object layer -- try the trees. Optimized trees (KINDOF_OPTIMIZED_TREE,
+		// drawn by W3DTreeDraw) are baked into the terrain's tree buffer rather than added to the
+		// scene as render objects, so they have no getRenderObj() and the layer ray test above can
+		// never see them. Without this they were only reachable through the 2D fallback in
+		// PointerTool, which tests a small radius around the object ORIGIN -- i.e. you had to click
+		// the trunk's spot on the ground, and clicking the canopy did nothing.
+		//
+		// Get_Screen_Ray left the pick ray in the intersector, so this reuses the very same ray.
+		if (m_intersector->RayLocation != NULL && m_intersector->RayDirection != NULL) {
+			MapObject *pTree = pickedTreeAlongRay(*m_intersector->RayLocation,
+				*m_intersector->RayDirection, m_camera->Get_Depth()*MAP_XY_FACTOR);
+			if (pTree != NULL) {
+				return pTree;
+			}
+		}
 	}
 
 	return NULL;
+}
+
+//=============================================================================
+// WbView3d::pickedTreeAlongRay
+//=============================================================================
+/** The nearest optimized tree the ray passes through, or NULL.
+
+Optimized trees live in the terrain's tree buffer, not the scene, so they cannot be picked by
+the layer intersector. The buffer exposes no per-tree bounds either, so this rebuilds each
+tree's box WB-side from the data WB already has: the draw module's model (whose object-space
+box comes from the same asset the buffer draws) placed at the tree's world position and scale.
+
+Boxes rather than meshes on purpose -- a canopy is mostly empty space, and a click anywhere in
+a tree's silhouette should select it, which is what a modeller would expect from an editor. */
+//=============================================================================
+MapObject *WbView3d::pickedTreeAlongRay(const Vector3 &rayStart, const Vector3 &rayDir,
+	Real maxDistance)
+{
+	if (m_assetManager == NULL || m_heightMapRenderObj == NULL) {
+		return NULL;
+	}
+
+	MapObject *pBest = NULL;
+	Real bestFraction = 1.0f;
+	LineSegClass ray(rayStart, rayStart + rayDir*maxDistance);
+
+	for (MapObject *pObj = MapObject::getFirstMapObject(); pObj; pObj = pObj->getNext()) {
+		if (pObj->getFlags() & FLAG_DONT_RENDER) {
+			continue;
+		}
+		const ThingTemplate *tt = pObj->getThingTemplate();
+		if (tt == NULL || !tt->isKindOf(KINDOF_OPTIMIZED_TREE)) {
+			continue;
+		}
+		const ModuleInfo &mi = tt->getDrawModuleInfo();
+		if (mi.getCount() <= 0) {
+			continue;
+		}
+		const ModuleData *mdd = mi.getNthData(0);
+		const W3DTreeDrawModuleData *md = mdd ? mdd->getAsW3DTreeDrawModuleData() : NULL;
+		if (md == NULL || md->m_modelName.isEmpty()) {
+			continue;
+		}
+
+		// Object-space box of the tree's model, cached by name so a forest costs one lookup per
+		// DISTINCT tree model rather than one render-object creation per tree.
+		AABoxClass objBox;
+		if (!getTreeModelBox(md->m_modelName, objBox)) {
+			continue;
+		}
+
+		// Place it the way addTree() does: terrain height at the trunk, uniform template scale.
+		const Real scale = tt->getAssetScale();
+		Coord3D pos = *pObj->getLocation();
+		pos.z += m_heightMapRenderObj->getHeightMapHeight(pos.x, pos.y, NULL);
+
+		// Axis-aligned world box. The tree's Z rotation is ignored: a canopy box is close enough
+		// to symmetric that rotating it would change the silhouette very little, and an AABB keeps
+		// this a cheap slab test per tree.
+		AABoxClass worldBox;
+		worldBox.Center.Set(pos.x + objBox.Center.X*scale,
+			pos.y + objBox.Center.Y*scale,
+			pos.z + objBox.Center.Z*scale);
+		worldBox.Extent.Set(objBox.Extent.X*scale, objBox.Extent.Y*scale, objBox.Extent.Z*scale);
+
+		CastResultStruct castResult;
+		castResult.Fraction = 1.0f;
+		RayCollisionTestClass rayTest(ray, &castResult);
+		if (CollisionMath::Collide(rayTest.Ray, worldBox, rayTest.Result)) {
+			if (castResult.Fraction < bestFraction) {
+				bestFraction = castResult.Fraction;
+				pBest = pObj;
+			}
+		}
+	}
+
+	if (pBest != NULL) {
+		// Same rule the object picks follow: don't select something the ground hides.
+		Vector3 hit = rayStart + rayDir*(maxDistance*bestFraction);
+		if (isHitBehindTerrain(hit)) {
+			return NULL;
+		}
+	}
+	return pBest;
+}
+
+//=============================================================================
+// WbView3d::getTreeModelBox
+//=============================================================================
+/** Object-space bounding box of a tree model, cached by model name.
+
+Creating a render object per tree per click would be far too slow on a forested map, and the
+box only depends on the asset -- so one lookup per distinct model, held for the session. */
+//=============================================================================
+Bool WbView3d::getTreeModelBox(const AsciiString &modelName, AABoxClass &boxOut)
+{
+	std::map<AsciiString, AABoxClass>::iterator it = m_treeBoxCache.find(modelName);
+	if (it != m_treeBoxCache.end()) {
+		boxOut = it->second;
+		return true;
+	}
+
+	RenderObjClass *robj = m_assetManager->Create_Render_Obj(modelName.str());
+	if (robj == NULL) {
+		return false;
+	}
+	robj->Get_Obj_Space_Bounding_Box(boxOut);
+	robj->Release_Ref();
+
+	m_treeBoxCache[modelName] = boxOut;
+	return true;
 }
 
 //=============================================================================
