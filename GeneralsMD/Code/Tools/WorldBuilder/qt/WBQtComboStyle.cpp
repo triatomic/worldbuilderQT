@@ -6,12 +6,14 @@
 #include <QCompleter>
 #include <QEvent>
 #include <QGuiApplication>
+#include <QKeyEvent>
 #include <QLineEdit>
 #include <QList>
 #include <QObject>
 #include <QPoint>
 #include <QRect>
 #include <QScreen>
+#include <QSortFilterProxyModel>
 #include <QWidget>
 
 namespace
@@ -20,6 +22,7 @@ namespace
 	// doesn't stack a second completer/filter on it.
 	const char *WB_COMBO_FILTERED = "wbComboFiltered";
 	const char *WB_COMBO_CLAMPED = "wbComboClamped";
+	const char *WB_COMBO_SEARCHABLE = "wbComboSearchable";
 
 	// How tall a dropped-down list may get, in pixels. The MFC combos each declare a fixed
 	// dropped height in WorldBuilder.rc (the COMBOBOX's 4th value, in dialog units): they run
@@ -110,6 +113,53 @@ namespace
 
 	private:
 		QComboBox *m_combo;
+	};
+
+	// A searchable combo is editable only so the user can TYPE to narrow the list -- it is still
+	// a pick-only control. Left alone, a half-typed or non-matching string would sit in the field
+	// while the actual selection is something else entirely, which in a properties panel reads as
+	// "this object's team is <whatever I typed>". On focus-out (and on Escape) put the current
+	// item's text back; a committed pick goes through activated(), which sets the text itself.
+	class WBQtSearchRevert : public QObject
+	{
+	public:
+		WBQtSearchRevert(QComboBox *combo, QSortFilterProxyModel *proxy)
+			: QObject(combo), m_combo(combo), m_proxy(proxy) {}
+
+	protected:
+		virtual bool eventFilter(QObject *watched, QEvent *event)
+		{
+			if (m_combo == NULL)
+			{
+				return QObject::eventFilter(watched, event);
+			}
+			bool revert = (event->type() == QEvent::FocusOut);
+			if (event->type() == QEvent::KeyPress)
+			{
+				QKeyEvent *key = static_cast<QKeyEvent *>(event);
+				revert = (key->key() == Qt::Key_Escape);
+			}
+			if (revert)
+			{
+				int cur = m_combo->currentIndex();
+				QString text = (cur >= 0) ? m_combo->itemText(cur) : QString();
+				if (m_combo->lineEdit() != NULL && m_combo->lineEdit()->text() != text)
+				{
+					m_combo->lineEdit()->setText(text);
+				}
+				// Drop the narrowing too, so the next drop-down opens on the full list
+				// instead of the leftovers of the last thing typed.
+				if (m_proxy != NULL)
+				{
+					m_proxy->setFilterFixedString(QString());
+				}
+			}
+			return QObject::eventFilter(watched, event);
+		}
+
+	private:
+		QComboBox *m_combo;
+		QSortFilterProxyModel *m_proxy;
 	};
 }
 
@@ -208,5 +258,55 @@ void WBQtComboStyle::applyTypeToFilter(QComboBox *combo)
 
 	// Scroll/clamp LAST: setEditable() above rebuilds the combo's internals, so the popup this
 	// hooks must be the one that survives.
+	applyPopupScroll(combo);
+}
+
+void WBQtComboStyle::applySearchable(QComboBox *combo)
+{
+	if (combo == NULL)
+	{
+		return;
+	}
+	if (combo->property(WB_COMBO_SEARCHABLE).toBool())
+	{
+		// Already wired. The proxy tracks the combo's model, so a refill needs no rework --
+		// but the popup bound is re-applied below now that the rows can be measured.
+		applyPopupScroll(combo);
+		return;
+	}
+
+	combo->setFocusPolicy(Qt::StrongFocus);
+	combo->setEditable(true);
+	combo->setInsertPolicy(QComboBox::NoInsert);	// typing must never add a bogus entry
+
+	// The proxy filters the COMPLETER only -- the combo keeps its own model, so item indices
+	// (which every panel here uses to talk to the MFC bridge) never shift under the filter.
+	QSortFilterProxyModel *proxy = new QSortFilterProxyModel(combo);
+	proxy->setFilterCaseSensitivity(Qt::CaseInsensitive);
+	proxy->setSourceModel(combo->model());
+
+	// UnfilteredPopupCompletion: the completer shows whatever the proxy currently holds rather
+	// than applying its own prefix match on top, so the popup IS the filtered list.
+	QCompleter *completer = new QCompleter(proxy, combo);
+	completer->setCompletionMode(QCompleter::UnfilteredPopupCompletion);
+	completer->setCaseSensitivity(Qt::CaseInsensitive);
+	completer->setCompletionColumn(0);
+	completer->setCompletionRole(Qt::DisplayRole);
+
+	// setEditable() installs the combo's own completer, so ours must be set after it.
+	combo->setCompleter(completer);
+
+	if (combo->lineEdit() != NULL)
+	{
+		// textEdited (not textChanged): only USER typing re-filters. Setting the field
+		// programmatically -- the revert below, or a selection push -- must not narrow the list.
+		QObject::connect(combo->lineEdit(), SIGNAL(textEdited(QString)),
+			proxy, SLOT(setFilterFixedString(QString)));
+		combo->lineEdit()->installEventFilter(new WBQtSearchRevert(combo, proxy));
+	}
+
+	combo->setProperty(WB_COMBO_SEARCHABLE, true);
+
+	// Scroll/clamp LAST: setEditable() above rebuilds the combo's internals.
 	applyPopupScroll(combo);
 }

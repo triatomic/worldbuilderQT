@@ -287,8 +287,9 @@ void WBQtObjectPanel::refreshTeamCombo()
 		}
 	}
 	// The ctor styled this combo while it was still empty, so the popup bound was computed
-	// from an estimated row height. Re-apply now that there are rows to measure.
-	WBQtComboStyle::applyPopupScroll(m_team);
+	// from an estimated row height. Re-apply now that there are rows to measure -- and make
+	// it type-to-search, since a busy map's team list is far too long to eyeball.
+	WBQtComboStyle::applySearchable(m_team);
 
 	int def = WBQtObject_GetDefaultTeamForCurrent();
 	if (def >= 0 && def < m_team->count())

@@ -183,8 +183,9 @@ void WBQtObjectPropsPanel::rebuildTeams()
 	}
 
 	// The ctor styled this combo while it was still empty, so the popup bound was computed
-	// from an estimated row height. Re-apply now that there are rows to measure.
-	WBQtComboStyle::applyPopupScroll(m_team);
+	// from an estimated row height. Re-apply now that there are rows to measure -- and make
+	// it type-to-search, since a busy map's team list is far too long to eyeball.
+	WBQtComboStyle::applySearchable(m_team);
 }
 
 // ID_EDIT_DELETE (resource.h) -- the MFC view command that deletes the selected object(s).
@@ -513,6 +514,11 @@ void WBQtObjectPropsPanel::rebuildSoundList()
 		m_sound->clear();
 		m_sound->addItems(items);
 		m_soundListBuilt = true;
+
+		// Hundreds of long sound names: MFC's first-letter jump is useless here, so let the
+		// user type any part of the name to narrow the list. Done once, with the rows present
+		// so the popup bound is measured rather than estimated.
+		WBQtComboStyle::applySearchable(m_sound);
 	}
 	else if (m_sound->count() > 0 && WBQtObjectProps_GetSoundItem(0, buf, cap))
 	{

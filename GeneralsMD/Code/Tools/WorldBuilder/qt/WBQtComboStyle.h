@@ -38,6 +38,20 @@ namespace WBQtComboStyle
 	// The combo keeps emitting its usual signals; the filter only affects what the popup shows.
 	// Call AFTER the combo is populated; safe to re-call when the item list is rebuilt.
 	void applyTypeToFilter(QComboBox *combo);
+
+	// Type-to-search for a LONG pick-only combo (Sound, the team pickers, ...): typing filters
+	// the completer popup to the substring matches instead of MFC's first-letter jump, which is
+	// unusable on a list of hundreds. Implies applyPopupScroll().
+	//
+	// The combo keeps its OWN model -- the filter proxy drives only the completer -- so
+	// count() / setCurrentIndex(i) / currentIndex() stay in SOURCE row coordinates and the
+	// panels' existing index-based bridge calls are unaffected.
+	//
+	// Unlike applyTypeToFilter() the combo stays pick-ONLY in effect: the field is editable so
+	// the user can type, but a partial or non-matching string is reverted to the current item
+	// when focus leaves, so the box never displays something that isn't the selected value.
+	// Safe to re-call after the item list is rebuilt.
+	void applySearchable(QComboBox *combo);
 }
 
 #endif // WB_QT_COMBO_STYLE_H
