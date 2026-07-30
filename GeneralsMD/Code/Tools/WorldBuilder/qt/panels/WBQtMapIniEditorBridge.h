@@ -61,9 +61,37 @@ int  WBQtMapIniEditorData_BuildSides(void);
 void WBQtMapIniEditorData_GetSide(int i, char *bufOut, int cap);
 int  WBQtMapIniEditorData_IsSide(const char *name);
 
-// The [MapIniEditor] profile section (window Top/Left/Width/Height).
+// ---- the whole-INI-tree scan, for autocomplete ----
+//
+// The engine's stores are the authority for VALIDATION, but most of them keep their maps
+// private, so they cannot be enumerated for suggestions. For autocomplete the game's own INI
+// files are scanned instead, through TheFileSystem (which resolves a mod's .big archives exactly
+// as the engine does). Two catalogs come out of it:
+//
+//   NAMES -- every block name declared anywhere ("Locomotor BasicCarLocomotor" -> the name)
+//   KEYS  -- every "Key =" seen, so the key side of a line can be completed too
+//
+// Scanned once and cached (the tree is thousands of files); Build returns the row count.
+// Returns 0 when the scan finds nothing, in which case autocomplete simply has less to offer.
+int  WBQtMapIniEditorData_BuildIniNames(void);
+void WBQtMapIniEditorData_GetIniName(int i, char *bufOut, int cap);
+int  WBQtMapIniEditorData_BuildIniKeys(void);
+void WBQtMapIniEditorData_GetIniKey(int i, char *bufOut, int cap);
+
+// The values seen with ONE specific key, rather than every value in the tree. This is what makes
+// autocomplete useful: "Surfaces =" offers GROUND/WATER/CLIFF/AIR/RUBBLE instead of thousands of
+// unrelated names, and it works for every key without hardcoding a single table -- the engine's
+// per-key name tables are compile-time and not reachable from here, but how each key is USED in
+// the game's own INI files reveals the same set. Returns 0 when the key was never seen, in which
+// case the caller falls back to the whole-tree catalog.
+int  WBQtMapIniEditorData_BuildValuesForKey(const char *key);
+void WBQtMapIniEditorData_GetValueForKey(int i, char *bufOut, int cap);
+
+// The [MapIniEditor] profile section (window Top/Left/Width/Height, and the recent-file list).
 int  WBQtMapIniEditorData_GetProfileInt(const char *key, int def);
 void WBQtMapIniEditor_SetProfileInt(const char *key, int value);
+void WBQtMapIniEditorData_GetProfileString(const char *key, char *bufOut, int cap);
+void WBQtMapIniEditor_SetProfileString(const char *key, const char *value);
 
 #ifdef __cplusplus
 }

@@ -15,7 +15,11 @@
 #include "GameClient/ControlBar.h"	// TheControlBar, for the CommandSet = check
 #include "Common/PlayerTemplate.h"	// ThePlayerTemplateStore, for the SideInfo check
 #include "EditParameter.h"			// qtCollectCommandButtons, for the Command entries
+#include "Common/FileSystem.h"		// TheFileSystem: the INI-tree scan for autocomplete
+#include "Common/File.h"
 #include "qt/panels/WBQtMapIniEditorBridge.h"
+#include <map>
+#include <set>
 #include <vector>
 
 #ifdef RTS_HAS_QT
@@ -353,6 +357,219 @@ extern "C" int WBQtMapIniEditorData_IsSide(const char *name)
 	return listContains(s_sides, name) ? 1 : 0;
 }
 
+//----------------------------------------------------------------------------------------
+// The whole-INI-tree scan, for autocomplete.
+//
+// Most engine stores keep their template maps private, so they can be checked but not listed.
+// For suggestions the game's own INI files are read instead, via TheFileSystem so a mod's
+// archives resolve the same way the engine resolves them. Harvests two things per line:
+// a block name (a bare "Keyword Name") and a key (anything before an '=').
+//----------------------------------------------------------------------------------------
+namespace {
+	std::vector<AsciiString> s_iniNames;
+	std::vector<AsciiString> s_iniKeys;
+	Bool s_iniScanned = false;
+
+	// key (lowercased) -> the distinct values seen with it anywhere in the INI tree. This is the
+	// per-key catalog; the flat s_iniNames list stays as the fallback for keys never seen.
+	typedef std::map<AsciiString, std::set<AsciiString> > IniValuesByKey;
+	IniValuesByKey s_iniValuesByKey;
+	// The last key asked about, materialized for index-based read-back across the seam.
+	std::vector<AsciiString> s_iniValuesForKey;
+
+	AsciiString iniLowered(const char *s)
+	{
+		AsciiString out(s);
+		out.toLower();
+		return out;
+	}
+
+	void iniHarvestLine(const char *line, std::set<AsciiString> &names,
+		std::set<AsciiString> &keys)
+	{
+		// Copy, then cut the comment in place, then tokenize on the same separators the engine's
+		// own parser uses (" \n\r\t=").
+		char buf[1024];
+		strncpy(buf, line, sizeof(buf) - 1);
+		buf[sizeof(buf) - 1] = 0;
+		char *semi = strchr(buf, ';');
+		if (semi != NULL)
+		{
+			*semi = 0;
+		}
+
+		const Bool hasEquals = (strchr(buf, '=') != NULL);
+		char *first = strtok(buf, " \t\r\n=");
+		if (first == NULL || first[0] == 0)
+		{
+			return;
+		}
+		if (hasEquals)
+		{
+			keys.insert(AsciiString(first));		// "Key = ..." -> the key
+			// Remember which values go with THIS key, so completion can offer just those.
+			std::set<AsciiString> &forKey = s_iniValuesByKey[iniLowered(first)];
+			// Also harvest the VALUES. Many keys take neither a block name nor a number but an
+			// enum or bit-flag name from a compile-time table -- Surfaces = GROUND WATER,
+			// KindOf = STRUCTURE SELECTABLE, Locomotor = SET_NORMAL. Those tables are not
+			// enumerable from here, but every name in them is used somewhere in the game's own
+			// INI files, so reading the values picks them all up.
+			for (char *value = strtok(NULL, " \t\r\n="); value != NULL;
+					value = strtok(NULL, " \t\r\n="))
+			{
+				// Skip numbers and percentages -- completing "50" or "30%" is noise.
+				const char *c = value;
+				Bool looksNumeric = true;
+				for (; *c != 0; ++c)
+				{
+					if (!isdigit((unsigned char)*c) && *c != '.' && *c != '-'
+						&& *c != '+' && *c != '%')
+					{
+						looksNumeric = false;
+						break;
+					}
+				}
+				if (looksNumeric || value[0] == 0)
+				{
+					continue;
+				}
+				names.insert(AsciiString(value));
+				forKey.insert(AsciiString(value));
+			}
+			return;
+		}
+		char *second = strtok(NULL, " \t\r\n=");
+		if (second == NULL || second[0] == 0)
+		{
+			return;		// a bare word (End, or a block with no name) -- nothing to harvest
+		}
+		if (strtok(NULL, " \t\r\n=") != NULL)
+		{
+			return;		// three or more tokens: not a "Keyword Name" header
+		}
+		names.insert(AsciiString(second));		// "Locomotor BasicCarLocomotor" -> the name
+		keys.insert(AsciiString(first));		// the keyword is worth completing too
+	}
+
+	void iniScanTree(void)
+	{
+		if (s_iniScanned)
+		{
+			return;
+		}
+		s_iniScanned = true;		// set first: a failed scan must not be retried per keystroke
+		if (TheFileSystem == NULL)
+		{
+			return;
+		}
+
+		FilenameList files;
+		// The directory MUST end in a backslash: Win32LocalFileSystem builds its search pattern
+		// as directory + searchName with no separator inserted, so "Data\INI" + "*.ini" would
+		// look for "Data\INI*.ini" and match nothing. (== the callers in ObjectOptions.cpp,
+		// which all append the slash before calling.)
+		TheFileSystem->getFileListInDirectory(AsciiString("Data\\INI\\"), AsciiString("*.ini"),
+			files, TRUE);
+
+		std::set<AsciiString> names;
+		std::set<AsciiString> keys;
+		for (FilenameList::const_iterator it = files.begin(); it != files.end(); ++it)
+		{
+			File *fp = TheFileSystem->openFile(it->str(), File::READ | File::TEXT);
+			if (fp == NULL)
+			{
+				continue;
+			}
+			// nextLine returns void, so eof() is the loop condition; it also guarantees
+			// termination on a file whose last line has no newline.
+			char line[1024];
+			while (!fp->eof())
+			{
+				line[0] = 0;
+				fp->nextLine(line, sizeof(line));
+				if (line[0] == 0 && fp->eof())
+				{
+					break;
+				}
+				iniHarvestLine(line, names, keys);
+			}
+			fp->close();
+		}
+
+		for (std::set<AsciiString>::const_iterator n = names.begin(); n != names.end(); ++n)
+		{
+			s_iniNames.push_back(*n);
+		}
+		for (std::set<AsciiString>::const_iterator k = keys.begin(); k != keys.end(); ++k)
+		{
+			s_iniKeys.push_back(*k);
+		}
+	}
+}
+
+extern "C" int WBQtMapIniEditorData_BuildIniNames(void)
+{
+	iniScanTree();
+	return (int)s_iniNames.size();
+}
+
+extern "C" void WBQtMapIniEditorData_GetIniName(int i, char *bufOut, int cap)
+{
+	if (i < 0 || i >= (int)s_iniNames.size())
+	{
+		copyOut("", bufOut, cap);
+		return;
+	}
+	copyOut(s_iniNames[i].str(), bufOut, cap);
+}
+
+extern "C" int WBQtMapIniEditorData_BuildIniKeys(void)
+{
+	iniScanTree();
+	return (int)s_iniKeys.size();
+}
+
+extern "C" void WBQtMapIniEditorData_GetIniKey(int i, char *bufOut, int cap)
+{
+	if (i < 0 || i >= (int)s_iniKeys.size())
+	{
+		copyOut("", bufOut, cap);
+		return;
+	}
+	copyOut(s_iniKeys[i].str(), bufOut, cap);
+}
+
+extern "C" int WBQtMapIniEditorData_BuildValuesForKey(const char *key)
+{
+	s_iniValuesForKey.clear();
+	if (key == NULL || key[0] == 0)
+	{
+		return 0;
+	}
+	iniScanTree();
+	IniValuesByKey::const_iterator it = s_iniValuesByKey.find(iniLowered(key));
+	if (it == s_iniValuesByKey.end())
+	{
+		return 0;		// key never seen -- the caller falls back to the whole-tree catalog
+	}
+	for (std::set<AsciiString>::const_iterator v = it->second.begin();
+			v != it->second.end(); ++v)
+	{
+		s_iniValuesForKey.push_back(*v);
+	}
+	return (int)s_iniValuesForKey.size();
+}
+
+extern "C" void WBQtMapIniEditorData_GetValueForKey(int i, char *bufOut, int cap)
+{
+	if (i < 0 || i >= (int)s_iniValuesForKey.size())
+	{
+		copyOut("", bufOut, cap);
+		return;
+	}
+	copyOut(s_iniValuesForKey[i].str(), bufOut, cap);
+}
+
 extern "C" int WBQtMapIniEditorData_GetProfileInt(const char *key, int def)
 {
 	if (key == NULL)
@@ -369,6 +586,26 @@ extern "C" void WBQtMapIniEditor_SetProfileInt(const char *key, int value)
 		return;
 	}
 	::AfxGetApp()->WriteProfileInt(MAPINI_EDITOR_SECTION, key, value);
+}
+
+extern "C" void WBQtMapIniEditorData_GetProfileString(const char *key, char *bufOut, int cap)
+{
+	copyOut("", bufOut, cap);
+	if (key == NULL)
+	{
+		return;
+	}
+	CString value = ::AfxGetApp()->GetProfileString(MAPINI_EDITOR_SECTION, key, "");
+	copyOut((LPCTSTR)value, bufOut, cap);
+}
+
+extern "C" void WBQtMapIniEditor_SetProfileString(const char *key, const char *value)
+{
+	if (key == NULL)
+	{
+		return;
+	}
+	::AfxGetApp()->WriteProfileString(MAPINI_EDITOR_SECTION, key, (value != NULL) ? value : "");
 }
 
 #endif // RTS_HAS_QT

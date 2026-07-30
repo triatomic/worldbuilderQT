@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Map.ini Editor</string>
+   <string>INI Editor</string>
   </property>
   <layout class="QVBoxLayout" name="rootLayout" stretch="0,0,1,0">
    <item>
@@ -77,12 +77,45 @@
       </widget>
      </item>
      <item>
+      <widget class="QCheckBox" name="whitespaceBox">
+       <property name="text">
+        <string>Show whitespace</string>
+       </property>
+       <property name="toolTip">
+        <string>Render spaces and tabs, so mixed indentation is visible.</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="checkSyntaxBox">
+       <property name="text">
+        <string>Check syntax</string>
+       </property>
+       <property name="toolTip">
+        <string>Underline structural problems: a stray End, a block left unclosed, a key with no value.</string>
+       </property>
+       <property name="checked">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="autoCompleteBox">
+       <property name="text">
+        <string>Autocomplete</string>
+       </property>
+       <property name="toolTip">
+        <string>Suggest names from the game data as you type. Ctrl+Space opens a searchable list (works even with this off).</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QCheckBox" name="showErrorsBox">
        <property name="text">
         <string>Show errors</string>
        </property>
        <property name="toolTip">
-        <string>List only the lines with an unrecognised name. Click one to jump to it in the file.</string>
+        <string>List the lines with a problem. Click one to jump to it in the file.</string>
        </property>
       </widget>
      </item>
@@ -164,29 +197,21 @@
     </layout>
    </item>
    <item>
-    <widget class="QSplitter" name="split">
-     <property name="orientation">
-      <enum>Qt::Vertical</enum>
-     </property>
-     <widget class="QPlainTextEdit" name="editor">
-      <property name="lineWrapMode">
-       <enum>QPlainTextEdit::NoWrap</enum>
+    <widget class="QWidget" name="editorHost" native="true">
+     <layout class="QVBoxLayout" name="editorHostLay">
+      <property name="leftMargin">
+       <number>0</number>
       </property>
-     </widget>
-     <widget class="QListWidget" name="errorList">
-      <property name="toolTip">
-       <string>Lines with an unrecognised name. Click one to jump to it in the file above.</string>
+      <property name="topMargin">
+       <number>0</number>
       </property>
-      <property name="alternatingRowColors">
-       <bool>true</bool>
+      <property name="rightMargin">
+       <number>0</number>
       </property>
-      <property name="maximumSize">
-       <size>
-        <width>16777215</width>
-        <height>200</height>
-       </size>
+      <property name="bottomMargin">
+       <number>0</number>
       </property>
-     </widget>
+     </layout>
     </widget>
    </item>
    <item>
