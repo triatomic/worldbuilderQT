@@ -1188,6 +1188,17 @@ void WbView3d::resetRenderObjects()
 	}
 	m_baseBuildScene->Destroy_Iterator(sceneIter);
 	MapObject *pMapObj = MapObject::getFirstMapObject();
+	// The scene was emptied above, so the loose draw-module pieces went with it: drop our
+	// refs and forget them, or the next build would leak them and re-add stale objects.
+	for (std::map<MapObject *, std::vector<LoosePiece> >::iterator lpIt = m_loosePieces.begin();
+			lpIt != m_loosePieces.end(); ++lpIt) {
+		for (size_t li = 0; li < lpIt->second.size(); ++li) {
+			if (lpIt->second[li].obj != NULL) {
+				lpIt->second[li].obj->Release_Ref();
+			}
+		}
+	}
+	m_loosePieces.clear();
 	// Erase references to render objs that have been removed.
 	while (pMapObj) 
 	{
@@ -2085,6 +2096,10 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 
 
 		if (!renderObj) {
+			// Rebuilding from scratch: drop any pieces from the previous build first, or each
+			// rebuild would stack another set on top of the last.
+			releaseLoosePieces(pMapObj);
+
 			Real scale = 1.0;
 		
 			const ThingTemplate* tTemplate = pMapObj->getThingTemplate();
@@ -2396,7 +2411,32 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 											renderObj->Capture_Bone(boneIndex);
 											renderObj->Control_Bone(boneIndex, cancel, false);
 										}
-										renderObj->Add_Sub_Object_To_Bone(subRenderObj, boneIndex);
+										// Add_Sub_Object_To_Bone is a NO-OP on a parent that isn't an HLod:
+										// RenderObjClass's base version just `return 0`, and only HLodClass
+										// overrides it. When module 0's model is a plain MeshClass -- it has
+										// no HTree, which is exactly the case here -- every attach is
+										// silently discarded and those pieces are never drawn at all. That
+										// is why a multi-part object could show only its first module.
+										//
+										// Fall back to putting the piece in the scene in its own right,
+										// which is closer to what the game does anyway (each draw module
+										// owns a render object; they are not sub-objects of each other).
+										// It can't be positioned yet -- the parent's own transform is set
+										// after this loop -- so collect it and place it there.
+										if (renderObj->Add_Sub_Object_To_Bone(subRenderObj, boneIndex) == 0) {
+											LoosePiece piece;
+											piece.obj = subRenderObj;
+											piece.obj->Add_Ref();	// the map holds a ref until released
+											piece.boneOffset.Set(0.0f, 0.0f, 0.0f);
+											// Keep the bone's OFFSET (not its rotation -- see above) when the
+											// module rides one and the parent can resolve it.
+											if (boneIndex != 0 && htree != NULL) {
+												Matrix3D bw = htree->Get_Transform(boneIndex);
+												Matrix3D pw = htree->Get_Transform(0);
+												piece.boneOffset = bw.Get_Translation() - pw.Get_Translation();
+											}
+											m_loosePieces[pMapObj].push_back(piece);
+										}
 										subRenderObj->Release_Ref();  // Release ref after attaching
 									}
 								}
@@ -2431,6 +2471,28 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 			}
 
 			m_scene->Add_Render_Object(renderObj);
+
+			// Draw modules the parent could not adopt as sub-objects (Add_Sub_Object_To_Bone is a
+			// no-op unless the parent is an HLod): they live in the scene as separate render objects
+			// and are positioned against the parent here. DECORATION ONLY, like attachSpawnedObjects
+			// -- they carry no MapObject and the pick scan matches on getRenderObj, so they cannot be
+			// selected or clicked.
+			// This block runs on the REUSE path too (a move/rotate keeps the existing render
+			// object and only re-sets its transform), which is what carries the pieces along --
+			// nothing parents them, so nothing else would move them. safeContains keeps the
+			// re-add from stacking duplicates on every reposition.
+			{
+				std::map<MapObject *, std::vector<LoosePiece> >::iterator lpIt = m_loosePieces.find(pMapObj);
+				if (lpIt != m_loosePieces.end()) {
+					for (size_t li = 0; li < lpIt->second.size(); ++li) {
+						RenderObjClass *piece = lpIt->second[li].obj;
+						if (piece != NULL && !m_scene->safeContains(piece)) {
+							m_scene->Add_Render_Object(piece);
+						}
+					}
+				}
+				placeLoosePieces(pMapObj, renderObj);
+			}
 
 			// View > Models > Show Full Model: also draw the units this object SPAWNS, attached to
 			// its spawn-point bones. Must come after Set_Transform + Add_Render_Object so the
@@ -2470,6 +2532,7 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 			// default state, which is where a model-less FX marker declares its emitters anyway.
 			WBParticleRuntime::placeEmittersForObject(pMapObj, NULL, loc.x, loc.y, loc.z, NULL);
 		}
+
 		if (found) break;
 	}
 	if (!found && pMapObjIn) {
@@ -2496,6 +2559,7 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 			return;
 		}
 		m_scene->Remove_Render_Object(pMapObjIn->getRenderObj());
+		releaseLoosePieces(pMapObjIn);	// the parent is going, so its pieces go with it
 		pMapObjIn->setRenderObj(NULL);
 	}
 
@@ -2992,6 +3056,72 @@ void WbView3d::attachSpawnedObjects(RenderObjClass *parentObj, const ThingTempla
 		}
 		attachOneRider(parentObj, payloadNames[p], boneIndex, playerColor);
 	}
+}
+
+//=============================================================================
+// WbView3d::placeLoosePieces
+//=============================================================================
+/** Put pMapObj's loose draw-module pieces where the parent is now.
+
+These are draw modules the parent could not adopt as sub-objects (Add_Sub_Object_To_Bone is a
+no-op unless the parent is an HLod), so they sit in the scene as separate render objects. Nothing
+parents them, which means nothing moves them either -- hence this, called both when the object is
+built and on the reuse path, so a move or rotate carries them along instead of leaving them
+behind at the old placement.
+
+Orientation comes from the parent; the bone contributes POSITION only, and its offset is rotated
+into the parent's frame so it swings around with the heading. That matches the game, whose
+adjustTransformMtx offsets the drawable's own matrix by the bone's translation alone. */
+//=============================================================================
+void WbView3d::placeLoosePieces(MapObject *pMapObj, RenderObjClass *parentObj)
+{
+	if (pMapObj == NULL || parentObj == NULL) {
+		return;
+	}
+	std::map<MapObject *, std::vector<LoosePiece> >::iterator it = m_loosePieces.find(pMapObj);
+	if (it == m_loosePieces.end()) {
+		return;
+	}
+
+	const Matrix3D parentMtx = parentObj->Get_Transform();
+	std::vector<LoosePiece> &pieces = it->second;
+	for (size_t i = 0; i < pieces.size(); ++i) {
+		if (pieces[i].obj == NULL) {
+			continue;
+		}
+		Matrix3D pieceMtx = parentMtx;
+		const Vector3 &off = pieces[i].boneOffset;
+		if (off.X != 0.0f || off.Y != 0.0f || off.Z != 0.0f) {
+			Vector3 rotated = parentMtx.Rotate_Vector(off);
+			pieceMtx.Adjust_X_Translation(rotated.X);
+			pieceMtx.Adjust_Y_Translation(rotated.Y);
+			pieceMtx.Adjust_Z_Translation(rotated.Z);
+		}
+		pieces[i].obj->Set_Transform(pieceMtx);
+	}
+}
+
+//=============================================================================
+// WbView3d::releaseLoosePieces
+//=============================================================================
+/** Remove pMapObj's loose pieces from the scene and forget them. */
+//=============================================================================
+void WbView3d::releaseLoosePieces(MapObject *pMapObj)
+{
+	std::map<MapObject *, std::vector<LoosePiece> >::iterator it = m_loosePieces.find(pMapObj);
+	if (it == m_loosePieces.end()) {
+		return;
+	}
+	std::vector<LoosePiece> &pieces = it->second;
+	for (size_t i = 0; i < pieces.size(); ++i) {
+		if (pieces[i].obj != NULL) {
+			if (m_scene != NULL) {
+				m_scene->Remove_Render_Object(pieces[i].obj);
+			}
+			pieces[i].obj->Release_Ref();
+		}
+	}
+	m_loosePieces.erase(it);
 }
 
 //=============================================================================

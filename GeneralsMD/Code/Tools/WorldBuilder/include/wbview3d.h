@@ -368,6 +368,16 @@ private:
 	Int											m_listenMode;			///< View > Listen To Map: which ambient sounds to play (WB_LISTEN_*)
 	UnsignedInt								m_lastListenSweepTime;	///< GetTickCount of the last re-submit sweep (see startListenSounds)
 	std::map<MapObject *, AudioHandle>		m_listenHandles;		///< the live audio handle per sounding object
+	/// Draw-module models the parent render object could not adopt as sub-objects, kept per
+	/// MapObject so a move/rotate can reposition them (the rebuild path is skipped once the
+	/// object already has a render object, so they would otherwise stay where first placed).
+	/// Each holds a scene ref; cleared with the scene in resetRenderObjects.
+	struct LoosePiece
+	{
+		RenderObjClass *obj;
+		Vector3 boneOffset;		///< offset from the parent's origin when the module rides a bone
+	};
+	std::map<MapObject *, std::vector<LoosePiece> >	m_loosePieces;
   Bool										m_showSoundCircles;	///< Flag whether to show the minimum and maximum radii of the ambient sounds attached to the selected object
 	Bool										m_showBoundingBoxes;
 	Bool										m_showSightRanges;
@@ -537,6 +547,12 @@ public:
 	/// Create one rider's model and hang it off parentObj's bone (shared by both paths above).
 	void attachOneRider(RenderObjClass *parentObj, const AsciiString &templateName, Int boneIndex,
 		Int playerColor);
+	/// Position pMapObj's loose draw-module pieces (see m_loosePieces) against the parent's
+	/// current transform. Call after the parent has been placed -- on a rebuild AND on the
+	/// reuse path, so a move/rotate carries them along. No-op when the object has none.
+	void placeLoosePieces(MapObject *pMapObj, RenderObjClass *parentObj);
+	/// Drop pMapObj's loose pieces from the scene and forget them (object deleted / rebuilt).
+	void releaseLoosePieces(MapObject *pMapObj);
 	virtual BuildListInfo *pickedBuildObjectInView(CPoint viewPt);
 
 	void removeFenceListObjects(MapObject *pObject);
