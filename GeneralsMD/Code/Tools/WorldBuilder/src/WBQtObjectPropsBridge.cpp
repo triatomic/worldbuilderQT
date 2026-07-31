@@ -1446,6 +1446,25 @@ extern "C" int WBQtObjectProps_GetName(char *out, int cap)
 	return MapObjectProps::qtGetName(out, cap);
 }
 
+// Non-zero when the selected object's TEMPLATE was invented by the loaded map.ini -- the
+// installed game data has no Object block for it, so it exists only while that map.ini is
+// loaded. The panel tints its header with this. Only meaningful for a single selection; a
+// multi-selection has no one template to report on.
+extern "C" int WBQtObjectProps_IsMapIniInvented(void)
+{
+	MapObject *pMapObj = MapObjectProps::getSingleSelectedObject();
+	if (pMapObj == NULL)
+	{
+		return 0;
+	}
+	const ThingTemplate *tt = pMapObj->getThingTemplate();
+	if (tt == NULL)
+	{
+		return 0;	// a test-model entry, not a real template
+	}
+	return WBMapIni_IsPhantomTemplate(tt->getName()) ? 1 : 0;
+}
+
 extern "C" void WBQtObjectProps_SetName(const char *name)
 {
 	MapObjectProps::qtMSetName(name);	// windowless model core (qt-debridge)

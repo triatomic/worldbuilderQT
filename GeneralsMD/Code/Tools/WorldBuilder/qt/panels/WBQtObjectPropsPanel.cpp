@@ -16,7 +16,12 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QPalette>
 #include <QPushButton>
+
+// Header colour for an object whose template the loaded map.ini invented. Must match the Object
+// Options tree's green for the same state (WBQtObjectPanel.cpp) -- one meaning, one colour.
+static const QColor kMapIniInventedColor(60, 170, 90);
 
 WBQtObjectPropsPanel *WBQtObjectPropsPanel::s_instance = NULL;
 
@@ -255,6 +260,23 @@ void WBQtObjectPropsPanel::pushRefresh()
 	else
 	{
 		m_selectionLabel->setText("1 object selected");
+	}
+
+	// Green header when this object's TYPE was invented by the loaded map.ini -- it exists only
+	// while that map.ini is loaded, which is worth knowing before building a map around it. Same
+	// green the Object Options tree uses for the same state. Cleared (back to the palette colour)
+	// for everything else, including a multi-selection with no single template to report on.
+	if (single && WBQtObjectProps_IsMapIniInvented() != 0)
+	{
+		QPalette pal = m_selectionLabel->palette();
+		pal.setColor(QPalette::WindowText, kMapIniInventedColor);
+		m_selectionLabel->setPalette(pal);
+		m_selectionLabel->setToolTip(tr("Added by the loaded map.ini (does not exist without it)"));
+	}
+	else
+	{
+		m_selectionLabel->setPalette(QPalette());
+		m_selectionLabel->setToolTip(QString());
 	}
 
 	if (single && WBQtObjectProps_GetName(buf, cap))

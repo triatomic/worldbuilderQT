@@ -32,6 +32,9 @@ static const int kListIndexRole = Qt::UserRole + 1;
 // Tint for a template the loaded map.ini redefined -- the same orange the map.ini editor uses
 // for a name it can't match, since both mean "look at this", not "this is broken".
 static const QColor kMapIniOverrideColor(220, 140, 40);
+// Templates the map.ini INVENTED. A mid green, not a pure one: it has to stay readable on the
+// light theme's white tree AND the dark theme's near-black, like the orange above.
+static const QColor kMapIniInventedColor(60, 170, 90);
 
 // Draw the little "copy" glyph (two offset outlined rectangles) for the name-copy button.
 // Painted rather than shipped as an asset because the Qt side carries no icon resources at all,
@@ -220,10 +223,17 @@ void WBQtObjectPanel::rebuildTree(const QString &filter)
 		leaf->setText(0, QString::fromLatin1(leafBuf));
 		leaf->setData(0, kListIndexRole, i);
 
-		// Flag templates the loaded map.ini redefined, so it's obvious at a glance which objects
-		// are not the stock ones. Same orange the map.ini editor uses for a name it can't match:
-		// this is information, not an error.
-		if (WBQtObject_IsMapIniOverridden(i) != 0)
+		// Flag templates the loaded map.ini touched, so it's obvious at a glance which objects
+		// are not the stock ones. Two distinct states, two colours: green for one map.ini
+		// INVENTED (no such object without it), orange for one it merely redefined. Invented is
+		// checked first -- it is the stronger statement, and the override test can't be true for
+		// a template that has no base to override anyway. Information, not an error.
+		if (WBQtObject_IsMapIniInvented(i) != 0)
+		{
+			leaf->setForeground(0, QBrush(kMapIniInventedColor));
+			leaf->setToolTip(0, tr("Added by the loaded map.ini (does not exist without it)"));
+		}
+		else if (WBQtObject_IsMapIniOverridden(i) != 0)
 		{
 			leaf->setForeground(0, QBrush(kMapIniOverrideColor));
 			leaf->setToolTip(0, tr("Redefined by the loaded map.ini"));

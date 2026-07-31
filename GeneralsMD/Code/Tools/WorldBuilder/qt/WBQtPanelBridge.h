@@ -184,6 +184,10 @@ int  WBQtObject_GetFullName(int listIndex, char *nameOut, int cap);
 // Non-zero if the loaded map.ini redefined this template (it has a map.ini override on its
 // chain), so the panel can tint the entry to show it was changed.
 int  WBQtObject_IsMapIniOverridden(int listIndex);
+// Non-zero if the loaded map.ini INVENTED this template (the installed game data has no Object
+// block for the name), so the panel can tint it differently from a merely redefined one -- an
+// invented template disappears the moment the map.ini is unloaded.
+int  WBQtObject_IsMapIniInvented(int listIndex);
 
 // Selection (Qt -> MFC): make listIndex the current object (drives placement).
 void WBQtObject_SelectIndex(int listIndex);

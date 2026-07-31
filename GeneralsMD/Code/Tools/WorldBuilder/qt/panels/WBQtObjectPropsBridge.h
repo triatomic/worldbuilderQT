@@ -30,6 +30,11 @@ int  WBQtObjectProps_GetSelCount(void);
 int  WBQtObjectProps_GetName(char *out, int cap);
 void WBQtObjectProps_SetName(const char *name);
 
+// Non-zero when the selected object's template was INVENTED by the loaded map.ini (the installed
+// game data has no Object block for it), so the panel can tint its header. Single-select only --
+// a multi-selection has no single template to report on.
+int  WBQtObjectProps_IsMapIniInvented(void);
+
 // Owning-team combo. GetTeamCount/GetTeamName give the team list (with the "(neutral)" relabel);
 // GetCurTeam returns the index of the current object's team (-1 if none/unknown); SetTeam writes
 // the hidden MFC combo then runs _TeamToDict (applies to every selected object).

@@ -231,6 +231,28 @@ int WBQtObject_IsMapIniOverridden(int listIndex)
 	return (base->getNextOverride() != NULL) ? 1 : 0;
 }
 
+// Non-zero when the loaded map.ini INVENTED this template -- the installed game data has no
+// Object block for the name at all, so it exists only while this map.ini is loaded.
+//
+// Distinct from WBQtObject_IsMapIniOverridden above, which is the "map.ini CHANGED a stock
+// template" case (a base template with an override on its chain). An invented template has no
+// base to override, so that test returns 0 for it. The doc's map.ini load already works the set
+// out during its pre-scan; this just reads it (see WBMapIni_IsPhantomTemplate).
+int WBQtObject_IsMapIniInvented(int listIndex)
+{
+	MapObject *pObj = objectAtIndex(listIndex);
+	if (pObj == NULL)
+	{
+		return 0;
+	}
+	const ThingTemplate *tt = pObj->getThingTemplate();
+	if (tt == NULL)
+	{
+		return 0;	// a test-model entry, not a real template
+	}
+	return WBMapIni_IsPhantomTemplate(tt->getName()) ? 1 : 0;
+}
+
 void WBQtObject_SelectIndex(int listIndex)
 {
 	MapObject *pObj = objectAtIndex(listIndex);
