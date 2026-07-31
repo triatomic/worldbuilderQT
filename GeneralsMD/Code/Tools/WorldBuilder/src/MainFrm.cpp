@@ -737,11 +737,16 @@ void CMainFrame::closeScriptDialog()
 void CMainFrame::onEditScripts()
 {
 #ifdef RTS_HAS_QT
-	// F4 / menu while the editor is already open: bring it to the front and give it
-	// keyboard focus instead of recreating the session (the recreate path below reseeds
-	// m_sides from TheSidesList, which would silently discard uncommitted script edits).
-	if (m_scriptDialog != NULL && WBQtScript_IsOpen()) {
-		WBQtScript_Focus();
+	// F4 / menu toggles the editor. Showing -> hide it; hidden but still alive -> bring it
+	// back. Neither path recreates the session: the recreate path below reseeds m_sides from
+	// TheSidesList, which would silently discard uncommitted script edits. Hiding is NOT a
+	// commit or a cancel -- OK/Cancel still own those -- so the edits survive the round trip.
+	if (m_scriptDialog != NULL && WBQtScript_HasSession()) {
+		if (WBQtScript_IsOpen()) {
+			WBQtScript_Hide();
+		} else {
+			WBQtScript_Reshow();
+		}
 		return;
 	}
 #endif

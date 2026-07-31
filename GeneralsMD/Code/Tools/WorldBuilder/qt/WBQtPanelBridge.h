@@ -348,6 +348,13 @@ void WBQtScript_Open(void *frameHwnd, int x, int y);
 void WBQtScript_Close(void);
 int  WBQtScript_IsOpen(void);
 void WBQtScript_Focus(void);
+// F4 toggles the editor: Hide puts a SHOWING editor away, Reshow brings a hidden one back.
+// Neither commits nor cancels -- the session (and any uncommitted edits) stays live, which is
+// why HasSession ("the window object exists", visible or not) gates the reopen: taking the
+// recreate path instead would reseed from TheSidesList and drop those edits.
+void WBQtScript_Hide(void);
+void WBQtScript_Reshow(void);
+int  WBQtScript_HasSession(void);
 
 #ifdef __cplusplus
 }

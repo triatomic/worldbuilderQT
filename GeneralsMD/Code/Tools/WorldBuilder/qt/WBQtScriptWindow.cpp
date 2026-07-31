@@ -1652,6 +1652,40 @@ extern "C" int WBQtScript_IsOpen(void)
 	return (win != NULL && win->isVisible()) ? 1 : 0;
 }
 
+// "A session exists" -- the window object is alive, whether or not it is currently VISIBLE.
+// F4 hides the editor without committing or cancelling, so the model in CMainFrame's
+// ScriptDialog is still live and must not be torn down and reseeded from TheSidesList on the
+// way back in (that is what would silently discard uncommitted edits). Distinct from
+// WBQtScript_IsOpen, which asks whether the window is on screen.
+extern "C" int WBQtScript_HasSession(void)
+{
+	return (WBQtScriptWindow::instance() != NULL) ? 1 : 0;
+}
+
+// F4 while the editor is showing: hide it, keeping the session (and any uncommitted edits)
+// intact so the next F4 brings it straight back. NOT a commit or a cancel -- OK/Cancel still
+// own those; this is only the window's visibility.
+extern "C" void WBQtScript_Hide(void)
+{
+	WBQtScriptWindow *win = WBQtScriptWindow::instance();
+	if (win != NULL)
+	{
+		win->hide();
+	}
+}
+
+// Re-show a hidden session (the second F4) without going through the recreate path.
+extern "C" void WBQtScript_Reshow(void)
+{
+	WBQtScriptWindow *win = WBQtScriptWindow::instance();
+	if (win == NULL)
+	{
+		return;
+	}
+	win->show();
+	WBQtScript_Focus();
+}
+
 // Bring the already-open editor to the front and give it keyboard focus (F4 / menu while
 // it is open re-focuses instead of recreating the session).
 extern "C" void WBQtScript_Focus(void)
