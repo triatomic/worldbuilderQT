@@ -2319,7 +2319,8 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 										// |-----------------------------|-------------------------|--------------------------|
 										// | AttachToBoneInAnotherModule | never read              | read per module          |
 										// | piece position              | the object's origin     | the bone's translation   |
-										// | piece orientation           | the parent's            | the parent's (unchanged) |
+										// | piece orientation           | the parent's            | the parent's, at any     |
+										// |                             |                         | object heading           |
 										// | riding pieces               | stacked at the origin,  | sit on their bone, as    |
 										// |                             | buried in the main mesh | the game draws them      |
 										// | reads to the user           | "the piece is missing"  | the full object          |
@@ -2354,16 +2355,44 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 										if (md->m_attachToDrawableBone.isNotEmpty()) {
 											boneIndex = renderObj->Get_Bone_Index(md->m_attachToDrawableBone.str());
 										}
-										if (boneIndex != 0) {
+										const HTreeClass *htree = (boneIndex != 0) ? renderObj->Get_HTree() : NULL;
+										if (htree != NULL) {
 											// PivotClass::Capture_Update POST-MULTIPLIES the control matrix
 											// onto the transform the hierarchy already computed -- it does
-											// not replace it. So to cancel the bone's rotation the control
-											// matrix must be that rotation's INVERSE: R * R-1 == identity,
-											// leaving the bone's translation with the parent's orientation.
-											Matrix3D boneMtx = renderObj->Get_Bone_Transform(boneIndex);
-											boneMtx.Set_Translation(Vector3(0.0f, 0.0f, 0.0f));	// rotation only
+											// not replace it -- so cancelling the bone's rotation means
+											// supplying that rotation's INVERSE: R * R-1 == identity.
+											//
+											// SPACES MATTER HERE. Control_Bone's parameter is named
+											// relative_tm: it is PARENT-RELATIVE, the same space as
+											// PivotClass::BaseTransform ("base-pose transform, relative to
+											// parent"). Get_Bone_Transform, by contrast, hands back the
+											// pivot's accumulated WORLD transform --
+											//     pivot->Transform = Parent->Transform * BaseTransform
+											// -- which carries the whole chain, including the object's own
+											// placement and heading on the map. Inverting THAT and passing
+											// it to Control_Bone only cancels correctly when the parent
+											// chain contributes no rotation (object at yaw 0); rotate the
+											// object and the pieces counter-rotate away from where they
+											// belong.
+											//
+											// So recover the local rotation first: parentWorld-1 * boneWorld
+											// == BaseTransform, which is what Control_Bone wants.
+											const Int parentIndex = htree->Get_Parent_Index(boneIndex);
+											Matrix3D boneWorld = htree->Get_Transform(boneIndex);
+											Matrix3D local = boneWorld;
+											if (parentIndex >= 0) {
+												Matrix3D parentInv;
+												htree->Get_Transform(parentIndex).Get_Orthogonal_Inverse(parentInv);
+												Matrix3D::Multiply(parentInv, boneWorld, &local);
+											}
+
+											// Rotation only: the bone's translation must survive (it is the
+											// whole point -- it says WHERE the piece goes), so zero the
+											// translation before inverting and the inverse stays a pure
+											// rotation that leaves the offset alone.
+											local.Set_Translation(Vector3(0.0f, 0.0f, 0.0f));
 											Matrix3D cancel;
-											boneMtx.Get_Orthogonal_Inverse(cancel);	// separate dest: it reads while writing
+											local.Get_Orthogonal_Inverse(cancel);	// separate dest: it reads while writing
 											renderObj->Capture_Bone(boneIndex);
 											renderObj->Control_Bone(boneIndex, cancel, false);
 										}
