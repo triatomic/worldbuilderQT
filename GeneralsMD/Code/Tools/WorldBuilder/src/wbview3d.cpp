@@ -690,6 +690,7 @@ WbView3d::WbView3d() :
 	m_projection(false),
 	m_showShadows(false),
 	m_animateModels(false),
+	m_poseAttachBones(false),
 	m_animatedModelCount(0),
 	m_firstPaint(true),
 	m_groundLevel(10),
@@ -2207,6 +2208,31 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 		
 				const ModuleInfo& mi = tTemplate->getDrawModuleInfo();
 				// DEBUG_LOG(("Draw Module Count: %d \n", mi.getCount()));
+
+				// AttachToBoneInAnotherModule names a bone published (via ExtraPublicBone) by SOME
+				// other draw module -- not necessarily module 0. The game resolves it through
+				// Drawable::getPristineBonePositions, which LOOPS OVER EVERY DRAW MODULE and takes
+				// the first that owns the bone; WB used to ask module 0's render object alone, so a
+				// module riding a sibling's bone resolved to index 0, got no offset, and stacked at
+				// the parent's origin. That is the "some objects are misaligned" symptom.
+				//
+				// NavyStructureCorvetteHangarGaalsien (map.ini) is the case in point -- 12 modules,
+				// only two of which ride a bone module 0 actually owns:
+				//
+				//   module 01 PSCarRapt     publishes WINGTIP01 WINGTIP02      <- the parent
+				//   module 02 NVSSUPPLYTK   publishes TIRE01 TIRE02 TREADFX07
+				//   module 03 UVLiteTank    publishes TREADSR01
+				//   module 06 NBSupCent_N   publishes BOX06 BOX1058, rides WINGTIP02  (module 01)
+				//   module 04 ABBtCmdHQ_N   rides TIRE01     (module 02)
+				//   module 07/08            ride  BOX06      (module 06 -- itself a rider)
+				//   module 09/10            ride  TREADSR01  (module 03)
+				//   module 12 NBPwrPtI      rides WINGTIP01  (module 01)
+				//
+				// So keep every module built so far and search them all, in module order, the way
+				// the game does. Note module 06 both rides a bone and publishes the one 07/08 ride:
+				// offsets have to ACCUMULATE down that chain, hence storing each module's resolved
+				// offset from the parent's origin rather than just its render object.
+				std::vector<BuiltDrawModule> builtModules;
 				if (mi.getCount() > 0) {
 					for (int i = 0; i < mi.getCount(); ++i) {
 						const ModuleData* mdd = mi.getNthData(i);
@@ -2274,6 +2300,41 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 											++m_animatedModelCount;
 										}
 									}
+									else if (m_poseAttachBones && info != NULL && !info->m_animations.empty())
+									{
+										// View > Models > Bone Attachment > Pose Attach Bones At Frame 0.
+										//
+										// A model WB does not animate shows its BIND pose -- the geometry as
+										// exported. The game rarely shows that: a state declared MANUAL or
+										// ONCE_BACKWARDS settles on its animation's FRAME 0, which is the
+										// resting pose the art is built around (a closed door, a lowered
+										// gantry, a stowed crane).
+										//
+										// That matters here beyond looks, because BONES MOVE WITH THE POSE.
+										// A module publishing a bone via ExtraPublicBone hands its position
+										// to whatever module rides it (AttachToBoneInAnotherModule), and
+										// findAttachBone reads that bone straight off this render object's
+										// HTree. Pose the publisher first and the riders land where the game
+										// puts them; leave it in bind pose and they inherit whatever offset
+										// the exporter happened to leave.
+										//
+										// ANIM_MODE_MANUAL parks the hierarchy at the given frame and holds
+										// it -- no per-frame advance, so WW3D::Sync() will not walk it off
+										// frame 0 the way the LOOP branch above intends to.
+										//
+										// pickWBAnimation is deliberately NOT used: it answers "what should
+										// PLAY", and returns NULL for exactly the MANUAL/ONCE_BACKWARDS
+										// states this is here to pose. Take the state's first animation,
+										// which is the one the engine would settle on.
+										HAnimClass* poseAnim =
+											m_assetManager->Get_HAnim(info->m_animations[0].getName().str());
+										if (poseAnim)
+										{
+											subRenderObj->Set_Animation(poseAnim, 0.0f,
+												RenderObjClass::ANIM_MODE_MANUAL);
+											poseAnim->Release_Ref();
+										}
+									}
 
 									Bool isNight = state.test(MODELCONDITION_NIGHT);
 
@@ -2321,6 +2382,14 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 									if (!renderObj) {
 										renderObj = subRenderObj;  // First model is the main renderObj
 
+										// The parent is a bone source like any other module -- record it so a
+										// later module naming one of ITS bones can find it. Offset zero: this
+										// module IS the parent's origin.
+										BuiltDrawModule parentModule;
+										parentModule.obj = subRenderObj;
+										parentModule.originOffset.Set(0.0f, 0.0f, 0.0f);
+										builtModules.push_back(parentModule);
+
 										if (m_lod == 1 || !m_showSubDraw) {
 											break;  // Only use the first model
 										}
@@ -2366,11 +2435,28 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 										// its rotation. Safe per-object because Animatable3DObjClass COPIES
 										// the HTree per instance (W3DNEW HTreeClass(*source)) instead of
 										// sharing the cached asset, so this cannot leak to other objects.
+										//
+										// Which module owns the bone? Ask them ALL, in module order (see the
+										// note by builtModules) -- asking only the parent is what left the
+										// riders of a sibling's bone sitting on the object's origin.
+										// boneOffset comes back measured from the PARENT's origin with any
+										// intermediate module's own offset already folded in.
 										Int boneIndex = 0;
+										Vector3 boneOffset(0.0f, 0.0f, 0.0f);
+										RenderObjClass *boneOwner = NULL;
 										if (md->m_attachToDrawableBone.isNotEmpty()) {
-											boneIndex = renderObj->Get_Bone_Index(md->m_attachToDrawableBone.str());
+											boneOwner = findAttachBone(builtModules,
+												md->m_attachToDrawableBone.str(), boneIndex, boneOffset);
 										}
-										const HTreeClass *htree = (boneIndex != 0) ? renderObj->Get_HTree() : NULL;
+
+										// Only the PARENT can adopt the piece as a sub-object, so the
+										// rotation-cancelling below applies to the parent's own bones. A bone
+										// on some other module cannot be attached to at all (that module is a
+										// loose piece in the scene, not a hierarchy WB can parent into) --
+										// there the offset alone carries the placement, which is all the game
+										// takes from the bone anyway.
+										const HTreeClass *htree =
+											(boneIndex != 0 && boneOwner == renderObj) ? renderObj->Get_HTree() : NULL;
 										if (htree != NULL) {
 											// PivotClass::Capture_Update POST-MULTIPLIES the control matrix
 											// onto the transform the hierarchy already computed -- it does
@@ -2423,20 +2509,32 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 										// owns a render object; they are not sub-objects of each other).
 										// It can't be positioned yet -- the parent's own transform is set
 										// after this loop -- so collect it and place it there.
-										if (renderObj->Add_Sub_Object_To_Bone(subRenderObj, boneIndex) == 0) {
+										//
+										// Only try the sub-object route for a bone the PARENT owns; a bone on
+										// another module has no hierarchy here to attach into, so go straight
+										// to a loose piece carrying the offset.
+										const Bool attached = (htree != NULL)
+											&& (renderObj->Add_Sub_Object_To_Bone(subRenderObj, boneIndex) != 0);
+										if (!attached) {
 											LoosePiece piece;
 											piece.obj = subRenderObj;
 											piece.obj->Add_Ref();	// the map holds a ref until released
-											piece.boneOffset.Set(0.0f, 0.0f, 0.0f);
-											// Keep the bone's OFFSET (not its rotation -- see above) when the
-											// module rides one and the parent can resolve it.
-											if (boneIndex != 0 && htree != NULL) {
-												Matrix3D bw = htree->Get_Transform(boneIndex);
-												Matrix3D pw = htree->Get_Transform(0);
-												piece.boneOffset = bw.Get_Translation() - pw.Get_Translation();
-											}
+											// Keep the bone's OFFSET (not its rotation -- see above). Already
+											// relative to the parent's origin, chain included.
+											piece.boneOffset = boneOffset;
 											m_loosePieces[pMapObj].push_back(piece);
 										}
+
+										// Record this module as a bone source for the modules still to come:
+										// it may publish the bone one of THEM rides (module 06 both rides
+										// WINGTIP02 and publishes the BOX06 that 07 and 08 ride). Its own
+										// offset is where it just landed, so those riders accumulate from
+										// here instead of measuring against the parent's origin.
+										BuiltDrawModule thisModule;
+										thisModule.obj = subRenderObj;
+										thisModule.originOffset = boneOffset;
+										builtModules.push_back(thisModule);
+
 										subRenderObj->Release_Ref();  // Release ref after attaching
 									}
 								}
@@ -3056,6 +3154,80 @@ void WbView3d::attachSpawnedObjects(RenderObjClass *parentObj, const ThingTempla
 		}
 		attachOneRider(parentObj, payloadNames[p], boneIndex, playerColor);
 	}
+}
+
+//=============================================================================
+// WbView3d::findAttachBone
+//=============================================================================
+/** Resolve an AttachToBoneInAnotherModule bone against every draw module built so far.
+
+"Another module" means exactly that: the bone is published (ExtraPublicBone) by whichever module
+owns it, which is very often NOT module 0. The game never assumes otherwise -- its
+Drawable::getPristineBonePositions walks the drawable's whole draw-module list and takes the first
+module that resolves the name -- so match that here rather than asking the parent alone.
+
+Returns the owning module's render object, or NULL when no module has the bone. offsetOut is the
+bone's offset from the PARENT's origin: the bone's own translation within its module, plus that
+module's offset, so a module riding a bone on a module that is itself riding a bone lands in the
+right place instead of losing the first hop. */
+//=============================================================================
+RenderObjClass *WbView3d::findAttachBone(const std::vector<BuiltDrawModule> &built,
+	const char *boneName, Int &boneIndexOut, Vector3 &offsetOut)
+{
+	boneIndexOut = 0;
+	offsetOut.Set(0.0f, 0.0f, 0.0f);
+	if (boneName == NULL || boneName[0] == '\0') {
+		return NULL;
+	}
+
+	for (size_t i = 0; i < built.size(); ++i) {
+		RenderObjClass *obj = built[i].obj;
+		if (obj == NULL) {
+			continue;
+		}
+
+		// TWO ways a model can carry a bone, and the engine tries both -- see doSingleBoneName in
+		// W3DModelDraw.cpp, which falls back to findSingleSubObj whenever findSingleBone misses.
+		//
+		// 1. an HTree PIVOT -- Get_Bone_Index. Only Animatable3DObjClass (HLod) implements it;
+		//    RenderObjClass::Get_Bone_Index is a base-class stub that just `return 0` (rendobj.h),
+		//    exactly like Add_Sub_Object_To_Bone. So on a plain MeshClass this ALWAYS misses, and
+		//    a module whose model is a mesh can never own a bone by this route.
+		// 2. a named SUB-OBJECT -- Get_Sub_Object_By_Name, which works on a mesh.
+		//
+		// Doing only (1) is what left the riders of NVSSUPPLYTK's TIRE01 and UVLiteTank's TREADSR01
+		// misaligned after the multi-module search went in: those publishers are plain meshes, so
+		// the search walked right past them and the riders kept the parent's origin.
+		const Int boneIndex = obj->Get_Bone_Index(boneName);
+		const HTreeClass *htree = obj->Get_HTree();
+		if (boneIndex != 0 && htree != NULL) {
+			// Translation only. The bone says WHERE the piece goes, not which way it faces -- the
+			// game offsets by boneMtx.Get_Translation() alone (getAttachToDrawableBoneOffset) and
+			// takes the orientation from the drawable. Measure against the module's own root so the
+			// offset is module-relative, then add where that module itself sits.
+			const Matrix3D boneWorld = htree->Get_Transform(boneIndex);
+			const Matrix3D rootWorld = htree->Get_Transform(0);
+			offsetOut = (boneWorld.Get_Translation() - rootWorld.Get_Translation()) + built[i].originOffset;
+			boneIndexOut = boneIndex;
+			return obj;
+		}
+
+		// Fallback: the bone is a named sub-object. Get_Sub_Object_By_Name addrefs what it returns.
+		// Its transform is already relative to the model's own origin (the mesh has no hierarchy to
+		// accumulate through), so it needs no root subtraction -- just the module's own offset.
+		RenderObjClass *child = obj->Get_Sub_Object_By_Name(boneName);
+		if (child != NULL) {
+			const Matrix3D childMtx = child->Get_Transform();
+			child->Release_Ref();
+			offsetOut = childMtx.Get_Translation() + built[i].originOffset;
+			// No HTree pivot backs this, so there is no index to attach to -- report 0 and let the
+			// caller place it as a loose piece on the offset alone. Returning the owner (not NULL)
+			// is what tells the caller the bone WAS found.
+			boneIndexOut = 0;
+			return obj;
+		}
+	}
+	return NULL;
 }
 
 //=============================================================================
@@ -4122,6 +4294,8 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_SHOWMODELS, OnUpdateViewShowModels)
 	ON_COMMAND(ID_VIEW_ANIMATEMODELS, OnViewAnimateModels)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_ANIMATEMODELS, OnUpdateViewAnimateModels)
+	ON_COMMAND(ID_VIEW_POSEATTACHBONES, OnViewPoseAttachBones)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_POSEATTACHBONES, OnUpdateViewPoseAttachBones)
 	ON_COMMAND(ID_VIEW_BOUNDINGBOXES, OnViewBoundingBoxes)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_BOUNDINGBOXES, OnUpdateViewBoundingBoxes)
 	ON_COMMAND(ID_VIEW_SIGHTRANGES, OnViewSightRanges)
@@ -4400,6 +4574,7 @@ int WbView3d::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	// Default OFF: looping animations keep the viewport repainting every frame (see the
 	// idle-skip in OnTimer), so this is opt-in rather than a silent perf cost.
 	m_animateModels = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "AnimateModels", 0);
+	m_poseAttachBones = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "PoseAttachBones", 0);
 	m_showSoundCircles = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowSoundCircles", 0);
 	m_showRulerGrid = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowRulerGrid", 1);
 	m_showTracingOverlay = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowTracingOverlay", 0);
@@ -6018,6 +6193,24 @@ void WbView3d::OnViewAnimateModels()
 void WbView3d::OnUpdateViewAnimateModels(CCmdUI* pCmdUI)
 {
 	pCmdUI->SetCheck(m_animateModels?1:0);
+}
+
+void WbView3d::OnViewPoseAttachBones()
+{
+	m_poseAttachBones = !m_poseAttachBones;
+	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "PoseAttachBones", m_poseAttachBones?1:0);
+	// The pose is applied while the render objects are built, and the bone offsets that riding
+	// modules use are read from it, so the whole scene has to be rebuilt for the toggle to take.
+	resetRenderObjects();
+	invalObjectInView(NULL);
+}
+
+void WbView3d::OnUpdateViewPoseAttachBones(CCmdUI* pCmdUI)
+{
+	// Animate Models wins: it drives the hierarchy per frame, so a static frame-0 pose would be
+	// overwritten anyway. Show the option as unavailable rather than silently doing nothing.
+	pCmdUI->Enable(m_animateModels?FALSE:TRUE);
+	pCmdUI->SetCheck(m_poseAttachBones?1:0);
 }
 
 // MLL C&C3

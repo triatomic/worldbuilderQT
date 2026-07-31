@@ -305,6 +305,11 @@ BEGIN
             MENUITEM "Show Shadows",                ID_VIEW_SHOWSHADOWS
             MENUITEM "Show Garrisoned",             ID_VIEW_GARRISONED
             MENUITEM "Show Bounding Boxes\tAlt+6",  ID_VIEW_BOUNDINGBOXES
+            MENUITEM SEPARATOR
+            POPUP "Bone Attachment"
+            BEGIN
+                MENUITEM "Pose Attach Bones At Frame 0", ID_VIEW_POSEATTACHBONES
+            END
         END
         POPUP "Ranges && Radii"
         BEGIN

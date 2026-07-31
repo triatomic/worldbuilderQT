@@ -158,6 +158,8 @@ protected:
 	afx_msg void OnUpdateViewShowModels(CCmdUI* pCmdUI);
 	afx_msg void OnViewAnimateModels();
 	afx_msg void OnUpdateViewAnimateModels(CCmdUI* pCmdUI);
+	afx_msg void OnViewPoseAttachBones();
+	afx_msg void OnUpdateViewPoseAttachBones(CCmdUI* pCmdUI);
 	afx_msg void OnViewListenEnabled();
 	afx_msg void OnUpdateViewListenEnabled(CCmdUI* pCmdUI);
 	afx_msg void OnViewListenPermanent();
@@ -378,6 +380,14 @@ private:
 		Vector3 boneOffset;		///< offset from the parent's origin when the module rides a bone
 	};
 	std::map<MapObject *, std::vector<LoosePiece> >	m_loosePieces;
+	/// One draw module already built for the object being assembled, kept so a LATER module naming
+	/// a bone in AttachToBoneInAnotherModule can find it -- the bone may belong to any module, not
+	/// just module 0 (the game searches them all in Drawable::getPristineBonePositions).
+	struct BuiltDrawModule
+	{
+		RenderObjClass *obj;		///< this module's render object, whose HTree may hold the bone
+		Vector3 originOffset;		///< where this module itself sits relative to the parent's origin
+	};
   Bool										m_showSoundCircles;	///< Flag whether to show the minimum and maximum radii of the ambient sounds attached to the selected object
 	Bool										m_showBoundingBoxes;
 	Bool										m_showSightRanges;
@@ -393,6 +403,11 @@ private:
 	Bool										m_showFullModel;
 	Bool										m_animateModels; ///< Flag whether models play their animation (LOOP states + idle anims)
 	Int											m_animatedModelCount; ///< # of animations actually applied in the last scene build
+	/// View > Models > Bone Attachment > Pose Attach Bones At Frame 0. When a draw module publishes
+	/// a bone that another module rides, evaluate the publisher's animation at frame 0 before
+	/// reading that bone -- the resting pose the art is authored around -- instead of the model's
+	/// bind pose. Off by default: it only matters for modules whose frame 0 differs from bind pose.
+	Bool										m_poseAttachBones;
 
 	Bool m_showBuildZoneFeedback;
 	Int m_lod;
@@ -553,6 +568,13 @@ public:
 	void placeLoosePieces(MapObject *pMapObj, RenderObjClass *parentObj);
 	/// Drop pMapObj's loose pieces from the scene and forget them (object deleted / rebuilt).
 	void releaseLoosePieces(MapObject *pMapObj);
+	/// Find the bone an AttachToBoneInAnotherModule names among the draw modules built so far,
+	/// searching them in module order the way Drawable::getPristineBonePositions does. Returns the
+	/// owning module's render object (NULL when no module has the bone), its bone index, and the
+	/// bone's total offset from the PARENT's origin -- which includes the owning module's own
+	/// offset, so a rider of a rider accumulates down the chain.
+	RenderObjClass *findAttachBone(const std::vector<BuiltDrawModule> &built, const char *boneName,
+		Int &boneIndexOut, Vector3 &offsetOut);
 	virtual BuildListInfo *pickedBuildObjectInView(CPoint viewPt);
 
 	void removeFenceListObjects(MapObject *pObject);
