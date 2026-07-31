@@ -184,6 +184,48 @@ static void unloadMapIniOverrides(void)
 	g_mapiniloaded = false;
 }
 
+// Shutdown-only teardown, called from ExitInstance BEFORE Qt is destroyed.
+//
+// THE BUG: closing WB with map.ini overrides still installed crashed on the way out -- an
+// access violation inside ~QApplication, freeing through WB's overridden global operator
+// delete (which routes to the game's MemoryPool). Isolated with three cdb runs: no map =
+// clean exit; map.ini previewed but CANCELLED (dialog shown, nothing installed) = clean exit;
+// map.ini actually loaded = crash. The installed overrides are the trigger, not the loader UI.
+//
+// WHY NOT JUST CALL unloadMapIniOverrides(): every one of its call sites is a load-time
+// operation or an "about to load something else" (see OnOpenDocument, which tears the PREVIOUS
+// map's overrides down before loading the next). It ends with postProcessLoad(), which walks
+// every template re-resolving names for the data that is about to be used again. At exit
+// nothing is rebuilt, and the document and its render objects still hold pointers into the
+// templates -- calling it there corrupted the heap at LOAD time (verified: the next run
+// crashed opening the map, with a garbage stack through RtlpAllocateNTHeapInternal).
+//
+// So do the freeing half only. The stores' reset()s delete the override chains and drop
+// map-only templates from the hash map, which is what has to happen before Qt goes; the
+// re-link is pure waste when the process is ending, and it is the part that walks live data.
+void WBMapIni_UnloadForShutdown(void)
+{
+	if (!g_mapiniloaded)
+		return;
+
+	g_mapIniPhantomTemplates.clear();
+
+	if (TheThingFactory)       TheThingFactory->reset();        // Object
+	if (TheWeaponStore)        TheWeaponStore->reset();         // Weapon
+	if (TheScienceStore)       TheScienceStore->reset();        // Science
+	if (TheSpecialPowerStore)  TheSpecialPowerStore->reset();   // SpecialPower
+
+	if (TheWaterTransparency.getNonOverloadedPointer())
+	{
+		WaterTransparencySetting *wt =
+			(WaterTransparencySetting*)TheWaterTransparency.getNonOverloadedPointer();
+		TheWaterTransparency = (WaterTransparencySetting*)wt->deleteOverrides();
+	}
+
+	// NO postProcessLoad() here -- see above.
+	g_mapiniloaded = false;
+}
+
 // ----------------------------------------------------------------------------
 // Map.ini pre-scan.
 //

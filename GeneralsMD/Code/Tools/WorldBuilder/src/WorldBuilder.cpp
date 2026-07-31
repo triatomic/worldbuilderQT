@@ -1596,6 +1596,11 @@ int CWorldBuilderApp::DoMessageBox(LPCTSTR lpszPrompt, UINT nType, UINT nIDPromp
 
 int CWorldBuilderApp::ExitInstance()
 {
+	// Free any installed map.ini overrides BEFORE Qt goes away: closing with them live
+	// crashed inside ~QApplication, which frees through WB's overridden operator delete into
+	// the game's MemoryPool. Frees only -- no template re-link (see the definition).
+	WBMapIni_UnloadForShutdown();
+
 #ifdef RTS_HAS_QT
 	// Tear down Qt FIRST (it came up last). Must be explicit: the app's global dtor
 	// calls _exit(0) right after this returns, so static/atexit teardown never runs.

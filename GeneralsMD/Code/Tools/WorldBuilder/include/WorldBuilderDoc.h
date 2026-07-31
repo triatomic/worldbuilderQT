@@ -273,6 +273,12 @@ protected:
 // Always false when no map.ini is loaded.
 Bool WBMapIni_IsPhantomTemplate(const AsciiString &name);
 
+// Free any installed map.ini overrides at shutdown. Called from ExitInstance BEFORE Qt is torn
+// down -- leaving them live across ~QApplication crashes on the way out. Deliberately NOT the
+// same as the loader's unload (it skips the template re-link, which is both pointless at exit
+// and unsafe while the document still references those templates). See the definition.
+void WBMapIni_UnloadForShutdown(void);
+
 //{{AFX_INSERT_LOCATION}}
 // Microsoft Visual C++ will insert additional declarations immediately before the previous line.
 
