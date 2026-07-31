@@ -2310,7 +2310,64 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 											break;  // Only use the first model
 										}
 									} else {
-										renderObj->Add_Sub_Object_To_Bone(subRenderObj, 0);  // Attach to root
+										// A module may ride a bone published by ANOTHER module (that module
+										// lists it in ExtraPublicBone; this one names it in
+										// AttachToBoneInAnotherModule) -- the Overlord's turret and the
+										// multi-part map.ini structures work this way.
+										//
+										// |                             | BEFORE                  | AFTER                    |
+										// |-----------------------------|-------------------------|--------------------------|
+										// | AttachToBoneInAnotherModule | never read              | read per module          |
+										// | piece position              | the object's origin     | the bone's translation   |
+										// | piece orientation           | the parent's            | the parent's (unchanged) |
+										// | riding pieces               | stacked at the origin,  | sit on their bone, as    |
+										// |                             | buried in the main mesh | the game draws them      |
+										// | reads to the user           | "the piece is missing"  | the full object          |
+										//
+										// That symptom is what sent this to the map.ini parser first, but
+										// nothing was mis-parsed: NavyStructureHeadquarters has three such
+										// modules (EXITEND, MESH06 x2), and a diagnostic build showed every
+										// module resolving and creating fine -- two of them just landed on
+										// the SAME render-object pointer.
+										//
+										// POSITION from the bone, ORIENTATION from the parent -- which is what
+										// the game does. With CACHE_ATTACH_BONE defined (it is),
+										// adjustTransformMtx offsets the drawable's own matrix by
+										// getAttachToDrawableBoneOffset == boneMtx.Get_Translation() ALONE.
+										// The bone says where the piece goes, not which way it faces.
+										//
+										// Attaching to the bone straight gives it the bone's FULL transform,
+										// so art that rotates the bone (EXITEND is turned 90 degrees about Z)
+										// spins the piece with it. Nor can that be undone by writing the
+										// sub-object's transform here: HLodClass::Update_Sub_Object_Transforms
+										// does robj->Set_Transform(HTree->Get_Transform(bone)) whenever the
+										// hierarchy is dirty -- and Add_Sub_Object_To_Bone dirties it -- so
+										// any Set_Transform at attach time is overwritten on the next render.
+										//
+										// Capture the bone instead and control it: a captured bone's pivot
+										// uses the matrix we supply rather than the animated one, and it
+										// survives the hierarchy update. Keep the bone's translation and drop
+										// its rotation. Safe per-object because Animatable3DObjClass COPIES
+										// the HTree per instance (W3DNEW HTreeClass(*source)) instead of
+										// sharing the cached asset, so this cannot leak to other objects.
+										Int boneIndex = 0;
+										if (md->m_attachToDrawableBone.isNotEmpty()) {
+											boneIndex = renderObj->Get_Bone_Index(md->m_attachToDrawableBone.str());
+										}
+										if (boneIndex != 0) {
+											// PivotClass::Capture_Update POST-MULTIPLIES the control matrix
+											// onto the transform the hierarchy already computed -- it does
+											// not replace it. So to cancel the bone's rotation the control
+											// matrix must be that rotation's INVERSE: R * R-1 == identity,
+											// leaving the bone's translation with the parent's orientation.
+											Matrix3D boneMtx = renderObj->Get_Bone_Transform(boneIndex);
+											boneMtx.Set_Translation(Vector3(0.0f, 0.0f, 0.0f));	// rotation only
+											Matrix3D cancel;
+											boneMtx.Get_Orthogonal_Inverse(cancel);	// separate dest: it reads while writing
+											renderObj->Capture_Bone(boneIndex);
+											renderObj->Control_Bone(boneIndex, cancel, false);
+										}
+										renderObj->Add_Sub_Object_To_Bone(subRenderObj, boneIndex);
 										subRenderObj->Release_Ref();  // Release ref after attaching
 									}
 								}
