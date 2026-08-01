@@ -623,6 +623,14 @@ public:
 	RenderObjClass *findAttachBone(const std::vector<BuiltDrawModule> &built, const char *boneName,
 		Int &boneIndexOut, Vector3 &offsetOut, Bool *fromSubObjectOut = NULL,
 		Bool logResolution = false);
+	/// Park obj at animation frame 0 so an attach bone reads at the PRISTINE pose (what the game
+	/// caches once in getAttachToDrawableBoneOffset), not at whatever frame it is displaying.
+	/// Returns the animation moved aside -- pass it back to restoreAfterPristineBoneRead.
+	static HAnimClass *poseForPristineBoneRead(RenderObjClass *obj, Real &savedFrameOut,
+		Int &savedModeOut);
+	/// Undo poseForPristineBoneRead. No-op when savedAnim is NULL.
+	static void restoreAfterPristineBoneRead(RenderObjClass *obj, HAnimClass *savedAnim,
+		Real savedFrame, Int savedMode);
 	virtual BuildListInfo *pickedBuildObjectInView(CPoint viewPt);
 
 	void removeFenceListObjects(MapObject *pObject);

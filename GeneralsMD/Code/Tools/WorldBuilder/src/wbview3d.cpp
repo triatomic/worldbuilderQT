@@ -48,6 +48,7 @@
 #include "part_ldr.h"
 #include "rendobj.h"
 #include "hanim.h"
+#include "hlod.h"		// Peek_Animation_And_Info, for the pristine attach-bone pose
 #include "htree.h"			// Get_Parent_Index, for the sub-object bone walk
 #include "dx8wrapper.h"
 #include "dx8indexbuffer.h"
@@ -3447,6 +3448,59 @@ Bool WbView3d::modulePublishesBone(const BuiltDrawModule &mod, const char *boneN
 }
 
 //=============================================================================
+// WbView3d::poseForPristineBoneRead
+//=============================================================================
+/** Park obj on its animation's frame 0 so a bone can be read at the PRISTINE pose.
+
+Attach offsets are pristine data. The game reads them through validateCachedBones, which poses the
+model at frame 0 before caching, and getAttachToDrawableBoneOffset then caches the result for the
+drawable's lifetime -- so a riding module is placed ONCE and never follows the bone afterwards.
+
+WB re-resolves on every rebuild, so it has to reproduce that frame explicitly: without it the
+offset is read from whatever frame the publisher is being DISPLAYED at, and the riders chase a
+moving bone (the NavyStructureHeadquarters dishes trailing CBBridgeArc_a's gantry). Returns the
+animation that was playing so restoreAfterPristineBoneRead can put the display pose back, or NULL
+when the object has no animation to disturb. */
+//=============================================================================
+HAnimClass *WbView3d::poseForPristineBoneRead(RenderObjClass *obj, Real &savedFrameOut,
+	Int &savedModeOut)
+{
+	savedFrameOut = 0.0f;
+	savedModeOut = RenderObjClass::ANIM_MODE_MANUAL;
+	if (obj == NULL || obj->Class_ID() != RenderObjClass::CLASSID_HLOD) {
+		return NULL;	// only an HLod carries an animatable hierarchy
+	}
+
+	HLodClass *hlod = (HLodClass *)obj;
+	Int numFrames = 0;
+	Real mult = 1.0f;
+	HAnimClass *current = hlod->Peek_Animation_And_Info(savedFrameOut, numFrames, savedModeOut, mult);
+	if (current == NULL) {
+		return NULL;	// nothing posed -- the bone already reads at the base pose
+	}
+
+	// Peek does NOT addref; hold one while it is out of the render object's hands.
+	current->Add_Ref();
+	obj->Set_Animation(current, 0.0f, RenderObjClass::ANIM_MODE_MANUAL);
+	return current;
+}
+
+//=============================================================================
+// WbView3d::restoreAfterPristineBoneRead
+//=============================================================================
+/** Put back the display pose poseForPristineBoneRead moved aside. Safe with a NULL anim. */
+//=============================================================================
+void WbView3d::restoreAfterPristineBoneRead(RenderObjClass *obj, HAnimClass *savedAnim,
+	Real savedFrame, Int savedMode)
+{
+	if (obj == NULL || savedAnim == NULL) {
+		return;
+	}
+	obj->Set_Animation(savedAnim, savedFrame, savedMode);
+	savedAnim->Release_Ref();	// balance the Add_Ref in poseForPristineBoneRead
+}
+
+//=============================================================================
 // WbView3d::findAttachBone
 //=============================================================================
 /** Resolve an AttachToBoneInAnotherModule bone against every draw module built so far.
@@ -3509,6 +3563,22 @@ RenderObjClass *WbView3d::findAttachBone(const std::vector<BuiltDrawModule> &bui
 		// misaligned after the multi-module search went in: those publishers are plain meshes, so
 		// the search walked right past them and the riders kept the parent's origin.
 
+		// READ THE BONE AT THE PRISTINE POSE, whatever frame the module is DISPLAYING.
+		//
+		// The attach offset is a pristine quantity in the game, fixed once and never revisited:
+		// getAttachToDrawableBoneOffset caches it behind m_attachToDrawableBoneOffsetValid, and the
+		// read underneath goes through validateCachedBones, which poses the model at frame 0 first
+		// ("make sure we're in frame zero"). So a rider does NOT track a moving bone -- the two
+		// NBIntCnt_AC dishes on NavyStructureHeadquarters are static scenery, even though the
+		// CBBridgeArc_a publishing their MESH06 animates a gantry through 156 units.
+		//
+		// WB re-resolves on every rebuild, so without this the offset would be recomputed from
+		// whatever frame the publisher currently sits at, and the Animation Scrubber would drag
+		// the dishes around after the gantry -- motion the game never shows.
+		Real savedFrame = 0.0f;
+		Int savedMode = RenderObjClass::ANIM_MODE_MANUAL;
+		HAnimClass *savedAnim = poseForPristineBoneRead(obj, savedFrame, savedMode);
+
 		const Int boneIndex = obj->Get_Bone_Index(boneName);
 		const HTreeClass *htree = obj->Get_HTree();
 		if (boneIndex != 0 && htree != NULL) {
@@ -3536,6 +3606,7 @@ RenderObjClass *WbView3d::findAttachBone(const std::vector<BuiltDrawModule> &bui
 					built[i].originOffset.X, built[i].originOffset.Y, built[i].originOffset.Z,
 					offsetOut.X, offsetOut.Y, offsetOut.Z));
 			}
+			restoreAfterPristineBoneRead(obj, savedAnim, savedFrame, savedMode);
 			return obj;
 		}
 
@@ -3574,8 +3645,13 @@ RenderObjClass *WbView3d::findAttachBone(const std::vector<BuiltDrawModule> &bui
 					built[i].originOffset.X, built[i].originOffset.Y, built[i].originOffset.Z,
 					offsetOut.X, offsetOut.Y, offsetOut.Z));
 			}
+			restoreAfterPristineBoneRead(obj, savedAnim, savedFrame, savedMode);
 			return obj;
 		}
+
+		// This module published the name but carries neither the pivot nor the sub-object; put its
+		// display pose back before moving on to the next candidate.
+		restoreAfterPristineBoneRead(obj, savedAnim, savedFrame, savedMode);
 	}
 
 	// Nothing published it. Worth a line of its own: the piece will sit on the parent's origin,
