@@ -1206,6 +1206,9 @@ void WbView3d::resetRenderObjects()
 	m_loosePieces.clear();
 	// Bone-name labels describe a build that no longer exists; the next one re-records them.
 	m_attachBoneLabels.clear();
+	// Resolved offsets go too: freeCachedModelsOnNextReset can drop the W3D prototypes, so a model
+	// NAME may mean different geometry after this (that is exactly why a map.ini reload resets).
+	m_attachBoneCache.clear();
 	// NOTE: m_scrubObject deliberately SURVIVES this. setAnimationScrub drives the scrub by calling
 	// resetRenderObjects (a per-object rebuild is not supported -- see the note there), so clearing
 	// it here would wipe the state the rebuild is supposed to apply: the object would arm, the
@@ -2116,6 +2119,49 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 			Real scale = 1.0;
 		
 			const ThingTemplate* tTemplate = pMapObj->getThingTemplate();
+
+			// BuildVariations: a template that lists them is a BUILD PLACEHOLDER and is never what
+			// the game actually creates. ThingFactory::newObject substitutes before the object
+			// exists at all --
+			//     const std::vector<AsciiString>& asv = tmplate->getBuildVariations();
+			//     if (!asv.empty()) { ... tmplate = findTemplate(asv[which]); }
+			// -- so EVERY spawn (build bar, script, map placement) becomes one of the variations.
+			// The placeholder itself carries only cost / prerequisites / BuildVariations and
+			// commonly has no draw modules whatsoever.
+			//
+			// WB never calls newObject; it walks the placed template's own draw modules, so it
+			// faithfully drew nothing and the object appeared as a bare label with no geometry
+			// (NavyCapitalNebulaCruiser00 and NavyCapitalEclipseCruiser00 in the naval map.ini,
+			// both of which the game shows as full battleships). Follow the substitution here.
+			//
+			// FIRST variation, not a random one: the game re-rolls per object, but a viewport that
+			// changed which model it drew on every rebuild would be worse than useless in an editor.
+			// Deterministic beats faithful here.
+			//
+			// Only when the placeholder has nothing to draw of its own -- a template with both its
+			// own modules AND variations keeps its own, since that is what it declares.
+			//
+			// Done HERE, at the point the template is resolved, rather than at the draw-module loop
+			// below: scale (getAssetScale), the shadow settings and the post-collapse scan all read
+			// tTemplate before that loop, and they must describe the model actually being drawn.
+			// "Has nothing to draw" is NOT "has no draw modules". Every object inherits
+			// ModuleTag_DefaultW3DDefaultDraw from the default template -- a W3DDefaultDraw, which
+			// renders nothing. Templates that want geometry add their own AND RemoveModule that
+			// default; a build placeholder does neither, so it reports ONE draw module that draws
+			// nothing at all (census: NavyCapitalNebulaCruiser00 modules=1 variations=3).
+			// Test for a module that can actually produce a model instead.
+			if (tTemplate != NULL && !templateHasDrawableModel(tTemplate)) {
+				const std::vector<AsciiString> &variations = tTemplate->getBuildVariations();
+				for (size_t vi = 0; vi < variations.size(); ++vi) {
+					const ThingTemplate *varTmpl =
+						TheThingFactory ? TheThingFactory->findTemplate(variations[vi], FALSE) : NULL;
+					if (varTmpl != NULL && templateHasDrawableModel(varTmpl)) {
+						tTemplate = varTmpl;
+						break;
+					}
+				}
+			}
+
 			if (tTemplate) {
 				Bool hasPostCollapseState = false;
 				const ModuleInfo& modelinfo = tTemplate->getBehaviorModuleInfo();
@@ -3448,6 +3494,42 @@ Bool WbView3d::modulePublishesBone(const BuiltDrawModule &mod, const char *boneN
 }
 
 //=============================================================================
+// WbView3d::templateHasDrawableModel
+//=============================================================================
+/** Can this template actually put geometry on screen?
+
+Not the same question as "does it have draw modules". Every object inherits
+`ModuleTag_DefaultW3DDefaultDraw` from the default template, and W3DDefaultDraw renders nothing --
+templates with real art add their own module AND `RemoveModule` that default. A build placeholder
+does neither, so it reports one draw module and draws nothing (which is exactly how
+NavyCapitalNebulaCruiser00 came to be an invisible object with modules=1).
+
+So: true only if some module is a W3DModelDraw whose default state names a real model. */
+//=============================================================================
+Bool WbView3d::templateHasDrawableModel(const ThingTemplate *tmpl)
+{
+	if (tmpl == NULL) {
+		return false;
+	}
+	const ModuleInfo &mi = tmpl->getDrawModuleInfo();
+	for (Int i = 0; i < mi.getCount(); ++i) {
+		const ModuleData *mdd = mi.getNthData(i);
+		const W3DModelDrawModuleData *md = mdd ? mdd->getAsW3DModelDrawModuleData() : NULL;
+		if (md == NULL) {
+			continue;		// e.g. the inherited W3DDefaultDraw -- not a model draw at all
+		}
+		ModelConditionFlags defaultState;
+		defaultState.clear();
+		const AsciiString modelName = md->getBestModelNameForWB(defaultState);
+		// "No " is how getBestModelNameForWB reports NONE (the same test the build loop uses).
+		if (!modelName.isEmpty() && strncmp(modelName.str(), "No ", 3) != 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
+//=============================================================================
 // WbView3d::poseForPristineBoneRead
 //=============================================================================
 /** Park obj on its animation's frame 0 so a bone can be read at the PRISTINE pose.
@@ -3563,6 +3645,30 @@ RenderObjClass *WbView3d::findAttachBone(const std::vector<BuiltDrawModule> &bui
 		// misaligned after the multi-module search went in: those publishers are plain meshes, so
 		// the search walked right past them and the riders kept the parent's origin.
 
+		// Cached? The offset is pristine data -- it depends on the MODEL and the BONE and nothing
+		// else, not on this object nor on the frame being displayed -- so it is the same answer
+		// every time for a given pair. Resolving it costs a Set_Animation plus a full hierarchy
+		// re-evaluation, and an object with many modules and riders pays that per pair on EVERY
+		// rebuild; undo of a complex map.ini-overridden object stalled for minutes on it.
+		// (The game does the same thing, once per drawable, behind m_attachToDrawableBoneOffsetValid.)
+		const char *ownerModelName = obj->Get_Name() ? obj->Get_Name() : "?";
+		AsciiString cacheKey;
+		cacheKey.format("%s|%s", ownerModelName, boneName);
+		std::map<AsciiString, AttachBoneCacheEntry>::const_iterator cacheIt =
+			m_attachBoneCache.find(cacheKey);
+		if (cacheIt != m_attachBoneCache.end()) {
+			offsetOut = cacheIt->second.offset + built[i].originOffset;
+			boneIndexOut = cacheIt->second.fromSubObject ? 0 : obj->Get_Bone_Index(boneName);
+			if (fromSubObjectOut != NULL) {
+				*fromSubObjectOut = cacheIt->second.fromSubObject;
+			}
+			if (logResolution) {
+				DEBUG_LOG(("WBBONE cached bone=%s owner=%s -> off=(%.2f %.2f %.2f)\n",
+					boneName, ownerModelName, offsetOut.X, offsetOut.Y, offsetOut.Z));
+			}
+			return obj;
+		}
+
 		// READ THE BONE AT THE PRISTINE POSE, whatever frame the module is DISPLAYING.
 		//
 		// The attach offset is a pristine quantity in the game, fixed once and never revisited:
@@ -3598,7 +3704,15 @@ RenderObjClass *WbView3d::findAttachBone(const std::vector<BuiltDrawModule> &bui
 			// was ever evaluated. Same accessor the engine's own findSingleBone uses.
 			const Matrix3D boneWorld = obj->Get_Bone_Transform(boneIndex);
 			const Matrix3D rootWorld = obj->Get_Bone_Transform(0);
-			offsetOut = (boneWorld.Get_Translation() - rootWorld.Get_Translation()) + built[i].originOffset;
+			// Cache the MODULE-LOCAL part only; originOffset is per-object placement and must not
+			// be baked in (the same model/bone pair is reused by objects at different offsets).
+			const Vector3 localOffset = boneWorld.Get_Translation() - rootWorld.Get_Translation();
+			AttachBoneCacheEntry entry;
+			entry.offset = localOffset;
+			entry.fromSubObject = false;
+			m_attachBoneCache[cacheKey] = entry;
+
+			offsetOut = localOffset + built[i].originOffset;
 			boneIndexOut = boneIndex;
 			if (logResolution) {
 				DEBUG_LOG(("WBBONE pivot  bone=%s owner=%s idx=%d modOff=(%.2f %.2f %.2f) -> off=(%.2f %.2f %.2f)\n",
@@ -3627,7 +3741,14 @@ RenderObjClass *WbView3d::findAttachBone(const std::vector<BuiltDrawModule> &bui
 			const Matrix3D childMtx = child->Get_Transform();
 			const Matrix3D ownerMtx = obj->Get_Transform();
 			child->Release_Ref();
-			offsetOut = (childMtx.Get_Translation() - ownerMtx.Get_Translation()) + built[i].originOffset;
+			// Module-local part only -- see the pivot branch above.
+			const Vector3 localOffset = childMtx.Get_Translation() - ownerMtx.Get_Translation();
+			AttachBoneCacheEntry subEntry;
+			subEntry.offset = localOffset;
+			subEntry.fromSubObject = true;
+			m_attachBoneCache[cacheKey] = subEntry;
+
+			offsetOut = localOffset + built[i].originOffset;
 			// No HTree pivot backs this, so there is no index to attach to -- report 0 and let the
 			// caller place it as a loose piece on the offset alone. Returning the owner (not NULL)
 			// is what tells the caller the bone WAS found.

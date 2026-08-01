@@ -623,6 +623,25 @@ public:
 	RenderObjClass *findAttachBone(const std::vector<BuiltDrawModule> &built, const char *boneName,
 		Int &boneIndexOut, Vector3 &offsetOut, Bool *fromSubObjectOut = NULL,
 		Bool logResolution = false);
+	/// Resolved attach-bone offsets, keyed by "<model name>|<bone name>".
+	///
+	/// The offset is PRISTINE data -- fixed at animation frame 0, independent of what the model is
+	/// displaying -- so it depends only on the model and the bone, never on the object or the frame.
+	/// The game exploits that by computing it once per drawable (getAttachToDrawableBoneOffset
+	/// caches behind m_attachToDrawableBoneOffsetValid); WB re-resolves on every rebuild, and each
+	/// resolve costs a Set_Animation plus a full Update_Sub_Object_Transforms hierarchy walk. On an
+	/// object with many modules and riders that is the difference between a redraw and a multi-minute
+	/// stall on undo. Cleared with the scene in resetRenderObjects.
+	struct AttachBoneCacheEntry
+	{
+		Vector3 offset;
+		Bool fromSubObject;
+	};
+	std::map<AsciiString, AttachBoneCacheEntry>	m_attachBoneCache;
+	/// Can tmpl actually put geometry on screen? NOT the same as "has draw modules": every template
+	/// inherits a do-nothing W3DDefaultDraw, so a build placeholder reports one module and draws
+	/// nothing. True only if some W3DModelDraw names a real model.
+	static Bool templateHasDrawableModel(const ThingTemplate *tmpl);
 	/// Park obj at animation frame 0 so an attach bone reads at the PRISTINE pose (what the game
 	/// caches once in getAttachToDrawableBoneOffset), not at whatever frame it is displaying.
 	/// Returns the animation moved aside -- pass it back to restoreAfterPristineBoneRead.
