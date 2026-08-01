@@ -42,6 +42,7 @@
 #include "qt/WBQtPanelBridge.h"
 #include "qt/panels/WBQtGlobalLightBridge.h"
 #include "qt/panels/WBQtCameraBridge.h"
+#include "qt/panels/WBQtAnimScrubBridge.h"
 #include "qt/panels/WBQtPickUnitBridge.h"
 #endif
 #define ADJUST_VIEW_TIMER 6969
@@ -65,6 +66,8 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWnd)
 	ON_WM_TIMER()
 	ON_WM_CANCELMODE()
 	ON_COMMAND(ID_EDIT_CAMERAOPTIONS, OnEditCameraoptions)
+	ON_COMMAND(ID_VIEW_ANIMSCRUBBER, OnViewAnimScrubber)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_ANIMSCRUBBER, OnUpdateViewAnimScrubber)
 	ON_WM_DROPFILES()  
 	//}}AFX_MSG_MAP
 	ON_COMMAND(ID_SHOW_ASSERT_DIALOGS, OnShowAssertDialogs)
@@ -1081,6 +1084,24 @@ void CMainFrame::OnEditCameraoptions()
 	return;
 #endif
 	m_cameraOptions.ShowWindow(SW_SHOWNA);
+}
+
+void CMainFrame::OnViewAnimScrubber()
+{
+#ifdef RTS_HAS_QT
+	WBQtAnimScrub_Open(GetSafeHwnd());
+#endif
+}
+
+void CMainFrame::OnUpdateViewAnimScrubber(CCmdUI* pCmdUI)
+{
+	// Qt-only: the scrubber has no MFC dialog behind it (unlike Camera Options, which kept its
+	// hidden CameraOptions as the OFF fallback). Grey it out rather than offer a dead command.
+#ifdef RTS_HAS_QT
+	pCmdUI->Enable(TRUE);
+#else
+	pCmdUI->Enable(FALSE);
+#endif
 }
 
 void CMainFrame::handleCameraChange(void)

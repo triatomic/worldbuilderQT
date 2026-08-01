@@ -415,6 +415,31 @@ private:
 	/// diagnoses a misplaced piece. Three wrong theories about the dishes on
 	/// NavyStructureHeadquarters died the moment the real offsets were on screen.
 	Bool										m_logBoneResolution;
+	/// Animation Scrubber (View > Models > Animation Scrubber): pose ONE object's draw modules at a
+	/// chosen point through their animations instead of at their resting frame. Keyed by MapObject
+	/// so the rest of the map stays still -- scrubbing everything at once is noise when you are
+	/// inspecting one structure. NULL = nothing is being scrubbed.
+	///
+	/// The position is a FRACTION (0..1), not a frame: an object's modules run animations of
+	/// different lengths (CBBridgeArc_a 60 frames, NBIntCnt_AC 20, ABBtCmdHQ_N 40), so one frame
+	/// number would mean a different point in each. Each module maps the fraction onto its own
+	/// frame count, so they stay in step and all reach their end together.
+	MapObject								*m_scrubObject;
+	Real										m_scrubFraction;
+
+public:
+	/// Animation Scrubber control (see m_scrubObject). Pass obj == NULL to stop scrubbing and let
+	/// everything return to its resting pose. Rebuilds the affected object so the new frame shows.
+	void setAnimationScrub(MapObject *obj, Real fraction);
+	MapObject *getAnimationScrubObject() const { return m_scrubObject; }
+	Real getAnimationScrubFraction() const { return m_scrubFraction; }
+	/// Longest animation among obj's draw modules, in frames, and how many of its modules actually
+	/// carry one. Drives the scrubber's readout; 0 frames == nothing to scrub. Pure query -- it
+	/// takes the object explicitly rather than reading the scrub state, so asking about a selection
+	/// does not arm it (doing so recursed: arming rebuilds, the rebuild re-notifies the panel, the
+	/// panel asks again).
+	Int getObjectAnimationInfo(MapObject *obj, Int *moduleCountOut) const;
+protected:
   Bool										m_showSoundCircles;	///< Flag whether to show the minimum and maximum radii of the ambient sounds attached to the selected object
 	Bool										m_showBoundingBoxes;
 	Bool										m_showSightRanges;

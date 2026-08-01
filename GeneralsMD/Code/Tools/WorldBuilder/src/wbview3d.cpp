@@ -692,6 +692,8 @@ WbView3d::WbView3d() :
 	m_animateModels(false),
 	m_showBoneNames(false),
 	m_logBoneResolution(false),
+	m_scrubObject(NULL),
+	m_scrubFraction(0.0f),
 	m_animatedModelCount(0),
 	m_firstPaint(true),
 	m_groundLevel(10),
@@ -1203,6 +1205,12 @@ void WbView3d::resetRenderObjects()
 	m_loosePieces.clear();
 	// Bone-name labels describe a build that no longer exists; the next one re-records them.
 	m_attachBoneLabels.clear();
+	// NOTE: m_scrubObject deliberately SURVIVES this. setAnimationScrub drives the scrub by calling
+	// resetRenderObjects (a per-object rebuild is not supported -- see the note there), so clearing
+	// it here would wipe the state the rebuild is supposed to apply: the object would arm, the
+	// reset would disarm it, and every module would pose at frame 0 as if nothing had been asked
+	// for. Map changes are handled where the objects actually go away (the removal path nulls it,
+	// and a MapObject that no longer exists can never match pMapObj again).
 	// Erase references to render objs that have been removed.
 	while (pMapObj) 
 	{
@@ -2307,8 +2315,16 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 
 									// "Animate Models" (View menu) governs PLAYBACK only. pickWBAnimation
 									// decides what is worth playing (LOOP states + idle anims) and why.
+									//
+									// A scrubbed object never plays: the whole point is to hold every one of
+									// its modules at the frame the slider asks for, and a module left running
+									// would be the one thing on the object ignoring the control. So the
+									// scrub takes over playback too, and all its modules go down the posing
+									// path below.
+									const Bool scrubbingThis = (pMapObj == m_scrubObject);
 									const W3DAnimationInfo *animInfo =
-										(m_animateModels && isLoopingMode) ? pickWBAnimation(info) : NULL;
+										(m_animateModels && isLoopingMode && !scrubbingThis)
+											? pickWBAnimation(info) : NULL;
 
 									// Posing covers the rest: the non-looping states, plus the looping ones
 									// whenever playback is off, so a bone source is never left in bind pose.
@@ -2368,8 +2384,18 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 												const Bool finalFrame =
 													(info != NULL
 														&& (info->m_flags & (1 << PRISTINE_BONE_POS_IN_FINAL_FRAME_BIT)) != 0);
-												const Real restFrame = finalFrame
+												Real restFrame = finalFrame
 													? (Real)(anim->Get_Num_Frames() - 1) : 0.0f;
+
+												// Animation Scrubber: this object is being scrubbed, so put
+												// the module at the requested point instead of its rest
+												// frame. The fraction maps onto THIS module's own frame
+												// count, so modules of different lengths stay in step.
+												if (pMapObj == m_scrubObject) {
+													restFrame = m_scrubFraction
+														* (Real)(anim->Get_Num_Frames() - 1);
+												}
+
 												// ANIM_MODE_MANUAL parks the hierarchy on that frame and holds
 												// it, so Sync() cannot walk it off.
 												subRenderObj->Set_Animation(anim, restFrame,
@@ -2726,6 +2752,9 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 		}
 		m_scene->Remove_Render_Object(pMapObjIn->getRenderObj());
 		releaseLoosePieces(pMapObjIn);	// the parent is going, so its pieces go with it
+		if (m_scrubObject == pMapObjIn) {
+			m_scrubObject = NULL;	// never keep a pointer to an object that is going away
+		}
 		pMapObjIn->setRenderObj(NULL);
 	}
 
@@ -3225,6 +3254,133 @@ void WbView3d::attachSpawnedObjects(RenderObjClass *parentObj, const ThingTempla
 }
 
 //=============================================================================
+// WbView3d::setAnimationScrub
+//=============================================================================
+/** Hold one object's draw modules at a point through their animations.
+
+Rebuilds whatever was being scrubbed before AND whatever is being scrubbed now, so the old object
+returns to its resting pose as the new one takes over.
+
+THE POSE ONLY APPLIES ON A FULL REBUILD. Set_Animation runs inside the draw-module loop, and
+invalObjectInView enters that loop only `if (!renderObj)` -- an object that already has a render
+object takes the reuse path, which re-sets its transform and nothing else. So dropping the existing
+render object is not an optimization detail here, it IS the mechanism: without it the slider moves,
+the frame readout updates, and the viewport shows exactly what it showed before. */
+//=============================================================================
+void WbView3d::setAnimationScrub(MapObject *obj, Real fraction)
+{
+	if (fraction < 0.0f) {
+		fraction = 0.0f;
+	}
+	if (fraction > 1.0f) {
+		fraction = 1.0f;
+	}
+
+	// Only ever hold a pointer that is currently in the map's object list. A map load replaces that
+	// list wholesale without routing through the removal path, so an object armed before the load
+	// would otherwise leave a dangling pointer that a new allocation could coincidentally match.
+	if (obj != NULL) {
+		Bool stillPresent = false;
+		for (MapObject *o = MapObject::getFirstMapObject(); o; o = o->getNext()) {
+			if (o == obj) {
+				stillPresent = true;
+				break;
+			}
+		}
+		if (!stillPresent) {
+			obj = NULL;
+		}
+	}
+
+	MapObject *previous = m_scrubObject;
+	m_scrubObject = obj;
+	m_scrubFraction = fraction;
+
+	// FULL scene reset, not a per-object teardown.
+	//
+	// Pulling one object's render object out of the scene and rebuilding it in place is not an
+	// operation WB supports: the scene owns it, and the picker, the shadow manager and
+	// m_loosePieces all hold references that a surgical removal leaves stale -- doing it from a
+	// slider callback crashed on the next mouse move (the null-this assert at the top of
+	// viewToDocCoords). resetRenderObjects() is the sanctioned way to make the scene reflect
+	// changed build-time decisions; it is what OnReloadMapIni uses for the same reason (a map.ini
+	// edit changes what the module loop would produce), and it tears the whole scene down and
+	// rebuilds cleanly.
+	//
+	// It costs a full rebuild per slider step, which is why the panel throttles rather than
+	// applying on every pixel of the drag.
+	if (previous != obj || obj != NULL) {
+		resetRenderObjects();
+		invalObjectInView(NULL);
+	}
+}
+
+//=============================================================================
+// WbView3d::getObjectAnimationInfo
+//=============================================================================
+/** Frames in the longest animation on obj, and how many of its modules animate.
+
+The scrubber shows a frame number alongside its percentage, and "frames" is only well defined per
+module -- the modules run animations of different lengths. Report the LONGEST, which is the one
+that finishes last and so bounds the whole object's motion. Returns 0 when nothing animates.
+
+PURE QUERY. It takes the object as an argument instead of reading m_scrubObject, so that describing
+a selection cannot arm it. The first cut did arm it, and that recursed until the stack died: arming
+rebuilds the object, the rebuild reaches the selection-changed hook, the hook re-notifies the panel,
+and the panel asks again. */
+//=============================================================================
+Int WbView3d::getObjectAnimationInfo(MapObject *obj, Int *moduleCountOut) const
+{
+	if (moduleCountOut != NULL) {
+		*moduleCountOut = 0;
+	}
+	if (obj == NULL) {
+		return 0;
+	}
+
+	const ThingTemplate *tTemplate = obj->getThingTemplate();
+	if (tTemplate == NULL) {
+		return 0;
+	}
+
+	Int maxFrames = 0;
+	Int animatedModules = 0;
+	const ModuleInfo &mi = tTemplate->getDrawModuleInfo();
+	for (Int i = 0; i < mi.getCount(); ++i) {
+		const ModuleData *mdd = mi.getNthData(i);
+		const W3DModelDrawModuleData *md = mdd ? mdd->getAsW3DModelDrawModuleData() : NULL;
+		if (md == NULL) {
+			continue;
+		}
+		// Frame COUNTS only, so the exact condition state does not matter much here -- a damaged
+		// variant of an animation is the same length as its pristine one in practice. Use the
+		// default state rather than recomputing the damage/weather/time flags the build loop
+		// derives; the posing itself still uses the real state.
+		ModelConditionFlags defaultState;
+		defaultState.clear();
+		const ModelConditionInfo *info = md->findBestInfo(defaultState);
+		if (info == NULL || info->m_animations.empty()) {
+			continue;
+		}
+		HAnimClass *anim = m_assetManager
+			? m_assetManager->Get_HAnim(info->m_animations[0].getName().str()) : NULL;
+		if (anim == NULL) {
+			continue;
+		}
+		++animatedModules;
+		if (anim->Get_Num_Frames() > maxFrames) {
+			maxFrames = anim->Get_Num_Frames();
+		}
+		anim->Release_Ref();	// Get_HAnim returns an addrefed handle
+	}
+
+	if (moduleCountOut != NULL) {
+		*moduleCountOut = animatedModules;
+	}
+	return maxFrames;
+}
+
+//=============================================================================
 // WbView3d::modulePublishesBone
 //=============================================================================
 /** Does this draw module publish boneName, so that it may answer an attach lookup?
@@ -3471,6 +3627,17 @@ void WbView3d::placeLoosePieces(MapObject *pMapObj, RenderObjClass *parentObj)
 			pieceMtx.Adjust_Z_Translation(rotated.Z);
 		}
 		pieces[i].obj->Set_Transform(pieceMtx);
+
+		if (m_logBoneResolution) {
+			// Where a piece ACTUALLY landed, which is a different question from what the bone
+			// lookup returned -- a correct offset placed against a wrong parent transform looks
+			// identical to a wrong offset until you can see both numbers side by side.
+			const Vector3 pp = pieceMtx.Get_Translation();
+			const Vector3 pt = parentMtx.Get_Translation();
+			DEBUG_LOG(("WBBONE place  piece=%s parentAt=(%.2f %.2f %.2f) off=(%.2f %.2f %.2f) -> at=(%.2f %.2f %.2f)\n",
+				pieces[i].obj->Get_Name() ? pieces[i].obj->Get_Name() : "?",
+				pt.X, pt.Y, pt.Z, off.X, off.Y, off.Z, pp.X, pp.Y, pp.Z));
+		}
 	}
 }
 

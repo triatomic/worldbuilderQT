@@ -41,6 +41,7 @@
 #include "GameLogic/Module/GenerateMinefieldBehavior.h"
 #ifdef RTS_HAS_QT
 #include "qt/panels/WBQtObjectPropsBridge.h"
+#include "qt/panels/WBQtAnimScrubBridge.h"
 #endif
 
 const char* NEUTRAL_TEAM_UI_STR = "(neutral)";
@@ -1694,6 +1695,9 @@ void MapObjectProps::updateTheUI(void)
 	}
 #ifdef RTS_HAS_QT
 	WBQtObjectProps_PushRefresh();
+	// The Animation Scrubber follows the selection. This runs on EVERY selection click, so the
+	// call must stay cheap -- it no-ops unless the scrubber window exists AND is visible.
+	WBQtAnimScrub_PushRefresh();
 #endif
 }
 

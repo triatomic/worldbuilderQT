@@ -307,6 +307,8 @@ BEGIN
             MENUITEM "Show Bounding Boxes\tAlt+6",  ID_VIEW_BOUNDINGBOXES
             MENUITEM "Show Bone Names",             ID_VIEW_BONENAMES
             MENUITEM "Log Bone Resolution",         ID_VIEW_LOGBONERESOLUTION
+            MENUITEM SEPARATOR
+            MENUITEM "Animation Scrubber...",       ID_VIEW_ANIMSCRUBBER
         END
         POPUP "Ranges && Radii"
         BEGIN

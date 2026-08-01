@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WBQtAnimScrubPanel</class>
+ <widget class="QWidget" name="WBQtAnimScrubPanel">
+  <property name="windowTitle">
+   <string>Animation Scrubber</string>
+  </property>
+  <layout class="QVBoxLayout" name="rootLayout">
+   <item>
+    <layout class="QGridLayout" name="infoGrid" columnstretch="0,1">
+     <item row="0" column="0">
+      <widget class="QLabel" name="objectLabel">
+       <property name="text">
+        <string>Object:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QLabel" name="objectText">
+       <property name="text">
+        <string>(nothing selected)</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QLabel" name="modulesLabel">
+       <property name="text">
+        <string>Animated modules:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QLabel" name="modulesText"/>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="scrubBox">
+     <property name="title">
+      <string>Position</string>
+     </property>
+     <layout class="QVBoxLayout" name="scrubLay">
+      <item>
+       <widget class="QSlider" name="scrub">
+        <property name="toolTip">
+         <string>Scrub the selected object's animations. Every draw module maps this position onto its own frame count, so modules of different lengths stay in step.</string>
+        </property>
+        <property name="maximum">
+         <number>1000</number>
+        </property>
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="readoutRow">
+        <item>
+         <widget class="QLabel" name="percentText">
+          <property name="text">
+           <string>0.0%</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="readoutSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+         </spacer>
+        </item>
+         <item>
+         <widget class="QLabel" name="frameText">
+          <property name="toolTip">
+           <string>Frame within the longest animation on this object.</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="buttonRow">
+     <item>
+      <widget class="QPushButton" name="startBtn">
+       <property name="text">
+        <string>Start</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="endBtn">
+       <property name="text">
+        <string>End</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="buttonSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="restBtn">
+       <property name="toolTip">
+        <string>Stop scrubbing and let the object return to the pose the view normally shows.</string>
+       </property>
+       <property name="text">
+        <string>Release</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <spacer name="bottomSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
