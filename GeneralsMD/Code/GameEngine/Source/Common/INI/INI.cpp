@@ -153,6 +153,12 @@ static const BlockParse theTypeTable[] =
 static const BlockParse theWbTypeTable[] =
 {
 	{ "Object",							INI::parseObjectDefinition },
+	// Without this, findWBBlockParse returns NULL for an ObjectReskin block and loadWB takes the
+	// unrecognized-block path: skip to End, never parse, never create the template. Every reskin
+	// in a map.ini then simply does not exist in WorldBuilder -- findTemplate misses it, anything
+	// naming it in BuildVariations resolves to nothing, and the object draws as a bare label.
+	// (The naval map.ini declares 166 of them.)
+	{ "ObjectReskin",					INI::parseObjectReskinDefinition },
 	{ "ObjectCreationList",	            INI::parseObjectCreationListDefinition },
 
 	{ "SpecialPower",				    INI::parseSpecialPowerDefinition },
