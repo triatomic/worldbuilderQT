@@ -2341,15 +2341,33 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 											}
 											else
 											{
-												// Posed. WHICH frame is the resting one depends on the mode:
-												// a *_BACKWARDS state runs from the END of the animation, so
-												// the engine starts it on the last frame (see the startFrame
-												// block in W3DModelDraw's setModelState) -- parking those on
-												// frame 0 would show the far end of the motion instead.
-												const Bool backwards =
-													(iniMode == RenderObjClass::ANIM_MODE_ONCE_BACKWARDS
-														|| iniMode == RenderObjClass::ANIM_MODE_LOOP_BACKWARDS);
-												const Real restFrame = backwards
+												// Posed. FRAME 0 -- always, whatever the AnimationMode says.
+												//
+												// This is the pose the engine reads bone positions from, and it
+												// is emphatic about it: validateCachedBones sets the model to
+												// frame 0 with the comment "make sure we're in frame zero"
+												// before caching any bone. The ONE exception is an opt-in
+												// per-state INI flag, PRISTINE_BONE_POS_IN_FINAL_FRAME:
+												//     whichFrame = testFlagBit(m_flags, PRISTINE_...) ?
+												//                      Get_Num_Frames()-1 : 0;
+												//
+												// NOT the *_BACKWARDS modes. Those pick a start frame for
+												// PLAYBACK (the startFrame block in setModelState), which is a
+												// different question from where the bones rest. Conflating the
+												// two parked CBBridgeArc_a (ONCE_BACKWARDS) on its LAST frame
+												// -- the gantry swung fully out -- so the MESH06 it publishes
+												// came back 156 units away and both NBIntCnt_AC dishes flew
+												// off the building with it.
+												//
+												// PRISTINE_BONE_POS_IN_FINAL_FRAME is bit 4 of the file-local
+												// ACBits enum in W3DModelDraw.cpp. It is not exported, and
+												// engine headers are off-limits from here, so the bit index is
+												// spelled out rather than shared.
+												const Int PRISTINE_BONE_POS_IN_FINAL_FRAME_BIT = 4;
+												const Bool finalFrame =
+													(info != NULL
+														&& (info->m_flags & (1 << PRISTINE_BONE_POS_IN_FINAL_FRAME_BIT)) != 0);
+												const Real restFrame = finalFrame
 													? (Real)(anim->Get_Num_Frames() - 1) : 0.0f;
 												// ANIM_MODE_MANUAL parks the hierarchy on that frame and holds
 												// it, so Sync() cannot walk it off.
@@ -2413,6 +2431,7 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 										BuiltDrawModule parentModule;
 										parentModule.obj = subRenderObj;
 										parentModule.originOffset.Set(0.0f, 0.0f, 0.0f);
+										parentModule.publicBones = &md->m_extraPublicBones;
 										builtModules.push_back(parentModule);
 
 										if (m_lod == 1 || !m_showSubDraw) {
@@ -2573,6 +2592,7 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 										BuiltDrawModule thisModule;
 										thisModule.obj = subRenderObj;
 										thisModule.originOffset = boneOffset;
+										thisModule.publicBones = &md->m_extraPublicBones;
 										builtModules.push_back(thisModule);
 
 										subRenderObj->Release_Ref();  // Release ref after attaching
@@ -3197,6 +3217,72 @@ void WbView3d::attachSpawnedObjects(RenderObjClass *parentObj, const ThingTempla
 }
 
 //=============================================================================
+// WbView3d::modulePublishesBone
+//=============================================================================
+/** Does this draw module publish boneName, so that it may answer an attach lookup?
+
+The engine never searches raw model contents. validateCachedBones fills a module's pristine-bone
+map by calling doSingleBoneName for each name in TheGlobalData->m_standardPublicBones and then each
+name in the module's own m_publicBones (== ExtraPublicBone); getPristineBonePositions then reads
+only that map. A mesh that nobody declared is simply not visible to the lookup.
+
+doSingleBoneName caches the declared name AND its numbered variants -- "MESH" also caches MESH01,
+MESH02, ... up to the first gap -- so a declared prefix publishes its whole numbered family. Match
+that here: exact hit, or the declared name is a prefix followed only by digits.
+
+Names arrive lowercased on both sides (m_attachToDrawableBone via parseAsciiStringLC; the declared
+list is lowered here), so the compare is case-insensitive in effect. */
+//=============================================================================
+Bool WbView3d::modulePublishesBone(const BuiltDrawModule &mod, const char *boneName)
+{
+	if (boneName == NULL || boneName[0] == '\0') {
+		return false;
+	}
+
+	// The declared list, then the global standard bones -- the same two sources, in the same
+	// order, that validateCachedBones walks.
+	for (Int pass = 0; pass < 2; ++pass) {
+		const std::vector<AsciiString> *list;
+		if (pass == 0) {
+			list = mod.publicBones;
+		} else {
+			list = TheGlobalData ? &TheGlobalData->m_standardPublicBones : NULL;
+		}
+		if (list == NULL) {
+			continue;
+		}
+
+		for (size_t i = 0; i < list->size(); ++i) {
+			AsciiString declared = (*list)[i];
+			if (declared.isEmpty()) {
+				continue;
+			}
+			declared.toLower();
+
+			const char *d = declared.str();
+			const size_t dlen = strlen(d);
+			if (strcmp(d, boneName) == 0) {
+				return true;
+			}
+			// Numbered variant: the declared name followed by digits only (MESH -> MESH06).
+			if (strncmp(d, boneName, dlen) == 0 && boneName[dlen] != '\0') {
+				Bool allDigits = true;
+				for (const char *c = boneName + dlen; *c != '\0'; ++c) {
+					if (*c < '0' || *c > '9') {
+						allDigits = false;
+						break;
+					}
+				}
+				if (allDigits) {
+					return true;
+				}
+			}
+		}
+	}
+	return false;
+}
+
+//=============================================================================
 // WbView3d::findAttachBone
 //=============================================================================
 /** Resolve an AttachToBoneInAnotherModule bone against every draw module built so far.
@@ -3229,6 +3315,22 @@ RenderObjClass *WbView3d::findAttachBone(const std::vector<BuiltDrawModule> &bui
 			continue;
 		}
 
+		// ONLY a module that PUBLISHES this bone may answer for it. The game does not scan raw model
+		// contents: validateCachedBones caches a module's bones from that module's own m_publicBones
+		// (ExtraPublicBone) plus TheGlobalData->m_standardPublicBones, and getPristineBonePositions
+		// then searches THAT cache. Anything else in the model is invisible to the lookup.
+		//
+		// This matters because the map.ini objects here are assembled from unrelated unit models,
+		// and the bone names in play (ENGINE01, SPARK02, MINIGUN, MESH06...) recur in dozens of
+		// them. Matching on raw model contents lets a module capture a bone belonging to a sibling
+		// it has nothing to do with -- observed: an AVCHINOOK module resolving SPARK02 against an
+		// NBPWRPLANT module, and the two NBIntCnt_AC dishes on NavyStructureHeadquarters landing
+		// apart because the second matched the first (its own model carries a MESH06) instead of
+		// the CBBridgeArc_a that publishes it.
+		if (!modulePublishesBone(built[i], boneName)) {
+			continue;
+		}
+
 		// TWO ways a model can carry a bone, and the engine tries both -- see doSingleBoneName in
 		// W3DModelDraw.cpp, which falls back to findSingleSubObj whenever findSingleBone misses.
 		//
@@ -3241,6 +3343,7 @@ RenderObjClass *WbView3d::findAttachBone(const std::vector<BuiltDrawModule> &bui
 		// Doing only (1) is what left the riders of NVSSUPPLYTK's TIRE01 and UVLiteTank's TREADSR01
 		// misaligned after the multi-module search went in: those publishers are plain meshes, so
 		// the search walked right past them and the riders kept the parent's origin.
+
 		const Int boneIndex = obj->Get_Bone_Index(boneName);
 		const HTreeClass *htree = obj->Get_HTree();
 		if (boneIndex != 0 && htree != NULL) {
@@ -3248,21 +3351,41 @@ RenderObjClass *WbView3d::findAttachBone(const std::vector<BuiltDrawModule> &bui
 			// game offsets by boneMtx.Get_Translation() alone (getAttachToDrawableBoneOffset) and
 			// takes the orientation from the drawable. Measure against the module's own root so the
 			// offset is module-relative, then add where that module itself sits.
-			const Matrix3D boneWorld = htree->Get_Transform(boneIndex);
-			const Matrix3D rootWorld = htree->Get_Transform(0);
+			//
+			// READ THROUGH Get_Bone_Transform, NOT htree->Get_Transform. The HTree holds whatever
+			// pose was last EVALUATED into it; setting an animation only marks the hierarchy dirty.
+			// Get_Bone_Transform (animobj.cpp) is what forces the evaluation:
+			//     if (!Is_Hierarchy_Valid()) { Update_Sub_Object_Transforms(); }
+			//     return HTree->Get_Transform(boneindex);
+			// Reading the HTree directly skips that and hands back the un-evaluated base pose --
+			// which is why posing CBBridgeArc_a at frame 0 vs its last frame changed the MESH06
+			// offset not at all: it stayed (2.68, -156.39, -33.91) either way, because neither pose
+			// was ever evaluated. Same accessor the engine's own findSingleBone uses.
+			const Matrix3D boneWorld = obj->Get_Bone_Transform(boneIndex);
+			const Matrix3D rootWorld = obj->Get_Bone_Transform(0);
 			offsetOut = (boneWorld.Get_Translation() - rootWorld.Get_Translation()) + built[i].originOffset;
 			boneIndexOut = boneIndex;
 			return obj;
 		}
 
 		// Fallback: the bone is a named sub-object. Get_Sub_Object_By_Name addrefs what it returns.
-		// Its transform is already relative to the model's own origin (the mesh has no hierarchy to
-		// accumulate through), so it needs no root subtraction -- just the module's own offset.
+		//
+		// Get_Transform() on the child gives its WORLD transform, so it only means "offset within
+		// the model" while the model itself is at the origin. The engine guarantees exactly that
+		// before reading it: validateCachedBones does
+		//     Matrix3D tmp(true); tmp.Scale(scale); robj->Set_Transform(tmp);
+		// -- parking the model at identity -- and only then calls findSingleSubObj. WB reads these
+		// during the module loop, BEFORE the object's own Set_Transform further down, so the model
+		// is usually at identity already; but "usually" is how a stray parent transform leaks into
+		// the offset and throws the piece far off (both NBIntCnt_AC dishes landed way out, either
+		// side of where MESH06 should be). Subtract the model's own placement so the result is
+		// genuinely model-relative no matter what the parent's transform happens to be.
 		RenderObjClass *child = obj->Get_Sub_Object_By_Name(boneName);
 		if (child != NULL) {
 			const Matrix3D childMtx = child->Get_Transform();
+			const Matrix3D ownerMtx = obj->Get_Transform();
 			child->Release_Ref();
-			offsetOut = childMtx.Get_Translation() + built[i].originOffset;
+			offsetOut = (childMtx.Get_Translation() - ownerMtx.Get_Translation()) + built[i].originOffset;
 			// No HTree pivot backs this, so there is no index to attach to -- report 0 and let the
 			// caller place it as a loose piece on the offset alone. Returning the owner (not NULL)
 			// is what tells the caller the bone WAS found.

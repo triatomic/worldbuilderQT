@@ -387,7 +387,14 @@ private:
 	{
 		RenderObjClass *obj;		///< this module's render object, whose HTree may hold the bone
 		Vector3 originOffset;		///< where this module itself sits relative to the parent's origin
+		/// What this module DECLARED via ExtraPublicBone. The engine caches a module's bones from
+		/// this plus TheGlobalData->m_standardPublicBones and searches only that cache, so anything
+		/// else in the model must not answer an attach lookup.
+		const std::vector<AsciiString> *publicBones;
 	};
+	/// Does this module publish boneName (ExtraPublicBone or a standard public bone)? Matches the
+	/// engine's numbered-variant convention: a declared "MESH" also publishes MESH01, MESH02...
+	static Bool modulePublishesBone(const BuiltDrawModule &mod, const char *boneName);
 	/// View > Models > Show Bone Names: one resolved AttachToBoneInAnotherModule bone, recorded
 	/// while the object is built (that is the only place the lookup happens) so drawLabels can
 	/// show WHERE a bone landed and WHICH lookup route found it.
