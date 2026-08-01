@@ -907,7 +907,7 @@
 #define ID_FILE_OPEN_MAPINI             33403
 #define ID_VIEW_LISTEN_TOGGLE           33421
 #define ID_VIEW_SHOWFULLMODEL           33422
-#define ID_VIEW_POSEATTACHBONES         33423
+#define ID_VIEW_BONENAMES               33423
 #define IDS_NEW                         61446
 #define IDS_RESIZE                      61447
 #define IDS_REMOVING_INUSE_TEAM         61448

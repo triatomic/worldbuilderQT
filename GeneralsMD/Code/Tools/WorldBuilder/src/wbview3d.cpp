@@ -690,7 +690,7 @@ WbView3d::WbView3d() :
 	m_projection(false),
 	m_showShadows(false),
 	m_animateModels(false),
-	m_poseAttachBones(false),
+	m_showBoneNames(false),
 	m_animatedModelCount(0),
 	m_firstPaint(true),
 	m_groundLevel(10),
@@ -1200,6 +1200,8 @@ void WbView3d::resetRenderObjects()
 		}
 	}
 	m_loosePieces.clear();
+	// Bone-name labels describe a build that no longer exists; the next one re-records them.
+	m_attachBoneLabels.clear();
 	// Erase references to render objs that have been removed.
 	while (pMapObj) 
 	{
@@ -2279,60 +2281,83 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 										}
 									}
 
-									// "Animate Models" (View menu). pickWBAnimation decides WHAT plays (and
-									// why); this just resolves and applies it. WW3D::Sync() is already
-									// called every redraw(), so W3D advances the animation from there.
+									// EVERY DRAW MODULE HAS ITS OWN STATE AND ITS OWN AnimationMode, so each
+									// gets the treatment ITS mode asks for -- they do not overlap, and one
+									// global "animate or don't" switch cannot describe them. On this object
+									// alone module 04 is LOOP, 05 is ONCE_BACKWARDS and 07/08 are MANUAL.
+									//
+									//   LOOP / LOOP_PINGPONG / LOOP_BACKWARDS -> play it, if the user asked
+									//   MANUAL / ONCE / ONCE_BACKWARDS        -> park it on its resting frame
+									//
+									// A non-looping state does not idle in bind pose in game: it settles on
+									// one frame of its animation and stays there (a closed door, a stowed
+									// crane). WB used to show bind pose instead -- and since BONES MOVE WITH
+									// THE POSE, a module publishing an ExtraPublicBone then handed the wrong
+									// position to every module riding it (findAttachBone reads that bone
+									// straight off this render object). Posing is therefore not cosmetic;
+									// it is what makes the riders land where the game puts them, which is
+									// why it happens whether or not Animate Models is on.
+									const RenderObjClass::AnimMode iniMode =
+										info ? info->m_mode : RenderObjClass::ANIM_MODE_MANUAL;
+									const Bool isLoopingMode =
+										(iniMode == RenderObjClass::ANIM_MODE_LOOP
+											|| iniMode == RenderObjClass::ANIM_MODE_LOOP_PINGPONG
+											|| iniMode == RenderObjClass::ANIM_MODE_LOOP_BACKWARDS);
+
+									// "Animate Models" (View menu) governs PLAYBACK only. pickWBAnimation
+									// decides what is worth playing (LOOP states + idle anims) and why.
 									const W3DAnimationInfo *animInfo =
-										m_animateModels ? pickWBAnimation(info) : NULL;
-									if (animInfo != NULL)
+										(m_animateModels && isLoopingMode) ? pickWBAnimation(info) : NULL;
+
+									// Posing covers the rest: the non-looping states, plus the looping ones
+									// whenever playback is off, so a bone source is never left in bind pose.
+									const W3DAnimationInfo *poseInfo = NULL;
+									if (animInfo == NULL && info != NULL && !info->m_animations.empty())
+									{
+										// NOT pickWBAnimation: that answers "what should PLAY" and returns
+										// NULL for exactly the MANUAL/ONCE_BACKWARDS states needing a pose.
+										// The engine settles on the state's first animation (m_curState->
+										// m_animations[m_whichAnimInCurState], which is 0 for a single-anim
+										// state), so take that.
+										poseInfo = &info->m_animations[0];
+									}
+
+									const W3DAnimationInfo *useInfo = animInfo ? animInfo : poseInfo;
+									if (useInfo != NULL)
 									{
 										// Resolve the anim through WB's OWN asset manager. The obvious call,
 										// W3DAnimationInfo::getAnimHandle(), goes through the static
 										// W3DDisplay::m_assetManager, which WB never sets (it is normally
 										// NULL) -- see the same trap documented in WBParticleRuntime. Look
 										// the animation up by name here instead so no global is involved.
-										HAnimClass* anim = m_assetManager->Get_HAnim(animInfo->getName().str());
+										HAnimClass* anim = m_assetManager->Get_HAnim(useInfo->getName().str());
 										if (anim)
 										{
-											subRenderObj->Set_Animation(anim, 0.0f, RenderObjClass::ANIM_MODE_LOOP);
+											if (animInfo != NULL)
+											{
+												// Playing. WW3D::Sync() runs every redraw() and advances it.
+												subRenderObj->Set_Animation(anim, 0.0f, iniMode);
+												++m_animatedModelCount;
+											}
+											else
+											{
+												// Posed. WHICH frame is the resting one depends on the mode:
+												// a *_BACKWARDS state runs from the END of the animation, so
+												// the engine starts it on the last frame (see the startFrame
+												// block in W3DModelDraw's setModelState) -- parking those on
+												// frame 0 would show the far end of the motion instead.
+												const Bool backwards =
+													(iniMode == RenderObjClass::ANIM_MODE_ONCE_BACKWARDS
+														|| iniMode == RenderObjClass::ANIM_MODE_LOOP_BACKWARDS);
+												const Real restFrame = backwards
+													? (Real)(anim->Get_Num_Frames() - 1) : 0.0f;
+												// ANIM_MODE_MANUAL parks the hierarchy on that frame and holds
+												// it, so Sync() cannot walk it off.
+												subRenderObj->Set_Animation(anim, restFrame,
+													RenderObjClass::ANIM_MODE_MANUAL);
+											}
 											// Get_HAnim returns an addrefed handle; Set_Animation adds its own.
 											anim->Release_Ref();
-											++m_animatedModelCount;
-										}
-									}
-									else if (m_poseAttachBones && info != NULL && !info->m_animations.empty())
-									{
-										// View > Models > Bone Attachment > Pose Attach Bones At Frame 0.
-										//
-										// A model WB does not animate shows its BIND pose -- the geometry as
-										// exported. The game rarely shows that: a state declared MANUAL or
-										// ONCE_BACKWARDS settles on its animation's FRAME 0, which is the
-										// resting pose the art is built around (a closed door, a lowered
-										// gantry, a stowed crane).
-										//
-										// That matters here beyond looks, because BONES MOVE WITH THE POSE.
-										// A module publishing a bone via ExtraPublicBone hands its position
-										// to whatever module rides it (AttachToBoneInAnotherModule), and
-										// findAttachBone reads that bone straight off this render object's
-										// HTree. Pose the publisher first and the riders land where the game
-										// puts them; leave it in bind pose and they inherit whatever offset
-										// the exporter happened to leave.
-										//
-										// ANIM_MODE_MANUAL parks the hierarchy at the given frame and holds
-										// it -- no per-frame advance, so WW3D::Sync() will not walk it off
-										// frame 0 the way the LOOP branch above intends to.
-										//
-										// pickWBAnimation is deliberately NOT used: it answers "what should
-										// PLAY", and returns NULL for exactly the MANUAL/ONCE_BACKWARDS
-										// states this is here to pose. Take the state's first animation,
-										// which is the one the engine would settle on.
-										HAnimClass* poseAnim =
-											m_assetManager->Get_HAnim(info->m_animations[0].getName().str());
-										if (poseAnim)
-										{
-											subRenderObj->Set_Animation(poseAnim, 0.0f,
-												RenderObjClass::ANIM_MODE_MANUAL);
-											poseAnim->Release_Ref();
 										}
 									}
 
@@ -2444,9 +2469,24 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 										Int boneIndex = 0;
 										Vector3 boneOffset(0.0f, 0.0f, 0.0f);
 										RenderObjClass *boneOwner = NULL;
+										Bool boneFromSubObj = false;
 										if (md->m_attachToDrawableBone.isNotEmpty()) {
 											boneOwner = findAttachBone(builtModules,
-												md->m_attachToDrawableBone.str(), boneIndex, boneOffset);
+												md->m_attachToDrawableBone.str(), boneIndex, boneOffset,
+												&boneFromSubObj);
+
+											// View > Models > Show Bone Names. This is the ONLY place the
+											// lookup runs, so record what it found for drawLabels -- both
+											// where the bone landed and which route resolved it, since a
+											// pivot and a sub-object are what the two halves of the search
+											// are for and telling them apart is the point of the overlay.
+											if (boneOwner != NULL) {
+												AttachBoneLabel bl;
+												bl.name = md->m_attachToDrawableBone;
+												bl.offset = boneOffset;
+												bl.fromSubObject = boneFromSubObj;
+												m_attachBoneLabels[pMapObj].push_back(bl);
+											}
 										}
 
 										// Only the PARENT can adopt the piece as a sub-object, so the
@@ -3172,10 +3212,13 @@ module's offset, so a module riding a bone on a module that is itself riding a b
 right place instead of losing the first hop. */
 //=============================================================================
 RenderObjClass *WbView3d::findAttachBone(const std::vector<BuiltDrawModule> &built,
-	const char *boneName, Int &boneIndexOut, Vector3 &offsetOut)
+	const char *boneName, Int &boneIndexOut, Vector3 &offsetOut, Bool *fromSubObjectOut)
 {
 	boneIndexOut = 0;
 	offsetOut.Set(0.0f, 0.0f, 0.0f);
+	if (fromSubObjectOut != NULL) {
+		*fromSubObjectOut = false;
+	}
 	if (boneName == NULL || boneName[0] == '\0') {
 		return NULL;
 	}
@@ -3224,6 +3267,9 @@ RenderObjClass *WbView3d::findAttachBone(const std::vector<BuiltDrawModule> &bui
 			// caller place it as a loose piece on the offset alone. Returning the owner (not NULL)
 			// is what tells the caller the bone WAS found.
 			boneIndexOut = 0;
+			if (fromSubObjectOut != NULL) {
+				*fromSubObjectOut = true;
+			}
 			return obj;
 		}
 	}
@@ -3276,10 +3322,17 @@ void WbView3d::placeLoosePieces(MapObject *pMapObj, RenderObjClass *parentObj)
 //=============================================================================
 // WbView3d::releaseLoosePieces
 //=============================================================================
-/** Remove pMapObj's loose pieces from the scene and forget them. */
+/** Remove pMapObj's loose pieces from the scene and forget them.
+
+Also drops its recorded bone-name labels, which describe the build being torn down. That happens
+BEFORE the early-out below on purpose: an object whose bones all resolved to HTree pivots has no
+loose pieces at all, and returning early would leave its labels behind to be re-recorded on the
+next build -- doubling them every rebuild. */
 //=============================================================================
 void WbView3d::releaseLoosePieces(MapObject *pMapObj)
 {
+	m_attachBoneLabels.erase(pMapObj);
+
 	std::map<MapObject *, std::vector<LoosePiece> >::iterator it = m_loosePieces.find(pMapObj);
 	if (it == m_loosePieces.end()) {
 		return;
@@ -4294,8 +4347,8 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_SHOWMODELS, OnUpdateViewShowModels)
 	ON_COMMAND(ID_VIEW_ANIMATEMODELS, OnViewAnimateModels)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_ANIMATEMODELS, OnUpdateViewAnimateModels)
-	ON_COMMAND(ID_VIEW_POSEATTACHBONES, OnViewPoseAttachBones)
-	ON_UPDATE_COMMAND_UI(ID_VIEW_POSEATTACHBONES, OnUpdateViewPoseAttachBones)
+	ON_COMMAND(ID_VIEW_BONENAMES, OnViewBoneNames)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_BONENAMES, OnUpdateViewBoneNames)
 	ON_COMMAND(ID_VIEW_BOUNDINGBOXES, OnViewBoundingBoxes)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_BOUNDINGBOXES, OnUpdateViewBoundingBoxes)
 	ON_COMMAND(ID_VIEW_SIGHTRANGES, OnViewSightRanges)
@@ -4574,7 +4627,7 @@ int WbView3d::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	// Default OFF: looping animations keep the viewport repainting every frame (see the
 	// idle-skip in OnTimer), so this is opt-in rather than a silent perf cost.
 	m_animateModels = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "AnimateModels", 0);
-	m_poseAttachBones = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "PoseAttachBones", 0);
+	m_showBoneNames = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowBoneNames", 0);
 	m_showSoundCircles = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowSoundCircles", 0);
 	m_showRulerGrid = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowRulerGrid", 1);
 	m_showTracingOverlay = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowTracingOverlay", 0);
@@ -5340,6 +5393,88 @@ void WbView3d::drawLabels(HDC hdc)
 				int statusOffset = 1; // Start after the main 4 label lines
 				for (int s = 0; s < rec.statusCount; ++s)
 					drawStatusLabels(rec.pt, statusOffset++, rec.statusText[s], m3DFont, hdc);
+			}
+		}
+
+		// View > Models > Show Bone Names. The bones a map.ini object attaches its draw modules
+		// to (AttachToBoneInAnotherModule), drawn AT the point each one resolved to, so a piece
+		// sitting in the wrong place can be read against the bone that put it there.
+		//
+		// Colour says which of the two lookups found it -- and those are genuinely different
+		// things, which is the whole reason this overlay exists:
+		//   GREEN = an HTree pivot   (Get_Bone_Index; only HLod models have these)
+		//   CYAN  = a named sub-object (Get_Sub_Object_By_Name; works on a plain mesh)
+		// A publisher that is a plain MeshClass can only ever resolve the second way.
+		//
+		// Recorded at build time in the module loop -- the bones are read from model hierarchies
+		// that only exist there -- so this pass just projects and emits.
+		if (m_showBoneNames && isNamesVisible()) {
+			for (std::map<MapObject *, std::vector<AttachBoneLabel> >::const_iterator bIt =
+					m_attachBoneLabels.begin(); bIt != m_attachBoneLabels.end(); ++bIt) {
+				MapObject *pMapObj = bIt->first;
+				if (pMapObj == NULL || (pMapObj->getFlags() & FLAG_DONT_RENDER)) {
+					continue;
+				}
+
+				// The offsets are parent-relative, so rotate them by the object's heading the
+				// same way placeLoosePieces does -- otherwise the labels stay put while the
+				// pieces they describe swing around with the object.
+				const Coord3D *loc = pMapObj->getLocation();
+				const Real angle = pMapObj->getAngle();
+				const Real cosA = (Real)cos(angle);
+				const Real sinA = (Real)sin(angle);
+				const Real baseZ = m_heightMapRenderObj->getHeightMapHeight(loc->x, loc->y, NULL);
+
+				const std::vector<AttachBoneLabel> &bones = bIt->second;
+				for (size_t bi = 0; bi < bones.size(); ++bi) {
+					const Vector3 &off = bones[bi].offset;
+					Vector3 world(
+						loc->x + (off.X * cosA - off.Y * sinA),
+						loc->y + (off.X * sinA + off.Y * cosA),
+						loc->z + baseZ + off.Z);
+
+					Vector3 screen;
+					if (CameraClass::INSIDE_FRUSTUM != m_camera->Project(screen, world)) {
+						continue;
+					}
+					Int sx, sy;
+					W3DLogicalScreenToPixelScreenHackedForWBLabels(screen.X, screen.Y,
+						&sx, &sy, projW, projH);
+
+					// Above the piece, clear of the object's own name labels.
+					CPoint pt(projOriginX + sx, projOriginY + sy - 20);
+
+					const AsciiString &label = bones[bi].name;
+					Int red, green, blue;
+					if (bones[bi].fromSubObject) {
+						red = 0; green = 255; blue = 255;		// cyan: named sub-object
+					} else {
+						red = 0; green = 255; blue = 0;			// green: HTree pivot
+					}
+					const UnsignedInt argb = 0xFF000000 | (red << 16) | (green << 8) | blue;
+
+					if (m_labelRenderer == 2 && !hdc) {
+						m_fontAtlas.drawText(pt.x + 1, pt.y, label.str(),
+							label.getLength(), argb, m_textShadow);
+					} else if (m_labelRenderer == 0 && m3DFont && !hdc) {
+						if (m_textShadow) {
+							RECT shadowRct = { pt.x + 2, pt.y + 1, pt.x + 2, pt.y + 1 };
+							m3DFont->DrawText(label.str(), label.getLength(), &shadowRct,
+								DT_LEFT | DT_NOCLIP | DT_TOP | DT_SINGLELINE, 0xFF000000);
+						}
+						RECT rct = { pt.x + 1, pt.y, pt.x + 1, pt.y };
+						m3DFont->DrawText(label.str(), label.getLength(), &rct,
+							DT_LEFT | DT_NOCLIP | DT_TOP | DT_SINGLELINE, argb);
+					} else if (m_labelRenderer == 1 && hdc) {
+						::SetBkMode(hdc, TRANSPARENT);
+						if (m_textShadow) {
+							::SetTextColor(hdc, RGB(0, 0, 0));
+							::TextOut(hdc, pt.x + 2, pt.y + 1, label.str(), label.getLength());
+						}
+						::SetTextColor(hdc, RGB(red, green, blue));
+						::TextOut(hdc, pt.x + 1, pt.y, label.str(), label.getLength());
+					}
+				}
 			}
 		}
 
@@ -6195,22 +6330,21 @@ void WbView3d::OnUpdateViewAnimateModels(CCmdUI* pCmdUI)
 	pCmdUI->SetCheck(m_animateModels?1:0);
 }
 
-void WbView3d::OnViewPoseAttachBones()
+void WbView3d::OnViewBoneNames()
 {
-	m_poseAttachBones = !m_poseAttachBones;
-	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "PoseAttachBones", m_poseAttachBones?1:0);
-	// The pose is applied while the render objects are built, and the bone offsets that riding
-	// modules use are read from it, so the whole scene has to be rebuilt for the toggle to take.
+	m_showBoneNames = !m_showBoneNames;
+	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "ShowBoneNames", m_showBoneNames?1:0);
+	// The labels are recorded while objects are built, so anything already placed has none yet
+	// the first time this is switched on -- rebuild rather than wait for the next edit.
 	resetRenderObjects();
 	invalObjectInView(NULL);
 }
 
-void WbView3d::OnUpdateViewPoseAttachBones(CCmdUI* pCmdUI)
+void WbView3d::OnUpdateViewBoneNames(CCmdUI* pCmdUI)
 {
-	// Animate Models wins: it drives the hierarchy per frame, so a static frame-0 pose would be
-	// overwritten anyway. Show the option as unavailable rather than silently doing nothing.
-	pCmdUI->Enable(m_animateModels?FALSE:TRUE);
-	pCmdUI->SetCheck(m_poseAttachBones?1:0);
+	// Rides the label system, so it needs labels on (Show Labels, Alt+4) to show anything.
+	pCmdUI->Enable(isNamesVisible()?TRUE:FALSE);
+	pCmdUI->SetCheck(m_showBoneNames?1:0);
 }
 
 // MLL C&C3

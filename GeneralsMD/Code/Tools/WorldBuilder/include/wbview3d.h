@@ -158,8 +158,8 @@ protected:
 	afx_msg void OnUpdateViewShowModels(CCmdUI* pCmdUI);
 	afx_msg void OnViewAnimateModels();
 	afx_msg void OnUpdateViewAnimateModels(CCmdUI* pCmdUI);
-	afx_msg void OnViewPoseAttachBones();
-	afx_msg void OnUpdateViewPoseAttachBones(CCmdUI* pCmdUI);
+	afx_msg void OnViewBoneNames();
+	afx_msg void OnUpdateViewBoneNames(CCmdUI* pCmdUI);
 	afx_msg void OnViewListenEnabled();
 	afx_msg void OnUpdateViewListenEnabled(CCmdUI* pCmdUI);
 	afx_msg void OnViewListenPermanent();
@@ -388,6 +388,17 @@ private:
 		RenderObjClass *obj;		///< this module's render object, whose HTree may hold the bone
 		Vector3 originOffset;		///< where this module itself sits relative to the parent's origin
 	};
+	/// View > Models > Show Bone Names: one resolved AttachToBoneInAnotherModule bone, recorded
+	/// while the object is built (that is the only place the lookup happens) so drawLabels can
+	/// show WHERE a bone landed and WHICH lookup route found it.
+	struct AttachBoneLabel
+	{
+		AsciiString name;			///< the bone as named in the map.ini
+		Vector3 offset;				///< resolved offset from the parent's origin, chain included
+		Bool fromSubObject;			///< true = found via Get_Sub_Object_By_Name, false = HTree pivot
+	};
+	std::map<MapObject *, std::vector<AttachBoneLabel> >	m_attachBoneLabels;
+	Bool										m_showBoneNames;	///< View > Models > Show Bone Names
   Bool										m_showSoundCircles;	///< Flag whether to show the minimum and maximum radii of the ambient sounds attached to the selected object
 	Bool										m_showBoundingBoxes;
 	Bool										m_showSightRanges;
@@ -403,11 +414,6 @@ private:
 	Bool										m_showFullModel;
 	Bool										m_animateModels; ///< Flag whether models play their animation (LOOP states + idle anims)
 	Int											m_animatedModelCount; ///< # of animations actually applied in the last scene build
-	/// View > Models > Bone Attachment > Pose Attach Bones At Frame 0. When a draw module publishes
-	/// a bone that another module rides, evaluate the publisher's animation at frame 0 before
-	/// reading that bone -- the resting pose the art is authored around -- instead of the model's
-	/// bind pose. Off by default: it only matters for modules whose frame 0 differs from bind pose.
-	Bool										m_poseAttachBones;
 
 	Bool m_showBuildZoneFeedback;
 	Int m_lod;
@@ -574,7 +580,7 @@ public:
 	/// bone's total offset from the PARENT's origin -- which includes the owning module's own
 	/// offset, so a rider of a rider accumulates down the chain.
 	RenderObjClass *findAttachBone(const std::vector<BuiltDrawModule> &built, const char *boneName,
-		Int &boneIndexOut, Vector3 &offsetOut);
+		Int &boneIndexOut, Vector3 &offsetOut, Bool *fromSubObjectOut = NULL);
 	virtual BuildListInfo *pickedBuildObjectInView(CPoint viewPt);
 
 	void removeFenceListObjects(MapObject *pObject);
