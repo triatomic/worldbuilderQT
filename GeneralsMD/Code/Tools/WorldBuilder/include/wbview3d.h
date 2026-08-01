@@ -160,6 +160,8 @@ protected:
 	afx_msg void OnUpdateViewAnimateModels(CCmdUI* pCmdUI);
 	afx_msg void OnViewBoneNames();
 	afx_msg void OnUpdateViewBoneNames(CCmdUI* pCmdUI);
+	afx_msg void OnViewLogBoneResolution();
+	afx_msg void OnUpdateViewLogBoneResolution(CCmdUI* pCmdUI);
 	afx_msg void OnViewListenEnabled();
 	afx_msg void OnUpdateViewListenEnabled(CCmdUI* pCmdUI);
 	afx_msg void OnViewListenPermanent();
@@ -406,6 +408,13 @@ private:
 	};
 	std::map<MapObject *, std::vector<AttachBoneLabel> >	m_attachBoneLabels;
 	Bool										m_showBoneNames;	///< View > Models > Show Bone Names
+	/// View > Models > Log Bone Resolution. Writes one line per AttachToBoneInAnotherModule lookup
+	/// to the debug log: which module answered, by which route, and the offset that came back.
+	/// OFF by default (it is per-module per-object -- thousands of lines on a full map), but kept
+	/// permanently rather than re-added ad hoc, because reading these numbers is what actually
+	/// diagnoses a misplaced piece. Three wrong theories about the dishes on
+	/// NavyStructureHeadquarters died the moment the real offsets were on screen.
+	Bool										m_logBoneResolution;
   Bool										m_showSoundCircles;	///< Flag whether to show the minimum and maximum radii of the ambient sounds attached to the selected object
 	Bool										m_showBoundingBoxes;
 	Bool										m_showSightRanges;
@@ -587,7 +596,8 @@ public:
 	/// bone's total offset from the PARENT's origin -- which includes the owning module's own
 	/// offset, so a rider of a rider accumulates down the chain.
 	RenderObjClass *findAttachBone(const std::vector<BuiltDrawModule> &built, const char *boneName,
-		Int &boneIndexOut, Vector3 &offsetOut, Bool *fromSubObjectOut = NULL);
+		Int &boneIndexOut, Vector3 &offsetOut, Bool *fromSubObjectOut = NULL,
+		Bool logResolution = false);
 	virtual BuildListInfo *pickedBuildObjectInView(CPoint viewPt);
 
 	void removeFenceListObjects(MapObject *pObject);

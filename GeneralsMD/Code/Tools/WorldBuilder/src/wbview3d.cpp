@@ -691,6 +691,7 @@ WbView3d::WbView3d() :
 	m_showShadows(false),
 	m_animateModels(false),
 	m_showBoneNames(false),
+	m_logBoneResolution(false),
 	m_animatedModelCount(0),
 	m_firstPaint(true),
 	m_groundLevel(10),
@@ -2490,9 +2491,16 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 										RenderObjClass *boneOwner = NULL;
 										Bool boneFromSubObj = false;
 										if (md->m_attachToDrawableBone.isNotEmpty()) {
+											if (m_logBoneResolution) {
+												// Which object/module the following lines belong to --
+												// otherwise a map's worth of bone lines is unattributable.
+												DEBUG_LOG(("WBBONE object=%s module=%d model=%s wants bone=%s\n",
+													tTemplate->getName().str(), i, modelName.str(),
+													md->m_attachToDrawableBone.str()));
+											}
 											boneOwner = findAttachBone(builtModules,
 												md->m_attachToDrawableBone.str(), boneIndex, boneOffset,
-												&boneFromSubObj);
+												&boneFromSubObj, m_logBoneResolution);
 
 											// View > Models > Show Bone Names. This is the ONLY place the
 											// lookup runs, so record what it found for drawLabels -- both
@@ -3298,7 +3306,8 @@ module's offset, so a module riding a bone on a module that is itself riding a b
 right place instead of losing the first hop. */
 //=============================================================================
 RenderObjClass *WbView3d::findAttachBone(const std::vector<BuiltDrawModule> &built,
-	const char *boneName, Int &boneIndexOut, Vector3 &offsetOut, Bool *fromSubObjectOut)
+	const char *boneName, Int &boneIndexOut, Vector3 &offsetOut, Bool *fromSubObjectOut,
+	Bool logResolution)
 {
 	boneIndexOut = 0;
 	offsetOut.Set(0.0f, 0.0f, 0.0f);
@@ -3365,6 +3374,12 @@ RenderObjClass *WbView3d::findAttachBone(const std::vector<BuiltDrawModule> &bui
 			const Matrix3D rootWorld = obj->Get_Bone_Transform(0);
 			offsetOut = (boneWorld.Get_Translation() - rootWorld.Get_Translation()) + built[i].originOffset;
 			boneIndexOut = boneIndex;
+			if (logResolution) {
+				DEBUG_LOG(("WBBONE pivot  bone=%s owner=%s idx=%d modOff=(%.2f %.2f %.2f) -> off=(%.2f %.2f %.2f)\n",
+					boneName, obj->Get_Name() ? obj->Get_Name() : "?", boneIndex,
+					built[i].originOffset.X, built[i].originOffset.Y, built[i].originOffset.Z,
+					offsetOut.X, offsetOut.Y, offsetOut.Z));
+			}
 			return obj;
 		}
 
@@ -3393,8 +3408,25 @@ RenderObjClass *WbView3d::findAttachBone(const std::vector<BuiltDrawModule> &bui
 			if (fromSubObjectOut != NULL) {
 				*fromSubObjectOut = true;
 			}
+			if (logResolution) {
+				// The raw pieces too, not just the result: a wrong offset is nearly always one of
+				// these three being wrong, and seeing which saves re-deriving it.
+				DEBUG_LOG(("WBBONE subobj bone=%s owner=%s child=(%.2f %.2f %.2f) ownerAt=(%.2f %.2f %.2f) modOff=(%.2f %.2f %.2f) -> off=(%.2f %.2f %.2f)\n",
+					boneName, obj->Get_Name() ? obj->Get_Name() : "?",
+					childMtx.Get_Translation().X, childMtx.Get_Translation().Y, childMtx.Get_Translation().Z,
+					ownerMtx.Get_Translation().X, ownerMtx.Get_Translation().Y, ownerMtx.Get_Translation().Z,
+					built[i].originOffset.X, built[i].originOffset.Y, built[i].originOffset.Z,
+					offsetOut.X, offsetOut.Y, offsetOut.Z));
+			}
 			return obj;
 		}
+	}
+
+	// Nothing published it. Worth a line of its own: the piece will sit on the parent's origin,
+	// and "no module publishes this bone" is a different problem from "the offset is wrong".
+	if (logResolution) {
+		DEBUG_LOG(("WBBONE MISS   bone=%s -- no module publishes it (piece stays at the object origin)\n",
+			boneName));
 	}
 	return NULL;
 }
@@ -4472,6 +4504,8 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_ANIMATEMODELS, OnUpdateViewAnimateModels)
 	ON_COMMAND(ID_VIEW_BONENAMES, OnViewBoneNames)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_BONENAMES, OnUpdateViewBoneNames)
+	ON_COMMAND(ID_VIEW_LOGBONERESOLUTION, OnViewLogBoneResolution)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_LOGBONERESOLUTION, OnUpdateViewLogBoneResolution)
 	ON_COMMAND(ID_VIEW_BOUNDINGBOXES, OnViewBoundingBoxes)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_BOUNDINGBOXES, OnUpdateViewBoundingBoxes)
 	ON_COMMAND(ID_VIEW_SIGHTRANGES, OnViewSightRanges)
@@ -4751,6 +4785,7 @@ int WbView3d::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	// idle-skip in OnTimer), so this is opt-in rather than a silent perf cost.
 	m_animateModels = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "AnimateModels", 0);
 	m_showBoneNames = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowBoneNames", 0);
+	m_logBoneResolution = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "LogBoneResolution", 0);
 	m_showSoundCircles = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowSoundCircles", 0);
 	m_showRulerGrid = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowRulerGrid", 1);
 	m_showTracingOverlay = AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowTracingOverlay", 0);
@@ -6468,6 +6503,21 @@ void WbView3d::OnUpdateViewBoneNames(CCmdUI* pCmdUI)
 	// Rides the label system, so it needs labels on (Show Labels, Alt+4) to show anything.
 	pCmdUI->Enable(isNamesVisible()?TRUE:FALSE);
 	pCmdUI->SetCheck(m_showBoneNames?1:0);
+}
+
+void WbView3d::OnViewLogBoneResolution()
+{
+	m_logBoneResolution = !m_logBoneResolution;
+	::AfxGetApp()->WriteProfileInt(MAIN_FRAME_SECTION, "LogBoneResolution", m_logBoneResolution?1:0);
+	// The lookups only run while objects are built, so turning this on has to rebuild to log
+	// anything -- otherwise it would appear to do nothing until the next edit.
+	resetRenderObjects();
+	invalObjectInView(NULL);
+}
+
+void WbView3d::OnUpdateViewLogBoneResolution(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(m_logBoneResolution?1:0);
 }
 
 // MLL C&C3

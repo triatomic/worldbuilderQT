@@ -306,6 +306,7 @@ BEGIN
             MENUITEM "Show Garrisoned",             ID_VIEW_GARRISONED
             MENUITEM "Show Bounding Boxes\tAlt+6",  ID_VIEW_BOUNDINGBOXES
             MENUITEM "Show Bone Names",             ID_VIEW_BONENAMES
+            MENUITEM "Log Bone Resolution",         ID_VIEW_LOGBONERESOLUTION
         END
         POPUP "Ranges && Radii"
         BEGIN
