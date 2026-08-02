@@ -62,6 +62,7 @@ class DrawObject;
 class CWorldBuilderView;
 class BuildListInfo;
 class TransRenderObj;
+class W3DModelDrawModuleData;
 struct ID3DXFont;
 
 /////////////////////////////////////////////////////////////////////////////
@@ -382,6 +383,19 @@ private:
 		Vector3 boneOffset;		///< offset from the parent's origin when the module rides a bone
 	};
 	std::map<MapObject *, std::vector<LoosePiece> >	m_loosePieces;
+	/// Every draw module's render object, in module order, kept per MapObject so the Animation
+	/// Scrubber can re-pose them all without rebuilding (see repositionAnimationScrub).
+	///
+	/// Recorded here rather than re-derived, because WHERE a module's model ends up is a decision
+	/// the build makes and cannot be read back: a module riding a bone becomes a sub-object of the
+	/// parent's HLod when Add_Sub_Object_To_Bone takes it, and a loose piece when it doesn't. Only
+	/// the loose ones are in m_loosePieces, so walking that list alone finds the parent and little
+	/// else -- which is what left a multi-module object with one thing animating.
+	///
+	/// Borrowed pointers: the parent and the sub-objects are owned by the scene / their parent, and
+	/// the loose ones already hold a ref in m_loosePieces. Cleared with the scene in
+	/// resetRenderObjects and per object in releaseLoosePieces, so nothing here outlives its object.
+	std::map<MapObject *, std::vector<RenderObjClass *> >	m_moduleRenderObjs;
 	/// One draw module already built for the object being assembled, kept so a LATER module naming
 	/// a bone in AttachToBoneInAnotherModule can find it -- the bone may belong to any module, not
 	/// just module 0 (the game searches them all in Drawable::getPristineBonePositions).
@@ -397,6 +411,12 @@ private:
 	/// Does this module publish boneName (ExtraPublicBone or a standard public bone)? Matches the
 	/// engine's numbered-variant convention: a declared "MESH" also publishes MESH01, MESH02...
 	static Bool modulePublishesBone(const BuiltDrawModule &mod, const char *boneName);
+	/// The condition flags obj's models were built against (damage / garrison / weather / night), so
+	/// a later pass can pick the same ModelConditionInfo the build did.
+	ModelConditionFlags buildModelConditionState(MapObject *obj, const ThingTemplate *tt);
+	/// Park one draw module's render object at `fraction` through its own animation (scrub re-pose).
+	void poseScrubbedModule(RenderObjClass *subRenderObj, const W3DModelDrawModuleData *md,
+									const ModelConditionFlags &state, Real fraction);
 	/// View > Models > Show Bone Names: one resolved AttachToBoneInAnotherModule bone, recorded
 	/// while the object is built (that is the only place the lookup happens) so drawLabels can
 	/// show WHERE a bone landed and WHICH lookup route found it.
@@ -431,6 +451,11 @@ public:
 	/// Animation Scrubber control (see m_scrubObject). Pass obj == NULL to stop scrubbing and let
 	/// everything return to its resting pose. Rebuilds the affected object so the new frame shows.
 	void setAnimationScrub(MapObject *obj, Real fraction);
+	/// Move an ALREADY-armed object to a new point in its animations. Poses the render objects the
+	/// scene already holds instead of rebuilding it, so this is cheap enough to run on every step of
+	/// a slider drag. Returns false when obj is not the armed object (or has no render object yet),
+	/// meaning the caller must go through setAnimationScrub to arm it first.
+	Bool repositionAnimationScrub(MapObject *obj, Real fraction);
 	MapObject *getAnimationScrubObject() const { return m_scrubObject; }
 	Real getAnimationScrubFraction() const { return m_scrubFraction; }
 	/// Longest animation among obj's draw modules, in frames, and how many of its modules actually

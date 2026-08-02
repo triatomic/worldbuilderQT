@@ -105,7 +105,13 @@ extern "C" void WBQtAnimScrub_SetFraction(double fraction)
 		return;
 	}
 	s_applying = true;
-	p3View->setAnimationScrub(selected, (Real)fraction);
+	// Moving an object that is ALREADY armed re-poses the render objects in place -- cheap enough to
+	// run on every step of a drag. Only arming a different object needs the full rebuild, which is
+	// why that is the fallback rather than the normal path.
+	if (!p3View->repositionAnimationScrub(selected, (Real)fraction))
+	{
+		p3View->setAnimationScrub(selected, (Real)fraction);
+	}
 	s_applying = false;
 }
 

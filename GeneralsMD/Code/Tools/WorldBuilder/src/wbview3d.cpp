@@ -1204,6 +1204,9 @@ void WbView3d::resetRenderObjects()
 		}
 	}
 	m_loosePieces.clear();
+	// Borrowed pointers into the scene that was just emptied -- forget them without releasing
+	// (the refs that existed were the loose ones, dropped just above).
+	m_moduleRenderObjs.clear();
 	// Bone-name labels describe a build that no longer exists; the next one re-records them.
 	m_attachBoneLabels.clear();
 	// Resolved offsets go too: freeCachedModelsOnNextReset can drop the W3D prototypes, so a model
@@ -2508,6 +2511,9 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 										parentModule.publicBones = &md->m_extraPublicBones;
 										builtModules.push_back(parentModule);
 
+										// Module order, for the scrubber's re-pose (m_moduleRenderObjs).
+										m_moduleRenderObjs[pMapObj].push_back(subRenderObj);
+
 										if (m_lod == 1 || !m_showSubDraw) {
 											break;  // Only use the first model
 										}
@@ -2675,6 +2681,11 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 										thisModule.originOffset = boneOffset;
 										thisModule.publicBones = &md->m_extraPublicBones;
 										builtModules.push_back(thisModule);
+
+										// Module order, for the scrubber's re-pose. Recorded whether the
+										// piece was adopted as a sub-object or left loose -- which of the
+										// two happened is exactly what a later pass cannot tell.
+										m_moduleRenderObjs[pMapObj].push_back(subRenderObj);
 
 										subRenderObj->Release_Ref();  // Release ref after attaching
 									}
@@ -3354,12 +3365,229 @@ void WbView3d::setAnimationScrub(MapObject *obj, Real fraction)
 	// edit changes what the module loop would produce), and it tears the whole scene down and
 	// rebuilds cleanly.
 	//
-	// It costs a full rebuild per slider step, which is why the panel throttles rather than
-	// applying on every pixel of the drag.
+	// It costs a full rebuild, which is why only ARMING and DISARMING come through here.
+	// repositionAnimationScrub handles moving an already-armed object, which is the common case
+	// (every step of a drag) and needs no rebuild at all.
 	if (previous != obj || obj != NULL) {
 		resetRenderObjects();
 		invalObjectInView(NULL);
 	}
+}
+
+//=============================================================================
+// WbView3d::buildModelConditionState
+//=============================================================================
+/** The condition flags obj's models were built against (damage, garrison, weather, time of day).
+
+Extracted so the scrub re-pose can pick the SAME ModelConditionInfo the build did -- picking a
+different one would pose a module against an animation it is not currently showing. The build in
+invalObjectInView derives its own copy inline from locals it already has; this recomputes it from
+the map object, which is all the information those locals came from. */
+//=============================================================================
+ModelConditionFlags WbView3d::buildModelConditionState(MapObject *obj, const ThingTemplate *tt)
+{
+	ModelConditionFlags state;
+	state.clear();
+	if (obj == NULL || tt == NULL) {
+		return state;
+	}
+
+	// Damage state, from initial health against the same thresholds the build uses.
+	Bool exists = FALSE;
+	const Int health = obj->getProperties() ? obj->getProperties()->getInt(TheKey_objectInitialHealth, &exists) : 100;
+	const Real ratio = health / 100.0f;
+	BodyDamageType curDamageState;
+	if (ratio > TheGlobalData->m_unitDamagedThresh) {
+		curDamageState = BODY_PRISTINE;
+	} else if (ratio > TheGlobalData->m_unitReallyDamagedThresh) {
+		curDamageState = BODY_DAMAGED;
+	} else if (ratio > 0.0f) {
+		curDamageState = BODY_REALLYDAMAGED;
+	} else {
+		curDamageState = BODY_RUBBLE;
+	}
+
+	Bool hasPostCollapseState = false;
+	const ModuleInfo &behaviors = tt->getBehaviorModuleInfo();
+	for (Int modIdx = 0; modIdx < behaviors.getCount(); ++modIdx) {
+		if (behaviors.getNthName(modIdx).compare("StructureCollapseUpdate") == 0 ||
+			behaviors.getNthName(modIdx).compare("StructureToppleUpdate") == 0) {
+			hasPostCollapseState = true;
+			break;
+		}
+	}
+
+	switch (curDamageState) {
+		case BODY_PRISTINE:
+		default:
+			break;
+		case BODY_DAMAGED:
+			state.set(MODELCONDITION_DAMAGED);
+			break;
+		case BODY_REALLYDAMAGED:
+			state.set(MODELCONDITION_REALLY_DAMAGED);
+			break;
+		case BODY_RUBBLE:
+			if (hasPostCollapseState) {
+				state.set(MODELCONDITION_POST_COLLAPSE);
+			} else {
+				state.set(MODELCONDITION_RUBBLE);
+			}
+			break;
+	}
+
+	if (getShowGarrisoned()) {
+		state.set(MODELCONDITION_GARRISONED);
+	}
+
+	Int objWeather = 0;
+	if (obj->getProperties()) {
+		objWeather = obj->getProperties()->getInt(TheKey_objectWeather, &exists);
+	}
+	switch (objWeather) {
+		default:
+		case 0:
+			if (TheGlobalData->m_weather == WEATHER_SNOWY) {
+				state.set(MODELCONDITION_SNOW);
+			}
+			break;
+		case 2:
+			state.set(MODELCONDITION_SNOW);
+			break;
+	}
+
+	Int objTime = 0;
+	if (obj->getProperties()) {
+		objTime = obj->getProperties()->getInt(TheKey_objectTime, &exists);
+	}
+	switch (objTime) {
+		default:
+		case 0:
+			if (TheGlobalData->m_timeOfDay == TIME_OF_DAY_NIGHT) {
+				state.set(MODELCONDITION_NIGHT);
+			}
+			break;
+		case 2:
+			state.set(MODELCONDITION_NIGHT);
+			break;
+	}
+
+	return state;
+}
+
+//=============================================================================
+// WbView3d::repositionAnimationScrub
+//=============================================================================
+/** Move the ALREADY-SCRUBBED object to a new point in its animations, without a rebuild.
+
+setAnimationScrub costs a whole-map resetRenderObjects, which is far too slow to run per slider
+step -- so the scrubber used to apply the pose only when the drag ended. That rebuild is only
+needed to change what the draw-module loop DECIDES (which modules play versus pose); once an object
+is armed, every module on it is already parked in ANIM_MODE_MANUAL and moving it is just
+Set_Animation with a different frame on render objects the scene already holds.
+
+So this re-walks the template's draw modules to re-derive each one's animation -- cheap, no asset
+creation and no scene surgery -- and re-poses the matching render objects in place. Riders need no
+attention: they are Add_Sub_Object_To_Bone'd onto the parent's HLod and follow their bone as the
+pose moves. Loose pieces DO need it, since they are positioned by a bone offset WB resolves itself.
+
+Returns false when the object is not currently armed or has no render object, in which case the
+caller must fall back to setAnimationScrub to arm it. */
+//=============================================================================
+Bool WbView3d::repositionAnimationScrub(MapObject *obj, Real fraction)
+{
+	if (obj == NULL || obj != m_scrubObject) {
+		return false;	// not armed -- only setAnimationScrub can build the posed state
+	}
+	RenderObjClass *renderObj = obj->getRenderObj();
+	if (renderObj == NULL || m_assetManager == NULL) {
+		return false;
+	}
+
+	if (fraction < 0.0f) {
+		fraction = 0.0f;
+	}
+	if (fraction > 1.0f) {
+		fraction = 1.0f;
+	}
+	m_scrubFraction = fraction;
+
+	const ThingTemplate *tt = obj->getThingTemplate();
+	if (tt == NULL) {
+		return false;
+	}
+
+	// The render objects the build produced, in module order. Recorded at build time rather than
+	// re-derived: a module that rides a bone becomes a sub-object of the parent's HLod when
+	// Add_Sub_Object_To_Bone takes it and a loose piece when it doesn't, and which happened is not
+	// something this pass can read back. Walking m_loosePieces alone found the parent and the few
+	// genuinely loose modules, so a multi-module object animated one thing.
+	std::map<MapObject *, std::vector<RenderObjClass *> >::iterator objIt = m_moduleRenderObjs.find(obj);
+	if (objIt == m_moduleRenderObjs.end() || objIt->second.empty()) {
+		return false;	// nothing recorded (built before this existed) -- let the caller rebuild
+	}
+	const std::vector<RenderObjClass *> &moduleObjs = objIt->second;
+	size_t objIndex = 0;
+
+	ModelConditionFlags state = buildModelConditionState(obj, tt);
+
+	// Same walk, and the same skips, as the build: only modules that contributed a model got a
+	// render object recorded, so the two stay in step.
+	const ModuleInfo &mi = tt->getDrawModuleInfo();
+	for (Int i = 0; i < mi.getCount() && objIndex < moduleObjs.size(); ++i) {
+		const ModuleData *mdd = mi.getNthData(i);
+		const W3DModelDrawModuleData *md = mdd ? mdd->getAsW3DModelDrawModuleData() : NULL;
+		if (md == NULL) {
+			continue;
+		}
+		AsciiString modelName = md->getBestModelNameForWB(state);
+		if (modelName.isEmpty() || strncmp(modelName.str(), "No ", 3) == 0) {
+			continue;	// contributed no model at build time either, so there is nothing to pose
+		}
+
+		poseScrubbedModule(moduleObjs[objIndex], md, state, fraction);
+		++objIndex;
+	}
+
+	// Loose pieces deliberately do NOT follow. They are placed from the PRISTINE bone offset
+	// captured at build time (placeLoosePieces re-uses that stored offset rather than re-reading
+	// the bone), which is what the game does -- the dishes on NavyStructureHeadquarters stay put
+	// while the mast they are published from swings. Riders that ARE parented via
+	// Add_Sub_Object_To_Bone need no help either: they hang off the HLod and move with their bone.
+	//
+	// So the only thing left is to get the new pose on screen.
+	Invalidate(false);
+	return true;
+}
+
+//=============================================================================
+// WbView3d::poseScrubbedModule
+//=============================================================================
+/** Park one draw module's render object at `fraction` through its own animation.
+
+Mirrors the posing branch of the draw-module loop in invalObjectInView -- same animation choice
+(the state's first animation, NOT pickWBAnimation, which answers "what should play") and the same
+ANIM_MODE_MANUAL park, but at the scrubbed frame instead of the rest frame. The fraction maps onto
+THIS module's own frame count, so modules of different lengths stay in step. */
+//=============================================================================
+void WbView3d::poseScrubbedModule(RenderObjClass *subRenderObj, const W3DModelDrawModuleData *md,
+											 const ModelConditionFlags &state, Real fraction)
+{
+	if (subRenderObj == NULL || md == NULL || m_assetManager == NULL) {
+		return;
+	}
+	const ModelConditionInfo *info = md->findBestInfo(state);
+	if (info == NULL || info->m_animations.empty()) {
+		return;	// this module has no animation to hold
+	}
+
+	HAnimClass *anim = m_assetManager->Get_HAnim(info->m_animations[0].getName().str());
+	if (anim == NULL) {
+		return;
+	}
+	const Real frame = fraction * (Real)(anim->Get_Num_Frames() - 1);
+	subRenderObj->Set_Animation(anim, frame, RenderObjClass::ANIM_MODE_MANUAL);
+	anim->Release_Ref();	// Get_HAnim addrefed; Set_Animation took its own
 }
 
 //=============================================================================
@@ -3843,14 +4071,17 @@ void WbView3d::placeLoosePieces(MapObject *pMapObj, RenderObjClass *parentObj)
 //=============================================================================
 /** Remove pMapObj's loose pieces from the scene and forget them.
 
-Also drops its recorded bone-name labels, which describe the build being torn down. That happens
-BEFORE the early-out below on purpose: an object whose bones all resolved to HTree pivots has no
-loose pieces at all, and returning early would leave its labels behind to be re-recorded on the
-next build -- doubling them every rebuild. */
+Also drops its recorded bone-name labels and module render objects, which describe the build being
+torn down. That happens BEFORE the early-out below on purpose: an object whose bones all resolved to
+HTree pivots has no loose pieces at all, and returning early would leave those behind to be
+re-recorded on the next build -- doubling them every rebuild. */
 //=============================================================================
 void WbView3d::releaseLoosePieces(MapObject *pMapObj)
 {
 	m_attachBoneLabels.erase(pMapObj);
+	// Borrowed pointers (see m_moduleRenderObjs) -- forget them, never release them. The loose ones
+	// among them are released below; the rest belong to the scene or to their parent.
+	m_moduleRenderObjs.erase(pMapObj);
 
 	std::map<MapObject *, std::vector<LoosePiece> >::iterator it = m_loosePieces.find(pMapObj);
 	if (it == m_loosePieces.end()) {

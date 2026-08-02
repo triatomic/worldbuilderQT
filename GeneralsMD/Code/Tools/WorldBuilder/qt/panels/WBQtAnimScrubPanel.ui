@@ -43,10 +43,13 @@
       <item>
        <widget class="QSlider" name="scrub">
         <property name="toolTip">
-         <string>Scrub the selected object's animations. Every draw module maps this position onto its own frame count, so modules of different lengths stay in step.</string>
+         <string>Scrub the selected object's animations. One step is one frame of the longest animation; every draw module maps that position onto its own frame count, so modules of different lengths stay in step.</string>
         </property>
         <property name="maximum">
-         <number>1000</number>
+         <number>0</number>
+        </property>
+        <property name="singleStep">
+         <number>1</number>
         </property>
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
@@ -54,29 +57,14 @@
        </widget>
       </item>
       <item>
-       <layout class="QHBoxLayout" name="readoutRow">
-        <item>
-         <widget class="QLabel" name="percentText">
-          <property name="text">
-           <string>0.0%</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <spacer name="readoutSpacer">
-          <property name="orientation">
-           <enum>Qt::Horizontal</enum>
-          </property>
-         </spacer>
-        </item>
-         <item>
-         <widget class="QLabel" name="frameText">
-          <property name="toolTip">
-           <string>Frame within the longest animation on this object.</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
+       <widget class="QLabel" name="frameText">
+        <property name="toolTip">
+         <string>Frame within the longest animation on this object.</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignVCenter</set>
+        </property>
+       </widget>
       </item>
      </layout>
     </widget>
