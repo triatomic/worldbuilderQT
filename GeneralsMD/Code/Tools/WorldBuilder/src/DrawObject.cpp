@@ -3371,8 +3371,13 @@ if (_skip_drawobject_render) {
 				continue;
 			}
 
+			// GROUND LEVEL, whatever height the object itself sits at. loc.z is the object's own
+			// Z offset, so ADDING terrain height to it floated the icon up with a raised object --
+			// the marker ended up hanging in the air, away from the spot on the terrain it marks.
+			// These icons are a top-down editing aid: they want to be where the object stands on
+			// the map, not where it is suspended. So take the terrain height alone.
 			if (TheTerrainRenderObject) {
-				loc.z += TheTerrainRenderObject->getHeightMapHeight(loc.x, loc.y, NULL);
+				loc.z = TheTerrainRenderObject->getHeightMapHeight(loc.x, loc.y, NULL);
 			}
 
 			Bool doArrow = true;
