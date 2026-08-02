@@ -53,6 +53,7 @@
 #define WBQT_ID_EDIT_COPY		0xE122	// == ID_EDIT_COPY
 #define WBQT_ID_EDIT_CUT		0xE123	// == ID_EDIT_CUT
 #define WBQT_ID_EDIT_PASTE		0xE125	// == ID_EDIT_PASTE
+#define WBQT_ID_ANIMSCRUBBER	33425	// == ID_VIEW_ANIMSCRUBBER (resource.h)
 
 // Defined in WBQtBridge.cpp: the Phase-2 viewport-host column the chrome inserts into,
 // and the hosted 3D view's HWND (for putting keyboard focus back after toolbar clicks).
@@ -224,12 +225,23 @@ bool WBQtChromeController::installToolBar()
 			m_toolBar->addSeparator();
 			continue;
 		}
-		QIcon icon(QPixmap::fromImage(strip.copy(imageIndex * iconW, 0, iconW, iconH)));
+		// Buttons whose art is drawn in code (standardToolIcon) own no cell in the bitmap strip
+		// and must not consume an index -- doing so would shift every later button's icon by one
+		// and slice past the end of the strip. Only strip-backed buttons advance imageIndex.
+		const bool drawnInCode = (id == WBQT_ID_ANIMSCRUBBER);
+		QIcon icon;
+		if (!drawnInCode)
+		{
+			icon = QIcon(QPixmap::fromImage(strip.copy(imageIndex * iconW, 0, iconW, iconH)));
+		}
 		QAction *action = m_toolBar->addAction(icon, QString());
 		action->setData(id);
 		action->setProperty("wbToolButton", true);
-		action->setProperty("wbCellIndex", imageIndex);	// so applyToolbarStrip can re-slice
-		imageIndex++;
+		if (!drawnInCode)
+		{
+			action->setProperty("wbCellIndex", imageIndex);	// so applyToolbarStrip can re-slice
+			imageIndex++;
+		}
 		char text[512];
 		text[0] = 0;
 		if (WBQtChromeData_GetTooltip(id, text, sizeof(text)))
@@ -416,6 +428,37 @@ QIcon WBQtChromeController::standardToolIcon(int id) const
 			p.drawLine(QPointF(11, 14), QPointF(21, 14));
 			p.drawLine(QPointF(11, 19), QPointF(21, 19));
 		}
+		else if (id == WBQT_ID_ANIMSCRUBBER)
+		{
+			// Filmstrip: an outline with a sprocket-hole row top and bottom and two frames
+			// between them. QStyle has no filmstrip in its standard set (it is dialog buttons,
+			// arrows and media transport), so it is drawn here like cut/copy/paste.
+			//
+			// Thinner pen than the others: at 16x15 the sprocket holes close up and read as a
+			// solid bar at pen width 2.
+			QPen thin(ink);
+			thin.setWidthF(1.6);
+			p.setPen(thin);
+			p.setBrush(Qt::NoBrush);
+			p.drawRect(QRectF(4, 4, 24, 22));
+
+			// Sprocket holes: four along the top edge and four along the bottom, filled so they
+			// stay legible once the 2x canvas is downscaled to the toolbar's 16x15.
+			p.setPen(Qt::NoPen);
+			p.setBrush(ink);
+			for (int h = 0; h < 4; ++h)
+			{
+				const qreal hx = 6.0 + h * 5.5;
+				p.drawRect(QRectF(hx, 6.5, 3.0, 2.5));
+				p.drawRect(QRectF(hx, 21.0, 3.0, 2.5));
+			}
+
+			// The two frames, outlined in the middle band.
+			p.setPen(thin);
+			p.setBrush(Qt::NoBrush);
+			p.drawRect(QRectF(6.5, 11.5, 8.5, 7.0));
+			p.drawRect(QRectF(17.0, 11.5, 8.5, 7.0));
+		}
 	}
 	return QIcon(pm);
 }
@@ -436,7 +479,8 @@ void WBQtChromeController::applyStandardToolIcons()
 			continue;
 		}
 		if (id == WBQT_ID_FILE_NEW || id == WBQT_ID_FILE_OPEN || id == WBQT_ID_FILE_SAVE
-			|| id == WBQT_ID_EDIT_CUT || id == WBQT_ID_EDIT_COPY || id == WBQT_ID_EDIT_PASTE)
+			|| id == WBQT_ID_EDIT_CUT || id == WBQT_ID_EDIT_COPY || id == WBQT_ID_EDIT_PASTE
+			|| id == WBQT_ID_ANIMSCRUBBER)
 		{
 			actions[i]->setIcon(standardToolIcon(id));
 		}

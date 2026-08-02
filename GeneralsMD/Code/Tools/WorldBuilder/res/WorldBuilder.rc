@@ -157,6 +157,7 @@ BEGIN
     BUTTON      ID_EDIT_MAPSETTINGS
     SEPARATOR
     BUTTON      ID_VIEW_LISTEN_TOGGLE
+    BUTTON      ID_VIEW_ANIMSCRUBBER
 END
 
 IDR_TOOLBAR1 TOOLBAR 20, 80
@@ -3212,6 +3213,7 @@ END
 STRINGTABLE
 BEGIN
     ID_VIEW_LISTEN_TOGGLE   "Play all ambient sounds, or none\nPlay/Pause Ambient Sounds"
+    ID_VIEW_ANIMSCRUBBER    "Pose the selected object through its animations\nAnimation Scrubber"
 END
 
 STRINGTABLE
