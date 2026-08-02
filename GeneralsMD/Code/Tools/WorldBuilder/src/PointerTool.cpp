@@ -871,6 +871,11 @@ void PointerTool::mouseUp(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldB
 			}
 			Bool picked;
 			Coord3D loc = *pObj->getLocation();
+			// Test where the ICON is, which is on the ground (see DrawObject::Render). Keeping the
+			// object's own Z offset here would project a raised object high above its icon, so a
+			// box drawn around the icon you can see would not select it.
+			// docToViewCoords adds the terrain height itself, so zero is ground level.
+			loc.z = 0.0f;
 			CPoint viewPt;
 			if (pView->docToViewCoords(loc, &viewPt)){
 				picked = (viewPt.x>=box.left && viewPt.x<=box.right && viewPt.y>=box.top && viewPt.y<=box.bottom) ;
