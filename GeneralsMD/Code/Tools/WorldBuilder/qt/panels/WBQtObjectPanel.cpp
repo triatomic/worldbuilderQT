@@ -247,6 +247,25 @@ void WBQtObjectPanel::rebuildTree(const QString &filter)
 	}
 }
 
+// The first placeable descendant of a grouping node, in display order (the tree is
+// kept sorted).  NULL when the branch holds no objects (an empty search filter node).
+static QTreeWidgetItem *firstLeafUnder(QTreeWidgetItem *item)
+{
+	if (item->data(0, kListIndexRole).toInt() >= 0)
+	{
+		return item;
+	}
+	for (int i = 0; i < item->childCount(); ++i)
+	{
+		QTreeWidgetItem *leaf = firstLeafUnder(item->child(i));
+		if (leaf != NULL)
+		{
+			return leaf;
+		}
+	}
+	return NULL;
+}
+
 void WBQtObjectPanel::onTreeSelectionChanged()
 {
 	if (m_updating)
@@ -258,14 +277,25 @@ void WBQtObjectPanel::onTreeSelectionChanged()
 	{
 		return;
 	}
-	int listIndex = sel.first()->data(0, kListIndexRole).toInt();
+	QTreeWidgetItem *picked = sel.first();
+	int listIndex = picked->data(0, kListIndexRole).toInt();
 	if (listIndex < 0)
 	{
-		return;	// a grouping node, not an object
+		// A grouping node.  Keep it selected in the tree, but drive the backend with
+		// the category's first object so placement works from a header pick too --
+		// notably "Place all objects in category", which anchors on the current
+		// object's side + sorting and used to require drilling down to a leaf first.
+		QTreeWidgetItem *leaf = firstLeafUnder(picked);
+		if (leaf == NULL)
+		{
+			return;
+		}
+		picked = leaf;
+		listIndex = leaf->data(0, kListIndexRole).toInt();
 	}
 
 	WBQtObject_SelectIndex(listIndex);
-	m_nameLabel->setText(sel.first()->text(0));
+	m_nameLabel->setText(picked->text(0));
 	m_copyNameBtn->setEnabled(true);
 
 	m_updating = true;
