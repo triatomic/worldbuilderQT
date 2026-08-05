@@ -159,29 +159,15 @@ static void unloadMapIniOverrides(void)
 	if (!g_mapiniloaded)
 		return;
 
-	// The invented templates go away with the reset below, so stop excluding those names.
-	g_mapIniPhantomTemplates.clear();
-
-	if (TheThingFactory)       TheThingFactory->reset();        // Object
-	if (TheWeaponStore)        TheWeaponStore->reset();         // Weapon
-	if (TheScienceStore)       TheScienceStore->reset();        // Science
-	if (TheSpecialPowerStore)  TheSpecialPowerStore->reset();   // SpecialPower
-
-	// Water transparency / radar color override (GameLogic does this same dance on its
-	// own reset). TheWaterTransparency is an OVERRIDE<> smart pointer.
-	if (TheWaterTransparency.getNonOverloadedPointer())
-	{
-		WaterTransparencySetting *wt =
-			(WaterTransparencySetting*)TheWaterTransparency.getNonOverloadedPointer();
-		TheWaterTransparency = (WaterTransparencySetting*)wt->deleteOverrides();
-	}
+	// The freeing half -- override chains deleted, phantom names dropped -- is exactly the
+	// shutdown teardown, so share it (see WBMapIni_UnloadForShutdown below). What this path adds
+	// is the re-link, because here the templates are about to be USED again.
+	WBMapIni_UnloadForShutdown();
 
 	// Re-link object templates after stripping overrides (resolves names, rebuilds the
 	// upgrade/module references) -- the same call the WB loader makes after parsing.
 	if (TheThingFactory)
 		TheThingFactory->postProcessLoad();
-
-	g_mapiniloaded = false;
 }
 
 // Shutdown-only teardown, called from ExitInstance BEFORE Qt is destroyed.
@@ -206,15 +192,32 @@ static void unloadMapIniOverrides(void)
 void WBMapIni_UnloadForShutdown(void)
 {
 	if (!g_mapiniloaded)
+	{
 		return;
+	}
 
+	// The invented templates go away with the resets below, so stop excluding those names.
 	g_mapIniPhantomTemplates.clear();
 
-	if (TheThingFactory)       TheThingFactory->reset();        // Object
-	if (TheWeaponStore)        TheWeaponStore->reset();         // Weapon
-	if (TheScienceStore)       TheScienceStore->reset();        // Science
-	if (TheSpecialPowerStore)  TheSpecialPowerStore->reset();   // SpecialPower
+	if (TheThingFactory)
+	{
+		TheThingFactory->reset();		// Object
+	}
+	if (TheWeaponStore)
+	{
+		TheWeaponStore->reset();		// Weapon
+	}
+	if (TheScienceStore)
+	{
+		TheScienceStore->reset();		// Science
+	}
+	if (TheSpecialPowerStore)
+	{
+		TheSpecialPowerStore->reset();	// SpecialPower
+	}
 
+	// Water transparency / radar color override (GameLogic does this same dance on its
+	// own reset). TheWaterTransparency is an OVERRIDE<> smart pointer.
 	if (TheWaterTransparency.getNonOverloadedPointer())
 	{
 		WaterTransparencySetting *wt =

@@ -1216,8 +1216,22 @@ void WbView3d::resetRenderObjects()
 	// resetRenderObjects (a per-object rebuild is not supported -- see the note there), so clearing
 	// it here would wipe the state the rebuild is supposed to apply: the object would arm, the
 	// reset would disarm it, and every module would pose at frame 0 as if nothing had been asked
-	// for. Map changes are handled where the objects actually go away (the removal path nulls it,
-	// and a MapObject that no longer exists can never match pMapObj again).
+	// for. But only a pointer still IN the map's object list may survive: the removal path nulls a
+	// deleted object, yet a map load replaces the whole list without routing through it, and the
+	// MemoryPool recycles freed slots -- so a stale pointer could coincidentally match a NEW
+	// object and silently scrub-pose it. Validate rather than trust.
+	if (m_scrubObject != NULL) {
+		Bool scrubStillPresent = false;
+		for (MapObject *o = MapObject::getFirstMapObject(); o; o = o->getNext()) {
+			if (o == m_scrubObject) {
+				scrubStillPresent = true;
+				break;
+			}
+		}
+		if (!scrubStillPresent) {
+			m_scrubObject = NULL;
+		}
+	}
 	// Erase references to render objs that have been removed.
 	while (pMapObj) 
 	{
@@ -2152,18 +2166,9 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 			// renders nothing. Templates that want geometry add their own AND RemoveModule that
 			// default; a build placeholder does neither, so it reports ONE draw module that draws
 			// nothing at all (census: NavyCapitalNebulaCruiser00 modules=1 variations=3).
-			// Test for a module that can actually produce a model instead.
-			if (tTemplate != NULL && !templateHasDrawableModel(tTemplate)) {
-				const std::vector<AsciiString> &variations = tTemplate->getBuildVariations();
-				for (size_t vi = 0; vi < variations.size(); ++vi) {
-					const ThingTemplate *varTmpl =
-						TheThingFactory ? TheThingFactory->findTemplate(variations[vi], FALSE) : NULL;
-					if (varTmpl != NULL && templateHasDrawableModel(varTmpl)) {
-						tTemplate = varTmpl;
-						break;
-					}
-				}
-			}
+			// Test for a module that can actually produce a model instead -- shared with the
+			// scrubber's passes (resolveBuildVariation), which must walk the same template.
+			tTemplate = resolveBuildVariation(tTemplate);
 
 			if (tTemplate) {
 				Bool hasPostCollapseState = false;
@@ -2307,6 +2312,15 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 		
 								// Create the sub-model render object
 								RenderObjClass* subRenderObj = m_assetManager->Create_Render_Obj(modelName.str(), scale, playerColor);
+								if (subRenderObj == NULL) {
+									// Keep m_moduleRenderObjs aligned with the module walk: the
+									// scrubber's re-pose (repositionAnimationScrub) pairs the recorded
+									// render objects against the modules that NAME a model, so a module
+									// whose asset failed to load must still occupy its slot -- otherwise
+									// every later module would be posed with the previous module's
+									// animation. poseScrubbedModule skips the NULL.
+									m_moduleRenderObjs[pMapObj].push_back(NULL);
+								}
 								if (subRenderObj) {
 									// == the game's W3DModelDraw: hide what THIS module's condition
 									// state hides, plus anything parented to a hidden bone. Uses
@@ -2782,7 +2796,6 @@ void WbView3d::invalObjectInView(MapObject *pMapObjIn)
 			// default state, which is where a model-less FX marker declares its emitters anyway.
 			WBParticleRuntime::placeEmittersForObject(pMapObj, NULL, loc.x, loc.y, loc.z, NULL);
 		}
-
 		if (found) break;
 	}
 	if (!found && pMapObjIn) {
@@ -3512,7 +3525,10 @@ Bool WbView3d::repositionAnimationScrub(MapObject *obj, Real fraction)
 	}
 	m_scrubFraction = fraction;
 
-	const ThingTemplate *tt = obj->getThingTemplate();
+	// Resolve through the same BuildVariations substitution the build used, or a placeholder
+	// object's walk below would pace off the PLACEHOLDER's modules (which all skip) while the
+	// recorded render objects came from the variation.
+	const ThingTemplate *tt = resolveBuildVariation(obj->getThingTemplate());
 	if (tt == NULL) {
 		return false;
 	}
@@ -3613,7 +3629,10 @@ Int WbView3d::getObjectAnimationInfo(MapObject *obj, Int *moduleCountOut) const
 		return 0;
 	}
 
-	const ThingTemplate *tTemplate = obj->getThingTemplate();
+	// Same BuildVariations substitution as the build: the placeholder's own modules carry no
+	// animations (or models) at all, so without this the scrubber reports "none animate" for
+	// exactly the objects the substitution exists for.
+	const ThingTemplate *tTemplate = resolveBuildVariation(obj->getThingTemplate());
 	if (tTemplate == NULL) {
 		return 0;
 	}
@@ -3755,6 +3774,37 @@ Bool WbView3d::templateHasDrawableModel(const ThingTemplate *tmpl)
 		}
 	}
 	return false;
+}
+
+//=============================================================================
+// WbView3d::resolveBuildVariation
+//=============================================================================
+/** The template whose draw modules the viewport actually builds.
+
+A template that lists BuildVariations and has nothing drawable of its own is a build placeholder:
+the game substitutes one of the variations in ThingFactory::newObject before the object exists at
+all, so the placeholder itself is never what gets drawn. Follow the substitution here --
+deterministically (the FIRST drawable variation, where the game re-rolls per object), because a
+viewport that changed models on every rebuild would be worse than useless in an editor.
+
+Every pass over an object's draw modules must resolve through this, or the passes walk DIFFERENT
+templates: the build would draw the variation while the scrubber's queries and re-pose walked the
+placeholder (whose modules all skip), leaving the scrubber dead on exactly these objects. */
+//=============================================================================
+const ThingTemplate *WbView3d::resolveBuildVariation(const ThingTemplate *tmpl)
+{
+	if (tmpl == NULL || templateHasDrawableModel(tmpl)) {
+		return tmpl;
+	}
+	const std::vector<AsciiString> &variations = tmpl->getBuildVariations();
+	for (size_t vi = 0; vi < variations.size(); ++vi) {
+		const ThingTemplate *varTmpl =
+			TheThingFactory ? TheThingFactory->findTemplate(variations[vi], FALSE) : NULL;
+		if (varTmpl != NULL && templateHasDrawableModel(varTmpl)) {
+			return varTmpl;
+		}
+	}
+	return tmpl;
 }
 
 //=============================================================================

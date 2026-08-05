@@ -667,6 +667,12 @@ public:
 	/// inherits a do-nothing W3DDefaultDraw, so a build placeholder reports one module and draws
 	/// nothing. True only if some W3DModelDraw names a real model.
 	static Bool templateHasDrawableModel(const ThingTemplate *tmpl);
+	/// The template whose draw modules the viewport actually builds. A template listing
+	/// BuildVariations with nothing drawable of its own is a build placeholder (the game
+	/// substitutes a variation in ThingFactory::newObject before the object exists); follow that
+	/// here so EVERY pass over an object's modules -- the build, the scrubber's queries, the
+	/// re-pose -- walks the same template. Returns tmpl unchanged when it draws for itself.
+	static const ThingTemplate *resolveBuildVariation(const ThingTemplate *tmpl);
 	/// Park obj at animation frame 0 so an attach bone reads at the PRISTINE pose (what the game
 	/// caches once in getAttachToDrawableBoneOffset), not at whatever frame it is displaying.
 	/// Returns the animation moved aside -- pass it back to restoreAfterPristineBoneRead.
