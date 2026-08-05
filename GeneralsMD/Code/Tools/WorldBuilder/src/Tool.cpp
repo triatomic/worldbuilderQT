@@ -25,6 +25,7 @@
 #include "MainFrm.h"
 #include "DrawObject.h"
 #include "WorldBuilderDoc.h"
+#include "WHeightMapEdit.h"
 #include "Common/MapObject.h"
 
 #include "Tool.h"
@@ -65,6 +66,22 @@ void Tool::activate()
     DrawObject::setDoBrushFeedback(false);
 }
 
+
+/// Undo the on-screen preview of an abandoned stroke.
+/** While a stroke is in progress the terrain tools push their edit copy into the
+views via updateHeightMap, but the document itself only changes at mouseUp.  When
+the stroke is dropped instead of committed, push the document's real height map
+back so the display doesn't keep showing an edit that no longer exists anywhere -
+otherwise the ghost of the stroke lingers until the next full rebuild, and saving
+the map would silently lose what's on screen. */
+void Tool::revertAbandonedPreview(void)
+{
+	CWorldBuilderDoc *pDoc = CWorldBuilderDoc::GetActiveDoc();
+	if (pDoc && pDoc->GetHeightMap()) {
+		IRegion2D range = {0, 0, 0, 0};
+		pDoc->updateHeightMap(pDoc->GetHeightMap(), false, range);
+	}
+}
 
 void Tool::setCursor(void) 
 {

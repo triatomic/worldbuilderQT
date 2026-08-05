@@ -107,9 +107,13 @@ void FeatherTool::setRadius(Int radius)
 copies would otherwise stay ref'd until the next mouseDown released them. */
 void FeatherTool::abandonStroke(void)
 {
+	if (m_htMapEditCopy == NULL && m_htMapFeatherCopy == NULL && m_htMapRateCopy == NULL) {
+		return;
+	}
 	REF_PTR_RELEASE(m_htMapEditCopy);
 	REF_PTR_RELEASE(m_htMapFeatherCopy);
 	REF_PTR_RELEASE(m_htMapRateCopy);
+	revertAbandonedPreview();
 }
 
 /// Start tool.

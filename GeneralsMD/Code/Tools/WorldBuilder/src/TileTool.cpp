@@ -75,7 +75,11 @@ void TileTool::deactivate()
 copy would otherwise stay ref'd until the next mouseDown released it. */
 void TileTool::abandonStroke(void)
 {
+	if (m_htMapEditCopy == NULL) {
+		return;
+	}
 	REF_PTR_RELEASE(m_htMapEditCopy);
+	revertAbandonedPreview();
 }
 // struct TileTextureData {
 //     int xOffset;

@@ -111,8 +111,12 @@ void BrushTool::activate()
 copies would otherwise stay ref'd until the next mouseDown released them. */
 void BrushTool::abandonStroke(void)
 {
+	if (m_htMapEditCopy == NULL && m_htMapFeatherCopy == NULL) {
+		return;
+	}
 	REF_PTR_RELEASE(m_htMapEditCopy);
 	REF_PTR_RELEASE(m_htMapFeatherCopy);
+	revertAbandonedPreview();
 }
 
 /// Start tool.

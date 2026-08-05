@@ -106,8 +106,12 @@ void MoundTool::activate()
 copies would otherwise stay ref'd until the next mouseDown released them. */
 void MoundTool::abandonStroke(void)
 {
+	if (m_htMapEditCopy == NULL && m_htMapSaveCopy == NULL) {
+		return;
+	}
 	REF_PTR_RELEASE(m_htMapEditCopy);
 	REF_PTR_RELEASE(m_htMapSaveCopy);
+	revertAbandonedPreview();
 }
 
 void MoundTool::mouseDown(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBuilderDoc *pDoc) 
