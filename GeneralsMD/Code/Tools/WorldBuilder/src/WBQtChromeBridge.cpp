@@ -12,6 +12,7 @@
 #include "Lib/BaseType.h"
 #include "MainFrm.h"
 #include "WorldBuilder.h"
+#include "WorldBuilderDoc.h"
 #include "qt/WBQtBridge.h"
 #include "qt/WBQtChromeBridge.h"
 
@@ -71,6 +72,25 @@ void CMainFrame::OnUpdateFrameTitle(BOOL bAddToTitle)
 	CString title;
 	GetWindowText(title);
 	WBQt_SetMainWindowTitle((LPCTSTR)title);
+}
+
+//----------------------------------------------------------------------------------------
+// CWorldBuilderDoc::SetTitle -- declared (guarded) in WorldBuilderDoc.h. The base
+// CDocument::SetTitle retitles frames via UpdateFrameCounts, which only reaches frames
+// found through a VISIBLE view's GetParentFrame(); inverted, the 3D view's parent chain
+// ends in the Qt window (no CFrameWnd) and the hidden MFC frame's own views are skipped
+// as invisible, so no frame was ever retitled and the OnUpdateFrameTitle mirror above
+// never ran after the startup seed. Compose on the frame explicitly; the mirror pushes
+// the result into the Qt title bar.
+//----------------------------------------------------------------------------------------
+void CWorldBuilderDoc::SetTitle(LPCTSTR lpszTitle)
+{
+	CDocument::SetTitle(lpszTitle);
+	CMainFrame *pFrame = CMainFrame::GetMainFrame();
+	if (pFrame != NULL)
+	{
+		pFrame->OnUpdateFrameTitle(TRUE);
+	}
 }
 
 //----------------------------------------------------------------------------------------

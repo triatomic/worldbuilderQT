@@ -111,6 +111,14 @@ public:
 public: // overridden
 	virtual BOOL DoSave(LPCTSTR lpszPathName, BOOL bReplace = TRUE);
 	virtual BOOL DoFileSave();
+#ifdef RTS_HAS_QT
+	// Stage 1: MFC retitles frames by walking each VISIBLE view's GetParentFrame()
+	// (CDocument::UpdateFrameCounts), but inverted, the 3D view lives under the Qt
+	// window (no CFrameWnd in its parent chain) and the MFC frame is hidden -- so a
+	// save/new/open never reached the OnUpdateFrameTitle mirror and the Qt title went
+	// stale. Push the title at the frame directly. Defined in src/WBQtChromeBridge.cpp.
+	virtual void SetTitle(LPCTSTR lpszTitle);
+#endif
 
 // Attributes
 public:
