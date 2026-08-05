@@ -2962,7 +2962,7 @@ END
 
 STRINGTABLE
 BEGIN
-    IDR_MAINFRAME           "Adrianes Generals World Builder\nMission\nMission\n Missions (*.map)\n.map\nGeneralsMap\n Generals Mission Map"
+    IDR_MAINFRAME           "Qt World Builder\nMission\nMission\n Missions (*.map)\n.map\nGeneralsMap\n Generals Mission Map"
     IDS_SKELETON            "SkeletonWindow"
 END
 

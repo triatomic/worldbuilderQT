@@ -27,7 +27,7 @@ WBQtMainWindow::WBQtMainWindow(void *frameHwnd)
 	s_instance = this;
 
 	setObjectName("wbMainWindow");
-	setWindowTitle("WorldBuilder");
+	setWindowTitle("Qt World Builder");
 	setAcceptDrops(true);
 
 	// Debounced placement save: fires 500ms after the last move/resize, skipping
