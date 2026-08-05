@@ -78,6 +78,7 @@ public:
 	void applyBrushAt(CPoint ndx, WorldHeightMapEdit* pDoc_htMap, IRegion2D& partialRange);
 	virtual WorldHeightMapEdit *getHeightMap(void) {return m_htMapEditCopy;};
 	virtual void activate(); ///< Become the current tool.
+	virtual void abandonStroke(void); ///< Drop an uncommitted stroke on a tool swap.
 	virtual Bool followsTerrain(void) {return false;};
 
 };

@@ -101,6 +101,15 @@ void MoundTool::activate()
 	DrawObject::setBrushFeedbackParms(false, m_brushWidth, m_brushFeather);
 }
 
+/// Throw away an uncommitted stroke.
+/** The tool was swapped out between the mouse down and the mouse up, so the edit
+copies would otherwise stay ref'd until the next mouseDown released them. */
+void MoundTool::abandonStroke(void)
+{
+	REF_PTR_RELEASE(m_htMapEditCopy);
+	REF_PTR_RELEASE(m_htMapSaveCopy);
+}
+
 void MoundTool::mouseDown(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBuilderDoc *pDoc) 
 {
 	if (m != TRACK_L) return;
@@ -121,6 +130,13 @@ void MoundTool::mouseDown(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldB
 void MoundTool::mouseUp(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBuilderDoc *pDoc) 
 {
 	if (m != TRACK_L) return;
+
+	// No stroke in progress (the tool was swapped in mid-drag, so it never got the
+	// matching mouseDown) - nothing to commit.
+	if (m_htMapEditCopy == NULL) {
+		REF_PTR_RELEASE(m_htMapSaveCopy);
+		return;
+	}
 
 	WBDocUndoable *pUndo = new WBDocUndoable(pDoc, m_htMapEditCopy);
 	pDoc->AddAndDoUndoable(pUndo);
@@ -182,6 +198,13 @@ void MoundTool::mouseMoved(TTrackingMode m, CPoint viewPt, WbView* pView, CWorld
 	pView->Invalidate();
 	pDoc->updateAllViews();
 	if (m != TRACK_L) return;
+
+	// The stroke buffers are built in mouseDown.  A fast tool swap can retarget the
+	// tool between the down and the move, so the move arrives without them; bail
+	// rather than dereference null.
+	if (m_htMapEditCopy == NULL || m_htMapSaveCopy == NULL) {
+		return;
+	}
 
 	Int curTime	= ::GetTickCount();
 	Int deltaTime = curTime - m_lastMoveTime;

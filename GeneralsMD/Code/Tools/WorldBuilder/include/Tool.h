@@ -73,6 +73,14 @@ public:
 	virtual void activate(); ///< Become the current tool.
 	virtual void deactivate(){}; ///< Become not the current tool.
 
+	/// Throw away a stroke that was started but never finished, because the tool got
+	/// swapped out from under it (a modifier key or a palette click between the mouse
+	/// down and the mouse up).  Unlike deactivate() this must be safe to call at any
+	/// time on any tool, so it only drops the tool's own in-progress edit buffers - no
+	/// panel, selection, or render-object side effects.  Tools that hold no stroke
+	/// state need not override it.
+	virtual void abandonStroke(void) {};
+
 	virtual Bool followsTerrain(void) {return true;};	 ///< True if the tool tracks the terrain, generally false if it modifies the terrain heights.
 
 	virtual void mouseMoved(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBuilderDoc *pDoc) {}

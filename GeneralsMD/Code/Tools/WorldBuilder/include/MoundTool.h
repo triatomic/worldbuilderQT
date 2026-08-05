@@ -80,6 +80,7 @@ public:
 
 	void applyMoundAt(CPoint ndx, CWorldBuilderDoc* pDoc, IRegion2D& partialRange);
 	virtual void activate(); ///< Become the current tool.
+	virtual void abandonStroke(void); ///< Drop an uncommitted stroke on a tool swap.
 };
 
 /*************************************************************************

@@ -83,6 +83,7 @@ public:
 	virtual WorldHeightMapEdit *getHeightMap(void) {return m_htMapEditCopy;};
 	virtual void activate(); ///< Become the current tool.
 	virtual void deactivate();
+	virtual void abandonStroke(void); ///< Drop an uncommitted stroke on a tool swap.
 	virtual Int getWidth(void) {return 1;};
 	static void clearCopiedTiles(); ///< Called under open new document
 	

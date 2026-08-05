@@ -783,7 +783,14 @@ void CWorldBuilderApp::setActiveTool(Tool *pNewTool)
 		// same tool
 		return;
 	}
+	// Whatever was receiving the mouse loses it here, so an unfinished stroke would
+	// never see its mouseUp; drop it.  m_curTool and m_selTool differ while a
+	// modifier key is held, so both have to be checked.
+	if (m_curTool && m_curTool != pNewTool) {
+		m_curTool->abandonStroke();
+	}
 	if (m_selTool && m_selTool != pNewTool) {
+		m_selTool->abandonStroke();
 		m_selTool->deactivate();
 	}
 	if (pNewTool) {
@@ -821,6 +828,15 @@ void CWorldBuilderApp::updateCurTool(Bool forceHand)
 		}
 	}
 	if (curTool != m_curTool) {
+		// The outgoing tool may have an edit in progress that will never get its
+		// matching mouseUp, because the mouse messages go to the new tool from here
+		// on.  Drop it, or its height-map copies stay ref'd until the tool is next
+		// used.  Note this deliberately isn't deactivate() - that has panel and
+		// render-object side effects that must not fire on a transient modifier-key
+		// swap (Ctrl/Space/Alt), which this path handles.
+		if (curTool) {
+			curTool->abandonStroke();
+		}
 		m_curTool->activate();
 	}
 }

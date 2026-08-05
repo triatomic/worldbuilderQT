@@ -69,6 +69,14 @@ void TileTool::deactivate()
 {
 	DrawObject::m_terrainPasteFeedback = false;
 }
+
+/// Throw away an uncommitted stroke.
+/** The tool was swapped out between the mouse down and the mouse up, so the edit
+copy would otherwise stay ref'd until the next mouseDown released it. */
+void TileTool::abandonStroke(void)
+{
+	REF_PTR_RELEASE(m_htMapEditCopy);
+}
 // struct TileTextureData {
 //     int xOffset;
 //     int yOffset;
@@ -1094,6 +1102,13 @@ void TileTool::mouseMoved(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldB
 	if (m != TRACK_L && m != TRACK_R) return;
 
 	if (TerrainMaterial::isCopySelectMode() || TerrainMaterial::isCopyApplyMode()) return;
+
+	// The stroke buffer is built in mouseDown, but only in normal paint mode - and a
+	// fast tool swap can retarget the tool between the down and the move.  Either way
+	// the move can arrive without it; bail rather than dereference null.
+	if (m_htMapEditCopy == NULL) {
+		return;
+	}
 
 	Int dx = m_prevViewPt.x - viewPt.x;
 	Int dy = m_prevViewPt.y - viewPt.y;

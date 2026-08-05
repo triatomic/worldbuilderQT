@@ -106,6 +106,15 @@ void BrushTool::activate()
 	DrawObject::setBrushFeedbackParms(m_brushSquare, m_brushWidth, m_brushFeather);
 }
 
+/// Throw away an uncommitted stroke.
+/** The tool was swapped out between the mouse down and the mouse up, so the edit
+copies would otherwise stay ref'd until the next mouseDown released them. */
+void BrushTool::abandonStroke(void)
+{
+	REF_PTR_RELEASE(m_htMapEditCopy);
+	REF_PTR_RELEASE(m_htMapFeatherCopy);
+}
+
 /// Start tool.
 /** Setup the tool to start brushing - make a copy of the height map
 to edit, another copy because we need it :), and call mouseMovedDown. */
@@ -130,6 +139,13 @@ doc to execute, and cleanup ref'd objects. */
 void BrushTool::mouseUp(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBuilderDoc *pDoc) 
 {
 	if (m != TRACK_L) return;
+
+	// No stroke in progress (the tool was swapped in mid-drag, so it never got the
+	// matching mouseDown) - nothing to commit.
+	if (m_htMapEditCopy == NULL) {
+		REF_PTR_RELEASE(m_htMapFeatherCopy);
+		return;
+	}
 
 	WBDocUndoable *pUndo = new WBDocUndoable(pDoc, m_htMapEditCopy);
 	pDoc->AddAndDoUndoable(pUndo);
@@ -212,6 +228,15 @@ void BrushTool::mouseMoved(TTrackingMode m, CPoint viewPt, WbView* pView, CWorld
             Int cellHeight = pMap->getHeight(ndx.x, ndx.y);
             setHeight(cellHeight);
         }
+        return;
+    }
+
+    // The stroke buffers are built in mouseDown.  A fast tool swap can retarget the
+    // tool between the down and the move, so the move arrives without them; bail
+    // rather than dereference null.  (The shift-key height pick above reads the
+    // document's height map, not these, so it runs before this guard.)
+    if (m_htMapEditCopy == NULL || m_htMapFeatherCopy == NULL)
+    {
         return;
     }
 

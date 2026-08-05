@@ -102,6 +102,16 @@ void FeatherTool::setRadius(Int radius)
 	}
 };
 
+/// Throw away an uncommitted stroke.
+/** The tool was swapped out between the mouse down and the mouse up, so the edit
+copies would otherwise stay ref'd until the next mouseDown released them. */
+void FeatherTool::abandonStroke(void)
+{
+	REF_PTR_RELEASE(m_htMapEditCopy);
+	REF_PTR_RELEASE(m_htMapFeatherCopy);
+	REF_PTR_RELEASE(m_htMapRateCopy);
+}
+
 /// Start tool.
 /** Setup the tool to start brushing - make a copy of the height map
 to edit, another copy because we need it :), and call mouseMovedDown. */
@@ -110,8 +120,11 @@ void FeatherTool::mouseDown(TTrackingMode m, CPoint viewPt, WbView* pView, CWorl
 	if (m != TRACK_L) return;
 
 //	WorldHeightMapEdit *pMap = pDoc->GetHeightMap();
-	// just in case, release it.
+	// just in case, release them.  (All three are overwritten below, so all three
+	// have to be released or a stroke that never got its mouseUp leaks them.)
 	REF_PTR_RELEASE(m_htMapEditCopy);
+	REF_PTR_RELEASE(m_htMapFeatherCopy);
+	REF_PTR_RELEASE(m_htMapRateCopy);
 	m_htMapEditCopy = pDoc->GetHeightMap()->duplicate();
 	m_htMapFeatherCopy = pDoc->GetHeightMap()->duplicate();
 	m_htMapRateCopy = pDoc->GetHeightMap()->duplicate();
@@ -132,6 +145,14 @@ doc to execute, and cleanup ref'd objects. */
 void FeatherTool::mouseUp(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldBuilderDoc *pDoc) 
 {
 	if (m != TRACK_L) return;
+
+	// No stroke in progress (the tool was swapped in mid-drag, so it never got the
+	// matching mouseDown) - nothing to commit.
+	if (m_htMapEditCopy == NULL) {
+		REF_PTR_RELEASE(m_htMapFeatherCopy);
+		REF_PTR_RELEASE(m_htMapRateCopy);
+		return;
+	}
 
 	WBDocUndoable *pUndo = new WBDocUndoable(pDoc, m_htMapEditCopy);
 	pDoc->AddAndDoUndoable(pUndo);
@@ -207,6 +228,14 @@ void FeatherTool::mouseMoved(TTrackingMode m, CPoint viewPt, WbView* pView, CWor
     pView->Invalidate();
     pDoc->updateAllViews();
     if (m != TRACK_L) return;
+
+    // The stroke buffers are built in mouseDown.  A fast tool swap can retarget the
+    // tool between the down and the move, so the move arrives without them; bail
+    // rather than dereference null.
+    if (m_htMapEditCopy == NULL || m_htMapFeatherCopy == NULL || m_htMapRateCopy == NULL)
+    {
+        return;
+    }
 
     CPoint ndx;
     getCenterIndex(&cpt, m_feather, &ndx, pDoc);
