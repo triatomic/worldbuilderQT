@@ -110,9 +110,22 @@ namespace WBQtNameMatch
 	}
 
 	// Best candidate for `target` out of `candidates`, or an empty string when nothing clears
-	// `threshold`. Admits on the raw similarity so the containment boost only ever REORDERS what
-	// already qualified -- it must not drag in a distant name that happens to embed the target.
-	// The single ranking rule behind every "closest existing name" lookup.
+	// `threshold`. The single ranking rule behind every "closest existing name" lookup.
+	//
+	// Admits on the BOOSTED score, not the raw similarity. Admitting on the raw value looks
+	// safer, but it silently defeats the boost whenever the prefix is long relative to the name:
+	// for a missing "GLABarracks" the faction variants "Aslt_GLABarracks" / "Slth_GLABarracks"
+	// score 0.6875 raw -- five inserted characters -- so they were dropped before the boost could
+	// rank them, leaving "GLAHoleBarracks" (four inserted characters, 0.7333) to win by default.
+	// Boosted they reach 0.8438 and beat it comfortably. Containing the whole missing name intact
+	// is itself strong evidence of a match, so it belongs in the admission test, not only in the
+	// ordering. This also rescues short names that previously matched nothing at all: "GLAPalace"
+	// now finds "Slth_GLAPalace" (0.8214) instead of being left unresolved.
+	//
+	// The boost only ever applies to a candidate that contains the target intact, and it closes
+	// half the gap to 1.0, so a genuinely distant name still has to be reasonably close on edit
+	// distance to qualify -- a long unrelated name that happens to embed a short target scores
+	// too low even boosted.
 	inline QString bestMatch(const QString &target, const QStringList &candidates,
 		float threshold = kSuggestThreshold)
 	{
@@ -125,12 +138,11 @@ namespace WBQtNameMatch
 			{
 				continue;
 			}
-			const float base = similarity(target, candidate);
-			if (base < threshold)
+			const float score = matchScore(target, candidate);
+			if (score < threshold)
 			{
 				continue;
 			}
-			const float score = matchScoreFromBase(target, candidate, base);
 			if (score > bestScore)
 			{
 				bestScore = score;
@@ -172,16 +184,16 @@ namespace WBQtNameMatch
 		{
 			if ((*it)->data(0, leafRole).toInt() >= leafMin)
 			{
-				// Admit on the raw similarity so the containment boost only ever REORDERS the
-				// candidates that already cleared the bar -- it must not drag in a distant name
-				// that happens to embed the target.
+				// Admit on the boosted score, matching bestMatch -- admitting on the raw value
+				// drops the very candidates the boost exists to promote whenever the prefix is
+				// long relative to the name (see the note on bestMatch).
 				const QString candidate = (*it)->text(0);
-				const float base = similarity(target, candidate);
-				if (base >= threshold)
+				const float score = matchScore(target, candidate);
+				if (score >= threshold)
 				{
 					ScoredLeaf s;
 					s.item = *it;
-					s.score = matchScoreFromBase(target, candidate, base);
+					s.score = score;
 					scored.push_back(s);
 				}
 			}
