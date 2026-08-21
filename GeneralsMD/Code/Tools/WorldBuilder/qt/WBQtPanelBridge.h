@@ -269,6 +269,10 @@ void WBQtScript_NewScript(void);
 void WBQtScript_EditScript(void);
 void WBQtScript_CopyScript(void);
 void WBQtScript_Delete(void);
+// Removes every script and folder from every side; reports how many went (either may be NULL).
+void WBQtScript_ClearAll(int *scriptsOut, int *foldersOut);
+// Counts the scripts and folders in the map without changing anything.
+void WBQtScript_CountAll(int *scriptsOut, int *foldersOut);
 // Rename the current script/folder in place (undoable). Returns 1 if renamed, 0 on empty/no-change.
 int  WBQtScript_RenameSelection(const char *newName);
 void WBQtScript_GetSelectionName(char *buf, int cap);	// current selection's bare name (rename prefill)
@@ -333,6 +337,9 @@ void WBQtScript_SaveNow(void);
 // its tree), 0 when the stack is empty.
 int  WBQtScript_Undo(void);
 int  WBQtScript_Redo(void);
+// Is there anything to undo / redo (for enabling the buttons)?
+int  WBQtScript_CanUndo(void);
+int  WBQtScript_CanRedo(void);
 
 // Exact-name script lookup (the detail pane's clickable "[Referenced in]" links):
 // returns the packed ListType int, or -1 when no script has that name.

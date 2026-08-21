@@ -625,6 +625,79 @@ void ScriptDialog::qtMDelete(void)
 	}
 }
 
+// Counts every script and folder in the map, across all sides.  Used to tell the user what
+// Clear All is about to remove before they commit to it.
+void ScriptDialog::qtCountAll(int *scriptsOut, int *foldersOut)
+{
+	int scripts = 0;
+	int folders = 0;
+	for (Int i = 0; i < m_sides.getNumSides(); i++)
+	{
+		ScriptList *pSL = m_sides.getSideInfo(i)->getScriptList();
+		if (!pSL)
+		{
+			continue;
+		}
+		Script *s;
+		for (s = pSL->getScript(); s; s = s->getNext())
+		{
+			scripts++;
+		}
+		ScriptGroup *g;
+		for (g = pSL->getScriptGroup(); g; g = g->getNext())
+		{
+			folders++;
+			for (s = g->getScript(); s; s = s->getNext())
+			{
+				scripts++;
+			}
+		}
+	}
+	if (scriptsOut != NULL)
+	{
+		*scriptsOut = scripts;
+	}
+	if (foldersOut != NULL)
+	{
+		*foldersOut = folders;
+	}
+}
+
+// Removes every script and folder from every side.  One undo snapshot covers the whole wipe --
+// the snapshot copies the entire SidesList, so a single Undo in the script editor puts all of
+// it back, rather than needing one step per script.
+void ScriptDialog::qtMClearAll(int *scriptsOut, int *foldersOut)
+{
+	qtCountAll(scriptsOut, foldersOut);
+
+	qtPushUndoSnapshot();
+
+	for (Int i = 0; i < m_sides.getNumSides(); i++)
+	{
+		ScriptList *pSL = m_sides.getSideInfo(i)->getScriptList();
+		if (!pSL)
+		{
+			continue;
+		}
+		// Delete from the head each time rather than walking with getNext(): deleteScript and
+		// deleteGroup free the object, so a cached next pointer would be read from freed memory.
+		while (pSL->getScript() != NULL)
+		{
+			pSL->deleteScript(pSL->getScript());
+		}
+		while (pSL->getScriptGroup() != NULL)
+		{
+			// deleteGroup takes the group's scripts with it.
+			pSL->deleteGroup(pSL->getScriptGroup());
+		}
+	}
+
+	// Nothing is left to point at, so drop the selection back to the player row.
+	m_curSelection.m_objType = ListType::PLAYER_TYPE;
+	m_curSelection.m_groupIndex = 0;
+	m_curSelection.m_scriptIndex = 0;
+}
+
 // == OnAddDebug minus the tree refresh.
 void ScriptDialog::qtMAddDebug(void)
 {
@@ -1362,6 +1435,48 @@ void WBQtScript_Delete(void)
 	}
 }
 
+void WBQtScript_ClearAll(int *scriptsOut, int *foldersOut)
+{
+	ScriptDialog *dlg = ScriptDialog::qtInstance();
+	if (dlg != NULL)
+	{
+		dlg->qtMClearAll(scriptsOut, foldersOut);
+	}
+	else
+	{
+		// No dialog -> nothing was cleared. Say so rather than leaving the caller's counts
+		// untouched, which would report whatever they happened to hold.
+		if (scriptsOut != NULL)
+		{
+			*scriptsOut = 0;
+		}
+		if (foldersOut != NULL)
+		{
+			*foldersOut = 0;
+		}
+	}
+}
+
+void WBQtScript_CountAll(int *scriptsOut, int *foldersOut)
+{
+	ScriptDialog *dlg = ScriptDialog::qtInstance();
+	if (dlg != NULL)
+	{
+		dlg->qtCountAll(scriptsOut, foldersOut);
+	}
+	else
+	{
+		if (scriptsOut != NULL)
+		{
+			*scriptsOut = 0;
+		}
+		if (foldersOut != NULL)
+		{
+			*foldersOut = 0;
+		}
+	}
+}
+
 int WBQtScript_RenameSelection(const char *newName)
 {
 	ScriptDialog *dlg = ScriptDialog::qtInstance();
@@ -1450,6 +1565,18 @@ int WBQtScript_Redo(void)
 {
 	ScriptDialog *dlg = ScriptDialog::qtInstance();
 	return (dlg != NULL) ? dlg->qtMRedo() : 0;
+}
+
+// Is there anything to undo / redo? The Qt window uses these to enable its buttons; the
+// snapshot stacks are file-static here, so they can't be reached from the window directly.
+int WBQtScript_CanUndo(void)
+{
+	return s_qtScriptUndo.empty() ? 0 : 1;
+}
+
+int WBQtScript_CanRedo(void)
+{
+	return s_qtScriptRedo.empty() ? 0 : 1;
 }
 
 void WBQtScript_Commit(void)

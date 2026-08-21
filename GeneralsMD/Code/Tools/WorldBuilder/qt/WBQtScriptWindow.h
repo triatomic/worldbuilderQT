@@ -73,6 +73,9 @@ private slots:
 	void onCopyScript();
 	void onDelete();
 	void onDeleteShortcut();
+	void onClearAll();
+	void onUndoShortcut();
+	void onRedoShortcut();
 	void onRename();			// rename the selected script/folder (a prefilled input dialog)
 	void onDuplicateShortcut();	// Ctrl+D: duplicate the selected script/folder (== Copy)
 	void onUndo();
@@ -197,6 +200,9 @@ private:
 	QPushButton *m_editScript;
 	QPushButton *m_copyScript;
 	QPushButton *m_delete;
+	QPushButton *m_clearAll;
+	QPushButton *m_undoBtn;
+	QPushButton *m_redoBtn;
 	QPushButton *m_verify;
 	QPushButton *m_replaceMissing;
 	QPushButton *m_addDebug;

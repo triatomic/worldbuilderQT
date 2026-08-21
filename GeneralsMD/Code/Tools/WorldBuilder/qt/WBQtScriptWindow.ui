@@ -426,6 +426,36 @@
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="undoBtn">
+       <property name="text">
+        <string>Undo</string>
+       </property>
+       <property name="toolTip">
+        <string>Undo the last script edit (Ctrl+Z).</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="redoBtn">
+       <property name="text">
+        <string>Redo</string>
+       </property>
+       <property name="toolTip">
+        <string>Redo the last undone script edit (Ctrl+Y).</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="clearAllBtn">
+       <property name="text">
+        <string>Clear All...</string>
+       </property>
+       <property name="toolTip">
+        <string>Remove every script and folder from the map, for all players. Undoable.</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QPushButton" name="verify">
        <property name="text">
         <string>Re-Verify All</string>

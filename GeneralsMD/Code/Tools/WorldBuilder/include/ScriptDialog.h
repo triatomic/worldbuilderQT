@@ -188,6 +188,10 @@ public:
 	int  qtMRenameSelection(const char *newName);	// rename the current script/group in place (undoable)
 	void qtGetSelectionName(char *buf, int cap);	// the current script/group's bare name (rename prefill)
 	void qtMDelete(void);
+	/// Removes every script and folder from every side.  Returns the counts removed.
+	void qtMClearAll(int *scriptsOut, int *foldersOut);
+	/// Counts the scripts and folders across every side, without changing anything.
+	void qtCountAll(int *scriptsOut, int *foldersOut);
 	void qtMAddDebug(void);
 	void qtMRemoveDebug(void);
 	void qtMPatchGC(void);

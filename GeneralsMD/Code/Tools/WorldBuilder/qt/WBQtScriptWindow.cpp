@@ -26,6 +26,7 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QPlainTextEdit>
+#include <QTextEdit>
 #include <QPushButton>
 #include <QSet>
 #include <QShortcut>
@@ -236,6 +237,9 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	m_editScript = m_ui->editScript;
 	m_copyScript = m_ui->copyScript;
 	m_delete = m_ui->deleteBtn;
+	m_clearAll = m_ui->clearAllBtn;
+	m_undoBtn = m_ui->undoBtn;
+	m_redoBtn = m_ui->redoBtn;
 	m_verify = m_ui->verify;
 	m_replaceMissing = m_ui->replaceMissing;
 	m_addDebug = m_ui->addDebug;
@@ -304,6 +308,9 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	connect(m_editScript, SIGNAL(clicked()), this, SLOT(onEditScript()));
 	connect(m_copyScript, SIGNAL(clicked()), this, SLOT(onCopyScript()));
 	connect(m_delete, SIGNAL(clicked()), this, SLOT(onDelete()));
+	connect(m_clearAll, SIGNAL(clicked()), this, SLOT(onClearAll()));
+	connect(m_undoBtn, SIGNAL(clicked()), this, SLOT(onUndo()));
+	connect(m_redoBtn, SIGNAL(clicked()), this, SLOT(onRedo()));
 	connect(m_verify, SIGNAL(clicked()), this, SLOT(onVerify()));
 	connect(m_replaceMissing, SIGNAL(clicked()), this, SLOT(onReplaceMissing()));
 	connect(m_addDebug, SIGNAL(clicked()), this, SLOT(onAddDebug()));
@@ -330,15 +337,20 @@ WBQtScriptWindow::WBQtScriptWindow(QWidget *owner)
 	QShortcut *delSc = new QShortcut(QKeySequence(Qt::Key_Delete), m_tree);
 	delSc->setContext(Qt::WidgetShortcut);
 	connect(delSc, SIGNAL(activated()), this, SLOT(onDeleteShortcut()));
-	QShortcut *undoSc = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_Z), m_tree);
-	undoSc->setContext(Qt::WidgetShortcut);
-	connect(undoSc, SIGNAL(activated()), this, SLOT(onUndo()));
-	QShortcut *redoSc = new QShortcut(QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_Z), m_tree);
-	redoSc->setContext(Qt::WidgetShortcut);
-	connect(redoSc, SIGNAL(activated()), this, SLOT(onRedo()));
-	QShortcut *redoSc2 = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_Y), m_tree);
-	redoSc2->setContext(Qt::WidgetShortcut);
-	connect(redoSc2, SIGNAL(activated()), this, SLOT(onRedo()));
+	// Undo/redo are window-scoped, not tree-scoped like Delete above. Tree scope meant they
+	// only fired while the tree itself held focus, so Ctrl+Z did nothing after clicking almost
+	// anywhere else in the editor -- and nothing at all once the tree was empty, since there was
+	// no row left to focus. onUndo/onRedo bail out when a text field has focus so typing keeps
+	// its own undo. The Undo/Redo buttons work regardless of focus.
+	QShortcut *undoSc = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_Z), this);
+	undoSc->setContext(Qt::WindowShortcut);
+	connect(undoSc, SIGNAL(activated()), this, SLOT(onUndoShortcut()));
+	QShortcut *redoSc = new QShortcut(QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_Z), this);
+	redoSc->setContext(Qt::WindowShortcut);
+	connect(redoSc, SIGNAL(activated()), this, SLOT(onRedoShortcut()));
+	QShortcut *redoSc2 = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_Y), this);
+	redoSc2->setContext(Qt::WindowShortcut);
+	connect(redoSc2, SIGNAL(activated()), this, SLOT(onRedoShortcut()));
 	QShortcut *renameSc = new QShortcut(QKeySequence(Qt::Key_F2), m_tree);
 	renameSc->setContext(Qt::WidgetShortcut);
 	connect(renameSc, SIGNAL(activated()), this, SLOT(onRename()));
@@ -687,6 +699,16 @@ void WBQtScriptWindow::updateButtonStates()
 	m_delete->setEnabled(hasScript || hasGroup);
 	m_addDebug->setEnabled(hasScript);
 	m_removeDebug->setEnabled(hasScript);
+
+	// Clear All works on the whole map, so it doesn't follow the selection like the others --
+	// it just needs there to be something to clear.
+	int scripts = 0;
+	int folders = 0;
+	WBQtScript_CountAll(&scripts, &folders);
+	m_clearAll->setEnabled(scripts > 0 || folders > 0);
+
+	m_undoBtn->setEnabled(WBQtScript_CanUndo() != 0);
+	m_redoBtn->setEnabled(WBQtScript_CanRedo() != 0);
 }
 
 // Escape the comment text for rich text and turn each script name on a reference line
@@ -923,6 +945,39 @@ void WBQtScriptWindow::onDelete()
 	updateDetail();
 }
 
+void WBQtScriptWindow::onClearAll()
+{
+	// Always confirm, and always with the counts -- this throws away the map's whole script set,
+	// so unlike the single Delete there is deliberately no "Don't ask again": a suppressed prompt
+	// would make a total wipe one stray click away.
+	int scripts = 0;
+	int folders = 0;
+	WBQtScript_CountAll(&scripts, &folders);
+	if (scripts == 0 && folders == 0)
+	{
+		QMessageBox::information(this, tr("Clear All"),
+			tr("This map has no scripts or folders to remove."));
+		return;
+	}
+
+	const QString what = tr("%1 script(s) and %2 folder(s)").arg(scripts).arg(folders);
+	QMessageBox box(QMessageBox::Warning, tr("Clear All"),
+		tr("Remove %1 from this map, for every player?\n\nThis can be undone with the "
+		   "script editor's Undo, and discarded entirely by closing the editor with "
+		   "Cancel.").arg(what),
+		QMessageBox::Yes | QMessageBox::No, this);
+	box.setDefaultButton(QMessageBox::No);
+	if (box.exec() != QMessageBox::Yes)
+	{
+		return;
+	}
+
+	WBQtScript_ClearAll(&scripts, &folders);
+	rebuildTree();
+	updateButtonStates();
+	updateDetail();
+}
+
 void WBQtScriptWindow::onDeleteShortcut()
 {
 	// Mirrors the Delete button's enable state (a script or folder is selected).
@@ -970,6 +1025,41 @@ void WBQtScriptWindow::onDuplicateShortcut()
 	if (m_copyScript->isEnabled())
 	{
 		onCopyScript();
+	}
+}
+
+// True while a text field has keyboard focus, so the window-wide Ctrl+Z/Ctrl+Y shortcuts can
+// leave typing alone -- a line edit has its own undo stack and the user means that one.
+// Clicks on the Undo/Redo buttons never come through here, so they always act on scripts.
+static bool wbTextFieldHasFocus(const QWidget *win)
+{
+	if (win == NULL)
+	{
+		return false;
+	}
+	const QWidget *focus = QApplication::focusWidget();
+	if (focus == NULL || !win->isAncestorOf(focus))
+	{
+		return false;
+	}
+	return (qobject_cast<const QLineEdit *>(focus) != NULL) ||
+			(qobject_cast<const QTextEdit *>(focus) != NULL) ||
+			(qobject_cast<const QPlainTextEdit *>(focus) != NULL);
+}
+
+void WBQtScriptWindow::onUndoShortcut()
+{
+	if (!wbTextFieldHasFocus(this))
+	{
+		onUndo();
+	}
+}
+
+void WBQtScriptWindow::onRedoShortcut()
+{
+	if (!wbTextFieldHasFocus(this))
+	{
+		onRedo();
 	}
 }
 
