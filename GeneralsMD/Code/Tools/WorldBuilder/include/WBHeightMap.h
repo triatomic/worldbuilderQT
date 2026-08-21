@@ -21,6 +21,10 @@
 #define __WBHEIGHTMAP_H_
 
 #include "W3DDevice/GameClient/FlatHeightMap.h"	
+#include <vector>
+
+class MapObject;
+class ThingTemplate;
 #include "W3DDevice/GameClient/HeightMap.h"	
 #define dont_USE_FLAT_HEIGHT_MAP // Use the origina height map for mission disk. jba. [4/15/2003]
 #ifdef USE_FLAT_HEIGHT_MAP
@@ -54,7 +58,17 @@ public:
 	static Bool getShowPathfindCliff(void) {return m_showPathfindCliff;}
 	static void setShowPathfindWater(Bool show) {m_showPathfindWater = show;}
 	static Bool getShowPathfindWater(void) {return m_showPathfindWater;}
-	static Bool anyPathfindOverlayOn(void) {return m_showPathfindCliff || m_showPathfindWater;}
+	static void setShowPathfindObjects(Bool show) {m_showPathfindObjects = show; m_objectCellsDirty = true;}
+	static Bool getShowPathfindObjects(void) {return m_showPathfindObjects;}
+	/// Combined view: collapses the CHECKED layers into one color, answering "can a unit stand
+	/// here" rather than showing each cause separately.  On its own it shows nothing -- it needs
+	/// at least one of Cliff/Water/Objects ticked to have something to combine.
+	static void setShowPassability(Bool show) {m_showPassability = show;}
+	static Bool getShowPassability(void) {return m_showPassability;}
+	static Bool anyPathfindOverlayOn(void)
+		{return m_showPathfindCliff || m_showPathfindWater || m_showPathfindObjects;}
+	/// The placed objects changed, so the obstacle cells need recomputing before the next tint.
+	static void invalidateObjectCells(void) {m_objectCellsDirty = true;}
 
 	void setDrawEntireMap(Bool entire) {m_drawEntireMap = entire;};
 	Bool getDrawEntireMap(void) {return m_drawEntireMap;};
@@ -67,6 +81,14 @@ protected:
 	void applyPathfindTint(Int x0, Int y0, Int x1, Int y1, WorldHeightMap *pMap);
 	/// Is this map cell inside a water polygon and below its surface?
 	Bool isWaterCell(Int cellX, Int cellY);
+	/// Rebuilds the obstacle cell set from the placed map objects, if it went stale.
+	void updateObjectCells(void);
+	/// Marks every cell covered by one object's footprint.
+	void markObjectFootprint(const MapObject *pObj);
+	/// Marks the cells one fence or wall segment blocks.
+	void markFenceFootprint(const MapObject *pObj, const ThingTemplate *pTmpl);
+	/// Is this map cell blocked by a placed object?
+	Bool isObjectCell(Int cellX, Int cellY) const;
 	/// Tints the vertices of one already-built vertex-buffer tile.
 	void tintVBTile(DX8VertexBufferClass *pVB, char *data, Int x0, Int y0, Int x1, Int y1,
 									Int originX, Int originY, WorldHeightMap *pMap);
@@ -79,6 +101,16 @@ protected:
 	// there is only ever one terrain render object in WorldBuilder.
 	static Bool m_showPathfindCliff;
 	static Bool m_showPathfindWater;
+	static Bool m_showPathfindObjects;
+	static Bool m_showPassability;
+
+	// Obstacle cells, rebuilt from the map objects only when they change.  Walking every
+	// object for every terrain cell would be far too slow, so the footprints are rasterized
+	// once into this set and then looked up per cell.
+	static Bool m_objectCellsDirty;
+	static std::vector<bool> m_objectCells;
+	static Int m_objectCellsWidth;
+	static Int m_objectCellsHeight;
 };
 
 #endif  // end __WBHEIGHTMAP_H_

@@ -5140,6 +5140,8 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_UPDATE_COMMAND_UI(ID_DEBUG_PATHFIND_WATER, OnUpdateDebugPathfindWater)
 	ON_COMMAND(ID_DEBUG_PATHFIND_OBJECTS, OnDebugPathfindObjects)
 	ON_UPDATE_COMMAND_UI(ID_DEBUG_PATHFIND_OBJECTS, OnUpdateDebugPathfindObjects)
+	ON_COMMAND(ID_DEBUG_PATHFIND_PASSABILITY, OnDebugPathfindPassability)
+	ON_UPDATE_COMMAND_UI(ID_DEBUG_PATHFIND_PASSABILITY, OnUpdateDebugPathfindPassability)
 	ON_COMMAND(ID_VIEW_IMPASSABLEAREAOPTIONS, OnImpassableAreaOptions)
 	ON_COMMAND(ID_VIEW_PARTIALMAPSIZE_96X96, OnViewPartialmapsize96x96)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_PARTIALMAPSIZE_96X96, OnUpdateViewPartialmapsize96x96)
@@ -7319,16 +7321,24 @@ void WbView3d::OnUpdateDebugPathfindWater(CCmdUI* pCmdUI)
 
 void WbView3d::OnDebugPathfindObjects()
 {
-	// Object footprint classification isn't implemented yet -- the cliff and water cells come
-	// from terrain data WorldBuilder already maintains, but obstacles need the placed objects'
-	// geometry walked the way the game's classifyObjectFootprint does.
-	::AfxMessageBox(_T("Object obstacle cells are not implemented yet."), MB_OK|MB_ICONINFORMATION);
+	WBHeightMap::setShowPathfindObjects(!WBHeightMap::getShowPathfindObjects());
+	refreshPathfindOverlay();
 }
 
 void WbView3d::OnUpdateDebugPathfindObjects(CCmdUI* pCmdUI)
 {
-	pCmdUI->SetCheck(0);
-	pCmdUI->Enable(FALSE);
+	pCmdUI->SetCheck(WBHeightMap::getShowPathfindObjects()?1:0);
+}
+
+void WbView3d::OnDebugPathfindPassability()
+{
+	WBHeightMap::setShowPassability(!WBHeightMap::getShowPassability());
+	refreshPathfindOverlay();
+}
+
+void WbView3d::OnUpdateDebugPathfindPassability(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(WBHeightMap::getShowPassability()?1:0);
 }
 
 void WbView3d::OnImpassableAreaOptions()

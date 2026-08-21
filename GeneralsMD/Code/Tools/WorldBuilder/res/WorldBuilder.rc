@@ -470,6 +470,8 @@ BEGIN
         MENUITEM "Cliff",                       ID_DEBUG_PATHFIND_CLIFF
         MENUITEM "Water",                       ID_DEBUG_PATHFIND_WATER
         MENUITEM "Objects",                     ID_DEBUG_PATHFIND_OBJECTS
+        MENUITEM SEPARATOR
+        MENUITEM "Passability",                 ID_DEBUG_PATHFIND_PASSABILITY
     END
     POPUP "Help / Entity finder"
     BEGIN

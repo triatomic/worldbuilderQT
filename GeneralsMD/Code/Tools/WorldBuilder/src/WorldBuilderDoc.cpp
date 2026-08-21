@@ -49,6 +49,7 @@
 #include "GameClient/Water.h"
 #include "Common/WellKnownKeys.h"
 
+#include "WBHeightMap.h"
 #include "GameClient/Line2D.h"
 #include "GameClient/View.h"
 #include "GameClient/GameText.h"
@@ -3290,6 +3291,11 @@ BOOL CWorldBuilderDoc::OnNewDocument()
 
 void CWorldBuilderDoc::invalObject(MapObject *pMapObj)
 {
+	// The Debug menu's object obstacle overlay is rasterized from the placed objects, so it
+	// goes stale whenever one is added, moved or removed.  This only sets a flag; the cells
+	// are rebuilt on the next terrain update, and only while that overlay is switched on.
+	WBHeightMap::invalidateObjectCells();
+
 	POSITION pos = GetFirstViewPosition();
 	while (pos != NULL)
 	{

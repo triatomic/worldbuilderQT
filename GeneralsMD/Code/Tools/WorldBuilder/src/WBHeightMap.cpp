@@ -42,6 +42,8 @@
 #include "WBHeightMap.h"
 #include "GameLogic/PolygonTrigger.h"
 #include "Common/GlobalData.h"
+#include "Common/MapObject.h"
+#include "Common/ThingTemplate.h"
 #include <tri.h>
 #include <colmath.h>
 #include <coltest.h>
@@ -323,6 +325,12 @@ void WBHeightMap::Render(RenderInfoClass & rinfo)
 //=============================================================================
 Bool WBHeightMap::m_showPathfindCliff = false;
 Bool WBHeightMap::m_showPathfindWater = false;
+Bool WBHeightMap::m_showPathfindObjects = false;
+Bool WBHeightMap::m_showPassability = false;
+Bool WBHeightMap::m_objectCellsDirty = true;
+std::vector<bool> WBHeightMap::m_objectCells;
+Int WBHeightMap::m_objectCellsWidth = 0;
+Int WBHeightMap::m_objectCellsHeight = 0;
 
 //=============================================================================
 // WBHeightMap::updateBlock
@@ -338,6 +346,9 @@ int WBHeightMap::updateBlock(Int x0, Int y0, Int x1, Int y1, WorldHeightMap *pMa
 #endif
 
 	if (result == 0 && anyPathfindOverlayOn()) {
+		if (m_showPathfindObjects) {
+			updateObjectCells();
+		}
 		applyPathfindTint(x0, y0, x1, y1, pMap);
 	}
 	return result;
@@ -460,6 +471,252 @@ Bool WBHeightMap::isWaterCell(Int cellX, Int cellY)
 }
 
 //=============================================================================
+// WBHeightMap::markFenceFootprint
+//=============================================================================
+/** Marks the cells one fence or wall segment blocks.
+
+	Mirrors Pathfinder::classifyFence: a fence blocks a thin strip fenceWidth long and a tenth
+	of a cell deep, shifted along its own axis by the template's fence X offset -- not the full
+	object bounds, which would wall off far more than the fence actually does.
+*/
+//=============================================================================
+void WBHeightMap::markFenceFootprint(const MapObject *pObj, const ThingTemplate *pTmpl)
+{
+	const Coord3D *pos = pObj->getLocation();
+	if (pos == NULL) {
+		return;
+	}
+
+	const Real angle = pObj->getAngle();
+	const Real halfsizeX = pTmpl->getFenceWidth()/2;
+	const Real halfsizeY = MAP_XY_FACTOR/10.0f;
+	const Real fenceOffset = pTmpl->getFenceXOffset();
+
+	const Real c = (Real)Cos(angle);
+	const Real s = (Real)Sin(angle);
+
+	const Real STEP_SIZE = MAP_XY_FACTOR * 0.5f;
+	const Real ydx = s * STEP_SIZE;
+	const Real ydy = -c * STEP_SIZE;
+	const Real xdx = c * STEP_SIZE;
+	const Real xdy = s * STEP_SIZE;
+
+	const Int numStepsX = REAL_TO_INT_CEIL(2.0f * halfsizeX / STEP_SIZE);
+	const Int numStepsY = REAL_TO_INT_CEIL(2.0f * halfsizeY / STEP_SIZE);
+
+	Real tl_x = pos->x - fenceOffset*c - halfsizeY*s;
+	Real tl_y = pos->y + halfsizeY*c - fenceOffset*s;
+
+	Int iy;
+	for (iy = 0; iy < numStepsY; ++iy, tl_x += ydx, tl_y += ydy)
+	{
+		Real x = tl_x;
+		Real y = tl_y;
+		Int ix;
+		for (ix = 0; ix < numStepsX; ++ix, x += xdx, y += xdy)
+		{
+			const Int cx = REAL_TO_INT_FLOOR((x + 0.5f)/MAP_XY_FACTOR);
+			const Int cy = REAL_TO_INT_FLOOR((y + 0.5f)/MAP_XY_FACTOR);
+			if (cx >= 0 && cy >= 0 && cx < m_objectCellsWidth && cy < m_objectCellsHeight) {
+				m_objectCells[cx + cy*m_objectCellsWidth] = true;
+			}
+		}
+	}
+}
+
+//=============================================================================
+// WBHeightMap::isObjectCell
+//=============================================================================
+/** Is this map cell blocked by a placed object? */
+//=============================================================================
+Bool WBHeightMap::isObjectCell(Int cellX, Int cellY) const
+{
+	if (cellX < 0 || cellY < 0 || cellX >= m_objectCellsWidth || cellY >= m_objectCellsHeight) {
+		return false;
+	}
+	if (m_objectCells.empty()) {
+		return false;
+	}
+	return m_objectCells[cellX + cellY*m_objectCellsWidth];
+}
+
+//=============================================================================
+// WBHeightMap::updateObjectCells
+//=============================================================================
+/** Rebuilds the obstacle cell set from the placed map objects.
+
+	This is the editor-side equivalent of the game's Pathfinder::classifyObjectFootprint.  The
+	game walks live Objects; WorldBuilder only has MapObjects and their ThingTemplates, so the
+	tests that need a live object (isMobile, height above terrain) are approximated from the
+	template instead -- see the notes at each check.
+
+	Rasterizing every object once into a cell set (rather than testing objects per terrain cell)
+	keeps this off the per-cell path, which runs for the whole map on every terrain rebuild.
+*/
+//=============================================================================
+void WBHeightMap::updateObjectCells(void)
+{
+	if (!m_objectCellsDirty) {
+		return;
+	}
+	m_objectCellsDirty = false;
+
+	// Size the grid in pathfind cells.  MAP_XY_FACTOR == PATHFIND_CELL_SIZE_F, so terrain cells
+	// and pathfind cells are the same size (the engine asserts this too).
+	m_objectCellsWidth = 0;
+	m_objectCellsHeight = 0;
+	if (m_map != NULL) {
+		m_objectCellsWidth = m_map->getXExtent();
+		m_objectCellsHeight = m_map->getYExtent();
+	}
+	if (m_objectCellsWidth <= 0 || m_objectCellsHeight <= 0) {
+		m_objectCells.clear();
+		return;
+	}
+
+	m_objectCells.assign(m_objectCellsWidth*m_objectCellsHeight, false);
+
+	for (MapObject *pObj = MapObject::getFirstMapObject(); pObj; pObj = pObj->getNext())
+	{
+		markObjectFootprint(pObj);
+	}
+}
+
+//=============================================================================
+// WBHeightMap::markObjectFootprint
+//=============================================================================
+/** Marks the cells one object covers, following the game's obstacle rules. */
+//=============================================================================
+void WBHeightMap::markObjectFootprint(const MapObject *pObj)
+{
+	if (pObj == NULL || pObj->isWaypoint()) {
+		return;
+	}
+
+	const ThingTemplate *pTmpl = pObj->getThingTemplate();
+	if (pTmpl == NULL) {
+		return;
+	}
+
+	// The same exclusions Pathfinder::classifyObjectFootprint applies.
+	if (pTmpl->isKindOf(KINDOF_MINE) || pTmpl->isKindOf(KINDOF_PROJECTILE) ||
+			pTmpl->isKindOf(KINDOF_BRIDGE_TOWER)) {
+		return;
+	}
+
+	// Fences block movement through a thin strip rather than their whole bounds, and the game
+	// classifies them before the structure test -- a fence is usually not a KINDOF_STRUCTURE,
+	// so it would otherwise be dropped.  Defensive walls deliberately fall through to the
+	// normal footprint path below, exactly as classifyObjectFootprint does.
+	if (pTmpl->getFenceWidth() > 0.0f && !pTmpl->isKindOf(KINDOF_DEFENSIVE_WALL))
+	{
+		markFenceFootprint(pObj, pTmpl);
+		return;
+	}
+	// Only structures are pathed around...
+	if (!pTmpl->isKindOf(KINDOF_STRUCTURE)) {
+		return;
+	}
+	// ...and only the ones that can't move.  The game asks the live object (isMobile); the
+	// template equivalent is the IMMOBILE kind-of flag.
+	if (!pTmpl->isKindOf(KINDOF_IMMOBILE)) {
+		return;
+	}
+	// Small objects are never obstacles.
+	const GeometryInfo &geom = pTmpl->getTemplateGeometryInfo();
+	if (geom.getIsSmall()) {
+		return;
+	}
+
+	const Coord3D *pos = pObj->getLocation();
+	if (pos == NULL) {
+		return;
+	}
+
+	switch (geom.getGeomType())
+	{
+		case GEOMETRY_BOX:
+		{
+			const Real angle = pObj->getAngle();
+			const Real halfsizeX = geom.getMajorRadius();
+			const Real halfsizeY = geom.getMinorRadius();
+
+			const Real c = (Real)Cos(angle);
+			const Real s = (Real)Sin(angle);
+
+			// Half a cell, matching the game: a full cell step aliases badly on rotated boxes.
+			const Real STEP_SIZE = MAP_XY_FACTOR * 0.5f;
+			const Real ydx = s * STEP_SIZE;
+			const Real ydy = -c * STEP_SIZE;
+			const Real xdx = c * STEP_SIZE;
+			const Real xdy = s * STEP_SIZE;
+
+			const Int numStepsX = REAL_TO_INT_CEIL(2.0f * halfsizeX / STEP_SIZE);
+			const Int numStepsY = REAL_TO_INT_CEIL(2.0f * halfsizeY / STEP_SIZE);
+
+			Real tl_x = pos->x - halfsizeX*c - halfsizeY*s;
+			Real tl_y = pos->y + halfsizeY*c - halfsizeX*s;
+
+			Int iy;
+			for (iy = 0; iy < numStepsY; ++iy, tl_x += ydx, tl_y += ydy)
+			{
+				Real x = tl_x;
+				Real y = tl_y;
+				Int ix;
+				for (ix = 0; ix < numStepsX; ++ix, x += xdx, y += xdy)
+				{
+					const Int cx = REAL_TO_INT_FLOOR((x + 0.5f)/MAP_XY_FACTOR);
+					const Int cy = REAL_TO_INT_FLOOR((y + 0.5f)/MAP_XY_FACTOR);
+					if (cx >= 0 && cy >= 0 && cx < m_objectCellsWidth && cy < m_objectCellsHeight) {
+						m_objectCells[cx + cy*m_objectCellsWidth] = true;
+					}
+				}
+			}
+			break;
+		}
+
+		case GEOMETRY_SPHERE:
+		case GEOMETRY_CYLINDER:
+		{
+			const Real radius = geom.getMajorRadius();
+			Real size = radius/MAP_XY_FACTOR;
+			const Real centerX = pos->x/MAP_XY_FACTOR;
+			const Real centerY = pos->y/MAP_XY_FACTOR;
+
+			const Int topLeftX = REAL_TO_INT_FLOOR(0.5f + (pos->x - radius)/MAP_XY_FACTOR)-1;
+			const Int topLeftY = REAL_TO_INT_FLOOR(0.5f + (pos->y - radius)/MAP_XY_FACTOR)-1;
+
+			size += 0.4f;
+			const Real r2 = size*size;
+
+			const Int bottomRightX = topLeftX + REAL_TO_INT_CEIL(2*size) + 2;
+			const Int bottomRightY = topLeftY + REAL_TO_INT_CEIL(2*size) + 2;
+
+			Int j;
+			for (j = topLeftY; j < bottomRightY; j++)
+			{
+				Int i;
+				for (i = topLeftX; i < bottomRightX; i++)
+				{
+					const Real dx = i+0.5f - centerX;
+					const Real dy = j+0.5f - centerY;
+					if (dx*dx + dy*dy <= r2)
+					{
+						if (i >= 0 && j >= 0 && i < m_objectCellsWidth && j < m_objectCellsHeight) {
+							m_objectCells[i + j*m_objectCellsWidth] = true;
+						}
+					}
+				}
+			}
+			break;
+		}
+
+		default:
+			break;
+	}
+}
+
+//=============================================================================
 // WBHeightMap::tintVBTile
 //=============================================================================
 /** Recolors one vertex-buffer tile's cells for the pathfind overlay.
@@ -504,19 +761,43 @@ void WBHeightMap::tintVBTile(DX8VertexBufferClass *pVB, char *data, Int x0, Int 
 			const Int cellX = getXWithOrigin(i) + pMap->getDrawOrgX();
 			const Int cellY = getYWithOrigin(j) + pMap->getDrawOrgY();
 
+			// Passability answers one question -- can a unit stand here -- by collapsing the
+			// checked layers into a single color.  It only ever considers the layers that are
+			// actually ticked, so Cliff+Passability shows terrain blocking alone; ticking
+			// Objects as well folds those in.  Without Passability the layers stay diagnostic
+			// and keep their own colors, so you can see WHY a cell is blocked.
+			const Bool wantCliff = m_showPathfindCliff;
+			const Bool wantWater = m_showPathfindWater;
+			const Bool wantObject = m_showPathfindObjects;
+
 			Bool isCliff = false;
-			if (m_showPathfindCliff) {
+			if (wantCliff) {
 				isCliff = pMap->getCliffState(cellX, cellY);
 			}
 
 			Bool isWater = false;
-			if (m_showPathfindWater) {
+			if (wantWater) {
 				isWater = isWaterCell(cellX, cellY);
 			}
 
-			if (isCliff || isWater) {
-				// Water is drawn under cliff so an underwater cliff still reads as impassable.
-				const UnsignedInt mask = isCliff ? 0xFFFF0000 : 0xFF0000FF;
+			Bool isObject = false;
+			if (wantObject) {
+				isObject = isObjectCell(cellX, cellY);
+			}
+
+			if (isCliff || isWater || isObject) {
+				UnsignedInt mask;
+				if (m_showPassability) {
+					mask = 0xFFFF0000;	// red with alpha -- blocked, whatever the reason.
+				} else if (isObject) {
+					// Priority matches the game's cell classification: an object footprint
+					// overrides the terrain underneath it, and a cliff outranks water.
+					mask = 0xFFFFFF00;	// yellow with alpha.
+				} else if (isCliff) {
+					mask = 0xFFFF0000;	// red with alpha.
+				} else {
+					mask = 0xFF0000FF;	// blue with alpha.
+				}
 				Int k;
 				for (k = 0; k < 4; k++) {
 					vb[k].diffuse &= mask;
