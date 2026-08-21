@@ -442,9 +442,15 @@ Bool WBHeightMap::isWaterCell(Int cellX, Int cellY)
 		haveWater = true;
 	}
 
+	// cellX/cellY are terrain cell indices, which include the heightmap's border ring; the
+	// polygon points and world heights are in border-free map space, so take it back off.
+	const Int borderSize = (m_map != NULL) ? m_map->getBorderSizeInline() : 0;
+	const Int mapX = cellX - borderSize;
+	const Int mapY = cellY - borderSize;
+
 	ICoord3D iLoc;
-	iLoc.x = cellX;
-	iLoc.y = cellY;
+	iLoc.x = mapX;
+	iLoc.y = mapY;
 	iLoc.z = 0;
 
 	for (PolygonTrigger *pTrig = PolygonTrigger::getFirstPolygonTrigger(); pTrig; pTrig = pTrig->getNext())
@@ -466,7 +472,7 @@ Bool WBHeightMap::isWaterCell(Int cellX, Int cellY)
 		return false;
 	}
 
-	const Real terrainZ = getHeightMapHeight(cellX*MAP_XY_FACTOR, cellY*MAP_XY_FACTOR, NULL);
+	const Real terrainZ = getHeightMapHeight(mapX*MAP_XY_FACTOR, mapY*MAP_XY_FACTOR, NULL);
 	return (terrainZ < waterZ);
 }
 
@@ -486,6 +492,8 @@ void WBHeightMap::markFenceFootprint(const MapObject *pObj, const ThingTemplate 
 	if (pos == NULL) {
 		return;
 	}
+
+	const Int borderSize = (m_map != NULL) ? m_map->getBorderSizeInline() : 0;
 
 	const Real angle = pObj->getAngle();
 	const Real halfsizeX = pTmpl->getFenceWidth()/2;
@@ -515,8 +523,8 @@ void WBHeightMap::markFenceFootprint(const MapObject *pObj, const ThingTemplate 
 		Int ix;
 		for (ix = 0; ix < numStepsX; ++ix, x += xdx, y += xdy)
 		{
-			const Int cx = REAL_TO_INT_FLOOR((x + 0.5f)/MAP_XY_FACTOR);
-			const Int cy = REAL_TO_INT_FLOOR((y + 0.5f)/MAP_XY_FACTOR);
+			const Int cx = REAL_TO_INT_FLOOR((x + 0.5f)/MAP_XY_FACTOR) + borderSize;
+			const Int cy = REAL_TO_INT_FLOOR((y + 0.5f)/MAP_XY_FACTOR) + borderSize;
 			if (cx >= 0 && cy >= 0 && cx < m_objectCellsWidth && cy < m_objectCellsHeight) {
 				m_objectCells[cx + cy*m_objectCellsWidth] = true;
 			}
@@ -633,6 +641,12 @@ void WBHeightMap::markObjectFootprint(const MapObject *pObj)
 		return;
 	}
 
+	// Object positions are world coordinates, but the cell grid is indexed the way the terrain
+	// is -- including the heightmap's border ring (see isCliffCell, which adds the same offset,
+	// and ADJUST_FROM_INDEX_TO_REAL, which subtracts it going the other way).  Without this the
+	// whole overlay lands shifted off its objects.
+	const Int borderSize = (m_map != NULL) ? m_map->getBorderSizeInline() : 0;
+
 	switch (geom.getGeomType())
 	{
 		case GEOMETRY_BOX:
@@ -665,8 +679,8 @@ void WBHeightMap::markObjectFootprint(const MapObject *pObj)
 				Int ix;
 				for (ix = 0; ix < numStepsX; ++ix, x += xdx, y += xdy)
 				{
-					const Int cx = REAL_TO_INT_FLOOR((x + 0.5f)/MAP_XY_FACTOR);
-					const Int cy = REAL_TO_INT_FLOOR((y + 0.5f)/MAP_XY_FACTOR);
+					const Int cx = REAL_TO_INT_FLOOR((x + 0.5f)/MAP_XY_FACTOR) + borderSize;
+					const Int cy = REAL_TO_INT_FLOOR((y + 0.5f)/MAP_XY_FACTOR) + borderSize;
 					if (cx >= 0 && cy >= 0 && cx < m_objectCellsWidth && cy < m_objectCellsHeight) {
 						m_objectCells[cx + cy*m_objectCellsWidth] = true;
 					}
@@ -702,8 +716,10 @@ void WBHeightMap::markObjectFootprint(const MapObject *pObj)
 					const Real dy = j+0.5f - centerY;
 					if (dx*dx + dy*dy <= r2)
 					{
-						if (i >= 0 && j >= 0 && i < m_objectCellsWidth && j < m_objectCellsHeight) {
-							m_objectCells[i + j*m_objectCellsWidth] = true;
+						const Int cx = i + borderSize;
+						const Int cy = j + borderSize;
+						if (cx >= 0 && cy >= 0 && cx < m_objectCellsWidth && cy < m_objectCellsHeight) {
+							m_objectCells[cx + cy*m_objectCellsWidth] = true;
 						}
 					}
 				}
