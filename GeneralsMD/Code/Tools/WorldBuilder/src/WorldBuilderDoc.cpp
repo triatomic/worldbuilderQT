@@ -3291,9 +3291,9 @@ BOOL CWorldBuilderDoc::OnNewDocument()
 
 void CWorldBuilderDoc::invalObject(MapObject *pMapObj)
 {
-	// The Debug menu's object obstacle overlay is rasterized from the placed objects, so it
-	// goes stale whenever one is added, moved or removed.  This only sets a flag; the cells
-	// are rebuilt on the next terrain update, and only while that overlay is switched on.
+	// The Debug menu's object obstacle overlay is rasterized from the placed objects, so it goes
+	// stale whenever one is added, moved or removed.  This only sets flags; the cells are
+	// rebuilt and the terrain repainted from the view timer, and only while an overlay is on.
 	WBHeightMap::invalidateObjectCells();
 
 	POSITION pos = GetFirstViewPosition();
@@ -3310,6 +3310,11 @@ void CWorldBuilderDoc::invalObject(MapObject *pMapObj)
 
 void CWorldBuilderDoc::invalCell(int xIndex, int yIndex)
 {
+	// A cell changed under a Debug menu overlay (terrain sculpted, a water area edited), so the
+	// tint needs repainting.  Coalesced through the view timer -- a brush stroke calls this for
+	// every cell it touches.
+	WBHeightMap::requestOverlayRefresh();
+
 	POSITION pos = GetFirstViewPosition();
 	while (pos != NULL)
 	{
@@ -3338,6 +3343,11 @@ void CWorldBuilderDoc::syncViewCenters(Real x, Real y)
 
 void CWorldBuilderDoc::updateAllViews()
 {
+	// Polygon trigger edits (which is how water areas are drawn) come through here rather than
+	// invalCell, so refresh any Debug menu overlay that depends on them.  Coalesced via the
+	// view timer, and a no-op when no overlay is on.
+	WBHeightMap::requestOverlayRefresh();
+
 	POSITION pos = GetFirstViewPosition();
 	while (pos != NULL)
 	{

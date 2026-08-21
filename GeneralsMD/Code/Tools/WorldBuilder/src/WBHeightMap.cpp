@@ -328,6 +328,7 @@ Bool WBHeightMap::m_showPathfindWater = false;
 Bool WBHeightMap::m_showPathfindObjects = false;
 Bool WBHeightMap::m_showPassability = false;
 Bool WBHeightMap::m_objectCellsDirty = true;
+Bool WBHeightMap::m_overlayRefreshPending = false;
 std::vector<bool> WBHeightMap::m_objectCells;
 Int WBHeightMap::m_objectCellsWidth = 0;
 Int WBHeightMap::m_objectCellsHeight = 0;

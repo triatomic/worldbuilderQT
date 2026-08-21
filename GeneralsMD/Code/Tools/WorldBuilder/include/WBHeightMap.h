@@ -68,7 +68,17 @@ public:
 	static Bool anyPathfindOverlayOn(void)
 		{return m_showPathfindCliff || m_showPathfindWater || m_showPathfindObjects;}
 	/// The placed objects changed, so the obstacle cells need recomputing before the next tint.
-	static void invalidateObjectCells(void) {m_objectCellsDirty = true;}
+	/// Also asks for a terrain refresh, since the tint only reapplies when the mesh rebuilds --
+	/// but only while an overlay is actually on, and coalesced (this fires once PER OBJECT, so
+	/// rebuilding here directly would mean one full terrain rebuild per band-selected object).
+	static void invalidateObjectCells(void)
+		{m_objectCellsDirty = true; if (anyPathfindOverlayOn()) {m_overlayRefreshPending = true;}}
+	/// Has an overlay change asked for a terrain refresh since the last one was serviced?
+	static Bool takeOverlayRefreshPending(void)
+		{const Bool p = m_overlayRefreshPending; m_overlayRefreshPending = false; return p;}
+	/// The terrain or water changed under an overlay, so it needs repainting.
+	static void requestOverlayRefresh(void)
+		{if (anyPathfindOverlayOn()) {m_overlayRefreshPending = true;}}
 
 	void setDrawEntireMap(Bool entire) {m_drawEntireMap = entire;};
 	Bool getDrawEntireMap(void) {return m_drawEntireMap;};
@@ -108,6 +118,7 @@ protected:
 	// object for every terrain cell would be far too slow, so the footprints are rasterized
 	// once into this set and then looked up per cell.
 	static Bool m_objectCellsDirty;
+	static Bool m_overlayRefreshPending;
 	static std::vector<bool> m_objectCells;
 	static Int m_objectCellsWidth;
 	static Int m_objectCellsHeight;

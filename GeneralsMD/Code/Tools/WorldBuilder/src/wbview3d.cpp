@@ -6797,6 +6797,23 @@ void WbView3d::OnTimer(UINT nIDEvent)
 		TheAudio->update();
 	}
 
+	// A Debug menu overlay went stale (an object moved, terrain or water was edited).  The tint
+	// is applied while the terrain mesh is built, so it only repaints on a heightmap update --
+	// service that here, coalesced, so a band-select or a brush stroke costs one rebuild per
+	// tick instead of one per object or per edit.
+	//
+	// Held off entirely while the mouse is down: dragging an object fires invalObject on every
+	// mouse move, and rebuilding the terrain mid-drag would rasterize every footprint again for
+	// a tint the user is still moving.  The flag survives, so the rebuild happens once on
+	// release.  Tracking mode covers the terrain tools, whose strokes are equally chatty.
+	{
+		const Bool interactingNow = (m_trackingMode != TRACK_NONE) || PointerTool::isMouseDown();
+		if (!interactingNow && WBHeightMap::takeOverlayRefreshPending())
+		{
+			refreshPathfindOverlay();
+		}
+	}
+
 	if (getLastDrawTime()+UPDATE_TIME >= ::GetTickCount())
 		return;		// throttle: at most one repaint per UPDATE_TIME
 
