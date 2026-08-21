@@ -329,6 +329,10 @@ Bool WBHeightMap::m_showPathfindObjects = false;
 Bool WBHeightMap::m_showPassability = false;
 Bool WBHeightMap::m_objectCellsDirty = true;
 Bool WBHeightMap::m_overlayRefreshPending = false;
+Bool WBHeightMap::m_waterCellsDirty = true;
+std::vector<bool> WBHeightMap::m_waterCells;
+Int WBHeightMap::m_waterCellsWidth = 0;
+Int WBHeightMap::m_waterCellsHeight = 0;
 std::vector<bool> WBHeightMap::m_objectCells;
 Int WBHeightMap::m_objectCellsWidth = 0;
 Int WBHeightMap::m_objectCellsHeight = 0;
@@ -349,6 +353,9 @@ int WBHeightMap::updateBlock(Int x0, Int y0, Int x1, Int y1, WorldHeightMap *pMa
 	if (result == 0 && anyPathfindOverlayOn()) {
 		if (m_showPathfindObjects) {
 			updateObjectCells();
+		}
+		if (m_showPathfindWater) {
+			updateWaterCells();
 		}
 		applyPathfindTint(x0, y0, x1, y1, pMap);
 	}
@@ -475,6 +482,66 @@ Bool WBHeightMap::isWaterCell(Int cellX, Int cellY)
 
 	const Real terrainZ = getHeightMapHeight(mapX*MAP_XY_FACTOR, mapY*MAP_XY_FACTOR, NULL);
 	return (terrainZ < waterZ);
+}
+
+//=============================================================================
+// WBHeightMap::isWaterCellCached
+//=============================================================================
+/** Cached water lookup. */
+//=============================================================================
+Bool WBHeightMap::isWaterCellCached(Int cellX, Int cellY) const
+{
+	if (cellX < 0 || cellY < 0 || cellX >= m_waterCellsWidth || cellY >= m_waterCellsHeight) {
+		return false;
+	}
+	if (m_waterCells.empty()) {
+		return false;
+	}
+	return m_waterCells[cellX + cellY*m_waterCellsWidth];
+}
+
+//=============================================================================
+// WBHeightMap::updateWaterCells
+//=============================================================================
+/** Rebuilds the water cell set.
+
+	isWaterCell walks every water polygon and samples the terrain height, which is far too much
+	to run per cell: scrolling the view re-tints a strip of the map every frame, so the uncached
+	test made panning stutter.  Resolving it once per map change instead makes the per-cell path
+	a single array read.
+*/
+//=============================================================================
+void WBHeightMap::updateWaterCells(void)
+{
+	if (!m_waterCellsDirty) {
+		return;
+	}
+	m_waterCellsDirty = false;
+
+	m_waterCellsWidth = 0;
+	m_waterCellsHeight = 0;
+	if (m_map != NULL) {
+		m_waterCellsWidth = m_map->getXExtent();
+		m_waterCellsHeight = m_map->getYExtent();
+	}
+	if (m_waterCellsWidth <= 0 || m_waterCellsHeight <= 0) {
+		m_waterCells.clear();
+		return;
+	}
+
+	m_waterCells.assign(m_waterCellsWidth*m_waterCellsHeight, false);
+
+	Int y;
+	for (y = 0; y < m_waterCellsHeight; y++)
+	{
+		Int x;
+		for (x = 0; x < m_waterCellsWidth; x++)
+		{
+			if (isWaterCell(x, y)) {
+				m_waterCells[x + y*m_waterCellsWidth] = true;
+			}
+		}
+	}
 }
 
 //=============================================================================
@@ -794,7 +861,7 @@ void WBHeightMap::tintVBTile(DX8VertexBufferClass *pVB, char *data, Int x0, Int 
 
 			Bool isWater = false;
 			if (wantWater) {
-				isWater = isWaterCell(cellX, cellY);
+				isWater = isWaterCellCached(cellX, cellY);
 			}
 
 			Bool isObject = false;

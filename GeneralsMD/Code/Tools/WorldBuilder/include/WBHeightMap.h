@@ -78,7 +78,7 @@ public:
 		{const Bool p = m_overlayRefreshPending; m_overlayRefreshPending = false; return p;}
 	/// The terrain or water changed under an overlay, so it needs repainting.
 	static void requestOverlayRefresh(void)
-		{if (anyPathfindOverlayOn()) {m_overlayRefreshPending = true;}}
+		{m_waterCellsDirty = true; if (anyPathfindOverlayOn()) {m_overlayRefreshPending = true;}}
 
 	void setDrawEntireMap(Bool entire) {m_drawEntireMap = entire;};
 	Bool getDrawEntireMap(void) {return m_drawEntireMap;};
@@ -89,8 +89,13 @@ protected:
 protected:
 	/// Walks the vertex-buffer tiles covering a block and tints each for the pathfind overlay.
 	void applyPathfindTint(Int x0, Int y0, Int x1, Int y1, WorldHeightMap *pMap);
-	/// Is this map cell inside a water polygon and below its surface?
+	/// Is this map cell inside a water polygon and below its surface?  Uncached -- walks the
+	/// polygon list, so it is only for building the cache below, never for a per-cell test.
 	Bool isWaterCell(Int cellX, Int cellY);
+	/// Rebuilds the water cell set, if it went stale.
+	void updateWaterCells(void);
+	/// Cached water lookup, O(1).
+	Bool isWaterCellCached(Int cellX, Int cellY) const;
 	/// Rebuilds the obstacle cell set from the placed map objects, if it went stale.
 	void updateObjectCells(void);
 	/// Marks every cell covered by one object's footprint.
@@ -122,6 +127,14 @@ protected:
 	static std::vector<bool> m_objectCells;
 	static Int m_objectCellsWidth;
 	static Int m_objectCellsHeight;
+
+	// Water cells, cached for the same reason as the obstacle cells: the uncached test walks
+	// every water polygon and samples the terrain height, and scrolling re-tints a strip of the
+	// map every frame, so doing that per cell made panning stutter.
+	static Bool m_waterCellsDirty;
+	static std::vector<bool> m_waterCells;
+	static Int m_waterCellsWidth;
+	static Int m_waterCellsHeight;
 };
 
 #endif  // end __WBHEIGHTMAP_H_
