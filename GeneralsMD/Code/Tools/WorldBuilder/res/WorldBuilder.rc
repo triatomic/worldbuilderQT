@@ -465,6 +465,12 @@ BEGIN
         MENUITEM SEPARATOR
         MENUITEM "Show Assertion Dialogs",      ID_SHOW_ASSERT_DIALOGS
     END
+    POPUP "Debug"
+    BEGIN
+        MENUITEM "Cliff",                       ID_DEBUG_PATHFIND_CLIFF
+        MENUITEM "Water",                       ID_DEBUG_PATHFIND_WATER
+        MENUITEM "Objects",                     ID_DEBUG_PATHFIND_OBJECTS
+    END
     POPUP "Help / Entity finder"
     BEGIN
         MENUITEM "Entity finder / Hotkey List", ID_APP_ABOUT

@@ -5134,6 +5134,12 @@ BEGIN_MESSAGE_MAP(WbView3d, WbView)
 	ON_COMMAND(ID_REMOVEBOUNDARIES, OnClearAllExtraBoundaries)
 	ON_COMMAND(ID_VIEW_SHOWIMPASSABLEAREAS, OnViewShowimpassableareas)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_SHOWIMPASSABLEAREAS, OnUpdateViewShowimpassableareas)
+	ON_COMMAND(ID_DEBUG_PATHFIND_CLIFF, OnDebugPathfindCliff)
+	ON_UPDATE_COMMAND_UI(ID_DEBUG_PATHFIND_CLIFF, OnUpdateDebugPathfindCliff)
+	ON_COMMAND(ID_DEBUG_PATHFIND_WATER, OnDebugPathfindWater)
+	ON_UPDATE_COMMAND_UI(ID_DEBUG_PATHFIND_WATER, OnUpdateDebugPathfindWater)
+	ON_COMMAND(ID_DEBUG_PATHFIND_OBJECTS, OnDebugPathfindObjects)
+	ON_UPDATE_COMMAND_UI(ID_DEBUG_PATHFIND_OBJECTS, OnUpdateDebugPathfindObjects)
 	ON_COMMAND(ID_VIEW_IMPASSABLEAREAOPTIONS, OnImpassableAreaOptions)
 	ON_COMMAND(ID_VIEW_PARTIALMAPSIZE_96X96, OnViewPartialmapsize96x96)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_PARTIALMAPSIZE_96X96, OnUpdateViewPartialmapsize96x96)
@@ -7277,6 +7283,52 @@ void WbView3d::OnUpdateViewShowimpassableareas(CCmdUI* pCmdUI)
 		showImpassable = TheTerrainRenderObject->getShowImpassableAreas();
 	}
 	pCmdUI->SetCheck(showImpassable?1:0);
+}
+
+//=============================================================================
+// Debug menu -- pathfind cell overlay
+//=============================================================================
+/** Forces the whole terrain mesh to rebuild so the overlay tint is applied or removed. */
+void WbView3d::refreshPathfindOverlay(void)
+{
+	IRegion2D range = {0,0,0,0};
+	updateHeightMapInView(WbDoc()->GetHeightMap(), false, range);
+}
+
+void WbView3d::OnDebugPathfindCliff()
+{
+	WBHeightMap::setShowPathfindCliff(!WBHeightMap::getShowPathfindCliff());
+	refreshPathfindOverlay();
+}
+
+void WbView3d::OnUpdateDebugPathfindCliff(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(WBHeightMap::getShowPathfindCliff()?1:0);
+}
+
+void WbView3d::OnDebugPathfindWater()
+{
+	WBHeightMap::setShowPathfindWater(!WBHeightMap::getShowPathfindWater());
+	refreshPathfindOverlay();
+}
+
+void WbView3d::OnUpdateDebugPathfindWater(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(WBHeightMap::getShowPathfindWater()?1:0);
+}
+
+void WbView3d::OnDebugPathfindObjects()
+{
+	// Object footprint classification isn't implemented yet -- the cliff and water cells come
+	// from terrain data WorldBuilder already maintains, but obstacles need the placed objects'
+	// geometry walked the way the game's classifyObjectFootprint does.
+	::AfxMessageBox(_T("Object obstacle cells are not implemented yet."), MB_OK|MB_ICONINFORMATION);
+}
+
+void WbView3d::OnUpdateDebugPathfindObjects(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(0);
+	pCmdUI->Enable(FALSE);
 }
 
 void WbView3d::OnImpassableAreaOptions()

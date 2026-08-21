@@ -146,6 +146,14 @@ protected:
 	afx_msg void OnClearAllExtraBoundaries();
 	afx_msg void OnViewShowimpassableareas();
 	afx_msg void OnUpdateViewShowimpassableareas(CCmdUI* pCmdUI);
+	afx_msg void OnDebugPathfindCliff();
+	afx_msg void OnUpdateDebugPathfindCliff(CCmdUI* pCmdUI);
+	afx_msg void OnDebugPathfindWater();
+	afx_msg void OnUpdateDebugPathfindWater(CCmdUI* pCmdUI);
+	afx_msg void OnDebugPathfindObjects();
+	afx_msg void OnUpdateDebugPathfindObjects(CCmdUI* pCmdUI);
+	/// Rebuilds the terrain mesh so a pathfind overlay toggle takes effect.
+	void refreshPathfindOverlay(void);
 	afx_msg void OnImpassableAreaOptions();
 	afx_msg void OnViewPartialmapsize96x96();
 	afx_msg void OnUpdateViewPartialmapsize96x96(CCmdUI* pCmdUI);

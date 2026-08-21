@@ -910,6 +910,9 @@
 #define ID_VIEW_BONENAMES               33423
 #define ID_VIEW_LOGBONERESOLUTION       33424
 #define ID_VIEW_ANIMSCRUBBER            33425
+#define ID_DEBUG_PATHFIND_CLIFF         33426
+#define ID_DEBUG_PATHFIND_WATER         33427
+#define ID_DEBUG_PATHFIND_OBJECTS       33428
 #define IDS_NEW                         61446
 #define IDS_RESIZE                      61447
 #define IDS_REMOVING_INUSE_TEAM         61448
@@ -986,7 +989,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_3D_CONTROLS                     1
 #define _APS_NEXT_RESOURCE_VALUE        247
-#define _APS_NEXT_COMMAND_VALUE         33410
+#define _APS_NEXT_COMMAND_VALUE         33429
 #define _APS_NEXT_CONTROL_VALUE         1393
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

@@ -40,6 +40,7 @@
 //         Includes                                                      
 //-----------------------------------------------------------------------------
 #include "WBHeightMap.h"
+#include "GameLogic/PolygonTrigger.h"
 #include "Common/GlobalData.h"
 #include <tri.h>
 #include <colmath.h>
@@ -315,3 +316,215 @@ void WBHeightMap::Render(RenderInfoClass & rinfo)
 }
 
 
+
+
+//=============================================================================
+// WBHeightMap pathfind-cell overlay (Debug menu)
+//=============================================================================
+Bool WBHeightMap::m_showPathfindCliff = false;
+Bool WBHeightMap::m_showPathfindWater = false;
+
+//=============================================================================
+// WBHeightMap::updateBlock
+//=============================================================================
+/** Builds the terrain vertices normally, then tints them for the pathfind overlay. */
+//=============================================================================
+int WBHeightMap::updateBlock(Int x0, Int y0, Int x1, Int y1, WorldHeightMap *pMap, RefRenderObjListIterator *pLightsIterator)
+{
+#ifdef USE_FLAT_HEIGHT_MAP
+	int result = FlatHeightMapRenderObjClass::updateBlock(x0, y0, x1, y1, pMap, pLightsIterator);
+#else
+	int result = HeightMapRenderObjClass::updateBlock(x0, y0, x1, y1, pMap, pLightsIterator);
+#endif
+
+	if (result == 0 && anyPathfindOverlayOn()) {
+		applyPathfindTint(x0, y0, x1, y1, pMap);
+	}
+	return result;
+}
+
+//=============================================================================
+// WBHeightMap::applyPathfindTint
+//=============================================================================
+/** Recolors already-built terrain vertices to show pathfind cell classes.
+
+	The cell data is whatever WorldBuilder already keeps up to date:
+	  - cliff: WorldHeightMap's m_cellCliffState bitfield, computed from heights with the
+	    pathfinder's own PATHFIND_CLIFF_SLOPE_LIMIT_F and refreshed on every terrain edit
+	    (see WorldHeightMapEdit::setHeight), so this needs no AI subsystem.
+	  - water: the polygon water areas, via getWaterHeightIfUnderwater.
+
+	The tint masks the diffuse channel the same way the engine's impassable-areas overlay
+	does, which keeps terrain shading visible through the color instead of flat-filling it.
+*/
+//=============================================================================
+void WBHeightMap::applyPathfindTint(Int x0, Int y0, Int x1, Int y1, WorldHeightMap *pMap)
+{
+	if (pMap == NULL || m_vertexBufferTiles == NULL || m_vertexBufferBackup == NULL) {
+		return;
+	}
+
+	Int i, j;
+	for (j = 0; j < m_numVBTilesY; j++)
+	{
+		Int originY = j*VERTEX_BUFFER_TILE_LENGTH;
+		Int yMin = originY;
+		if (y0 > yMin) {
+			yMin = y0;
+		}
+		Int yMax = originY+VERTEX_BUFFER_TILE_LENGTH;
+		if (y1 < yMax) {
+			yMax = y1;
+		}
+		if (yMin >= yMax) {
+			continue;
+		}
+		for (i = 0; i < m_numVBTilesX; i++)
+		{
+			Int originX = i*VERTEX_BUFFER_TILE_LENGTH;
+			Int xMin = originX;
+			if (xMin < x0) {
+				xMin = x0;
+			}
+			Int xMax = originX+VERTEX_BUFFER_TILE_LENGTH;
+			if (xMax > x1) {
+				xMax = x1;
+			}
+			if (xMin >= xMax) {
+				continue;
+			}
+
+			DX8VertexBufferClass *pVB = *(m_vertexBufferTiles+j*m_numVBTilesX+i);
+			char *pData = *(m_vertexBufferBackup+j*m_numVBTilesX+i);
+			if (pVB == NULL || pData == NULL) {
+				continue;
+			}
+			tintVBTile(pVB, pData, xMin, yMin, xMax, yMax, originX, originY, pMap);
+		}
+	}
+}
+
+//=============================================================================
+// WBHeightMap::isWaterCell
+//=============================================================================
+/** Is this map cell underwater?
+
+	Water comes from two places, and a cell counts as water if the HIGHEST of them covers the
+	terrain (the same "tallest water wins" rule TerrainLogic::getWaterHandle uses):
+
+	  - the water area polygons (rivers, lakes drawn in the editor)
+	  - the global water level, which fills low ground on maps that don't draw a water area
+
+	The polygons store their points in MAP CELL units, so the point-in-polygon test has to be
+	done in cell space -- note getWaterHeightIfUnderwater() floors its arguments straight into
+	pointInTrigger(), so passing it world coordinates silently tests the wrong place.  The water
+	heights are world Zs, so they are compared against the terrain height sampled in world units.
+*/
+//=============================================================================
+Bool WBHeightMap::isWaterCell(Int cellX, Int cellY)
+{
+	Bool haveWater = false;
+	Real waterZ = 0.0f;
+
+	if (TheGlobalData != NULL && TheGlobalData->m_waterPositionZ > 0.0f) {
+		waterZ = TheGlobalData->m_waterPositionZ;
+		haveWater = true;
+	}
+
+	ICoord3D iLoc;
+	iLoc.x = cellX;
+	iLoc.y = cellY;
+	iLoc.z = 0;
+
+	for (PolygonTrigger *pTrig = PolygonTrigger::getFirstPolygonTrigger(); pTrig; pTrig = pTrig->getNext())
+	{
+		if (!pTrig->isWaterArea()) {
+			continue;
+		}
+		if (!pTrig->pointInTrigger(iLoc)) {
+			continue;
+		}
+		const Real polyZ = pTrig->getPoint(0)->z;
+		if (!haveWater || polyZ >= waterZ) {
+			waterZ = polyZ;
+			haveWater = true;
+		}
+	}
+
+	if (!haveWater) {
+		return false;
+	}
+
+	const Real terrainZ = getHeightMapHeight(cellX*MAP_XY_FACTOR, cellY*MAP_XY_FACTOR, NULL);
+	return (terrainZ < waterZ);
+}
+
+//=============================================================================
+// WBHeightMap::tintVBTile
+//=============================================================================
+/** Recolors one vertex-buffer tile's cells for the pathfind overlay.
+
+	The row/vertex indexing here mirrors HeightMapRenderObjClass::updateVB so the same cell
+	maps to the same 4 vertices; the base class has already filled both the backup buffer and
+	the hardware buffer, so this only rewrites the diffuse color and copies the touched cells.
+*/
+//=============================================================================
+void WBHeightMap::tintVBTile(DX8VertexBufferClass *pVB, char *data, Int x0, Int y0, Int x1, Int y1,
+														 Int originX, Int originY, WorldHeightMap *pMap)
+{
+	const Int vertsPerRow = (VERTEX_BUFFER_TILE_LENGTH)*4;
+	// Mirrors the file-local HALF_RES_MESH in the engine's HeightMap.cpp, which the vertex
+	// layout below has to agree with.  It is a compile-time constant false there.
+	const Bool halfResMesh = false;
+	const Int cellOffset = halfResMesh ? 2 : 1;
+
+	DX8VertexBufferClass::WriteLockClass lockVtxBuffer(pVB);
+	VERTEX_FORMAT *vbHardware = (VERTEX_FORMAT*)lockVtxBuffer.Get_Vertex_Array();
+	VERTEX_FORMAT *vBase = (VERTEX_FORMAT*)data;
+
+	Int i, j;
+	for (j = y0; j < y1; j++)
+	{
+		VERTEX_FORMAT *vb = vBase;
+		if (halfResMesh) {
+			if (j&1) {
+				continue;
+			}
+			vb += ((j-originY)/2)*vertsPerRow/2;
+			vb += ((x0-originX)/2)*4;
+		} else {
+			vb += (j-originY)*vertsPerRow;
+			vb += (x0-originX)*4;
+		}
+
+		for (i = x0; i < x1; i += cellOffset)
+		{
+			// Cell indices in the same space getCliffState() expects (see BaseHeightMap's
+			// isCliffCell, which adds the draw origin the same way).
+			const Int cellX = getXWithOrigin(i) + pMap->getDrawOrgX();
+			const Int cellY = getYWithOrigin(j) + pMap->getDrawOrgY();
+
+			Bool isCliff = false;
+			if (m_showPathfindCliff) {
+				isCliff = pMap->getCliffState(cellX, cellY);
+			}
+
+			Bool isWater = false;
+			if (m_showPathfindWater) {
+				isWater = isWaterCell(cellX, cellY);
+			}
+
+			if (isCliff || isWater) {
+				// Water is drawn under cliff so an underwater cliff still reads as impassable.
+				const UnsignedInt mask = isCliff ? 0xFFFF0000 : 0xFF0000FF;
+				Int k;
+				for (k = 0; k < 4; k++) {
+					vb[k].diffuse &= mask;
+				}
+				const Int offset = vb - vBase;
+				memcpy(vbHardware+offset, vb, 4*sizeof(VERTEX_FORMAT));
+			}
+			vb += 4;
+		}
+	}
+}
