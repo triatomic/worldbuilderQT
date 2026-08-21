@@ -5521,7 +5521,12 @@ void WbView3d::OnPaint()
 		// drawLabels, so the drag-select box (a GDI ::FrameRect) would never appear. Draw
 		// it here on the window HDC instead -- same GDI box as GDI mode, for both modes.
 		CBrush brush;
-		brush.CreateSolidBrush(RGB(255, 165, 0));
+		// A subtract box (Shift+Ctrl+drag) draws red so the mode is obvious while dragging.
+		if (m_rectFeedbackSubtract) {
+			brush.CreateSolidBrush(RGB(255, 48, 48));
+		} else {
+			brush.CreateSolidBrush(RGB(255, 165, 0));
+		}
 		::FrameRect(hdc, &m_feedbackBox, (HBRUSH)brush.GetSafeHandle());
 	}
 	::EndPaint(m_hWnd, &ps);
@@ -6353,7 +6358,12 @@ void WbView3d::drawLabels(HDC hdc)
 	if (hdc && m_doRectFeedback) {
 		CBrush brush;
 		// green brush for drawing the grid.
-		brush.CreateSolidBrush(RGB(255, 165, 0));
+		// A subtract box (Shift+Ctrl+drag) draws red so the mode is obvious while dragging.
+		if (m_rectFeedbackSubtract) {
+			brush.CreateSolidBrush(RGB(255, 48, 48));
+		} else {
+			brush.CreateSolidBrush(RGB(255, 165, 0));
+		}
 		::FrameRect(hdc, &m_feedbackBox, (HBRUSH)brush.GetSafeHandle());
 	}
 

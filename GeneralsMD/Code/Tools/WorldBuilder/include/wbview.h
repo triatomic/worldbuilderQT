@@ -96,6 +96,7 @@ protected:
 	// Box feedback.
 	RECT										m_feedbackBox;
 	Bool										m_doRectFeedback;
+	Bool										m_rectFeedbackSubtract;	///< True if the box removes from the selection rather than adding.
 	int											m_doRulerFeedback;
 	Coord3D									m_rulerPoints[2];
 	Real										m_rulerLength;
@@ -109,7 +110,9 @@ protected:
 	// Attributes
 public:
 
-	void doRectFeedback(Bool doFeedback, RECT &rect) {m_feedbackBox=rect;m_doRectFeedback = doFeedback;};
+	void doRectFeedback(Bool doFeedback, RECT &rect) {m_feedbackBox=rect;m_doRectFeedback = doFeedback;m_rectFeedbackSubtract = false;};
+	void doRectFeedback(Bool doFeedback, RECT &rect, Bool subtract) {m_feedbackBox=rect;m_doRectFeedback = doFeedback;m_rectFeedbackSubtract = subtract;};
+	Bool isRectFeedbackSubtract(void) const {return m_rectFeedbackSubtract;};
 	void doRulerFeedback(int doRulerFeedback) {m_doRulerFeedback = doRulerFeedback;}
 	void rulerFeedbackInfo(Coord3D &point1, Coord3D &point2, Real dist);
 	int getRulerFeedback(void) const { return m_doRulerFeedback; }

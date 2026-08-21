@@ -69,7 +69,8 @@ WbView::WbView() :
 	m_lockAngle(false),
 	m_doLightFeedback(FALSE),
 	m_pickConstraint(ES_NONE),
-	m_doRulerFeedback(RULER_NONE)
+	m_doRulerFeedback(RULER_NONE),
+	m_rectFeedbackSubtract(FALSE)
 {
 	Int showWater = ::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "ShowWater", 1);
 	m_showWater = (showWater!=0);

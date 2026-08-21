@@ -46,6 +46,7 @@
 CString PointerTool::m_lastPointerInfo = _T("");
 Bool PointerTool::m_isMouseDown = false;
 Bool PointerTool::m_dragSelect = false;
+Bool PointerTool::m_dragDeselect = false;
 Bool PointerTool::m_pointerIsActive = false;
 Bool PointerTool::m_rotateObjectsWithGroup = true;
 Bool PointerTool::m_useFarthestObjectPivot = true;
@@ -302,6 +303,7 @@ void PointerTool::deactivate()
 	m_curObject = NULL;
 	m_pointerIsActive = false;
 	m_dragSelect = false;
+	m_dragDeselect = false;
 	PolygonTool::deactivate();
 }
 
@@ -405,6 +407,9 @@ void PointerTool::mouseDown(TTrackingMode m, CPoint viewPt, WbView* pView, CWorl
 	m_dragSelect = false;
 	Bool shiftKey = (0x8000 & ::GetAsyncKeyState(VK_SHIFT))!=0;
 	Bool ctrlKey = (0x8000 & ::GetAsyncKeyState(VK_CONTROL))!=0;
+	// Shift+Ctrl+drag on empty space removes the boxed objects from the selection.  Latch it
+	// here so the mode can't change if the keys come up part way through the drag.
+	m_dragDeselect = (shiftKey && ctrlKey);
 
 	m_doPolyTool = false;
 	if (pView->GetPickConstraint() == ES_NONE || pView->GetPickConstraint() == ES_WAYPOINT) {
@@ -631,7 +636,7 @@ void PointerTool::mouseMoved(TTrackingMode m, CPoint viewPt, WbView* pView, CWor
         box.top = m_downPt2d.y;
         box.right = m_downPt2d.x;
         box.NormalizeRect();
-        pView->doRectFeedback(true, box);
+        pView->doRectFeedback(true, box, m_dragDeselect);
         pView->Invalidate();
 		pDoc->updateAllViews();
         return;
@@ -880,9 +885,11 @@ void PointerTool::mouseUp(TTrackingMode m, CPoint viewPt, WbView* pView, CWorldB
 			if (pView->docToViewCoords(loc, &viewPt)){
 				picked = (viewPt.x>=box.left && viewPt.x<=box.right && viewPt.y>=box.top && viewPt.y<=box.bottom) ;
 				if (picked) {
-					if ((0x8000 && ::GetAsyncKeyState(VK_SHIFT))) {
-						// !pObj->isSelected() is the original value -- its a bit annoying so we use true always (Adriane[Deathscythe])
-						pObj->setSelected(true);
+					// Shift+Ctrl+drag subtracts from the selection; every other drag box adds to it.
+					// Toggling on plain Shift was tried and removed -- its a bit annoying so we use
+					// true always (Adriane[Deathscythe]).
+					if (m_dragDeselect) {
+						pObj->setSelected(false);
 					}	else {
 						pObj->setSelected(true);
 					}

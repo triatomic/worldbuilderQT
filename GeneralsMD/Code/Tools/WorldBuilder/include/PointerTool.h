@@ -53,6 +53,10 @@ protected:
 	Bool m_moving; ///< True if we are drag moving an object.
 	Bool m_rotating; ///< True if we are rotating an object.
 	static Bool m_dragSelect; ///< True if we are drag selecting.
+	/// True if the drag box removes objects from the selection (Shift+Ctrl+drag) rather than
+	/// adding to it.  Latched on mouseDown so releasing the keys mid-drag can't change the
+	/// meaning of the box the user is already looking at.
+	static Bool m_dragDeselect;
 
 	Bool m_doPolyTool; ///< True if we are using the polygon tool to modify a polygon triggter.
 	
@@ -90,6 +94,7 @@ public:
 	static void setLastPointerInfoString(const CString& info) { m_lastPointerInfo = info; }
 	static Bool isMouseDown(void) { return m_isMouseDown; }
 	static Bool isDragSelecting(void) { return m_dragSelect; }
+	static Bool isDragDeselecting(void) { return m_dragDeselect; }
 	static Bool isActive(void) {return m_pointerIsActive; }
 
 	/// Update the cached group-rotate options when the menu toggles change, so mouseMoved
