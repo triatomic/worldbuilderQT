@@ -40,6 +40,7 @@ WBQtBuildListPanel::WBQtBuildListPanel(QWidget *owner)
 	m_alreadyBuilt = m_ui->alreadyBuilt;
 	m_rebuilds = m_ui->rebuilds;
 	m_power = m_ui->power;
+	m_followObject = m_ui->followObject;
 	m_forcedShow = m_ui->forcedShow;
 
 	// == the MFC IDC_REBUILDS (CBS_DROPDOWN): type to narrow the list. The rest of the panel's
@@ -76,6 +77,8 @@ WBQtBuildListPanel::WBQtBuildListPanel(QWidget *owner)
 		connect(m_rebuilds->lineEdit(), SIGNAL(editingFinished()), this, SLOT(onRebuildsTextCommitted()));
 	}
 	connect(m_forcedShow, SIGNAL(clicked()), this, SLOT(onForcedShowToggled()));
+	connect(m_followObject, SIGNAL(clicked()), this, SLOT(onFollowObjectToggled()));
+	m_followObject->setChecked(WBQtConfig_GetBuildListFollow() != 0);
 
 	s_instance = this;
 }
@@ -213,6 +216,15 @@ void WBQtBuildListPanel::onBuildSelChanged()
 	}
 	WBQtBuildList_SetCurBuild(m_buildList->currentRow());
 	refreshAttributes();
+
+	// Take the view to the building, so picking a row in a long list shows you what it
+	// is rather than leaving you to find it. Off by default: the view moving on every
+	// selection gets in the way while reordering or editing a list. Entries with no
+	// position yet are skipped by the bridge, so selecting one never moves the camera.
+	if (m_followObject != NULL && m_followObject->isChecked())
+	{
+		WBQtBuildList_GoToCurBuild();
+	}
 }
 
 void WBQtBuildListPanel::onBuildDoubleClicked()
@@ -351,6 +363,18 @@ void WBQtBuildListPanel::onRebuildsTextCommitted()
 	}
 	WBQtBuildList_SetCurBuildNoRefresh(m_buildList->currentRow());
 	WBQtBuildList_SetRebuilds(nr);
+}
+
+void WBQtBuildListPanel::onFollowObjectToggled()
+{
+	WBQtConfig_SetBuildListFollow(m_followObject->isChecked() ? 1 : 0);
+
+	// Turning it on takes you to whatever is already selected, rather than waiting for
+	// the next selection change to do anything.
+	if (m_followObject->isChecked())
+	{
+		WBQtBuildList_GoToCurBuild();
+	}
 }
 
 void WBQtBuildListPanel::onForcedShowToggled()

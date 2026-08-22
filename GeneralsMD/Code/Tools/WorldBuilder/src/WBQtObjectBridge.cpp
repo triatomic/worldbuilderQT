@@ -560,5 +560,14 @@ void WBQtConfig_SetComboSearch(int on)
 	::AfxGetApp()->WriteProfileInt("QtSearch", "ComboSearch", on ? 1 : 0);
 }
 
+int WBQtConfig_GetBuildListFollow(void)
+{
+	return ::AfxGetApp()->GetProfileInt("BuildList", "FollowObject", 0);
+}
+void WBQtConfig_SetBuildListFollow(int on)
+{
+	::AfxGetApp()->WriteProfileInt("BuildList", "FollowObject", on ? 1 : 0);
+}
+
 }
 #endif

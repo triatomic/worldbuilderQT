@@ -34,6 +34,7 @@
 #include "PointerTool.h"
 #include "WHeightMapEdit.h"
 #include "WorldBuilderDoc.h"
+#include "WbView3d.h"
 #include "W3DDevice/GameClient/HeightMap.h"
 #include "GameLogic/SidesList.h"
 #include "Common/PlayerTemplate.h"
@@ -1342,6 +1343,43 @@ static void qtInvalBuildItem(BuildListInfo *p)
 	if (p3View != NULL)
 	{
 		p3View->invalBuildListItemInView(p);
+	}
+}
+
+//=============================================================================
+// BuildList::qtGoToCurBuild
+//=============================================================================
+/** Centres the 3D view on the selected build list entry.
+
+	A build list entry is a BuildListInfo rather than a map object, but it carries the
+	position the building will be placed at, which is what the view needs. An entry
+	added from the palette but never positioned sits at the origin -- skip those
+	rather than throwing the camera into the corner of the map.
+*/
+//=============================================================================
+void BuildList::qtGoToCurBuild(void)
+{
+	BuildListInfo *p = qtBuildAt(qtGetCurSide(), qtGetCurBuild());
+	if (p == NULL)
+	{
+		return;
+	}
+
+	const Coord3D *pos = p->getLocation();
+	if (pos == NULL)
+	{
+		return;
+	}
+	if (pos->x == 0.0f && pos->y == 0.0f)
+	{
+		return;	// never placed on the map
+	}
+
+	WbView3d *p3View = CWorldBuilderDoc::GetActive3DView();
+	if (p3View != NULL)
+	{
+		p3View->setCenterInView(pos->x / MAP_XY_FACTOR, pos->y / MAP_XY_FACTOR);
+		p3View->Invalidate(false);
 	}
 }
 

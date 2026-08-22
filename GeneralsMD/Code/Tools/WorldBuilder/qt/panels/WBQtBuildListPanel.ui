@@ -254,6 +254,16 @@
     </widget>
    </item>
    <item>
+    <widget class="QCheckBox" name="followObject">
+     <property name="text">
+      <string>Follow Object</string>
+     </property>
+     <property name="toolTip">
+      <string>Move the view to a building when you select it in the list.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
     <widget class="QCheckBox" name="forcedShow">
      <property name="text">
       <string>Don't Hide Objects When Tool Is Closed</string>

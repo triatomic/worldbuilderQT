@@ -133,6 +133,8 @@ public:
 	// refresh). Use when only re-pointing the "current" building before writing an attribute --
 	// the refresh would overwrite the edit-in-progress with the stored value.
 	static void qtSetCurBuildNoRefresh(int i);
+	/// Centres the 3D view on the current entry's building.
+	static void qtGoToCurBuild(void);
 	// Current building's attributes.
 	static int    qtHasCurBuild(void);
 	static double qtGetAngle(void);

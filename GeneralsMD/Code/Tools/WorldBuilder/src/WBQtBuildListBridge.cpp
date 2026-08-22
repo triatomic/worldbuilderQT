@@ -25,6 +25,7 @@ int  WBQtBuildList_ReplaceBuildingName(const char *f, const char *t)
 int  WBQtBuildList_GetCurBuild(void)               { return BuildList::qtGetCurBuild(); }
 void WBQtBuildList_SetCurBuild(int i)              { BuildList::qtSetCurBuild(i); }
 void WBQtBuildList_SetCurBuildNoRefresh(int i)     { BuildList::qtSetCurBuildNoRefresh(i); }
+void WBQtBuildList_GoToCurBuild(void)              { BuildList::qtGoToCurBuild(); }
 
 int    WBQtBuildList_HasCurBuild(void)             { return BuildList::qtHasCurBuild(); }
 double WBQtBuildList_GetAngle(void)                { return BuildList::qtGetAngle(); }

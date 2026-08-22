@@ -49,6 +49,7 @@ private slots:
 	void onRebuildsChanged();
 	void onRebuildsTextCommitted();		// a hand-typed rebuild count (== MFC's CBN_EDITCHANGE)
 	void onForcedShowToggled();
+	void onFollowObjectToggled();
 
 private:
 	void refreshAttributes();		// the per-building attribute controls + power + button enables
@@ -68,6 +69,7 @@ private:
 	QCheckBox      *m_alreadyBuilt;
 	QComboBox      *m_rebuilds;
 	QProgressBar   *m_power;
+	QCheckBox      *m_followObject;
 	QCheckBox      *m_forcedShow;
 
 	bool m_updating;	// re-entrancy guard while seeding controls

@@ -90,6 +90,9 @@ void WBQtBuildList_SetCurBuild(int i);
 // Re-point the current building without pushing a panel refresh; use before writing an attribute
 // so the refresh does not overwrite the value being edited.
 void WBQtBuildList_SetCurBuildNoRefresh(int i);
+// Centres the 3D view on the current build list entry. No-op when the entry has no
+// position yet or there is no 3D view.
+void WBQtBuildList_GoToCurBuild(void);
 int    WBQtBuildList_HasCurBuild(void);
 double WBQtBuildList_GetAngle(void);
 double WBQtBuildList_GetZ(void);
@@ -242,6 +245,11 @@ void WBQtConfig_SetNewSearch(int on);
 // so it applies to panels opened after the toggle changes.
 int  WBQtConfig_GetComboSearch(void);
 void WBQtConfig_SetComboSearch(int on);
+
+// Build List panel: follow the selected building with the view. Off by default -- the view
+// jumping on every selection is not what everyone wants while editing a list.
+int  WBQtConfig_GetBuildListFollow(void);
+void WBQtConfig_SetBuildListFollow(int on);
 
 // Forward (Qt-side): WB calls ObjectOptions::update()/selectObject() on selection changes;
 // a guarded WBQtObject_PushFromSelection() re-seeds the Qt panel (label/team/preview) and
