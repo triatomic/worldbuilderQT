@@ -1214,8 +1214,12 @@ extern "C" int WBQtTeamSheet_Open(void)
 		{
 			s_qtCatUnits.push_back(tTemplate->getName());
 		}
-		s_qtCatUnits.push_back(AsciiString(NONE_STRING));
+		// <none> goes at the TOP rather than sorting in with the templates. MFC added it to a
+		// sorted combo, so it landed wherever "<" happened to sort and you had to hunt for it
+		// in a list of hundreds; clearing a slot is a common thing to want, so it belongs
+		// where it can be found. Same treatment the generic-script combo already gets.
 		std::sort(s_qtCatUnits.begin(), s_qtCatUnits.end(), qtmStrLess);
+		s_qtCatUnits.insert(s_qtCatUnits.begin(), AsciiString(NONE_STRING));
 	}
 
 	s_qtCatTransports.clear();
@@ -1231,8 +1235,8 @@ extern "C" int WBQtTeamSheet_Open(void)
 				s_qtCatTransports.push_back(tTemplate->getName());
 			}
 		}
-		s_qtCatTransports.push_back(AsciiString(NONE_STRING));
 		std::sort(s_qtCatTransports.begin(), s_qtCatTransports.end(), qtmStrLess);
+		s_qtCatTransports.insert(s_qtCatTransports.begin(), AsciiString(NONE_STRING));
 	}
 
 	s_qtCatVeterancy.clear();
