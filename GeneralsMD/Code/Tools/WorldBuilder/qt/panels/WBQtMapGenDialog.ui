@@ -190,6 +190,55 @@
         </property>
        </widget>
       </item>
+      <item row="6" column="0" colspan="2">
+       <widget class="QCheckBox" name="doPlayers">
+        <property name="text">
+         <string>Add skirmish players</string>
+        </property>
+        <property name="toolTip">
+         <string>Add the standard skirmish sides. Without them the map has start positions but no players, and will not show up as a skirmish map.</string>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="0" colspan="2">
+       <widget class="QCheckBox" name="doSupplies">
+        <property name="text">
+         <string>Place supply sources</string>
+        </property>
+        <property name="toolTip">
+         <string>Put a pair of supply docks near each start, the same for every player.</string>
+        </property>
+       </widget>
+      </item>
+      <item row="8" column="0">
+       <widget class="QLabel" name="roadModeLabel">
+        <property name="text">
+         <string>Roads:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="8" column="1">
+       <widget class="QComboBox" name="roadMode">
+        <property name="toolTip">
+         <string>Roads are run between the player start positions. Via supplies routes them past each side's supply points as well.</string>
+        </property>
+        <item>
+         <property name="text">
+          <string>None</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Between starts</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Between starts, via supplies</string>
+         </property>
+        </item>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>

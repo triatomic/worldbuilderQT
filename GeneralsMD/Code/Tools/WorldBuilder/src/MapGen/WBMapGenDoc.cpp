@@ -33,6 +33,8 @@
 #include "WaypointOptions.h"
 #include "ObjectOptions.h"
 #include "mapobjectprops.h"
+#include "GameLogic/SidesList.h"
+#include <math.h>
 #include "WorldBuilder.h"
 #include "Common/MapObject.h"
 #include "Common/WellKnownKeys.h"
@@ -321,6 +323,350 @@ static MapObject *scatterProps(MapObject *pHead, const WBMapGenSettings &setting
 }
 
 //=============================================================================
+// addSkirmishSide
+//=============================================================================
+/** Adds one side, if the map doesn't already have it. */
+//=============================================================================
+static void addSkirmishSide(SidesList *pSides, const char *faction, const char *playerName,
+														const wchar_t *displayName)
+{
+	if (pSides->findSideInfo(AsciiString(playerName)) != NULL)
+	{
+		return;
+	}
+
+	Dict newPlayerDict;
+	UnicodeString displayStr;
+	displayStr = displayName;
+	newPlayerDict.setAsciiString(TheKey_playerName, AsciiString(playerName));
+	newPlayerDict.setBool(TheKey_playerIsHuman, false);
+	newPlayerDict.setUnicodeString(TheKey_playerDisplayName, displayStr);
+	newPlayerDict.setAsciiString(TheKey_playerFaction, AsciiString(faction));
+	newPlayerDict.setAsciiString(TheKey_playerEnemies, AsciiString(""));
+	newPlayerDict.setAsciiString(TheKey_playerAllies, AsciiString(""));
+
+	pSides->addSide(&newPlayerDict);
+	pSides->validateSides();
+}
+
+//=============================================================================
+// buildSkirmishSides
+//=============================================================================
+/** Fills in the sides a skirmish map needs.
+
+	Without these a generated map has start positions but nobody to occupy them,
+	and the game won't offer it as a skirmish map. Mirrors the Player List
+	dialog's "Add Skirmish Players", so a generated map has the same side list a
+	mapper would set up by hand.
+*/
+//=============================================================================
+static void buildSkirmishSides(SidesList *pSides)
+{
+	addSkirmishSide(pSides, "FactionCivilian", "PlyrCivilian", L"PlyrCivilian");
+	addSkirmishSide(pSides, "FactionAmerica", "SkirmishAmerica", L"SkirmishAmerica");
+	addSkirmishSide(pSides, "FactionChina", "SkirmishChina", L"SkirmishChina");
+	addSkirmishSide(pSides, "FactionGLA", "SkirmishGLA", L"SkirmishGLA");
+
+	addSkirmishSide(pSides, "FactionAmericaAirForceGeneral", "SkirmishAmericaAirForceGeneral", L"SkirmishAmericaAirForceGeneral");
+	addSkirmishSide(pSides, "FactionAmericaLaserGeneral", "SkirmishAmericaLaserGeneral", L"SkirmishAmericaLaserGeneral");
+	addSkirmishSide(pSides, "FactionAmericaSuperWeaponGeneral", "SkirmishAmericaSuperWeaponGeneral", L"SkirmishAmericaSuperWeaponGeneral");
+	addSkirmishSide(pSides, "FactionChinaTankGeneral", "SkirmishChinaTankGeneral", L"SkirmishChinaTankGeneral");
+	addSkirmishSide(pSides, "FactionChinaNukeGeneral", "SkirmishChinaNukeGeneral", L"SkirmishChinaNukeGeneral");
+	addSkirmishSide(pSides, "FactionChinaInfantryGeneral", "SkirmishChinaInfantryGeneral", L"SkirmishChinaInfantryGeneral");
+	addSkirmishSide(pSides, "FactionGLADemolitionGeneral", "SkirmishGLADemolitionGeneral", L"SkirmishGLADemolitionGeneral");
+	addSkirmishSide(pSides, "FactionGLAToxinGeneral", "SkirmishGLAToxinGeneral", L"SkirmishGLAToxinGeneral");
+	addSkirmishSide(pSides, "FactionGLAStealthGeneral", "SkirmishGLAStealthGeneral", L"SkirmishGLAStealthGeneral");
+}
+
+//=============================================================================
+// placeSupplies
+//=============================================================================
+/** Puts a pair of supply sources near each player's start.
+
+	Every player gets the same count at the same distance, so nobody starts with
+	an economic advantage. They sit outside the base pad but well within reach,
+	and are nudged off cliffs and water if the first choice is unusable.
+*/
+//=============================================================================
+static MapObject *placeSupplies(MapObject *pHead, const WBMapGenSettings &settings,
+																const WBMapGenHeightField &field,
+																const WBMapGenAssets &assets,
+																const std::vector<WBMapGenPoint> &starts,
+																Int border, Int *countInOut,
+																std::vector<WBMapGenPoint> *placedOut)
+{
+	if (!assets.hasSupplySource())
+	{
+		return pHead;
+	}
+
+	const Bool haveWater = localHasWaterAreas();
+	const Real twoPi = 6.283185307f;
+	// Just outside the flattened base, close enough to be clearly "theirs".
+	const Int distance = WB_MAPGEN_BASE_RADIUS + 12;
+	const Int perPlayer = 2;
+
+	WBRandom random((UnsignedInt)(settings.m_seed + 7103));
+	// One angle for everyone, rotated per player, so each base's supplies sit in
+	// the same relative spot -- the layout stays fair however the map came out.
+	const Real baseAngle = random.nextReal() * twoPi;
+
+	Int i;
+	for (i = 0; i < (Int)starts.size(); i++)
+	{
+		Int n;
+		for (n = 0; n < perPlayer; n++)
+		{
+			const Real angle = baseAngle + (twoPi * (Real)n / (Real)perPlayer);
+
+			// Try the ideal spot, then walk around the ring if it is unusable.
+			Int attempt;
+			for (attempt = 0; attempt < 8; attempt++)
+			{
+				const Real tryAngle = angle + ((Real)attempt * 0.4f);
+				const Int cellX = starts[i].m_x + (Int)((Real)cos(tryAngle) * (Real)distance);
+				const Int cellY = starts[i].m_y + (Int)((Real)sin(tryAngle) * (Real)distance);
+
+				const Real worldX = (Real)(cellX - border) * MAP_XY_FACTOR;
+				const Real worldY = (Real)(cellY - border) * MAP_XY_FACTOR;
+
+				if (!field.isValid(cellX, cellY))
+				{
+					continue;
+				}
+				if (field.hasFlag(cellX, cellY, WBMapGenHeightField::FLAG_CLIFF))
+				{
+					continue;
+				}
+				if (haveWater && localIsUnderwater(worldX, worldY))
+				{
+					continue;
+				}
+				if (localIsInsideMapObject(worldX, worldY))
+				{
+					continue;
+				}
+
+				MapObject *pNew = makeProp(assets.getSupplySource(), worldX, worldY, 0.0f);
+				if (pNew != NULL)
+				{
+					pNew->setNextMap(pHead);
+					pHead = pNew;
+					(*countInOut)++;
+					if (placedOut != NULL)
+					{
+						WBMapGenPoint placed;
+						placed.m_x = cellX;
+						placed.m_y = cellY;
+						placedOut->push_back(placed);
+					}
+				}
+				break;
+			}
+		}
+	}
+
+	return pHead;
+}
+
+//=============================================================================
+// addRoadSegment
+//=============================================================================
+/** Lays one straight road segment between two cells.
+
+	A segment is a pair of adjacent map objects, the first flagged as the start
+	point and the second as the end. They have to stay next to each other in the
+	object list, which is why both are chained together here rather than added
+	one at a time.
+*/
+//=============================================================================
+static MapObject *addRoadSegment(MapObject *pHead, const AsciiString &roadName,
+																 const WBMapGenPoint &from, const WBMapGenPoint &to,
+																 Int border, Int *countInOut)
+{
+	Coord3D loc1;
+	loc1.x = (Real)(from.m_x - border) * MAP_XY_FACTOR;
+	loc1.y = (Real)(from.m_y - border) * MAP_XY_FACTOR;
+	loc1.z = 0.0f;
+
+	Coord3D loc2;
+	loc2.x = (Real)(to.m_x - border) * MAP_XY_FACTOR;
+	loc2.y = (Real)(to.m_y - border) * MAP_XY_FACTOR;
+	loc2.z = 0.0f;
+
+	MapObject *pStart = newInstance(MapObject)(loc1, roadName, 0.0f, 0, NULL, NULL);
+	MapObject *pEnd = newInstance(MapObject)(loc2, roadName, 0.0f, 0, NULL, NULL);
+
+	pStart->setColor(RGB(255, 255, 0));	// road endpoints are drawn yellow
+	pEnd->setColor(RGB(255, 255, 0));
+	pStart->setFlag(FLAG_ROAD_POINT1);
+	pEnd->setFlag(FLAG_ROAD_POINT2);
+	pStart->getProperties()->setAsciiString(TheKey_originalOwner,
+																				 AsciiString(NEUTRAL_TEAM_INTERNAL_STR));
+	pEnd->getProperties()->setAsciiString(TheKey_originalOwner,
+																			 AsciiString(NEUTRAL_TEAM_INTERNAL_STR));
+
+	// POINT2 has to immediately follow POINT1 in the list.
+	pStart->setNextMap(pEnd);
+	pEnd->setNextMap(pHead);
+	(*countInOut) += 2;
+	return pStart;
+}
+
+//=============================================================================
+// buildRoadRoute
+//=============================================================================
+/** Runs a road from one cell to another in a few straight hops.
+
+	The route is broken into segments and each joint is nudged off cliff cells,
+	which is enough to stop a road running up a rock face without needing a full
+	pathfinder. It is a road network rather than an optimal path -- and a road
+	that bends a little looks better than a ruler-straight one anyway.
+*/
+//=============================================================================
+static MapObject *buildRoadRoute(MapObject *pHead, const AsciiString &roadName,
+																 const WBMapGenHeightField &field,
+																 const WBMapGenPoint &from, const WBMapGenPoint &to,
+																 Int border, Int *countInOut)
+{
+	const Int dx = to.m_x - from.m_x;
+	const Int dy = to.m_y - from.m_y;
+	const Int span = (Int)sqrt((Real)(dx*dx + dy*dy));
+	if (span <= 0)
+	{
+		return pHead;
+	}
+
+	// A joint roughly every 25 cells, so the road has somewhere to bend.
+	Int hops = span / 25;
+	if (hops < 1)
+	{
+		hops = 1;
+	}
+	if (hops > 12)
+	{
+		hops = 12;
+	}
+
+	WBMapGenPoint prev = from;
+	Int hop;
+	for (hop = 1; hop <= hops; hop++)
+	{
+		WBMapGenPoint next;
+		next.m_x = from.m_x + (dx * hop) / hops;
+		next.m_y = from.m_y + (dy * hop) / hops;
+
+		// Shift an intermediate joint off unusable ground. The endpoints stay put:
+		// they are the places the road is meant to reach.
+		if (hop < hops && field.hasFlag(next.m_x, next.m_y, WBMapGenHeightField::FLAG_CLIFF))
+		{
+			Int shift;
+			for (shift = 1; shift <= 8; shift++)
+			{
+				// Step sideways from the road direction, so the detour goes around
+				// the obstacle rather than back along the route.
+				const Int tryX = next.m_x + ((dy > 0) ? shift : -shift);
+				const Int tryY = next.m_y + ((dx > 0) ? -shift : shift);
+				if (field.isValid(tryX, tryY) &&
+						!field.hasFlag(tryX, tryY, WBMapGenHeightField::FLAG_CLIFF))
+				{
+					next.m_x = tryX;
+					next.m_y = tryY;
+					break;
+				}
+			}
+		}
+
+		pHead = addRoadSegment(pHead, roadName, prev, next, border, countInOut);
+		prev = next;
+	}
+
+	return pHead;
+}
+
+//=============================================================================
+// buildRoads
+//=============================================================================
+/** Links the player starts together with roads.
+
+	The generator this was ported from grew its roads out of the villages and
+	resource sites it stamped down from its own mod templates. Without those there
+	are no road nodes to connect at all, so the network is seeded here from what a
+	generated map does have: the start positions, and optionally the supply points
+	belonging to each player.
+*/
+//=============================================================================
+static MapObject *buildRoads(MapObject *pHead, const WBMapGenSettings &settings,
+														 const WBMapGenHeightField &field,
+														 const WBMapGenAssets &assets,
+														 const std::vector<WBMapGenPoint> &starts,
+														 const std::vector<WBMapGenPoint> &supplies,
+														 Int border, Int *countInOut)
+{
+	if (settings.m_roadMode == WB_ROADS_NONE || !assets.hasRoad())
+	{
+		return pHead;
+	}
+	if (starts.size() < 2)
+	{
+		return pHead;
+	}
+
+	const AsciiString &roadName = assets.getRoad();
+	const Int numStarts = (Int)starts.size();
+
+	Int i;
+	for (i = 0; i < numStarts; i++)
+	{
+		// Each start links to the next: one road across the map for two players,
+		// a loop around it for more.
+		if (numStarts == 2 && i == 1)
+		{
+			break;	// two players need the one road, not the same road twice
+		}
+		const Int nextNdx = (i + 1) % numStarts;
+
+		if (settings.m_roadMode == WB_ROADS_SUPPLIES && !supplies.empty())
+		{
+			// Route by way of whichever supply point sits nearest the midpoint of
+			// the two starts, so the road passes the economy instead of ignoring it.
+			WBMapGenPoint mid;
+			mid.m_x = (starts[i].m_x + starts[nextNdx].m_x) / 2;
+			mid.m_y = (starts[i].m_y + starts[nextNdx].m_y) / 2;
+
+			Int bestNdx = -1;
+			Int bestDistSqr = 0;
+			Int s;
+			for (s = 0; s < (Int)supplies.size(); s++)
+			{
+				const Int sdx = supplies[s].m_x - mid.m_x;
+				const Int sdy = supplies[s].m_y - mid.m_y;
+				const Int distSqr = sdx*sdx + sdy*sdy;
+				if (bestNdx < 0 || distSqr < bestDistSqr)
+				{
+					bestNdx = s;
+					bestDistSqr = distSqr;
+				}
+			}
+
+			if (bestNdx >= 0)
+			{
+				pHead = buildRoadRoute(pHead, roadName, field, starts[i], supplies[bestNdx],
+															 border, countInOut);
+				pHead = buildRoadRoute(pHead, roadName, field, supplies[bestNdx], starts[nextNdx],
+															 border, countInOut);
+				continue;
+			}
+		}
+
+		pHead = buildRoadRoute(pHead, roadName, field, starts[i], starts[nextNdx],
+													 border, countInOut);
+	}
+
+	return pHead;
+}
+
+//=============================================================================
 // WBMapGen_RunOnDocument
 //=============================================================================
 Bool WBMapGen_RunOnDocument(CWorldBuilderDoc *pDoc, const WBMapGenSettings &settings)
@@ -375,6 +721,22 @@ Bool WBMapGen_RunOnDocument(CWorldBuilderDoc *pDoc, const WBMapGenSettings &sett
 			border = pCopy->getBorderSizeInline();
 			playableWidth = pCopy->getXExtent() - 2*border;
 			playableHeight = pCopy->getYExtent() - 2*border;
+
+			// resize() grows the height map but leaves the playable boundary alone,
+			// and the boundary is what the GAME reads as the map size -- without
+			// this the map stays locked to its old dimensions in game however big
+			// the terrain got.
+			ICoord2D bounds;
+			bounds.x = playableWidth;
+			bounds.y = playableHeight;
+			if (pCopy->getNumBoundaries() > 0)
+			{
+				pCopy->changeBoundary(0, &bounds);
+			}
+			else
+			{
+				pCopy->addBoundary(&bounds);
+			}
 		}
 	}
 
@@ -414,9 +776,21 @@ Bool WBMapGen_RunOnDocument(CWorldBuilderDoc *pDoc, const WBMapGenSettings &sett
 	}
 
 	MapObject *pStartHead = buildStartWaypoints(pDoc, starts, border);
+
+	Int propCount = 0;
+	std::vector<WBMapGenPoint> supplyPoints;
+	if (actual.m_doSupplies)
+	{
+		pStartHead = placeSupplies(pStartHead, actual, field, assets, starts, border,
+															 &propCount, &supplyPoints);
+	}
+	if (actual.m_roadMode != WB_ROADS_NONE)
+	{
+		pStartHead = buildRoads(pStartHead, actual, field, assets, starts, supplyPoints,
+														border, &propCount);
+	}
 	if (actual.m_doTrees || actual.m_doRocks)
 	{
-		Int propCount = 0;
 		pStartHead = scatterProps(pStartHead, actual, field, assets, border, &propCount);
 	}
 
@@ -425,6 +799,18 @@ Bool WBMapGen_RunOnDocument(CWorldBuilderDoc *pDoc, const WBMapGenSettings &sett
 	MultipleUndoable *pBatch = new MultipleUndoable;
 
 	// addUndoable prepends, so add in reverse of the order things should happen.
+
+	// Sides: without these the map has start positions but no players to use them,
+	// and the game won't list it as a skirmish map.
+	if (actual.m_doPlayers && TheSidesList != NULL)
+	{
+		SidesList newSides = *TheSidesList;
+		buildSkirmishSides(&newSides);
+		SidesListUndoable *pSidesUndo = new SidesListUndoable(newSides, pDoc);
+		pBatch->addUndoable(pSidesUndo);
+		REF_PTR_RELEASE(pSidesUndo);	// belongs to pBatch now
+	}
+
 	if (pStartHead != NULL)
 	{
 		AddObjectUndoable *pObjs = new AddObjectUndoable(pDoc, pStartHead);

@@ -50,6 +50,7 @@ namespace
 WBQtMapGenDialog::WBQtMapGenDialog(int seed, int numPlayers, int baseHeight,
 																	 int doCliffs, int cliffDensity, int doTextures,
 																	 int doTrees, int treeDensity, int doRocks,
+																	 int doPlayers, int doSupplies, int roadMode,
 																	 QWidget *parent)
 	: QDialog(parent),
 		m_ui(new Ui::WBQtMapGenDialog)
@@ -65,6 +66,9 @@ WBQtMapGenDialog::WBQtMapGenDialog(int seed, int numPlayers, int baseHeight,
 	m_doTrees = m_ui->doTrees;
 	m_treeDensity = m_ui->treeDensity;
 	m_doRocks = m_ui->doRocks;
+	m_doPlayers = m_ui->doPlayers;
+	m_doSupplies = m_ui->doSupplies;
+	m_roadMode = m_ui->roadMode;
 	m_sizeNote = m_ui->noteLabel;
 
 	m_seed->setValue(seed);
@@ -78,6 +82,9 @@ WBQtMapGenDialog::WBQtMapGenDialog(int seed, int numPlayers, int baseHeight,
 	m_treeDensity->setCurrentIndex(treeDensity);
 	m_treeDensity->setEnabled(doTrees != 0);
 	m_doRocks->setChecked(doRocks != 0);
+	m_doPlayers->setChecked(doPlayers != 0);
+	m_doSupplies->setChecked(doSupplies != 0);
+	m_roadMode->setCurrentIndex(roadMode);
 
 	refreshSizeNote();
 
@@ -168,6 +175,24 @@ int WBQtMapGenDialog::doRocks(void) const
 }
 
 //=============================================================================
+int WBQtMapGenDialog::doPlayers(void) const
+{
+	return m_doPlayers->isChecked() ? 1 : 0;
+}
+
+//=============================================================================
+int WBQtMapGenDialog::doSupplies(void) const
+{
+	return m_doSupplies->isChecked() ? 1 : 0;
+}
+
+//=============================================================================
+int WBQtMapGenDialog::roadMode(void) const
+{
+	return m_roadMode->currentIndex();
+}
+
+//=============================================================================
 void WBQtMapGenDialog::onTreesToggled(bool checked)
 {
 	m_treeDensity->setEnabled(checked);
@@ -225,17 +250,19 @@ void WBQtMapGenDialog::refreshSizeNote()
 //=============================================================================
 extern "C" int WBQtMapGen_Run(void * /*frameHwnd*/, int *seed, int *numPlayers,
 	int *baseHeight, int *doCliffs, int *cliffDensity, int *doTextures, int *doTrees,
-	int *treeDensity, int *doRocks)
+	int *treeDensity, int *doRocks, int *doPlayers, int *doSupplies, int *roadMode)
 {
 	if (seed == NULL || numPlayers == NULL || baseHeight == NULL ||
 			doCliffs == NULL || cliffDensity == NULL || doTextures == NULL ||
-			doTrees == NULL || treeDensity == NULL || doRocks == NULL)
+			doTrees == NULL || treeDensity == NULL || doRocks == NULL ||
+			doPlayers == NULL || doSupplies == NULL || roadMode == NULL)
 	{
 		return 0;
 	}
 
 	WBQtMapGenDialog dlg(*seed, *numPlayers, *baseHeight, *doCliffs, *cliffDensity,
-											 *doTextures, *doTrees, *treeDensity, *doRocks);
+											 *doTextures, *doTrees, *treeDensity, *doRocks,
+											 *doPlayers, *doSupplies, *roadMode);
 	if (runMapGenModal(dlg) == 0)
 	{
 		return 0;
@@ -250,5 +277,8 @@ extern "C" int WBQtMapGen_Run(void * /*frameHwnd*/, int *seed, int *numPlayers,
 	*doTrees = dlg.doTrees();
 	*treeDensity = dlg.treeDensity();
 	*doRocks = dlg.doRocks();
+	*doPlayers = dlg.doPlayers();
+	*doSupplies = dlg.doSupplies();
+	*roadMode = dlg.roadMode();
 	return 1;
 }

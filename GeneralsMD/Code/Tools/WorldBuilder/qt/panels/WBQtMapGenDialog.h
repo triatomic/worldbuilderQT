@@ -28,7 +28,9 @@ class WBQtMapGenDialog : public QDialog
 public:
 	WBQtMapGenDialog(int seed, int numPlayers, int baseHeight,
 									 int doCliffs, int cliffDensity, int doTextures,
-									 int doTrees, int treeDensity, int doRocks, QWidget *parent = 0);
+									 int doTrees, int treeDensity, int doRocks,
+									 int doPlayers, int doSupplies, int roadMode,
+									 QWidget *parent = 0);
 	virtual ~WBQtMapGenDialog();
 
 	int seed(void) const;
@@ -40,6 +42,9 @@ public:
 	int doTrees(void) const;
 	int treeDensity(void) const;
 	int doRocks(void) const;
+	int doPlayers(void) const;
+	int doSupplies(void) const;
+	int roadMode(void) const;
 
 private slots:
 	void onRandomize();
@@ -58,6 +63,9 @@ private:
 	QCheckBox *m_doTrees;
 	QComboBox *m_treeDensity;
 	QCheckBox *m_doRocks;
+	QCheckBox *m_doPlayers;
+	QCheckBox *m_doSupplies;
+	QComboBox *m_roadMode;
 	QLabel *m_sizeNote;
 
 	/// Updates the note about the map being enlarged for the player count.

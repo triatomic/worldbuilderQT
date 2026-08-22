@@ -54,6 +54,14 @@ public:
 	Int getNumRocks(void) const {return (Int)m_rocks.size();}
 	const AsciiString &getRock(Int ndx) const {return m_rocks[ndx];}
 
+	/// Something units can gather supplies from, or empty if the game data has none.
+	const AsciiString &getSupplySource(void) const {return m_supplySource;}
+	Bool hasSupplySource(void) const {return !m_supplySource.isEmpty();}
+
+	/// A road type to lay down, or empty if the game data has none.
+	const AsciiString &getRoad(void) const {return m_road;}
+	Bool hasRoad(void) const {return !m_road.isEmpty();}
+
 	/// Texture class index for open ground, or -1 when nothing suitable was found.
 	Int getGroundTexture(void) const {return m_groundTexture;}
 	/// Texture class index for cliff faces, or -1.
@@ -62,6 +70,7 @@ public:
 protected:
 	void gatherObjects(void);
 	void gatherTextures(void);
+	void gatherRoad(void);
 
 	/// Finds a texture class whose name contains one of the given words.
 	static Int findTextureClass(const char *const *words, Int numWords);
@@ -69,6 +78,8 @@ protected:
 protected:
 	std::vector<AsciiString> m_trees;
 	std::vector<AsciiString> m_rocks;
+	AsciiString m_supplySource;
+	AsciiString m_road;
 	Int m_groundTexture;
 	Int m_cliffTexture;
 };

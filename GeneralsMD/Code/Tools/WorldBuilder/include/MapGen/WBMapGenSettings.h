@@ -31,6 +31,14 @@
 
 #include "always.h"
 
+/// How much of a road network to lay down.
+enum WBMapGenRoadMode
+{
+	WB_ROADS_NONE = 0,		///< no roads at all
+	WB_ROADS_STARTS = 1,	///< link the player starts to each other
+	WB_ROADS_SUPPLIES = 2	///< route those roads via each player's supply points
+};
+
 /// Density steps for props and cliffs.
 enum WBMapGenDensity
 {
@@ -80,6 +88,9 @@ struct WBMapGenSettings
 	Bool m_doTextures;
 	Bool m_doTrees;
 	Bool m_doRocks;
+	Bool m_doPlayers;	///< add the skirmish sides, so the map is playable as one
+	Bool m_doSupplies;	///< put supply sources near each start
+	Int m_roadMode;		///< WBMapGenRoadMode
 
 	/// Fills in the shipped defaults.
 	void setDefaults(void);

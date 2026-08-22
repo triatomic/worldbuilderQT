@@ -26,6 +26,9 @@
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
 #include "Common/ThingSort.h"
+#include "Common/KindOf.h"
+#include "Common/TerrainTypes.h"
+#include "GameClient/TerrainRoads.h"
 
 #include <string.h>
 
@@ -59,6 +62,8 @@ void WBMapGenAssets::gatherObjects(void)
 {
 	m_trees.clear();
 	m_rocks.clear();
+	m_supplySource.clear();
+	m_road.clear();
 
 	if (TheThingFactory == NULL)
 	{
@@ -78,6 +83,80 @@ void WBMapGenAssets::gatherObjects(void)
 		{
 			m_rocks.push_back(pTemplate->getName());
 		}
+
+		// Remember the first supply source as a fallback, in case this install
+		// doesn't have the one we'd rather use.
+		if (m_supplySource.isEmpty() && pTemplate->isKindOf(KINDOF_SUPPLY_SOURCE))
+		{
+			m_supplySource = pTemplate->getName();
+		}
+	}
+
+	// Prefer the plain supply dock: it is the one mappers reach for, and the
+	// KINDOF scan above would otherwise pick whichever supply object the game
+	// data happens to define first (a crate, a hidden variant, a mod's own).
+	{
+		static const char *preferred[] = {"SupplyDock", "SupplyWarehouse"};
+		Int i;
+		for (i = 0; i < (Int)(sizeof(preferred)/sizeof(preferred[0])); i++)
+		{
+			const ThingTemplate *pFound = TheThingFactory->findTemplate(AsciiString(preferred[i]), FALSE);
+			if (pFound != NULL)
+			{
+				m_supplySource = pFound->getName();
+				break;
+			}
+		}
+	}
+
+	gatherRoad();
+}
+
+//=============================================================================
+// WBMapGenAssets::gatherRoad
+//=============================================================================
+/** Picks a road type.
+
+	Roads are NOT object templates: they are terrain road types, and they live in
+	TheTerrainRoads rather than the thing factory. Looking them up in the object
+	catalogue finds nothing at all, which is silent -- the generator simply lays
+	no roads.
+
+	A plain two-lane road reads as a main route; the first road in the data could
+	just as easily be a dirt track or something decorative, so a preferred name is
+	tried before falling back to whatever exists.
+*/
+//=============================================================================
+void WBMapGenAssets::gatherRoad(void)
+{
+	m_road.clear();
+
+	if (TheTerrainRoads == NULL)
+	{
+		return;
+	}
+
+	static const char *preferredRoads[] =
+	{
+		"TwoLaneDarkDotted", "TwoLaneDark", "FourLaneDark", "DirtRoad"
+	};
+
+	Int i;
+	for (i = 0; i < (Int)(sizeof(preferredRoads)/sizeof(preferredRoads[0])); i++)
+	{
+		TerrainRoadType *pRoad = TheTerrainRoads->findRoad(AsciiString(preferredRoads[i]));
+		if (pRoad != NULL)
+		{
+			m_road = pRoad->getName();
+			return;
+		}
+	}
+
+	// Nothing preferred is present: take the first road this install defines.
+	TerrainRoadType *pFirst = TheTerrainRoads->firstRoad();
+	if (pFirst != NULL)
+	{
+		m_road = pFirst->getName();
 	}
 }
 

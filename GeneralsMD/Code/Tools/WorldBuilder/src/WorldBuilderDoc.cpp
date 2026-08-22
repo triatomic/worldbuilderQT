@@ -3012,10 +3012,14 @@ void CWorldBuilderDoc::OnMapGenGenerate()
 		int doTrees = settings.m_doTrees ? 1 : 0;
 		int treeDensity = settings.m_treeDensity;
 		int doRocks = settings.m_doRocks ? 1 : 0;
+		int doPlayers = settings.m_doPlayers ? 1 : 0;
+		int doSupplies = settings.m_doSupplies ? 1 : 0;
+		int roadMode = settings.m_roadMode;
 
 		if (!WBQtMapGen_Run(::AfxGetMainWnd()->GetSafeHwnd(), &seed, &numPlayers,
 				&baseHeight, &doCliffs, &cliffDensity, &doTextures, &doTrees,
-				&treeDensity, &doRocks))
+				&treeDensity, &doRocks, &doPlayers, &doSupplies,
+				&roadMode))
 		{
 			return;
 		}
@@ -3029,6 +3033,9 @@ void CWorldBuilderDoc::OnMapGenGenerate()
 		settings.m_doTrees = (doTrees != 0);
 		settings.m_treeDensity = treeDensity;
 		settings.m_doRocks = (doRocks != 0);
+		settings.m_doPlayers = (doPlayers != 0);
+		settings.m_doSupplies = (doSupplies != 0);
+		settings.m_roadMode = roadMode;
 	}
 #else
 	// No settings dialog in the plain MFC build -- confirm and use the defaults.

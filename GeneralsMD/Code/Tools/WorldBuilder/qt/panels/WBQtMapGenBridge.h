@@ -15,7 +15,8 @@ extern "C" {
 /// whatever the user chose. Returns 0 when cancelled, leaving them untouched.
 int WBQtMapGen_Run(void *frameHwnd, int *seed, int *numPlayers, int *baseHeight,
 	int *doCliffs, int *cliffDensity, int *doTextures, int *doTrees, int *treeDensity,
-	int *doRocks);
+	int *doRocks, int *doPlayers, int *doSupplies,
+	int *roadMode);
 
 /// Smallest playable width/height that fits this many players, and the size of
 /// the map that is currently open (0 when there isn't one). The dialog uses these

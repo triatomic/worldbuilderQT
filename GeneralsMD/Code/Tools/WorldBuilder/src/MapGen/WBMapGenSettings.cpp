@@ -118,4 +118,7 @@ void WBMapGenSettings::setDefaults(void)
 	m_doTextures = true;
 	m_doTrees = true;
 	m_doRocks = true;
+	m_doPlayers = true;
+	m_doSupplies = true;
+	m_roadMode = WB_ROADS_STARTS;
 }
