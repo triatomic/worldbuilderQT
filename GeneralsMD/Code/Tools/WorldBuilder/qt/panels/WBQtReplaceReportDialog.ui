@@ -25,6 +25,30 @@
     </widget>
    </item>
    <item>
+    <layout class="QHBoxLayout" name="filterRow">
+     <item>
+      <widget class="QLabel" name="filterLabel">
+       <property name="text">
+        <string>Filter:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="filterEdit">
+       <property name="placeholderText">
+        <string>Show only rows containing...</string>
+       </property>
+       <property name="clearButtonEnabled">
+        <bool>true</bool>
+       </property>
+       <property name="toolTip">
+        <string>Matches either the missing name or its replacement.</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
     <widget class="QTreeWidget" name="rowTree">
      <property name="rootIsDecorated">
       <bool>false</bool>

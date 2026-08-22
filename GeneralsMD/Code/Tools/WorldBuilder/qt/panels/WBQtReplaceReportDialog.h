@@ -32,12 +32,16 @@ private slots:
 	void onChangeReplacement();
 	void onFindNextRow();	// F3 / "Find Next": step to the next report row
 	void onFindPrevRow();	// Shift+F3 / "^": step to the previous report row
+	void onFilterChanged(const QString &text);
 
 private:
 	void reload();
 	void refreshSummary();
 	int currentRow() const;
 	void stepRow(int dir);	// move the selection by dir (+1/-1) with wrap-around
+	void applyFilter();		// hide the rows that don't match the filter box
+	/// Is this row currently shown? Rows are HIDDEN by the filter, never removed.
+	bool rowVisible(int row) const;
 
 	Ui::WBQtReplaceReportDialog *m_ui;
 };

@@ -66,6 +66,8 @@ WBQtReplaceReportDialog::WBQtReplaceReportDialog(QWidget *parent)
 	// "this one is wrong".
 	connect(m_ui->rowTree, SIGNAL(itemDoubleClicked(QTreeWidgetItem*,int)),
 			this, SLOT(onChangeReplacement()));
+	connect(m_ui->filterEdit, SIGNAL(textChanged(QString)),
+		this, SLOT(onFilterChanged(QString)));
 	connect(m_ui->changeButton, SIGNAL(clicked()), this, SLOT(onChangeReplacement()));
 	connect(m_ui->closeButton, SIGNAL(clicked()), this, SLOT(accept()));
 
@@ -127,7 +129,11 @@ void WBQtReplaceReportDialog::reload()
 	const bool canStep = (m_ui->rowTree->topLevelItemCount() > 1);
 	m_ui->findNextButton->setEnabled(canStep);
 	m_ui->findPrevButton->setEnabled(canStep);
-	refreshSummary();
+
+	// The tree was rebuilt from scratch, so every row is showing again -- re-apply the
+	// filter (this also refreshes the summary). Changing a replacement must not silently
+	// drop the filter the user is working under.
+	applyFilter();
 }
 
 void WBQtReplaceReportDialog::refreshSummary()
@@ -163,6 +169,21 @@ void WBQtReplaceReportDialog::refreshSummary()
 	{
 		text = tr("%1 missing unit(s)").arg(count);
 	}
+	// While filtering, say how much of the report is actually on screen -- otherwise the
+	// count reads as the whole list when most of it is hidden.
+	if (!m_ui->filterEdit->text().trimmed().isEmpty())
+	{
+		int shown = 0;
+		const int rows = m_ui->rowTree->topLevelItemCount();
+		for (int i = 0; i < rows; i++)
+		{
+			if (rowVisible(i))
+			{
+				shown++;
+			}
+		}
+		text += tr(" -- showing %1").arg(shown);
+	}
 	if (unresolved > 0)
 	{
 		text += tr(" -- %1 with no close match").arg(unresolved);
@@ -196,6 +217,12 @@ void WBQtReplaceReportDialog::onCurrentItemChanged(QTreeWidgetItem *current,
 // Move the selection by `dir` (+1 next, -1 previous) with wrap-around. Setting the current item
 // fires onCurrentItemChanged, which selects that row's objects on the map -- so stepping the
 // report also walks the viewport through them.
+bool WBQtReplaceReportDialog::rowVisible(int row) const
+{
+	QTreeWidgetItem *item = m_ui->rowTree->topLevelItem(row);
+	return (item != NULL && !item->isHidden());
+}
+
 void WBQtReplaceReportDialog::stepRow(int dir)
 {
 	const int count = m_ui->rowTree->topLevelItemCount();
@@ -206,8 +233,81 @@ void WBQtReplaceReportDialog::stepRow(int dir)
 	const int cur = currentRow();
 	// No selection yet: enter at the top going forward, at the bottom going back.
 	int next = (cur < 0) ? ((dir > 0) ? 0 : count - 1) : ((cur + dir + count) % count);
+
+	// Walk past anything the filter is hiding, so stepping stays inside what is on
+	// screen. Bounded by the row count, so an all-hidden list can't spin forever.
+	int guard = count;
+	while (guard-- > 0 && !rowVisible(next))
+	{
+		next = (next + dir + count) % count;
+	}
+	if (!rowVisible(next))
+	{
+		return;	// nothing matches the filter
+	}
+
 	m_ui->rowTree->setCurrentItem(m_ui->rowTree->topLevelItem(next));
 	m_ui->rowTree->scrollToItem(m_ui->rowTree->topLevelItem(next));
+}
+
+//=============================================================================
+// WBQtReplaceReportDialog::applyFilter
+//=============================================================================
+/** Shows only the rows matching the filter box.
+
+	Rows are HIDDEN rather than removed: the row's position in the tree is its index
+	into the report on the MFC side, so rebuilding a filtered subset would leave
+	"Change Replacement" editing whichever entry happened to land at that position.
+
+	Matches either column -- you might be looking for what went missing or for what
+	it was replaced with.
+*/
+//=============================================================================
+void WBQtReplaceReportDialog::applyFilter()
+{
+	const QString filter = m_ui->filterEdit->text().trimmed();
+	const int count = m_ui->rowTree->topLevelItemCount();
+
+	int firstShown = -1;
+	int shown = 0;
+	for (int i = 0; i < count; i++)
+	{
+		QTreeWidgetItem *item = m_ui->rowTree->topLevelItem(i);
+		if (item == NULL)
+		{
+			continue;
+		}
+
+		const bool match = filter.isEmpty()
+			|| item->text(kColMissing).contains(filter, Qt::CaseInsensitive)
+			|| item->text(kColReplacement).contains(filter, Qt::CaseInsensitive);
+
+		item->setHidden(!match);
+		if (match)
+		{
+			shown++;
+			if (firstShown < 0)
+			{
+				firstShown = i;
+			}
+		}
+	}
+
+	// If the filter hid the selected row, move to the first row still showing --
+	// leaving the selection on a hidden row would have the buttons acting on
+	// something the user can no longer see.
+	const int cur = currentRow();
+	if (firstShown >= 0 && (cur < 0 || !rowVisible(cur)))
+	{
+		m_ui->rowTree->setCurrentItem(m_ui->rowTree->topLevelItem(firstShown));
+	}
+
+	refreshSummary();
+}
+
+void WBQtReplaceReportDialog::onFilterChanged(const QString & /*text*/)
+{
+	applyFilter();
 }
 
 void WBQtReplaceReportDialog::onFindNextRow()
