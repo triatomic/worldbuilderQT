@@ -79,6 +79,15 @@ WBQtTeamSheetDialog::WBQtTeamSheetDialog(QWidget *parent)
 	setupBehaviorTab();
 	setupGenericTab();
 
+	// Bound every drop-down on the sheet. Run AFTER the tabs are built so it catches the
+	// unit-type combos too, which are created in code rather than coming from the .ui.
+	//
+	// Only setMaxVisibleItems was in play here before, and the native Windows style honours
+	// that on its own -- so the light theme looked right. Dark mode switches the application
+	// to Fusion, which sizes the popup to its full content instead, and a catalog combo of
+	// several hundred entries then opened as a column taller than the screen.
+	WBQtComboStyle::applyPopupScrollRecursive(this);
+
 	// Edits apply live to the Teams dialog's working copy (== the MFC sheet, whose OK/Cancel
 	// result was ignored); a single OK just closes.
 	connect(m_ui->okButton, SIGNAL(clicked()), this, SLOT(accept()));

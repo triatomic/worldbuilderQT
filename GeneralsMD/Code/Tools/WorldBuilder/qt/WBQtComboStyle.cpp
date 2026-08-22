@@ -57,38 +57,50 @@ namespace
 				return QObject::eventFilter(watched, event);
 			}
 			QWidget *popup = qobject_cast<QWidget *>(watched);
-			if (popup == NULL || m_combo == NULL || popup->height() <= WB_COMBO_MAX_POPUP_PX)
+			if (popup == NULL || m_combo == NULL)
 			{
 				return QObject::eventFilter(watched, event);
 			}
 
-			// Shrinking the popup WINDOW alone leaves the view inside it at its full content
-			// height (all N rows), merely CLIPPED by the smaller window: the view's viewport
-			// still spans every item, so its scroll range stays 0..0 -- no scrollbar, and the
-			// entries past the cut are unreachable. Bound the view to the window as well, which
-			// is what gives it something to scroll.
-			QAbstractItemView *view = m_combo->view();
-			if (view != NULL)
+			// Only a list taller than the cap needs shrinking -- but the re-anchoring below
+			// runs for EVERY popup. Bailing out early on the short ones left them wherever
+			// the style had put them, which under Fusion is not necessarily under the combo.
+			if (popup->height() > WB_COMBO_MAX_POPUP_PX)
 			{
-				// The view is inset in the popup by the container's frame; keep that inset so
-				// the list doesn't overhang the border.
-				int inset = 0;
-				if (view->parentWidget() == popup)
+				// Shrinking the popup WINDOW alone leaves the view inside it at its full content
+				// height (all N rows), merely CLIPPED by the smaller window: the view's viewport
+				// still spans every item, so its scroll range stays 0..0 -- no scrollbar, and the
+				// entries past the cut are unreachable. Bound the view to the window as well, which
+				// is what gives it something to scroll.
+				QAbstractItemView *view = m_combo->view();
+				if (view != NULL)
 				{
-					inset = popup->height() - view->height();
+					// The view is inset in the popup by the container's frame; keep that inset so
+					// the list doesn't overhang the border.
+					int inset = 0;
+					if (view->parentWidget() == popup)
+					{
+						inset = popup->height() - view->height();
+					}
+					if (inset < 0)
+					{
+						inset = 0;
+					}
+					view->setMaximumHeight(WB_COMBO_MAX_POPUP_PX);
+					view->resize(view->width(), WB_COMBO_MAX_POPUP_PX - inset);
 				}
-				if (inset < 0)
-				{
-					inset = 0;
-				}
-				view->setMaximumHeight(WB_COMBO_MAX_POPUP_PX);
-				view->resize(view->width(), WB_COMBO_MAX_POPUP_PX - inset);
+
+				popup->setMaximumHeight(WB_COMBO_MAX_POPUP_PX);
+				popup->resize(popup->width(), WB_COMBO_MAX_POPUP_PX);
 			}
 
-			popup->setMaximumHeight(WB_COMBO_MAX_POPUP_PX);
-			popup->resize(popup->width(), WB_COMBO_MAX_POPUP_PX);
-
 			// Re-anchor to the combo in screen coords (the popup is a top-level window).
+			//
+			// BOTH coordinates, not just y. Resizing the popup can leave the style's own
+			// placement stale, and keeping the existing x left the list sitting off to one
+			// side of the combo it belongs to instead of hanging under it. Light mode never
+			// showed this because the native style bounds the popup itself, so this filter
+			// only ever had to do anything under Fusion (dark mode).
 			QPoint below = m_combo->mapToGlobal(QPoint(0, m_combo->height()));
 			QScreen *scr = QGuiApplication::screenAt(below);
 			if (scr == NULL)
@@ -100,17 +112,60 @@ namespace
 				return QObject::eventFilter(watched, event);
 			}
 			QRect screen = scr->availableGeometry();
+
+			const int popupHeight = popup->height();
 			int y = below.y();
-			if (y + WB_COMBO_MAX_POPUP_PX > screen.bottom())
+			if (y + popupHeight > screen.bottom())
 			{
 				// No room below -- open upward, bottom edge on the combo's top, like Qt does.
-				int above = m_combo->mapToGlobal(QPoint(0, 0)).y() - WB_COMBO_MAX_POPUP_PX;
+				int above = m_combo->mapToGlobal(QPoint(0, 0)).y() - popupHeight;
 				if (above >= screen.top())
 				{
 					y = above;
 				}
 			}
-			popup->move(popup->x(), y);
+
+			// Match the combo's width. Fusion sizes the popup to its WIDEST item, so a catalog
+			// list of long template names opened far wider than the control it belongs to and
+			// spilled past its right edge. The combos here are already width-capped
+			// (AdjustToMinimumContentsLengthWithIcon), and the native style keeps the popup to
+			// the control, so this matches what light mode does. Long names stay readable via
+			// the horizontal scrollbar the view already has.
+			const int comboWidth = m_combo->width();
+			if (comboWidth > 0 && popup->width() != comboWidth)
+			{
+				popup->resize(comboWidth, popup->height());
+				QAbstractItemView *popupView = m_combo->view();
+				if (popupView != NULL && popupView->parentWidget() == popup)
+				{
+					// Keep the frame inset the container drew, so the list doesn't overhang it.
+					const int frame = popup->width() - popupView->width();
+					const int viewWidth = (frame > 0) ? (comboWidth - frame) : comboWidth;
+					if (viewWidth > 0)
+					{
+						popupView->resize(viewWidth, popupView->height());
+					}
+				}
+			}
+
+			// Line the popup up with the combo's left edge, then pull it back on screen if
+			// that would push it off the right.
+			int x = below.x();
+			if (x + popup->width() > screen.right())
+			{
+				x = screen.right() - popup->width();
+			}
+			if (x < screen.left())
+			{
+				x = screen.left();
+			}
+
+			// Only move if it is actually in the wrong place: this runs on Resize too, and a
+			// move can provoke another event, so a no-op move risks bouncing.
+			if (popup->x() != x || popup->y() != y)
+			{
+				popup->move(x, y);
+			}
 			return QObject::eventFilter(watched, event);
 		}
 
