@@ -26,6 +26,7 @@
 
 #include "StdAfx.h"
 #include "MapGen/WBMapGenSettings.h"
+#include "CustomConfigProfile.h"
 
 //=============================================================================
 // The default terrain layers.
@@ -121,4 +122,75 @@ void WBMapGenSettings::setDefaults(void)
 	m_doPlayers = true;
 	m_doSupplies = true;
 	m_roadMode = WB_ROADS_STARTS;
+}
+
+//=============================================================================
+// Settings persistence
+//=============================================================================
+/** The generator remembers what you last used.
+
+	Kept alongside the editor's other preferences rather than in the map, since
+	these are how YOU like to generate maps, not a property of any one map. This
+	is also what makes the Randomize command work: it reuses these and changes
+	only the seed.
+*/
+//=============================================================================
+static const char *MAPGEN_SECTION = "MapGenerator";
+
+void WBMapGenSettings::load(void)
+{
+	setDefaults();
+
+	m_seed = CustomConfigProfile::ReadInt(MAPGEN_SECTION, "Seed", m_seed);
+	m_numPlayers = CustomConfigProfile::ReadInt(MAPGEN_SECTION, "Players", m_numPlayers);
+	m_baseHeight = CustomConfigProfile::ReadInt(MAPGEN_SECTION, "BaseHeight", m_baseHeight);
+	m_treeDensity = CustomConfigProfile::ReadInt(MAPGEN_SECTION, "TreeDensity", m_treeDensity);
+	m_cliffDensity = CustomConfigProfile::ReadInt(MAPGEN_SECTION, "CliffDensity", m_cliffDensity);
+	m_roadMode = CustomConfigProfile::ReadInt(MAPGEN_SECTION, "RoadMode", m_roadMode);
+
+	m_doCliffs = (CustomConfigProfile::ReadInt(MAPGEN_SECTION, "DoCliffs", m_doCliffs ? 1 : 0) != 0);
+	m_doTextures = (CustomConfigProfile::ReadInt(MAPGEN_SECTION, "DoTextures", m_doTextures ? 1 : 0) != 0);
+	m_doTrees = (CustomConfigProfile::ReadInt(MAPGEN_SECTION, "DoTrees", m_doTrees ? 1 : 0) != 0);
+	m_doRocks = (CustomConfigProfile::ReadInt(MAPGEN_SECTION, "DoRocks", m_doRocks ? 1 : 0) != 0);
+	m_doPlayers = (CustomConfigProfile::ReadInt(MAPGEN_SECTION, "DoPlayers", m_doPlayers ? 1 : 0) != 0);
+	m_doSupplies = (CustomConfigProfile::ReadInt(MAPGEN_SECTION, "DoSupplies", m_doSupplies ? 1 : 0) != 0);
+
+	// Guard against a hand-edited or stale ini leaving something out of range.
+	if (m_numPlayers < 2 || m_numPlayers > 8 || (m_numPlayers & 1) != 0)
+	{
+		m_numPlayers = 2;
+	}
+	if (m_treeDensity < 0 || m_treeDensity > WB_DENSITY_HIGH)
+	{
+		m_treeDensity = WB_DENSITY_MEDIUM;
+	}
+	if (m_cliffDensity < 0 || m_cliffDensity > WB_DENSITY_HIGH)
+	{
+		m_cliffDensity = WB_DENSITY_MEDIUM;
+	}
+	if (m_roadMode < WB_ROADS_NONE || m_roadMode > WB_ROADS_SUPPLIES)
+	{
+		m_roadMode = WB_ROADS_STARTS;
+	}
+	if (m_baseHeight < 0 || m_baseHeight > 200)
+	{
+		m_baseHeight = 40;
+	}
+}
+
+void WBMapGenSettings::save(void) const
+{
+	CustomConfigProfile::WriteInt(MAPGEN_SECTION, "Seed", m_seed);
+	CustomConfigProfile::WriteInt(MAPGEN_SECTION, "Players", m_numPlayers);
+	CustomConfigProfile::WriteInt(MAPGEN_SECTION, "BaseHeight", m_baseHeight);
+	CustomConfigProfile::WriteInt(MAPGEN_SECTION, "TreeDensity", m_treeDensity);
+	CustomConfigProfile::WriteInt(MAPGEN_SECTION, "CliffDensity", m_cliffDensity);
+	CustomConfigProfile::WriteInt(MAPGEN_SECTION, "RoadMode", m_roadMode);
+
+	CustomConfigProfile::WriteInt(MAPGEN_SECTION, "DoCliffs", m_doCliffs ? 1 : 0);
+	CustomConfigProfile::WriteInt(MAPGEN_SECTION, "DoTextures", m_doTextures ? 1 : 0);
+	CustomConfigProfile::WriteInt(MAPGEN_SECTION, "DoTrees", m_doTrees ? 1 : 0);
+	CustomConfigProfile::WriteInt(MAPGEN_SECTION, "DoRocks", m_doRocks ? 1 : 0);
+	CustomConfigProfile::WriteInt(MAPGEN_SECTION, "DoPlayers", m_doPlayers ? 1 : 0);
+	CustomConfigProfile::WriteInt(MAPGEN_SECTION, "DoSupplies", m_doSupplies ? 1 : 0);
 }

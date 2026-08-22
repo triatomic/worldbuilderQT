@@ -94,6 +94,12 @@ struct WBMapGenSettings
 
 	/// Fills in the shipped defaults.
 	void setDefaults(void);
+
+	/// Reads back whatever was used last, falling back to the defaults for
+	/// anything not saved yet.
+	void load(void);
+	/// Remembers these settings for next time.
+	void save(void) const;
 };
 
 /// The default terrain layers, and how many there are.

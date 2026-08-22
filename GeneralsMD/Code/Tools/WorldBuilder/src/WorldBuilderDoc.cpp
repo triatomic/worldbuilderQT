@@ -1130,6 +1130,7 @@ BEGIN_MESSAGE_MAP(CWorldBuilderDoc, CDocument)
 	ON_UPDATE_COMMAND_UI(ID_TS_CANONICAL, OnUpdateTsCanonical)
 	ON_COMMAND(ID_FILE_RESIZE, OnFileResize)
 	ON_COMMAND(ID_MAPGEN_GENERATE, OnMapGenGenerate)
+	ON_COMMAND(ID_MAPGEN_RANDOMIZE, OnMapGenRandomize)
 #ifdef RTS_HAS_QT
 	// Intercept ID_FILE_CLOSE at the document (before CDocument's default close, which
 	// destroys the Qt-hosted 3D view and fails to recreate it -- "Command failed.").
@@ -2994,12 +2995,9 @@ void CWorldBuilderDoc::OnFileClose()
 //=============================================================================
 void CWorldBuilderDoc::OnMapGenGenerate()
 {
+	// Start from whatever was used last, so the dialog picks up where you left off.
 	WBMapGenSettings settings;
-	settings.setDefaults();
-
-	// Seed from the clock so the dialog opens on a fresh map each time rather
-	// than always offering the same one.
-	settings.m_seed = (Int)(::GetTickCount() % 1000000000);
+	settings.load();
 
 #ifdef RTS_HAS_QT
 	{
@@ -3047,8 +3045,42 @@ void CWorldBuilderDoc::OnMapGenGenerate()
 	}
 #endif
 
+	// Remember what was used, so opening the dialog again picks up where you left
+	// off -- and so Randomize has something to reuse.
+	settings.save();
+
 	CWaitCursor wait;
 	if (!WBMapGen_RunOnDocument(this, settings))
+	{
+		::AfxMessageBox(_T("Could not generate a map -- there is no map open."),
+										MB_OK | MB_ICONWARNING);
+	}
+}
+
+//=============================================================================
+// CWorldBuilderDoc::OnMapGenRandomize
+//=============================================================================
+/** Map Generator > Randomize.
+
+	Generates again with the settings from the last run, changing only the seed --
+	so you can keep rolling maps of the same kind without walking through the
+	dialog every time. Falls back to the defaults if the generator has not been
+	used yet.
+*/
+//=============================================================================
+void CWorldBuilderDoc::OnMapGenRandomize()
+{
+	WBMapGenSettings settings;
+	settings.load();
+
+	// A fresh seed is the whole point of this command.
+	settings.m_seed = (Int)(::GetTickCount() % 1000000000);
+	settings.save();
+
+	CWaitCursor wait;
+	// Clear first: this command is for rolling one map after another, and without
+	// it each run would leave the previous run's trees, rocks and roads behind.
+	if (!WBMapGen_RunOnDocument(this, settings, true))
 	{
 		::AfxMessageBox(_T("Could not generate a map -- there is no map open."),
 										MB_OK | MB_ICONWARNING);

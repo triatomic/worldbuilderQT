@@ -32,7 +32,10 @@ class CWorldBuilderDoc;
 /// Generates a map into the document, as a single undoable step.
 ///
 /// Replaces the terrain of the CURRENT map and adds the player start waypoints.
-/// Returns false if the document has no height map to work on.
-Bool WBMapGen_RunOnDocument(CWorldBuilderDoc *pDoc, const WBMapGenSettings &settings);
+/// With clearExisting set, everything already on the map is removed first, so a
+/// regenerated map starts clean instead of stacking new objects on top of the
+/// last run's. Returns false if the document has no height map to work on.
+Bool WBMapGen_RunOnDocument(CWorldBuilderDoc *pDoc, const WBMapGenSettings &settings,
+														Bool clearExisting = false);
 
 #endif // WB_MAP_GEN_DOC_H

@@ -476,6 +476,7 @@ BEGIN
     POPUP "Map Generator"
     BEGIN
         MENUITEM "Generate Map...",             ID_MAPGEN_GENERATE
+        MENUITEM "Randomize",                   ID_MAPGEN_RANDOMIZE
     END
     POPUP "Help / Entity finder"
     BEGIN

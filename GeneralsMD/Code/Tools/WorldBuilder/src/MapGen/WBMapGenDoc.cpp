@@ -669,7 +669,8 @@ static MapObject *buildRoads(MapObject *pHead, const WBMapGenSettings &settings,
 //=============================================================================
 // WBMapGen_RunOnDocument
 //=============================================================================
-Bool WBMapGen_RunOnDocument(CWorldBuilderDoc *pDoc, const WBMapGenSettings &settings)
+Bool WBMapGen_RunOnDocument(CWorldBuilderDoc *pDoc, const WBMapGenSettings &settings,
+													Bool clearExisting)
 {
 	if (pDoc == NULL)
 	{
@@ -775,6 +776,24 @@ Bool WBMapGen_RunOnDocument(CWorldBuilderDoc *pDoc, const WBMapGenSettings &sett
 		paintTextures(pCopy, field, assets);
 	}
 
+	// Wipe what is already on the map, so a regenerate starts clean rather than
+	// stacking this run's trees, rocks and roads on top of the last run's. Only the
+	// objects go -- the terrain is replaced wholesale by the height map undoable.
+	//
+	// Done BEFORE any new object is created: DeleteObjectUndoable snapshots the
+	// selection in its constructor, so building it here makes it impossible for it
+	// to pick up the objects this run is about to add.
+	DeleteObjectUndoable *pDelete = NULL;
+	if (clearExisting && MapObject::getFirstMapObject() != NULL)
+	{
+		MapObject *pObj;
+		for (pObj = MapObject::getFirstMapObject(); pObj; pObj = pObj->getNext())
+		{
+			pObj->setSelected(true);
+		}
+		pDelete = new DeleteObjectUndoable(pDoc);
+	}
+
 	MapObject *pStartHead = buildStartWaypoints(pDoc, starts, border);
 
 	Int propCount = 0;
@@ -825,6 +844,15 @@ Bool WBMapGen_RunOnDocument(CWorldBuilderDoc *pDoc, const WBMapGenSettings &sett
 																						 didResize ? &objOffset : NULL);
 	pBatch->addUndoable(pTerrain);
 	REF_PTR_RELEASE(pTerrain);	// belongs to pBatch now
+
+	// Added last of all, so it is the first thing to run -- the map is cleared
+	// before the new terrain and objects land.
+	if (pDelete != NULL)
+	{
+		pBatch->addUndoable(pDelete);
+		REF_PTR_RELEASE(pDelete);	// belongs to pBatch now
+		pDelete = NULL;
+	}
 
 	pDoc->AddAndDoUndoable(pBatch);
 	REF_PTR_RELEASE(pBatch);
