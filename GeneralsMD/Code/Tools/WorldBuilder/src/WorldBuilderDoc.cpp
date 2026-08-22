@@ -50,6 +50,7 @@
 #include "Common/WellKnownKeys.h"
 
 #include "WBHeightMap.h"
+#include "MapGen/WBMapGenDoc.h"
 #include "GameClient/Line2D.h"
 #include "GameClient/View.h"
 #include "GameClient/GameText.h"
@@ -71,6 +72,7 @@
 #include "qt/panels/WBQtPickUnitBridge.h"
 #include "qt/panels/WBQtMapIniReport.h"
 #include "qt/panels/WBQtMapIniEditorBridge.h"
+#include "qt/panels/WBQtMapGenBridge.h"
 #endif
 #include "SaveMap.h"
 #include "ScriptDialog.h"
@@ -1127,6 +1129,7 @@ BEGIN_MESSAGE_MAP(CWorldBuilderDoc, CDocument)
 	ON_COMMAND(ID_TS_CANONICAL, OnTsCanonical)
 	ON_UPDATE_COMMAND_UI(ID_TS_CANONICAL, OnUpdateTsCanonical)
 	ON_COMMAND(ID_FILE_RESIZE, OnFileResize)
+	ON_COMMAND(ID_MAPGEN_GENERATE, OnMapGenGenerate)
 #ifdef RTS_HAS_QT
 	// Intercept ID_FILE_CLOSE at the document (before CDocument's default close, which
 	// destroys the Qt-hosted 3D view and fails to recreate it -- "Command failed.").
@@ -2978,6 +2981,72 @@ void CWorldBuilderDoc::OnFileClose()
 	AfxGetApp()->OnCmdMsg(ID_FILE_NEW, 0, NULL, NULL);
 }
 #endif
+
+//=============================================================================
+// CWorldBuilderDoc::OnMapGenGenerate
+//=============================================================================
+/** Map Generator > Generate Map.
+
+	Replaces the current map's terrain with generated terrain and drops the
+	player start waypoints in. The whole thing is one undoable step, so a single
+	Undo puts the previous map back.
+*/
+//=============================================================================
+void CWorldBuilderDoc::OnMapGenGenerate()
+{
+	WBMapGenSettings settings;
+	settings.setDefaults();
+
+	// Seed from the clock so the dialog opens on a fresh map each time rather
+	// than always offering the same one.
+	settings.m_seed = (Int)(::GetTickCount() % 1000000000);
+
+#ifdef RTS_HAS_QT
+	{
+		int seed = settings.m_seed;
+		int numPlayers = settings.m_numPlayers;
+		int baseHeight = settings.m_baseHeight;
+		int doCliffs = settings.m_doCliffs ? 1 : 0;
+		int cliffDensity = settings.m_cliffDensity;
+		int doTextures = settings.m_doTextures ? 1 : 0;
+		int doTrees = settings.m_doTrees ? 1 : 0;
+		int treeDensity = settings.m_treeDensity;
+		int doRocks = settings.m_doRocks ? 1 : 0;
+
+		if (!WBQtMapGen_Run(::AfxGetMainWnd()->GetSafeHwnd(), &seed, &numPlayers,
+				&baseHeight, &doCliffs, &cliffDensity, &doTextures, &doTrees,
+				&treeDensity, &doRocks))
+		{
+			return;
+		}
+
+		settings.m_seed = seed;
+		settings.m_numPlayers = numPlayers;
+		settings.m_baseHeight = baseHeight;
+		settings.m_doCliffs = (doCliffs != 0);
+		settings.m_cliffDensity = cliffDensity;
+		settings.m_doTextures = (doTextures != 0);
+		settings.m_doTrees = (doTrees != 0);
+		settings.m_treeDensity = treeDensity;
+		settings.m_doRocks = (doRocks != 0);
+	}
+#else
+	// No settings dialog in the plain MFC build -- confirm and use the defaults.
+	if (::AfxMessageBox(_T("Generate new terrain over the current map?\n\n")
+											_T("This replaces the existing terrain. It can be undone."),
+											MB_YESNO | MB_ICONQUESTION) != IDYES)
+	{
+		return;
+	}
+#endif
+
+	CWaitCursor wait;
+	if (!WBMapGen_RunOnDocument(this, settings))
+	{
+		::AfxMessageBox(_T("Could not generate a map -- there is no map open."),
+										MB_OK | MB_ICONWARNING);
+	}
+}
 
 void CWorldBuilderDoc::OnFileResize() 
 {

@@ -473,6 +473,10 @@ BEGIN
         MENUITEM SEPARATOR
         MENUITEM "Passability",                 ID_DEBUG_PATHFIND_PASSABILITY
     END
+    POPUP "Map Generator"
+    BEGIN
+        MENUITEM "Generate Map...",             ID_MAPGEN_GENERATE
+    END
     POPUP "Help / Entity finder"
     BEGIN
         MENUITEM "Entity finder / Hotkey List", ID_APP_ABOUT

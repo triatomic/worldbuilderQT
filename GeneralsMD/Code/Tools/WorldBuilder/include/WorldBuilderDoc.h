@@ -209,6 +209,7 @@ protected:
 	afx_msg void OnTsCanonical();
 	afx_msg void OnUpdateTsCanonical(CCmdUI* pCmdUI);
 	afx_msg void OnFileResize();
+	afx_msg void OnMapGenGenerate();
 #ifdef RTS_HAS_QT
 	afx_msg void OnFileClose();
 #endif
