@@ -478,6 +478,12 @@ BEGIN
         MENUITEM "Generate Map...",             ID_MAPGEN_GENERATE
         MENUITEM "Randomize",                   ID_MAPGEN_RANDOMIZE
     END
+    POPUP "&MCP"
+    BEGIN
+        MENUITEM "&Enable MCP Server",          ID_MCP_SERVER_ENABLED
+        MENUITEM SEPARATOR
+        MENUITEM "Server &Information...",      ID_MCP_SERVER_INFORMATION
+    END
     POPUP "Help / Entity finder"
     BEGIN
         MENUITEM "Entity finder / Hotkey List", ID_APP_ABOUT
@@ -3012,6 +3018,8 @@ STRINGTABLE
 BEGIN
     ID_APP_ABOUT            "Display program information, version number and copyright\nAbout"
     ID_APP_EXIT             "Quit the application; prompts to save documents\nExit"
+    ID_MCP_SERVER_ENABLED   "Enable or disable the local WorldBuilder MCP endpoint\nEnable MCP Server"
+    ID_MCP_SERVER_INFORMATION "Display WorldBuilder MCP endpoint information\nMCP Server Information"
 END
 
 STRINGTABLE

@@ -203,6 +203,11 @@ protected:
 	afx_msg void OnViewBrushfeedback();
 	afx_msg void OnUpdateViewBrushfeedback(CCmdUI* pCmdUI);
 	afx_msg void OnDestroy();
+	afx_msg BOOL OnCopyData(CWnd *pWnd, COPYDATASTRUCT *pCopyDataStruct);
+	afx_msg LRESULT OnMcpRequest(WPARAM wParam, LPARAM lParam);
+	afx_msg void OnMcpServerEnabled();
+	afx_msg void OnUpdateMcpServerEnabled(CCmdUI *pCmdUI);
+	afx_msg void OnMcpServerInformation();
 	afx_msg void OnTimer(UINT nIDEvent);
 	afx_msg void OnEditCameraoptions();
 	afx_msg void OnViewAnimScrubber();

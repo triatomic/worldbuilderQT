@@ -32,6 +32,7 @@
 #include "WorldBuilder.h"
 #include "WorldBuilderDoc.h"
 #include "WorldBuilderView.h"
+#include "WorldBuilderMcpBridge.h"
 #include "ToastDialog.h"
 #include "PickUnitDialog.h"
 
@@ -63,6 +64,7 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWnd)
 	ON_COMMAND(ID_VIEW_BRUSHFEEDBACK, OnViewBrushfeedback)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_BRUSHFEEDBACK, OnUpdateViewBrushfeedback)
 	ON_WM_DESTROY()
+	ON_WM_COPYDATA()
 	ON_WM_TIMER()
 	ON_WM_CANCELMODE()
 	ON_COMMAND(ID_EDIT_CAMERAOPTIONS, OnEditCameraoptions)
@@ -72,6 +74,10 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWnd)
 	//}}AFX_MSG_MAP
 	ON_COMMAND(ID_SHOW_ASSERT_DIALOGS, OnShowAssertDialogs)
 	ON_UPDATE_COMMAND_UI(ID_SHOW_ASSERT_DIALOGS, OnUpdateShowAssertDialogs)
+	ON_MESSAGE(WorldBuilderMcpBridge::PROCESS_REQUEST_MESSAGE, OnMcpRequest)
+	ON_COMMAND(ID_MCP_SERVER_ENABLED, OnMcpServerEnabled)
+	ON_UPDATE_COMMAND_UI(ID_MCP_SERVER_ENABLED, OnUpdateMcpServerEnabled)
+	ON_COMMAND(ID_MCP_SERVER_INFORMATION, OnMcpServerInformation)
 #ifdef RTS_HAS_QT
 	ON_COMMAND_RANGE(ID_QTTHEME_SYSTEM, ID_QTTHEME_LIGHT, OnQtTheme)
 	ON_UPDATE_COMMAND_UI_RANGE(ID_QTTHEME_SYSTEM, ID_QTTHEME_LIGHT, OnUpdateQtTheme)
@@ -431,6 +437,11 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 #if USE_STREAMING_AUDIO
 	StartMusic();
 #endif
+
+	// TheSuperHackers @feature Let users persistently enable the local MCP endpoint.
+	if (::AfxGetApp()->GetProfileInt(MAIN_FRAME_SECTION, "McpServerEnabled", 1) != 0) {
+		WorldBuilderMcpBridge::Attach(m_hWnd);
+	}
 
 	DragAcceptFiles(TRUE);
 	return 0;
@@ -916,8 +927,62 @@ void CMainFrame::OnClose()
 }
 #endif
 
+BOOL CMainFrame::OnCopyData(CWnd *pWnd, COPYDATASTRUCT *pCopyDataStruct)
+{
+	// Queue MCP work so WM_COPYDATA returns before modal editor operations run.
+	if (WorldBuilderMcpBridge::IsEnabled(m_hWnd) && WorldBuilderMcpBridge::IsRequest(pCopyDataStruct)) {
+		return WorldBuilderMcpBridge::QueueRequest(m_hWnd, pCopyDataStruct);
+	}
+	return CFrameWnd::OnCopyData(pWnd, pCopyDataStruct);
+}
+
+LRESULT CMainFrame::OnMcpRequest(WPARAM, LPARAM lParam)
+{
+	return WorldBuilderMcpBridge::ProcessQueuedRequest(lParam);
+}
+
+void CMainFrame::OnMcpServerEnabled()
+{
+	if (WorldBuilderMcpBridge::IsEnabled(m_hWnd)) {
+		WorldBuilderMcpBridge::Detach(m_hWnd);
+	} else {
+		WorldBuilderMcpBridge::Attach(m_hWnd);
+	}
+	::AfxGetApp()->WriteProfileInt(
+		MAIN_FRAME_SECTION,
+		"McpServerEnabled",
+		WorldBuilderMcpBridge::IsEnabled(m_hWnd) ? 1 : 0);
+}
+
+void CMainFrame::OnUpdateMcpServerEnabled(CCmdUI *pCmdUI)
+{
+	pCmdUI->SetCheck(WorldBuilderMcpBridge::IsEnabled(m_hWnd) ? 1 : 0);
+}
+
+void CMainFrame::OnMcpServerInformation()
+{
+	CString information;
+	information.Format(
+		"Status: %s\n"
+		"Native bridge version: %lu\n"
+		"Process ID: %lu\n"
+		"Discovery marker: %s\n"
+		"Transport: local WM_COPYDATA\n"
+		"Request directory: %%TEMP%%\\GeneralsWorldBuilderMcp\n\n"
+		"The external Python MCP host runs as a separate process and connects "
+		"to this native WorldBuilder endpoint.",
+		WorldBuilderMcpBridge::IsEnabled(m_hWnd) ? "Enabled" : "Disabled",
+		static_cast<unsigned long>(WorldBuilderMcpBridge::BRIDGE_VERSION),
+		static_cast<unsigned long>(GetCurrentProcessId()),
+		"GeneralsWorldBuilderMcp");
+	MessageBox(information, "WorldBuilder MCP Server", MB_OK | MB_ICONINFORMATION);
+}
+
 void CMainFrame::OnDestroy() 
 {
+	// Drain any queued MCP work while the document and views are still alive.
+	WorldBuilderMcpBridge::Detach(m_hWnd);
+
 	if (m_hAutoSaveTimer) {
 		KillTimer(m_hAutoSaveTimer);
 	}

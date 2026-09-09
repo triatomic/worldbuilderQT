@@ -985,6 +985,8 @@
 #define ID_QTTHEME_SYSTEM               61600
 #define ID_QTTHEME_DARK                 61601
 #define ID_QTTHEME_LIGHT                61602
+#define ID_MCP_SERVER_ENABLED           61610
+#define ID_MCP_SERVER_INFORMATION       61611
 
 // Next default values for new objects
 // 

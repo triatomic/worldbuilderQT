@@ -1,4 +1,7 @@
 set(WORLDBUILDER_SRC
+    # TheSuperHackers @build Build the shared local MCP bridge into WorldBuilder.
+    "${CMAKE_SOURCE_DIR}/Core/Tools/WorldBuilderMcp/WorldBuilderMcpBridge.cpp"
+    "${CMAKE_SOURCE_DIR}/Core/Tools/WorldBuilderMcp/WorldBuilderMcpBridge.h"
     "src/addplayerdialog.cpp"
     "src/AutoEdgeOutTool.cpp"
     "src/BaseBuildProps.cpp"
@@ -287,6 +290,7 @@ add_dependencies(z_worldbuilder z_worldbuilder_buildstamp)
 
 target_include_directories(z_worldbuilder PRIVATE
     .
+    "${CMAKE_SOURCE_DIR}/Core/Tools/WorldBuilderMcp"
     include
     res
     "${CMAKE_CURRENT_BINARY_DIR}"

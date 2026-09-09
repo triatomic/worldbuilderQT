@@ -57,6 +57,8 @@ protected:
 	Undoable						*m_undoList;  ///< Head of undo/redo list.
 	int									m_maxUndos;
 	int									m_curRedo;		///< 0 means no redos available.
+	// TheSuperHackers @feature Expose a monotonic document revision to automation clients.
+	UnsignedInt					m_changeSerial;
 	Bool								m_linkCenters;				///< Flag whether the centers of the 2d and 3d views track together.
  	Bool								m_needAutosave;			///< True if changes have been made since last autosave.
 	Int									m_curWaypointID;
@@ -167,6 +169,7 @@ public:
 	void syncViewCenters(Real x, Real y);
 
 	Bool needAutoSave(void) {return m_needAutosave;};
+	UnsignedInt getChangeSerial(void) const { return m_changeSerial; }
 
 	Int getNextWaypointID(void) { return ++m_curWaypointID;};
 
@@ -174,6 +177,9 @@ public:
 
 	void autoSave(void);
 	void validate(void);
+	/// Create a map without displaying the interactive New Map dialog.
+	Bool createMapForAutomation(Int width, Int height, UnsignedByte initialHeight, Int borderSize);
+	static void setAutomationNewDocument(Bool enabled);
 // Operations
 public:
 

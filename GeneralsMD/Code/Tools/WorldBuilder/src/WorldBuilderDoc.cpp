@@ -105,6 +105,8 @@
 #ifdef ONLY_ONE_AT_A_TIME
 static Bool gAlreadyOpen = false;
 #endif
+// TheSuperHackers @feature Suppress the interactive New Map dialog for automation clients.
+static Bool gAutomationNewDocument = false;
 
 enum DIRECTION
 {
@@ -1192,6 +1194,7 @@ CWorldBuilderDoc::CWorldBuilderDoc() :
 	m_undoList(NULL),
 	m_maxUndos(MAX_UNDOS),
 	m_curRedo(0),
+	m_changeSerial(0),
 	m_needAutosave(false),
 	m_curWaypointID(0),
 	m_numWaypointLinks(0),
@@ -2799,6 +2802,8 @@ void CWorldBuilderDoc::AddAndDoUndoable(Undoable *pUndo)
 	pUndo->LinkNext(pCurUndo);
 	REF_PTR_SET(m_undoList, pUndo);
 	pUndo->Do();
+	// TheSuperHackers @feature Chain every automation-visible mutation through a monotonic revision.
+	++m_changeSerial;
 	SetModifiedFlag();
 	pCurUndo = m_undoList;
 	count = 0;
@@ -2838,6 +2843,7 @@ void CWorldBuilderDoc::OnEditRedo()
 		DEBUG_ASSERTCRASH((pUndo != NULL),("oops"));
 		if (pUndo) {
 			pUndo->Redo();
+			++m_changeSerial;
 			SetModifiedFlag();
 			m_curRedo--;
 		}
@@ -2872,6 +2878,7 @@ void CWorldBuilderDoc::OnEditUndo()
 	}
 	if (pUndo != NULL) {
 		pUndo->Undo();
+		++m_changeSerial;
 		SetModifiedFlag();
 		m_curRedo++;
 	}
@@ -3282,6 +3289,8 @@ BOOL CWorldBuilderDoc::OnNewDocument()
 	if (!CDocument::OnNewDocument())
 		return FALSE;
 	static Bool firstTime = true;
+	// TheSuperHackers @feature Skip the interactive size dialog when automation creates the map.
+	Bool regular_reset = !firstTime && !gAutomationNewDocument;
 
 	// clear out map-specific text
 	TheGameText->reset();
@@ -3292,7 +3301,7 @@ BOOL CWorldBuilderDoc::OnNewDocument()
 	hi.yExtent = AfxGetApp()->GetProfileInt("GameOptions", "Default Map Y-size", 100);
 	hi.borderWidth = AfxGetApp()->GetProfileInt("GameOptions", "Default Map Border", 30);
 	hi.forResize = false;
-	if (!firstTime) {
+	if (regular_reset) {
 		CString label;
 		label.LoadString(IDS_NEW);
 #ifdef RTS_HAS_QT
@@ -3394,7 +3403,89 @@ BOOL CWorldBuilderDoc::OnNewDocument()
 	if (p3View) {
 		p3View->setDefaultCamera();
 	}
+	if (regular_reset) {
+		// TheSuperHackers @bugfix Advance the automation revision when File New resets this document.
+		++m_changeSerial;
+	}
 	return TRUE;
+}
+
+void CWorldBuilderDoc::setAutomationNewDocument(Bool enabled)
+{
+	gAutomationNewDocument = enabled;
+}
+
+// TheSuperHackers @feature Create maps without displaying the interactive size dialog.
+Bool CWorldBuilderDoc::createMapForAutomation(
+	Int width, Int height, UnsignedByte initialHeight, Int borderSize)
+{
+	if (width < 2 || height < 2 || borderSize < 0
+		|| borderSize * 2 >= width || borderSize * 2 >= height) {
+		return false;
+	}
+
+	TheGameText->reset();
+	REF_PTR_RELEASE(m_heightMap);
+	REF_PTR_RELEASE(m_undoList);
+	m_curRedo = 0;
+	m_numWaypointLinks = 0;
+	m_waypointTableNeedsUpdate = true;
+	m_curWaypointID = 0;
+	WbApp()->selectPointerTool();
+
+	TheLayersList->enableUpdates();
+	TheLayersList->resetLayers();
+	TheLayersList->disableUpdates();
+	PolygonTrigger::deleteTriggers();
+	TheSidesList->clear();
+	TheSidesList->validateSides();
+
+	WbView3d *view = Get3DView();
+	if (view != NULL) {
+		view->resetRenderObjects();
+	}
+	m_heightMap = NEW_REF(WorldHeightMapEdit, (width, height, initialHeight, borderSize));
+
+	PolygonTrigger *water = newInstance(PolygonTrigger)(4);
+	water->setWaterArea(true);
+	water->setTriggerName("Default Water");
+	ICoord3D point;
+	point.x = -borderSize * MAP_XY_FACTOR;
+	point.y = -borderSize * MAP_XY_FACTOR;
+	point.z = REAL_TO_INT(TheGlobalData->m_waterPositionZ);
+	water->addPoint(point);
+	point.x = (width + borderSize) * MAP_XY_FACTOR;
+	water->addPoint(point);
+	point.y = (height + borderSize) * MAP_XY_FACTOR;
+	water->addPoint(point);
+	point.x = -borderSize * MAP_XY_FACTOR;
+	water->addPoint(point);
+	PolygonTrigger::addPolygonTrigger(water);
+	TheLayersList->addPolygonTriggerToLayersList(water, water->getLayerName());
+
+	SetHeightMap(m_heightMap, true);
+	TerrainMaterial::updateTextures(m_heightMap);
+	Create3DView();
+	POSITION pos = GetFirstViewPosition();
+	while (pos != NULL) {
+		CView *current_view = GetNextView(pos);
+		WbView *world_builder_view = (WbView *)current_view;
+		ASSERT_VALID(world_builder_view);
+		world_builder_view->setCenterInView(
+			m_heightMap->getXExtent() / 2 - m_heightMap->getBorderSize(),
+			m_heightMap->getYExtent() / 2 - m_heightMap->getBorderSize());
+	}
+	view = Get3DView();
+	if (view != NULL) {
+		view->setDefaultCamera();
+	}
+	// TheSuperHackers @bugfix Clear the path without asking MFC to canonicalize an empty filename.
+	m_strPathName.Empty();
+	SetTitle(_T("Untitled"));
+	SetModifiedFlag(TRUE);
+	m_needAutosave = true;
+	++m_changeSerial;
+	return true;
 }
 
 void CWorldBuilderDoc::invalObject(MapObject *pMapObj)
@@ -3628,6 +3719,9 @@ BOOL CWorldBuilderDoc::OnOpenDocument(LPCTSTR lpszPathName)
 	// }
 	// TerrainMaterial::ReloadFavorites(fullPath);
 	
+	// TheSuperHackers @feature Advance the automation revision when a new map is loaded.
+	++m_changeSerial;
+
 	return TRUE;
 }
 

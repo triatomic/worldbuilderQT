@@ -61,3 +61,7 @@ build.ninja
 CLAUDE.md
 errorCOMPILE.txt
 aqtinstall.log
+
+# Python bytecode (tools/worldbuilder_mcp)
+__pycache__/
+*.pyc
