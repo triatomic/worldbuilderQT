@@ -3,6 +3,7 @@
 !.gitignore
 !.gitattributes
 !.github
+!.mcp.json
 
 *.user
 *.ncb
