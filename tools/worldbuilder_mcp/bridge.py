@@ -598,10 +598,12 @@ class WorldBuilderBridge:
                     timeout_ms=remaining_ms,
                 )
             except BridgeError as error:
-                if error.code != "editor_not_found":
-                    unknown.append(
-                        {**editor, "edition": None, "probe_error": error.code}
-                    )
+                # Count an editor we could not probe as unknown, including one that
+                # vanished from the enumeration mid-probe. Dropping it entirely would
+                # let launch_editor start a second copy of a running editor.
+                unknown.append(
+                    {**editor, "edition": None, "probe_error": error.code}
+                )
                 continue
             reported_edition = (
                 information.get("edition")
@@ -889,6 +891,7 @@ class WorldBuilderBridge:
         else:
             command_timeout_ms = self.timeout_ms
         deadline = time.monotonic() + (command_timeout_ms / 1000.0)
+        delivered = False
         try:
             self._write_request(
                 request_path, response_path, command, arguments
@@ -896,9 +899,17 @@ class WorldBuilderBridge:
             self._get_api().send_request(
                 editor.handle, request_path, COPYDATA_MAGIC, command_timeout_ms
             )
-            return self._read_response(response_path, deadline)
+            delivered = True
+            result = self._read_response(response_path, deadline)
+            delivered = False
+            return result
         finally:
-            for path in (request_path, response_path):
+            # The editor only queues the request during WM_COPYDATA and reads the
+            # file later, off its message loop. Deleting it after a timeout would
+            # drop a command the editor is still about to run, with no error
+            # anywhere, so leave a delivered-but-unanswered request in place.
+            leftovers = () if delivered else (request_path, response_path)
+            for path in leftovers:
                 try:
                     path.unlink(missing_ok=True)
                 except OSError:

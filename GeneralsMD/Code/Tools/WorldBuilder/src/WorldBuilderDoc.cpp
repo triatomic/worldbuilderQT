@@ -3443,6 +3443,7 @@ Bool CWorldBuilderDoc::createMapForAutomation(
 	WbView3d *view = Get3DView();
 	if (view != NULL) {
 		view->resetRenderObjects();
+		view->resetEditTimer();
 	}
 	m_heightMap = NEW_REF(WorldHeightMapEdit, (width, height, initialHeight, borderSize));
 
@@ -3454,9 +3455,9 @@ Bool CWorldBuilderDoc::createMapForAutomation(
 	point.y = -borderSize * MAP_XY_FACTOR;
 	point.z = REAL_TO_INT(TheGlobalData->m_waterPositionZ);
 	water->addPoint(point);
-	point.x = (width + borderSize) * MAP_XY_FACTOR;
+	point.x = (width + borderSize - 1) * MAP_XY_FACTOR;
 	water->addPoint(point);
-	point.y = (height + borderSize) * MAP_XY_FACTOR;
+	point.y = (height + borderSize - 1) * MAP_XY_FACTOR;
 	water->addPoint(point);
 	point.x = -borderSize * MAP_XY_FACTOR;
 	water->addPoint(point);

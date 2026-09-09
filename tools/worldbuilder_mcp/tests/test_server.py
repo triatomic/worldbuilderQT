@@ -6,8 +6,10 @@ import unittest
 from typing import Any
 
 from tools.worldbuilder_mcp.server import (
+    InvalidToolArguments,
     McpServer,
     TOOL_DEFINITIONS,
+    _validate_arguments,
     serve,
 )
 
@@ -899,6 +901,45 @@ class McpServerTests(unittest.TestCase):
         self.assertEqual(length, len(response_payload))
         response = json.loads(response_payload)
         self.assertEqual(response["result"]["protocolVersion"], "2024-11-05")
+
+
+class DeclaredSchemaValidationTests(unittest.TestCase):
+    """Limits a tool advertises in its schema must actually be enforced."""
+
+    def test_out_of_range_and_unknown_enum_values_are_rejected(self) -> None:
+        cases = (
+            ("update_map_settings", {"time_of_day": 99}),
+            ("update_map_settings", {"light_index": 77}),
+            ("update_map_settings", {"player_count": 0}),
+            ("new_map", {"width": 1, "height": 100,
+                         "default_height": 10, "border_size": 5}),
+            ("new_map", {"width": 100, "height": 100,
+                         "default_height": 999, "border_size": 5}),
+            ("new_map", {"width": 100, "height": 100,
+                         "default_height": 10, "border_size": -5}),
+            ("upsert_script", {"player_index": -4, "name": "s"}),
+            ("connect_waypoints", {"from_id": 0, "to_id": 1}),
+            ("launch_editor", {"wait_ms": 999_999_999}),
+            ("create_area", {"kind": "bogus", "name": "a", "points": [
+                {"x": 1, "y": 1}, {"x": 2, "y": 2}, {"x": 3, "y": 3}]}),
+        )
+        for name, arguments in cases:
+            with self.subTest(tool=name, arguments=arguments):
+                with self.assertRaises(InvalidToolArguments):
+                    _validate_arguments(name, dict(arguments))
+
+    def test_values_inside_the_declared_range_are_accepted(self) -> None:
+        cases = (
+            ("update_map_settings", {"time_of_day": 2}),
+            ("new_map", {"width": 100, "height": 100,
+                         "default_height": 10, "border_size": 5}),
+            ("connect_waypoints", {"from_id": 1, "to_id": 2}),
+            ("create_area", {"kind": "water", "name": "a", "points": [
+                {"x": 1, "y": 1}, {"x": 2, "y": 2}, {"x": 3, "y": 3}]}),
+        )
+        for name, arguments in cases:
+            with self.subTest(tool=name, arguments=arguments):
+                _validate_arguments(name, dict(arguments))
 
 
 if __name__ == "__main__":

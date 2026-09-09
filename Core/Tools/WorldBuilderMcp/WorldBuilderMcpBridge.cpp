@@ -2097,11 +2097,13 @@ CommandResult UpdateObjects(const RequestFields &fields)
 		AsciiString new_script_name;
 		if (has_script_name) {
 			if (script_name_it->second.empty() || script_name_it->second.size() > 128) {
+				REF_PTR_RELEASE(composite);
 				return Error("invalid_arguments", "script_name must contain 1 to 128 characters.");
 			}
 			new_script_name.set(script_name_it->second.c_str());
 			if (!IsUniqueScriptName(new_script_name, object)
 				|| !script_names.insert(LowerAscii(AnsiToUtf8(new_script_name.str()))).second) {
+				REF_PTR_RELEASE(composite);
 				return Error("duplicate_script_name", "script_name is already assigned to another map object.");
 			}
 		}
@@ -3729,7 +3731,8 @@ CommandResult GetTerrainCells(const RequestFields &fields)
 		|| !GetRequiredInt(fields, "width", 1, MAX_TERRAIN_SAMPLES, &width)
 		|| !GetRequiredInt(fields, "height", 1, MAX_TERRAIN_SAMPLES, &height)
 		|| width > MAX_TERRAIN_SAMPLES / height
-		|| x + width > map->getXExtent() - 1 || y + height > map->getYExtent() - 1) {
+		// Compare without adding, so a large x or y cannot overflow past the guard.
+		|| x > map->getXExtent() - 1 - width || y > map->getYExtent() - 1 - height) {
 		return Error("terrain_region_out_of_bounds", "Terrain-cell rectangle is invalid or exceeds 4096 cells.");
 	}
 	std::string result = "{\"x\":" + FormatInt(x) + ",\"y\":" + FormatInt(y)
@@ -4127,7 +4130,11 @@ CommandResult GeneratePreview(const RequestFields &fields)
 	MapPreview preview;
 	preview.save(map_path);
 	CString preview_path = map_path;
-	preview_path.Replace(_T(".map"), _T(".tga"));
+	// Rewrite only the trailing extension; a folder named *.map must survive.
+	Int extension_start = preview_path.ReverseFind(_T('.'));
+	if (extension_start >= 0 && preview_path.Mid(extension_start).CompareNoCase(_T(".map")) == 0) {
+		preview_path = preview_path.Left(extension_start) + _T(".tga");
+	}
 	if (GetFileAttributes(preview_path) == INVALID_FILE_ATTRIBUTES) {
 		return Error("preview_failed", "WorldBuilder did not create the preview file.");
 	}

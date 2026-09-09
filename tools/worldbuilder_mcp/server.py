@@ -659,6 +659,12 @@ _ALLOWED_ARGUMENTS: dict[str, set[str]] = {
 }
 _ALLOWED_ARGUMENTS.update(EXTRA_ALLOWED)
 
+# Property schemas per tool, so declared limits can be enforced at validation time.
+_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
+    definition["name"]: definition.get("inputSchema", {}).get("properties", {})
+    for definition in TOOL_DEFINITIONS
+}
+
 _REQUIRED_ARGUMENTS: dict[str, set[str]] = {
     "open_map": {"path"},
     "get_object": {"object_id"},
@@ -810,6 +816,40 @@ def _flatten_bulk_arguments(name: str, arguments: dict[str, Any]) -> dict[str, A
     return arguments
 
 
+def _enforce_declared_schema(name: str, arguments: dict[str, Any]) -> None:
+    """Apply the numeric and enum limits each tool already declares.
+
+    The hand-written checks above cover the common arguments. This closes the
+    gap for the rest, so a tool's advertised schema and what it accepts agree.
+    """
+
+    schema = _TOOL_SCHEMAS.get(name)
+    if not schema:
+        return
+    for key, spec in schema.items():
+        if key not in arguments or not isinstance(spec, dict):
+            continue
+        value = arguments[key]
+        choices = spec.get("enum")
+        if choices and value not in choices:
+            raise InvalidToolArguments(
+                f"{key} must be one of: " + ", ".join(str(c) for c in choices) + "."
+            )
+        if spec.get("type") not in ("integer", "number"):
+            continue
+        if isinstance(value, bool):
+            raise InvalidToolArguments(f"{key} must be a number.")
+        if spec["type"] == "integer" and not isinstance(value, int):
+            raise InvalidToolArguments(f"{key} must be an integer.")
+        if not isinstance(value, (int, float)):
+            raise InvalidToolArguments(f"{key} must be a number.")
+        low, high = spec.get("minimum"), spec.get("maximum")
+        if low is not None and value < low:
+            raise InvalidToolArguments(f"{key} must be at least {low}.")
+        if high is not None and value > high:
+            raise InvalidToolArguments(f"{key} must not exceed {high}.")
+
+
 def _validate_arguments(name: str, raw_arguments: Any) -> dict[str, Any]:
     if raw_arguments is None:
         arguments: dict[str, Any] = {}
@@ -937,6 +977,8 @@ def _validate_arguments(name: str, raw_arguments: Any) -> dict[str, Any]:
             raise InvalidToolArguments(
                 "update_team needs owner or singleton."
             )
+    _enforce_declared_schema(name, arguments)
+
     if name in ("add_objects", "update_objects"):
         items = arguments["items"]
         if not isinstance(items, list) or not 1 <= len(items) <= 500:
